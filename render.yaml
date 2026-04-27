@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: reelance-hub
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    disk:
+      name: reelance-hub-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 10000
+      - key: APP_BASE_URL
+        sync: false
+      - key: KOMMO_SUBDOMAIN
+        sync: false
+      - key: KOMMO_CLIENT_ID
+        sync: false
+      - key: KOMMO_CLIENT_SECRET
+        sync: false
+      - key: KOMMO_REDIRECT_URI
+        sync: false
+      - key: KOMMO_SALESBOT_ID
+        sync: false
+      - key: KOMMO_SOURCE_ID
+        sync: false

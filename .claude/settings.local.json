@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:es-developers.kommo.com)",
+      "Bash(ngrok version *)",
+      "Bash(lsof -ti:3000)",
+      "Bash(curl -s http://localhost:3000/api/debug/webhooks)",
+      "Bash(node -e \" const chunks = []; process.stdin.on\\('data', c => chunks.push\\(c\\)\\); process.stdin.on\\('end', \\(\\) => { const data = JSON.parse\\(chunks.join\\(''\\)\\); const items = \\(data.items || []\\).slice\\(0, 3\\); items.forEach\\(\\(item, i\\) => { console.log\\('--- webhook', i, '---'\\); console.log\\(JSON.stringify\\(item.payload, null, 2\\).slice\\(0, 600\\)\\); }\\); }\\); \")",
+      "Bash(curl -s http://localhost:3000/api/debug/salesbot)",
+      "Bash(node -e \" const chunks = []; process.stdin.on\\('data', c => chunks.push\\(c\\)\\); process.stdin.on\\('end', \\(\\) => { const data = JSON.parse\\(chunks.join\\(''\\)\\); console.log\\(JSON.stringify\\(data.items.slice\\(0, 8\\), null, 2\\)\\); }\\); \")",
+      "Bash(curl -s \"http://localhost:3000/api/chats\")",
+      "Bash(node -e \" const chunks = []; process.stdin.on\\('data', c => chunks.push\\(c\\)\\); process.stdin.on\\('end', \\(\\) => { const data = JSON.parse\\(chunks.join\\(''\\)\\); const chats = data.chats || []; if \\(chats.length === 0\\) { console.log\\('No hay chats'\\); return; } const chat = chats[0]; console.log\\('Chat:', chat.chatId\\); console.log\\('Mensajes:'\\); \\(chat.messages || []\\).forEach\\(m => { console.log\\(JSON.stringify\\({ id: \\(m.id||''\\).slice\\(0,20\\), text: \\(m.text||''\\).slice\\(0,40\\), dir: m.direction, status: m.deliveryStatus }\\)\\); }\\); }\\); \")",
+      "Bash(node -e \" const chunks = []; process.stdin.on\\('data', c => chunks.push\\(c\\)\\); process.stdin.on\\('end', \\(\\) => { const data = JSON.parse\\(chunks.join\\(''\\)\\); console.log\\(JSON.stringify\\(data.items, null, 2\\)\\); }\\); \")",
+      "Bash(zip -r reelance-widget-v1.0.3.zip kommo-widget/ -x \"kommo-widget/.DS_Store\")",
+      "Bash(open /Users/luismelchor/Desktop/ReelanceHub/)",
+      "Bash(zip -r ../reelance-widget-v1.0.3.zip . -x \".DS_Store\" \"*/.DS_Store\")",
+      "Bash(unzip -l ../reelance-widget-v1.0.3.zip)",
+      "Bash(python3 -c \" import json, sys data = json.load\\(sys.stdin\\) items = data.get\\('items', []\\)[:15] for item in items: t = item.get\\('type', '?'\\) ts = item.get\\('receivedAt', 0\\) extra = '' if t == 'handoff_request': extra = ' return_url=' + item.get\\('body', {}\\).get\\('return_url', ''\\)[-30:] elif t == 'handoff_response_prepared': extra = ' reply_text=' + str\\(item.get\\('responsePayload', {}\\).get\\('data', {}\\).get\\('reply_text', ''\\)\\)[:30] elif t == 'handoff_complete': extra = ' delivered=' + str\\(item.get\\('delivered'\\)\\) print\\(f'{ts} {t}{extra}'\\) \")",
+      "WebSearch",
+      "WebFetch(domain:developers.kommo.com)",
+      "WebFetch(domain:www.kommo.com)",
+      "Bash(curl -s http://localhost:3000/api/kommo/sources)",
+      "Bash(python3 -m json.tool)",
+      "Bash(zip -r ../reelance-widget-v1.0.4.zip . -x \".DS_Store\" \"*/.DS_Store\")",
+      "Bash(unzip -l ../reelance-widget-v1.0.4.zip)",
+      "Bash(python3 -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\(f'Kommo conectado: {d.get\\(\\\\\"connected\\\\\"\\)}'\\)\")",
+      "Bash(git --version)",
+      "Bash(git init *)",
+      "Bash(git branch *)",
+      "Bash(git add *)",
+      "Bash(git -c user.email=you@example.com -c user.name=\"Reelance\" commit -m \"Preparar para deploy en Render\")",
+      "Bash(grep -E \"\\(ngrok|node_modules|\\\\.env$|app-state\\)\")",
+      "Bash(git rm *)",
+      "Bash(git -c user.email=you@example.com -c user.name=\"Reelance\" commit -m \"Excluir ngrok del repo\")",
+      "Bash(grep -E \"\\(ngrok|node_modules|\\\\.env$\\)\")"
+    ]
+  }
+}

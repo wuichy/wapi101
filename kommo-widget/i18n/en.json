@@ -1,0 +1,15 @@
+{
+  "widget": {
+    "name": "Reelance Hub Bridge",
+    "description": "Connects Kommo Salesbot with Reelance Hub so replies can be sent to the latest active chat.",
+    "short_description": "Reply bridge to WhatsApp",
+    "tour_description": "Use this widget to ask Reelance Hub for the pending reply and send it through the active channel."
+  },
+  "settings": {
+    "webhook_url": "Reelance Hub webhook"
+  },
+  "salesbot": {
+    "handler_name": "Send from Reelance Hub",
+    "webhook_url": "Reply webhook URL"
+  }
+}

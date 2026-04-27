@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reelance Hub</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="appNotifications" class="app-notifications" aria-live="polite"></div>
+
+  <div class="app-shell">
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+      <div class="brand-card">
+        <p id="brandVersion" class="eyebrow">Reelance Hub</p>
+        <h1>Inbox</h1>
+      </div>
+
+      <div class="status-card">
+        <div>
+          <p class="status-label">Kommo</p>
+          <strong id="connectionLabel">Cargando…</strong>
+        </div>
+        <button id="connectButton" class="ghost-button">Conectar</button>
+      </div>
+
+      <div class="search-wrap">
+        <input id="searchInput" type="search" placeholder="Buscar" />
+      </div>
+
+      <div class="sidebar-actions">
+        <button id="openQuickReplyManagerButton" class="ghost-button wide-button" type="button">
+          + Respuesta rápida
+        </button>
+      </div>
+
+      <div id="chatList" class="chat-list"></div>
+    </aside>
+
+    <!-- ── Panel conversación ── -->
+    <main class="conversation-panel">
+      <header class="conversation-header">
+        <div class="conversation-heading">
+          <p id="chatTitle" class="conversation-title">Selecciona una conversación</p>
+          <div id="chatMeta" class="conversation-meta">
+            Los mensajes de Kommo aparecerán aquí.
+          </div>
+        </div>
+        <button id="deleteChatButton" class="ghost-button danger-button" type="button" hidden>Borrar</button>
+      </header>
+
+      <section id="messages" class="messages">
+        <div class="empty-state">
+          <h2>Inbox listo</h2>
+          <p>Conecta Kommo y activa el webhook para que lleguen mensajes de WhatsApp.</p>
+        </div>
+      </section>
+
+      <form id="replyForm" class="reply-form">
+        <div class="reply-tools">
+          <button id="composerAttachmentButton" class="icon-button" type="button" title="Adjuntar">⊕</button>
+          <button id="openQuickReplyPickerButton" class="icon-button quick-reply-trigger" type="button" title="Respuestas rápidas">QR</button>
+        </div>
+        <div class="reply-compose">
+          <textarea id="replyInput" placeholder="Escribe un mensaje…" rows="1"></textarea>
+          <p id="replyWindowNotice" class="reply-window-notice" hidden></p>
+          <p id="composerAttachmentHint" class="composer-attachment-hint" hidden></p>
+        </div>
+        <button type="submit" id="sendButton" title="Enviar">↑</button>
+      </form>
+    </main>
+  </div>
+
+  <!-- ── Modal: Respuestas rápidas ── -->
+  <div id="quickReplyManagerModal" class="overlay-panel" hidden>
+    <div class="overlay-card">
+      <div class="overlay-header">
+        <div>
+          <h2>Respuestas rápidas</h2>
+          <p>Crea mensajes reutilizables para responder más rápido.</p>
+        </div>
+        <button id="closeQuickReplyManagerButton" class="ghost-button" type="button">Cerrar</button>
+      </div>
+
+      <form id="quickReplyForm" class="quick-reply-form">
+        <input id="quickReplyName" type="text" placeholder="Título (ej: Saludo)" />
+        <textarea id="quickReplyText" rows="3" placeholder="Texto del mensaje…"></textarea>
+        <div class="quick-reply-actions">
+          <label class="ghost-button upload-button" for="quickReplyAttachment">Adjuntar archivo</label>
+          <input id="quickReplyAttachment" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" hidden />
+          <span id="quickReplyAttachmentName" class="attachment-name"></span>
+          <button type="submit" class="ghost-button">Guardar</button>
+        </div>
+      </form>
+
+      <div id="quickReplyList" class="quick-reply-manager-list"></div>
+    </div>
+  </div>
+
+  <!-- ── Picker de respuestas rápidas ── -->
+  <div id="quickReplyPicker" class="floating-panel" hidden>
+    <div class="floating-panel-header">
+      <strong>Respuestas rápidas</strong>
+      <button id="closeQuickReplyPickerButton" class="ghost-button" type="button">Cerrar</button>
+    </div>
+    <div id="quickReplyPickerList" class="quick-reply-picker-list"></div>
+  </div>
+
+  <!-- ── Sheet: adjuntos ── -->
+  <div id="attachmentSheet" class="floating-panel attachment-sheet" hidden>
+    <div class="floating-panel-header">
+      <strong>Adjuntar</strong>
+      <button id="closeAttachmentSheetButton" class="ghost-button" type="button">Cerrar</button>
+    </div>
+    <div class="attachment-sheet-actions">
+      <label class="ghost-button wide-button" for="cameraAttachmentInput">Tomar foto</label>
+      <label class="ghost-button wide-button" for="libraryAttachmentInput">Fototeca</label>
+      <label class="ghost-button wide-button" for="fileAttachmentInput">Archivo</label>
+    </div>
+    <input id="cameraAttachmentInput" type="file" accept="image/*" capture="environment" hidden />
+    <input id="libraryAttachmentInput" type="file" accept="image/*" hidden />
+    <input id="fileAttachmentInput" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" hidden />
+  </div>
+
+  <!-- ── Templates ── -->
+  <template id="chatItemTemplate">
+    <button class="chat-item" type="button">
+      <div class="chat-item-top">
+        <strong class="chat-name"></strong>
+        <span class="chat-time"></span>
+      </div>
+      <p class="chat-phone"></p>
+      <p class="chat-preview"></p>
+      <div class="chat-badges">
+        <span class="chat-origin"></span>
+        <span class="conversation-window chat-window" hidden></span>
+      </div>
+    </button>
+  </template>
+
+  <template id="messageTemplate">
+    <article class="message">
+      <div class="bubble"></div>
+      <div class="message-foot">
+        <span class="message-meta"></span>
+        <span class="message-countdown" hidden></span>
+      </div>
+    </article>
+  </template>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

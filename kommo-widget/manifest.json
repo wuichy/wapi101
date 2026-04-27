@@ -1,0 +1,46 @@
+{
+  "widget": {
+    "name": "widget.name",
+    "description": "widget.description",
+    "short_description": "widget.short_description",
+    "version": "1.0.4",
+    "interface_version": 2,
+    "init_once": true,
+    "locale": ["es", "en"],
+    "installation": true,
+    "support": {
+      "link": "https://tu-app.ngrok-free.app",
+      "email": "noreply@example.com"
+    }
+  },
+  "locations": ["settings", "salesbot_designer"],
+  "tour": {
+    "is_tour": true,
+    "tour_images": {
+      "es": ["/images/logo_main.png"],
+      "en": ["/images/logo_main.png"]
+    },
+    "tour_description": "widget.tour_description"
+  },
+  "settings": {
+    "webhook_url": {
+      "name": "settings.webhook_url",
+      "type": "text",
+      "required": true
+    }
+  },
+  "salesbot_designer": {
+    "logo": "/images/logo_main.png",
+    "reelance_reply_bridge": {
+      "name": "salesbot.handler_name",
+      "settings": {
+        "webhook_url": {
+          "name": "salesbot.webhook_url",
+          "default_value": "https://TU-NGROK-URL.ngrok-free.app/api/kommo/salesbot/handoff",
+          "type": "text",
+          "manual": true
+        }
+      }
+    }
+  }
+}

@@ -5138,24 +5138,18 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .rh-toast--error   { background: #991b1b; }
 
 /* ═══════ Modo personal /chat ═══════ */
-/* Oculta sidebar nav, topbar de vista, y todo lo que no sea chat */
-body.personal-mode .rh-nav,
-body.personal-mode .nav,
-body.personal-mode #navSidebar,
-body.personal-mode .topbar:not(.rh-conversation-topbar),
+/* Oculta sidebar global (nav del CRM) y demás vistas; deja
+   el grid de .app como una sola columna. NO toca el flex interno
+   de .view-chats (rh-sidebar + rh-conversation-panel). */
+body.personal-mode .app {
+  grid-template-columns: 1fr !important;
+}
+body.personal-mode .sidebar {
+  display: none !important;
+}
 body.personal-mode .view:not(.view-chats),
 body.personal-mode [data-view]:not([data-view="chats"]) {
   display: none !important;
-}
-body.personal-mode .view-chats,
-body.personal-mode [data-view="chats"] {
-  display: flex !important;
-  width: 100vw !important;
-  margin-left: 0 !important;
-}
-body.personal-mode .main {
-  margin-left: 0 !important;
-  width: 100vw !important;
 }
 
 /* Toggle "Mostrar ocultos" en sidebar */

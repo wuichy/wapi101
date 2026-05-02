@@ -36,6 +36,17 @@ if [[ "$CONFIRM" != "s" && "$CONFIRM" != "S" ]]; then
   exit 0
 fi
 
+# ─── Backup forzado a iCloud ANTES de apagar ───
+# Asegura que todo lo del día quede respaldado, no solo lo de la última hora :05
+echo ""
+echo "  💾 Respaldando a iCloud antes de apagar..."
+if [ -x "$HOME/.reelance/backup.sh" ]; then
+  bash "$HOME/.reelance/backup.sh" 2>/dev/null && echo "     ✓ DB SQLite respaldada" || echo "     ⚠️  Backup de DB falló (no es bloqueante)"
+fi
+if [ -x "$HOME/.reelance/backup-project.sh" ]; then
+  bash "$HOME/.reelance/backup-project.sh" 2>/dev/null && echo "     ✓ Proyecto respaldado (código + .env + system-files)" || echo "     ⚠️  Backup de proyecto falló (no es bloqueante)"
+fi
+
 echo ""
 if [ -n "$APP_PID" ]; then
   echo "  → Apagando Reelance CRM (PID $APP_PID)..."

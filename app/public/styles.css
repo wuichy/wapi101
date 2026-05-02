@@ -5106,6 +5106,20 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 
 /* ═══════ Tokens de máquina ═══════ */
 .mt-actions { display: flex; gap: 8px; }
+.mt-help { margin-top: 8px; font-size: 13px; }
+.mt-help-link {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13px;
+}
+.mt-help-link:hover { background: #dbeafe; }
+.mt-help-hint { color: #64748b; margin-left: 8px; font-size: 12px; }
 .btn--danger-strong {
   background: #dc2626;
   color: #fff;

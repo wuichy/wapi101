@@ -6193,6 +6193,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     const btn = e.currentTarget;
     btn.classList.add('is-spinning');
     btn.disabled = true;
+    const cb = Date.now().toString(36);
+
+    // 1) Refresh in-place de CSS — modifica el href de cada <link> con cache-buster.
+    //    Esto fuerza re-fetch del CSS (cache miss por URL distinta) y re-aplica estilos
+    //    SIN esperar el reload completo — el cambio visual es instantáneo.
+    document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+      try {
+        const u = new URL(link.href, window.location.href);
+        u.searchParams.set('_cb', cb);
+        link.href = u.toString();
+      } catch (_) {}
+    });
+
+    // 2) Limpiar caches del Service Worker (si los hay) y desregistrar SW.
     try {
       if ('caches' in window) {
         const keys = await caches.keys();
@@ -6205,8 +6219,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (err) {
       console.error('cache-clear', err);
     }
+
+    // 3) Hard reload con cache-buster en la URL — fuerza HTML+JS frescos.
+    //    Combinado con el middleware no-cache del server, los <script> y <link>
+    //    del HTML nuevo se piden con If-None-Match y Safari ya no los devuelve cacheados.
     const url = new URL(window.location.href);
-    url.searchParams.set('_cb', Date.now().toString(36));
+    url.searchParams.set('_cb', cb);
     window.location.replace(url.toString());
   }
   document.getElementById('navCacheBtn')?.addEventListener('click', clearCacheAndReload);

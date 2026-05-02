@@ -192,10 +192,22 @@ if (config.env !== 'production') {
 // Ruta /chat — sirve la SPA con marker para que el frontend active "modo personal"
 // (chat-only, vista personal por asesor con hides + tags propios).
 app.get('/chat', (_req, res) => {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Estáticos — HTML/CSS/JS sin caché agresivo (always revalidate via ETag).
+// Imágenes/fonts mantienen el comportamiento default de express.static.
+// Esto evita que Safari/Cloudflare retengan versiones viejas tras un deploy:
+// el browser pregunta cada vez "¿sigue siendo válido?" y el server devuelve
+// 304 si no cambió, 200 con el archivo nuevo si sí.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|css|js|json|map)$/i.test(filePath)) {
+      res.set('Cache-Control', 'no-cache, must-revalidate');
+    }
+  },
+}));
 
 app.listen(config.port, config.host, () => {
   console.log(`Reelance App → http://${config.host}:${config.port}  (env: ${config.env})`);

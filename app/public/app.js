@@ -6188,7 +6188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (confirm('¿Cerrar sesión?')) logout();
   });
 
-  document.getElementById('navCacheBtn')?.addEventListener('click', async (e) => {
+  async function clearCacheAndReload(e) {
     if (!confirm('¿Limpiar caché y recargar? Útil después de un deploy si no ves cambios.')) return;
     const btn = e.currentTarget;
     btn.classList.add('is-spinning');
@@ -6208,7 +6208,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const url = new URL(window.location.href);
     url.searchParams.set('_cb', Date.now().toString(36));
     window.location.replace(url.toString());
-  });
+  }
+  document.getElementById('navCacheBtn')?.addEventListener('click', clearCacheAndReload);
+  document.getElementById('navBrandCacheBtn')?.addEventListener('click', clearCacheAndReload);
 
   setupTrash();
   setupNav();

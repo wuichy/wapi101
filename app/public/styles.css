@@ -89,6 +89,42 @@ svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; 
   place-items: center;
 }
 
+/* Botón de limpiar caché debajo de la R — rojo, rectangular, mismo ancho que .brand-mark (40px) */
+.brand-cache-btn {
+  width: 40px;
+  height: 26px;
+  margin: 0 auto 8px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 1px 2px rgba(220,38,38,0.3);
+}
+.brand-cache-btn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(220,38,38,0.45);
+}
+.brand-cache-btn:active {
+  transform: translateY(0);
+}
+.brand-cache-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.brand-cache-btn.is-spinning svg {
+  animation: brand-cache-spin 0.7s linear infinite;
+}
+@keyframes brand-cache-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .nav { display: flex; flex-direction: column; gap: 4px; flex: 1; margin-top: 8px; }
 .nav-item {
   display: flex;

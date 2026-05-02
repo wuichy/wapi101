@@ -1,17 +1,35 @@
 const https = require('https');
+const { decryptJson } = require('../../security/crypto');
 
 const META_API_VERSION = 'v22.0';
 
-function getWAConfig() {
-  return {
-    token: process.env.WHATSAPP_ACCESS_TOKEN || '',
-    wabaId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
-  };
+// Lee credenciales de Meta desde la integración WhatsApp activa en DB,
+// con fallback a .env. La integración suele tener el token vigente que
+// pegó el usuario en el form; el .env queda como respaldo histórico.
+function getWAConfig(db) {
+  let token  = '';
+  let wabaId = '';
+  try {
+    const row = db && db.prepare(
+      `SELECT credentials_enc FROM integrations
+        WHERE provider = 'whatsapp' AND status = 'connected'
+        ORDER BY id ASC LIMIT 1`
+    ).get();
+    if (row?.credentials_enc) {
+      const creds = decryptJson(row.credentials_enc) || {};
+      if (creds.accessToken) token  = creds.accessToken;
+      if (creds.wabaId)      wabaId = creds.wabaId;
+    }
+  } catch (_) { /* ignore — caemos al fallback */ }
+
+  if (!token)  token  = process.env.WHATSAPP_ACCESS_TOKEN || '';
+  if (!wabaId) wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
+  return { token, wabaId };
 }
 
-function metaRequest(method, path, body = null) {
+function metaRequest(db, method, path, body = null) {
   return new Promise((resolve, reject) => {
-    const { token } = getWAConfig();
+    const { token } = getWAConfig(db);
     const data = body ? JSON.stringify(body) : null;
     const options = {
       hostname: 'graph.facebook.com',
@@ -106,8 +124,8 @@ async function submitToMeta(db, id) {
   if (!tmpl) throw new Error('Plantilla no encontrada');
   if (tmpl.type !== 'wa_api') throw new Error('Solo las plantillas de WhatsApp API pueden enviarse a Meta');
 
-  const { wabaId } = getWAConfig();
-  if (!wabaId) throw new Error('WHATSAPP_BUSINESS_ACCOUNT_ID no configurado');
+  const { wabaId } = getWAConfig(db);
+  if (!wabaId) throw new Error('WABA ID no encontrado (revisa la integración WhatsApp o WHATSAPP_BUSINESS_ACCOUNT_ID en .env)');
 
   const components = buildComponents(tmpl);
   const payload = {
@@ -117,7 +135,7 @@ async function submitToMeta(db, id) {
     components,
   };
 
-  const result = await metaRequest('POST', `/${wabaId}/message_templates`, payload);
+  const result = await metaRequest(db, 'POST', `/${wabaId}/message_templates`, payload);
 
   if (result.body?.id) {
     update(db, id, { waId: result.body.id, waStatus: 'pending' });
@@ -134,7 +152,7 @@ async function syncFromMeta(db, id) {
   if (!tmpl) throw new Error('Plantilla no encontrada');
   if (!tmpl.waId) throw new Error('Esta plantilla aún no se ha enviado a Meta');
 
-  const result = await metaRequest('GET', `/${tmpl.waId}?fields=name,status,rejected_reason`);
+  const result = await metaRequest(db, 'GET', `/${tmpl.waId}?fields=name,status,rejected_reason`);
   if (result.body?.status) {
     const statusMap = { APPROVED: 'approved', REJECTED: 'rejected', PENDING: 'pending', IN_APPEAL: 'pending', DELETED: 'draft' };
     const newStatus = statusMap[result.body.status] || 'pending';

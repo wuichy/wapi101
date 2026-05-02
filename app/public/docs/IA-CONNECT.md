@@ -4,7 +4,25 @@
 
 ---
 
-## Setup en 4 pasos (lo que TÚ haces)
+## ¿Qué quieres hacer? Dos caminos
+
+Hay **dos cosas distintas** que puedes hacer, y necesitan setup distinto. Identifica la tuya antes de seguir:
+
+### Camino A — Operar datos del CRM (lo más común)
+"Buscame contactos", "manda este mensaje", "muéveme expedientes", "dame stats".
+- **Setup:** solo necesitas un token de máquina. **60 segundos.**
+- **Sigue:** secciones 1–4 ("Setup en 4 pasos") + "El prompt".
+- **Cambios son INSTANTÁNEOS** en `lucho101.com`. No requiere deploy.
+
+### Camino B — Cambiar código del CRM (UI, features, bugs)
+"Agrega un botón X", "cambia el color de Y", "arregla el bug Z".
+- **Setup:** token + acceso a GitHub + login admin en navegador. **15-20 minutos la primera vez** en una compu nueva.
+- **Sigue:** primero Camino A, después salta a "Lo que el token NO te da: cambios de código" abajo.
+- **Cambios requieren `git push` + click manual al botón Deploy** en `lucho101.com`.
+
+---
+
+## CAMINO A — Setup en 4 pasos (lo que TÚ haces)
 
 ### 1. Generar un token
 
@@ -136,7 +154,7 @@ quiere que haga.
 
 ---
 
-## Lo que el token NO te da: cambios de código
+## CAMINO B — Cambios de código (lo que el token NO te da)
 
 El token de máquina sirve para mover **datos** (contactos, mensajes, expedientes). **No** sirve para cambiar el código del CRM (UI, features, bugs). Son tres capas distintas:
 
@@ -193,10 +211,45 @@ Una vez clonado, le pides cambios normalmente ("agrega un botón X", "arregla el
 
 ### Cambios de DATOS vs cambios de CÓDIGO
 
-- "Cambia el nombre del contacto X a Y" → **datos**, instantáneo, no requiere deploy
-- "Mándale a todos los de la etapa 3 el mensaje X" → **datos**, instantáneo, no requiere deploy
-- "Agrega una columna nueva en la tabla de bots" → **código**, requiere git push + deploy
-- "Cambia el color del botón X a azul" → **código**, requiere git push + deploy
+| Lo que pides | Tipo | Necesita deploy |
+|---|---|---|
+| "Cambia el nombre del contacto X a Y" | datos | ❌ No, instantáneo |
+| "Mándale a todos los de la etapa 3 el mensaje X" | datos | ❌ No, instantáneo |
+| "Agrega una columna nueva en la tabla de bots" | código | ✅ Sí, push + Deploy |
+| "Cambia el color del botón X a azul" | código | ✅ Sí, push + Deploy |
+| "Borra al contacto Juan Pérez" | datos | ❌ No, instantáneo |
+| "Crea un endpoint nuevo /api/X" | código | ✅ Sí, push + Deploy |
+
+### Resumen visual del flujo end-to-end
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  UNA VEZ POR COMPU NUEVA                                    │
+├─────────────────────────────────────────────────────────────┤
+│  1. Generas token en lucho101.com → Ajustes → Tokens        │
+│  2. Pegas el "El prompt" en tu IA con el token              │
+│  3. (Solo si vas a editar código) Setup git+SSH:            │
+│     - ssh-keygen → autorizas en github.com/settings/keys    │
+│     - git clone del repo                                    │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  CADA VEZ QUE QUIERES UN CAMBIO DE DATOS                    │
+├─────────────────────────────────────────────────────────────┤
+│  1. Le dices a la IA en lenguaje natural lo que quieres     │
+│  2. La IA llama el API y listo — instantáneo                │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│  CADA VEZ QUE QUIERES UN CAMBIO DE CÓDIGO                   │
+├─────────────────────────────────────────────────────────────┤
+│  1. Le dices a la IA: "haz X cambio"                        │
+│  2. IA edita archivos + git commit + git push origin main   │
+│  3. Tú abres lucho101.com → Ajustes → Tokens de máquina     │
+│  4. Click en 🚀 Desplegar última versión                    │
+│  5. Esperas ~5 segundos, la página se recarga sola          │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -222,4 +275,4 @@ El "Caso C" del archivo `RECOVERY.md` describe una integración futura vía **MC
 
 ---
 
-Última actualización: 2026-05-02 — añadida sección "Lo que el token NO te da: cambios de código" explicando deploy button + diferencia datos/código.
+Última actualización: 2026-05-02 — manual reorganizado en Camino A (datos) y Camino B (código), con resumen visual end-to-end y pasos concretos para setup de GitHub en compu nueva.

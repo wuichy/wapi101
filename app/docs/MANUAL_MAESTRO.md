@@ -8,6 +8,7 @@ Lecturas complementarias:
 - [README.md](../README.md) — visión general y estado del proyecto
 - [LECCIONES_APRENDIDAS.md](LECCIONES_APRENDIDAS.md) — anti-patterns del proyecto padre que evitamos
 - [DEPLOYMENT.md](DEPLOYMENT.md) — local Mac vs VPS
+- [SETUP_MACBOOK_PRO.md](SETUP_MACBOOK_PRO.md) — cómo trabajar el proyecto desde una segunda máquina (dev) mientras el iMac sigue siendo server
 
 ---
 
@@ -538,6 +539,82 @@ No bloquea mensajería. Solo afecta cambios de `verified_name` o solicitud de ba
 - [ ] **Borrar código del Hub viejo** (`server.js` en root, lib/, kommo-widget/) cuando se confirme estabilidad
 - [ ] **Limpiar warning de `npm audit`** — 2 critical vulnerabilities en deps transitivas de Baileys (no bloqueante)
 - [ ] **Renovar `code_verification_status`** del número (cosmético)
+
+---
+
+## 12.5. Setup dual-machine (iMac server + MacBook Pro dev)
+
+### Topología
+```
+┌──────────────────┐                    ┌──────────────────────┐
+│  MacBook Pro     │  edits + git push  │   GitHub             │
+│  (development)   │ ─────────────────► │   wuichy/reelance-   │
+│  ~/dev/repo/     │                    │   woocommerre-github │
+│  Claude Code     │                    └──────────┬───────────┘
+└──────────────────┘                               │
+                                                   │ git pull
+                                                   ▼
+                                       ┌──────────────────────┐
+                                       │  iMac (server)       │
+                                       │  ~/Desktop/ReelanceH │
+                                       │  + LaunchAgents      │
+                                       │  + cloudflared       │
+                                       │  → lucho101.com      │
+                                       └──────────────────────┘
+                                               │
+                                               ▼
+                                       ┌──────────────────────┐
+                                       │  ~/.reelance/data/   │
+                                       │  (DB live, NO iCloud)│
+                                       └──────────────────────┘
+```
+
+### Qué vive dónde
+
+| Recurso | iMac (server) | MacBook Pro (dev) |
+|---|---|---|
+| Código | `~/Desktop/ReelanceHub/` (git tracked) | `~/dev/reelance-woocommerre-github/` (git clone) |
+| `.env` | Producción real | Copia local con valores de dev (PORT diferente) |
+| DB live | `~/.reelance/data/reelance.sqlite` | `~/dev/.../app/data/reelance.sqlite` (independiente) |
+| Backups DB | `~/Desktop/ReelanceHub-Backups/` (iCloud) | (no necesarios — es dev) |
+| LaunchAgents | 3 activos (app, tunnel, backup) | (ninguno) |
+| Webhook URL pública | `https://lucho101.com/webhooks/...` | (ninguna — solo si expones con cloudflared/ngrok) |
+| Kommo OAuth tokens | `data/app-state.json` (Hub viejo) | Copia via AirDrop |
+
+### Qué hace cada Claude
+
+**Claude en iMac (esta sesión)** — operaciones que tocan producción:
+- Reiniciar server, ver logs en vivo
+- Inspeccionar / modificar la DB live
+- Ejecutar comandos contra Meta API con tokens reales
+- Migrar datos de Kommo (cuando aplique)
+- Configurar LaunchAgents, cloudflared
+
+**Claude en MacBook Pro** — desarrollo y edición:
+- Editar código, agregar features
+- Test local en puerto distinto (3002)
+- Commit + push
+- NO toca la DB del server, NO reinicia el server (lo hace el deploy script o el usuario manual)
+
+### Cómo coexisten
+
+Ambas Claudes ven el mismo código (vía git) y los mismos docs. Cuando una hace cambios:
+1. Commit + push
+2. La otra hace `git pull` antes de empezar a trabajar
+3. Si las dos editan el mismo archivo simultáneamente → git resuelve conflictos al pull (manual)
+
+Para evitar conflictos:
+- MacBook Pro: trabajo de código (frontend, lógica, refactors)
+- iMac: trabajo operativo (reinicios, queries, debug en vivo)
+- Comunicar via commits con mensajes claros
+
+### Setup detallado en MacBook Pro
+
+Ver **[SETUP_MACBOOK_PRO.md](SETUP_MACBOOK_PRO.md)** — guía paso a paso (10 secciones, checklist final).
+
+### Auto-deploy en el server (opcional, recomendado)
+
+Si quieres que el iMac jale cambios automáticamente después de cada push, crea `~/.reelance/deploy.sh` + LaunchAgent que lo corra cada minuto. Detalle en SETUP_MACBOOK_PRO.md §5. Sin auto-deploy, después de cada push hay que hacer `git pull && reload server` manual en el iMac.
 
 ---
 

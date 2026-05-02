@@ -136,6 +136,39 @@ quiere que haga.
 
 ---
 
+## Lo que el token NO te da: cambios de código
+
+El token de máquina sirve para mover **datos** (contactos, mensajes, expedientes). **No** sirve para cambiar el código del CRM (UI, features, bugs). Son tres capas distintas:
+
+| Capa | Qué hace | Qué necesitas |
+|---|---|---|
+| **Token de máquina** (`mt_…`) | La IA lee/escribe datos del CRM por API | Generarlo en Ajustes → Tokens de máquina |
+| **GitHub access** | La IA edita código y hace `git push` | SSH key tuya autorizada en GitHub |
+| **Login admin en navegador** | Tú aprietas el botón Deploy | Tu password de admin |
+
+### Flujo "compu nueva, quiero cambios de código"
+
+1. Generas token en Ajustes → la IA puede operar datos (no necesitas más para esto)
+2. Si además quieres que la IA edite código:
+   - Clona el repo en la compu nueva: `git clone git@github.com:wuichy/reelance-woocommerre-github.git`
+   - Tu llave SSH tiene que estar autorizada en GitHub (si no, agrégala en https://github.com/settings/keys)
+   - La IA edita archivos localmente y hace `git push` a `main`
+3. Para que los cambios lleguen a `lucho101.com`:
+   - Abres `lucho101.com` en navegador, login con password admin
+   - Ajustes → Tokens de máquina → arriba aparece la card **"Despliegue de versión"**
+   - Click en **🚀 Desplegar última versión** → el server hace `git pull` + reinicio solo (~3s)
+
+**El botón Deploy bloquea explícitamente machine tokens** (anti-escalada). Solo funciona con sesión de navegador autenticada con password — para que ninguna IA pueda autodeployarse cambios sin que tú apruebes.
+
+### Cambios de DATOS vs cambios de CÓDIGO
+
+- "Cambia el nombre del contacto X a Y" → **datos**, instantáneo, no requiere deploy
+- "Mándale a todos los de la etapa 3 el mensaje X" → **datos**, instantáneo, no requiere deploy
+- "Agrega una columna nueva en la tabla de bots" → **código**, requiere git push + deploy
+- "Cambia el color del botón X a azul" → **código**, requiere git push + deploy
+
+---
+
 ## Diferencia con Caso C de RECOVERY.md (MCP)
 
 Este manual usa **autenticación Bearer + curl** — funciona con CUALQUIER IA hoy mismo, sin instalar nada.
@@ -150,10 +183,12 @@ El "Caso C" del archivo `RECOVERY.md` describe una integración futura vía **MC
 
 **"403 Los tokens de máquina no pueden gestionar tokens"** → la IA está intentando llegar a `/api/machine-tokens`. Eso es por diseño: solo el navegador con tu password puede gestionar tokens. Dile a la IA que no use ese endpoint.
 
+**"403 Los tokens de máquina no pueden ejecutar deploys"** → la IA está intentando llegar a `/api/admin/deploy`. Eso también es por diseño: el botón de deploy solo funciona desde el navegador con tu password admin. Dile a la IA que no use ese endpoint y que tú das el click cuando estés listo.
+
 **"500 Server error"** → algo falló del lado del CRM. Revisa `app/logs/server-error.log` o avísame.
 
 **La IA "alucina" datos** → asegúrate de que verificó la conexión con `/api/me` antes. Pídele "muéstrame la respuesta cruda del último curl que hiciste" para auditar.
 
 ---
 
-Última actualización: 2026-05-02
+Última actualización: 2026-05-02 — añadida sección "Lo que el token NO te da: cambios de código" explicando deploy button + diferencia datos/código.

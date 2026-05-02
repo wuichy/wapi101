@@ -117,6 +117,12 @@ svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; 
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* Alinear el botón cache con la R: pegado a la izquierda cuando el sidebar está expandido,
+   centrado cuando está colapsado (igual que .brand) */
+body:not(.nav-collapsed) .brand-cache-btn,
+body.nav-expanded .brand-cache-btn {
+  margin-left: 8px;
+}
 .brand-cache-btn.is-spinning svg {
   animation: brand-cache-spin 0.7s linear infinite;
 }

@@ -1239,6 +1239,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6m4-6v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
               Papelera
             </button>
+            <button class="settings-tab" data-settings="tokens-maquina" data-admin-only hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              Tokens de máquina
+            </button>
           </aside>
 
           <div class="settings-content">
@@ -1545,6 +1549,85 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6m4-6v6"/></svg>
                   <p>La papelera está vacía</p>
                 </div>
+              </div>
+            </div>
+
+            <!-- ─── Tokens de máquina (solo admin) ─── -->
+            <div class="settings-pane" data-settings="tokens-maquina" data-admin-only hidden>
+              <div class="settings-head">
+                <div>
+                  <h2>Tokens de máquina</h2>
+                  <p>Credenciales para acceso por API desde tus dispositivos. Si pierdes uno, revócalo aquí. El kill switch invalida todos en un click.</p>
+                </div>
+                <div class="mt-actions">
+                  <button class="btn btn--primary" id="mtNewBtn">+ Generar token</button>
+                  <button class="btn btn--danger-strong" id="mtRevokeAllBtn">🔴 Revocar todos</button>
+                </div>
+              </div>
+
+              <label class="mt-toggle">
+                <input type="checkbox" id="mtShowRevoked" />
+                <span>Mostrar revocados</span>
+              </label>
+
+              <div class="mt-table" id="mtTable">
+                <div class="mt-row mt-row--head">
+                  <div>Nombre</div>
+                  <div>Prefijo</div>
+                  <div>Último uso</div>
+                  <div>IP</div>
+                  <div>Estado</div>
+                  <div></div>
+                </div>
+                <div class="mt-empty" id="mtEmpty" hidden>No hay tokens generados.</div>
+              </div>
+            </div>
+
+            <!-- ─── Modal: token generado (mostrado UNA vez) ─── -->
+            <div class="modal" id="mtTokenModal" hidden>
+              <div class="modal-backdrop" data-close-mt-token></div>
+              <div class="modal-card modal-card--md">
+                <header class="modal-header">
+                  <h3>Token generado</h3>
+                  <button class="icon-btn" data-close-mt-token aria-label="Cerrar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </header>
+                <div class="modal-body">
+                  <div class="mt-warn-banner">
+                    ⚠️ Cópialo ahora. <strong>No se volverá a mostrar.</strong>
+                  </div>
+                  <div class="mt-token-box">
+                    <code id="mtTokenPlain"></code>
+                    <button class="btn btn--ghost" id="mtCopyBtn">Copiar</button>
+                  </div>
+                </div>
+                <footer class="modal-footer">
+                  <button class="btn btn--primary" data-close-mt-token>Listo</button>
+                </footer>
+              </div>
+            </div>
+
+            <!-- ─── Modal: nuevo token ─── -->
+            <div class="modal" id="mtNewModal" hidden>
+              <div class="modal-backdrop" data-close-mt-new></div>
+              <div class="modal-card modal-card--sm">
+                <header class="modal-header">
+                  <h3>Nuevo token</h3>
+                  <button class="icon-btn" data-close-mt-new aria-label="Cerrar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </header>
+                <div class="modal-body">
+                  <div class="int-field">
+                    <label>Nombre del dispositivo <span class="int-field-required">*</span></label>
+                    <input type="text" id="mtNewName" placeholder="Ej. iMac de oficina" autocomplete="off" maxlength="80" />
+                  </div>
+                </div>
+                <footer class="modal-footer">
+                  <button class="btn btn--ghost" data-close-mt-new>Cancelar</button>
+                  <button class="btn btn--primary" id="mtNewCreate">Generar</button>
+                </footer>
               </div>
             </div>
 

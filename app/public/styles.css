@@ -5103,3 +5103,93 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .rh-toast--show { opacity: 1; transform: translateY(0); }
 .rh-toast--success { background: #166534; }
 .rh-toast--error   { background: #991b1b; }
+
+/* ═══════ Tokens de máquina ═══════ */
+.mt-actions { display: flex; gap: 8px; }
+.btn--danger-strong {
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #b91c1c;
+  font-weight: 600;
+}
+.btn--danger-strong:hover { background: #b91c1c; }
+.mt-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+}
+.mt-table {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.mt-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1.1fr 1.2fr 0.9fr 0.8fr;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  align-items: center;
+  font-size: 14px;
+}
+.mt-row:last-child { border-bottom: none; }
+.mt-row--head {
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+.mt-row--revoked { opacity: 0.55; }
+.mt-prefix code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.mt-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mt-status--active   { background: #dcfce7; color: #15803d; }
+.mt-status--revoked  { background: #fee2e2; color: #b91c1c; }
+.mt-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+}
+.mt-warn-banner {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.mt-token-box {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+.mt-token-box code {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}

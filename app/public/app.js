@@ -1318,6 +1318,151 @@ function showAdvError(msg) {
   el.hidden = false;
 }
 
+// ═══════ Tokens de máquina (admin only) ═══════
+let _machineTokens = [];
+
+function relTime(ts) {
+  if (!ts) return '—';
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 60) return 'ahora';
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+  if (diff < 86400 * 30) return `hace ${Math.floor(diff / 86400)} d`;
+  return new Date(ts * 1000).toLocaleDateString();
+}
+
+async function loadMachineTokens() {
+  try {
+    const data = await api('GET', '/api/machine-tokens');
+    _machineTokens = data.items || [];
+    renderMachineTokens();
+  } catch (err) {
+    console.error('loadMachineTokens', err);
+    toast(err.message || 'Error cargando tokens', 'error');
+  }
+}
+
+function renderMachineTokens() {
+  const table = document.getElementById('mtTable');
+  const empty = document.getElementById('mtEmpty');
+  if (!table) return;
+
+  table.querySelectorAll('.mt-row:not(.mt-row--head)').forEach(r => r.remove());
+
+  const showRevoked = document.getElementById('mtShowRevoked')?.checked;
+  const items = _machineTokens.filter(t => showRevoked || !t.revoked_at);
+
+  if (!items.length) {
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+
+  items.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'mt-row' + (t.revoked_at ? ' mt-row--revoked' : '');
+    const status = t.revoked_at
+      ? `<span class="mt-status mt-status--revoked">Revocado</span>`
+      : `<span class="mt-status mt-status--active">Activo</span>`;
+    const revokeBtn = t.revoked_at
+      ? ''
+      : `<button class="btn btn--sm btn--danger-ghost" data-mt-revoke="${t.id}">Revocar</button>`;
+    row.innerHTML = `
+      <div class="mt-name">${escapeHtml(t.name)}</div>
+      <div class="mt-prefix"><code>${escapeHtml(t.prefix)}…</code></div>
+      <div class="mt-lastuse">${relTime(t.last_used_at)}</div>
+      <div class="mt-ip">${escapeHtml(t.last_used_ip || '—')}</div>
+      <div>${status}</div>
+      <div class="mt-actions-cell">${revokeBtn}</div>
+    `;
+    table.appendChild(row);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function setupMachineTokens() {
+  const newBtn       = document.getElementById('mtNewBtn');
+  const newModal     = document.getElementById('mtNewModal');
+  const newName      = document.getElementById('mtNewName');
+  const newCreate    = document.getElementById('mtNewCreate');
+  const tokenModal   = document.getElementById('mtTokenModal');
+  const tokenPlain   = document.getElementById('mtTokenPlain');
+  const copyBtn      = document.getElementById('mtCopyBtn');
+  const revokeAllBtn = document.getElementById('mtRevokeAllBtn');
+  const showRevoked  = document.getElementById('mtShowRevoked');
+  const table        = document.getElementById('mtTable');
+
+  if (!newBtn) return;
+
+  newBtn.addEventListener('click', () => {
+    if (newName) newName.value = '';
+    newModal.hidden = false;
+    setTimeout(() => newName?.focus(), 50);
+  });
+
+  document.querySelectorAll('[data-close-mt-new]').forEach(el => {
+    el.addEventListener('click', () => { newModal.hidden = true; });
+  });
+
+  document.querySelectorAll('[data-close-mt-token]').forEach(el => {
+    el.addEventListener('click', () => { tokenModal.hidden = true; });
+  });
+
+  newCreate.addEventListener('click', async () => {
+    const name = (newName.value || '').trim();
+    if (!name) { toast('Nombre requerido', 'error'); return; }
+    try {
+      const r = await api('POST', '/api/machine-tokens', { name });
+      newModal.hidden = true;
+      tokenPlain.textContent = r.token;
+      tokenModal.hidden = false;
+      await loadMachineTokens();
+    } catch (err) {
+      toast(err.message || 'Error generando token', 'error');
+    }
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(tokenPlain.textContent);
+      toast('Copiado al portapapeles', 'success');
+    } catch (_) {
+      toast('No se pudo copiar — selecciónalo manualmente', 'error');
+    }
+  });
+
+  table.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-mt-revoke]');
+    if (!btn) return;
+    const id = Number(btn.dataset.mtRevoke);
+    const tok = _machineTokens.find(t => t.id === id);
+    if (!confirm(`¿Revocar el token "${tok?.name || id}"? Las requests con este token recibirán 401.`)) return;
+    try {
+      await api('DELETE', `/api/machine-tokens/${id}`);
+      await loadMachineTokens();
+      toast('Token revocado', 'success');
+    } catch (err) {
+      toast(err.message || 'Error al revocar', 'error');
+    }
+  });
+
+  revokeAllBtn.addEventListener('click', async () => {
+    if (!confirm('Esto va a invalidar TODOS los tokens activos. ¿Continuar?')) return;
+    try {
+      const r = await api('POST', '/api/machine-tokens/revoke-all');
+      await loadMachineTokens();
+      toast(`${r.revoked} token(s) revocados`, 'success');
+    } catch (err) {
+      toast(err.message || 'Error al revocar todos', 'error');
+    }
+  });
+
+  showRevoked?.addEventListener('change', renderMachineTokens);
+}
+
 // ═══════ Dashboard / Inicio ═══════
 
 async function loadDashboard() {
@@ -1485,6 +1630,7 @@ function setupSettingsTabs() {
       tabs.forEach((t) => t.classList.toggle("is-active", t === tab));
       panes.forEach((p) => p.classList.toggle("is-active", p.dataset.settings === target));
       if (target === 'papelera') loadTrash();
+      if (target === 'tokens-maquina') loadMachineTokens();
     });
   });
   document.querySelectorAll(".ai-provider input").forEach((input) => {
@@ -5842,6 +5988,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (_advisor.role !== 'admin' && !_advisor.permissions?.manage_advisors) {
       document.querySelectorAll('[data-perm="manage_advisors"]').forEach(e => e.hidden = true);
     }
+    if (_advisor.role === 'admin') {
+      document.querySelectorAll('[data-admin-only]').forEach(e => { e.hidden = false; });
+    }
   }
   document.getElementById('navLogoutBtn')?.addEventListener('click', () => {
     if (confirm('¿Cerrar sesión?')) logout();
@@ -5883,6 +6032,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupTplPicker();
   setupDashboard();
   setupAdvisors();
+  setupMachineTokens();
   setupNotifications();
   registerServiceWorker();
   const _savedView   = localStorage.getItem('lastView') || 'chats';

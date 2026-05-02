@@ -8,7 +8,7 @@
 APP_PLIST="$HOME/Library/LaunchAgents/com.reelance.app.plist"
 TUNNEL_PLIST="$HOME/Library/LaunchAgents/com.reelance.tunnel.plist"
 PUBLIC_URL="https://lucho101.com/healthz"
-LOG_DIR="/Users/luismelchor/Desktop/ReelanceHub/app/logs"
+LOG_DIR="/Users/luismelchor/dev/ReelanceHub/app/logs"
 
 clear
 echo ""

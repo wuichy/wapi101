@@ -7,7 +7,7 @@
 
 PUBLIC_URL="https://lucho101.com/healthz"
 LOCAL_URL="http://127.0.0.1:3001/healthz"
-LOG_DIR="/Users/luismelchor/Desktop/ReelanceHub/app/logs"
+LOG_DIR="/Users/luismelchor/dev/ReelanceHub/app/logs"
 
 clear
 echo ""

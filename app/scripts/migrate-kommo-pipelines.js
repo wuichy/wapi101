@@ -18,8 +18,14 @@ const path = require('path');
 const Database = require('better-sqlite3');
 
 const APPLY = process.argv.includes('--apply');
-const DB_PATH = path.resolve(__dirname, '../data/reelance.sqlite');
-const KOMMO_STATE = '/Users/luismelchor/Desktop/ReelanceHub/data/app-state.json';
+const DB_PATH = process.env.DB_PATH
+  || path.resolve(__dirname, '../data/reelance.sqlite');
+// Path al app-state.json del Hub viejo (tiene los OAuth tokens de Kommo).
+// Busca en orden: env var → ../../data/ (relativo al proyecto) → ubicación legacy
+const KOMMO_STATE = process.env.KOMMO_STATE_PATH
+  || (fs.existsSync(path.resolve(__dirname, '../../data/app-state.json'))
+      ? path.resolve(__dirname, '../../data/app-state.json')
+      : '/Users/luismelchor/dev/ReelanceHub/data/app-state.json');
 
 (async () => {
   // 1. Leer token de Kommo del proyecto viejo

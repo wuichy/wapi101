@@ -6040,6 +6040,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (confirm('¿Cerrar sesión?')) logout();
   });
 
+  document.getElementById('navCacheBtn')?.addEventListener('click', async (e) => {
+    if (!confirm('¿Limpiar caché y recargar? Útil después de un deploy si no ves cambios.')) return;
+    const btn = e.currentTarget;
+    btn.classList.add('is-spinning');
+    btn.disabled = true;
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+    } catch (err) {
+      console.error('cache-clear', err);
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('_cb', Date.now().toString(36));
+    window.location.replace(url.toString());
+  });
+
   setupTrash();
   setupNav();
   setupSettingsTabs();

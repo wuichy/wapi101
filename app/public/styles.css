@@ -163,6 +163,22 @@ body.nav-expanded .nav-advisor-name { display: block; }
 .nav-logout-btn:hover { color: #fff; background: rgba(239,68,68,.2); }
 body:not(.nav-collapsed) .nav-logout-btn,
 body.nav-expanded .nav-logout-btn { display: flex; align-items: center; }
+.nav-cache-btn {
+  background: none;
+  border: none;
+  color: var(--text-sidebar);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: none;
+  flex-shrink: 0;
+  transition: color .15s, background .15s, transform .4s;
+}
+.nav-cache-btn:hover { color: #fff; background: rgba(59,130,246,.2); }
+.nav-cache-btn.is-spinning svg { animation: nav-cache-spin .8s linear infinite; }
+@keyframes nav-cache-spin { to { transform: rotate(360deg); } }
+body:not(.nav-collapsed) .nav-cache-btn:not([hidden]),
+body.nav-expanded .nav-cache-btn:not([hidden]) { display: flex; align-items: center; }
 
 /* ── Account modal ── */
 .account-modal-box { max-width: 540px; width: 100%; }

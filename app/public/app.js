@@ -3684,6 +3684,31 @@ let sbStepCounter = 0;
 let sbTagIds = [];        // tag IDs asignados al bot en edición
 let _botTags = [];
 let _botTagFilter = null; // null = todos, number = id de tag
+let _botSort = 'date_desc'; // date_desc | date_asc | name_asc | name_desc | tag
+
+function formatBotDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function sortBots(bots) {
+  const arr = bots.slice();
+  switch (_botSort) {
+    case 'name_asc':  return arr.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
+    case 'name_desc': return arr.sort((a, b) => (b.name || '').localeCompare(a.name || '', 'es', { sensitivity: 'base' }));
+    case 'date_asc':  return arr.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+    case 'tag': return arr.sort((a, b) => {
+      const ta = (a.tags && a.tags[0] && a.tags[0].name) || '￿';
+      const tb = (b.tags && b.tags[0] && b.tags[0].name) || '￿';
+      const c = ta.localeCompare(tb, 'es', { sensitivity: 'base' });
+      return c !== 0 ? c : (b.created_at || 0) - (a.created_at || 0);
+    });
+    case 'date_desc':
+    default: return arr.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  }
+}
 
 const BOT_TAG_PALETTE = ['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e','#10b981','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#ec4899','#94a3b8'];
 
@@ -3736,6 +3761,13 @@ function renderBotTagFilters() {
   root.innerHTML = `
     <button type="button" class="bot-tag-filter ${allActive}" data-bot-tag-filter="">Todos</button>
     ${tagPills}
+    <select id="botSortSelect" class="bot-sort-select" title="Ordenar bots">
+      <option value="date_desc"${_botSort === 'date_desc' ? ' selected' : ''}>Más nuevo</option>
+      <option value="date_asc"${_botSort === 'date_asc' ? ' selected' : ''}>Más viejo</option>
+      <option value="name_asc"${_botSort === 'name_asc' ? ' selected' : ''}>A → Z</option>
+      <option value="name_desc"${_botSort === 'name_desc' ? ' selected' : ''}>Z → A</option>
+      <option value="tag"${_botSort === 'tag' ? ' selected' : ''}>Por etiqueta</option>
+    </select>
     <button type="button" class="bot-tag-manage-btn" id="botTagManageBtn" title="Gestionar etiquetas">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><circle cx="10" cy="10" r="3"/><path d="M10 2v2m0 12v2M4.2 4.2l1.4 1.4m8.8 8.8l1.4 1.4M2 10h2m12 0h2M4.2 15.8l1.4-1.4m8.8-8.8l1.4-1.4"/></svg>
       Etiquetas
@@ -3754,9 +3786,10 @@ function renderBotList() {
 
   renderBotTagFilters();
 
-  const visibleBots = _botTagFilter === null
+  const filteredBots = _botTagFilter === null
     ? sbBots
     : sbBots.filter(b => Array.isArray(b.tags) && b.tags.some(t => t.id === _botTagFilter));
+  const visibleBots = sortBots(filteredBots);
 
   if (!sbBots.length) {
     list.innerHTML = '';
@@ -3781,7 +3814,10 @@ function renderBotList() {
       </div>
       ${visibleBots.map(b => `
         <div class="bot-list-row" data-bot-id="${b.id}">
-          <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}</div>
+          <div class="bot-row-name-wrap">
+            <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}</div>
+            ${b.created_at ? `<div class="bot-row-date">Creado ${escHtml(formatBotDate(b.created_at))}</div>` : ''}
+          </div>
           <div class="bot-row-trigger">${SB_TRIGGER_LABELS[b.trigger_type] || b.trigger_type}${b.trigger_value ? `: "${escHtml(b.trigger_value)}"` : ''}</div>
           <div class="bot-row-steps">${b.steps.length} paso${b.steps.length !== 1 ? 's' : ''}</div>
           <div>
@@ -4429,6 +4465,14 @@ function setupBot() {
       return;
     }
     if (e.target.closest('#botTagManageBtn')) openBotTagsManager();
+  });
+
+  // ─── Selector de orden de bots ───
+  document.getElementById('botTagFilters')?.addEventListener('change', (e) => {
+    if (e.target && e.target.id === 'botSortSelect') {
+      _botSort = e.target.value;
+      renderBotList();
+    }
   });
 
   // ─── Builder: + Etiqueta + remove pill ───

@@ -3248,7 +3248,9 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .bot-list-row:last-child { border-bottom: 0; }
 .bot-list-row:hover { background: var(--bg); }
+.bot-row-name-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .bot-row-name { font-weight: 600; font-size: 13px; }
+.bot-row-date { font-size: 11px; color: var(--text-muted); }
 .bot-row-trigger { font-size: 12px; color: var(--text-muted); }
 .bot-row-steps { font-size: 12px; }
 
@@ -4062,9 +4064,24 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .bot-tag-filter:hover { border-color: var(--accent); color: var(--text); }
 .bot-tag-filter.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .bot-tag-filter.is-active .bot-tag-dot { box-shadow: 0 0 0 2px #fff inset; }
+.bot-sort-select {
+  margin-left: auto;
+  padding: 6px 28px 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 12px; font-weight: 500;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23667085' stroke-width='1.6'><polyline points='3 5 6 8 9 5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+}
+.bot-sort-select:hover { border-color: var(--accent); }
 .bot-tag-manage-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  margin-left: auto;
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid var(--border);

@@ -1,0 +1,13 @@
+# Cloudflare Tunnel config template para Reelance Hub.
+# Este archivo se completa automáticamente cuando ejecutes el script
+# `setup-cloudflared.sh`. No edites a mano salvo que sepas lo que haces.
+
+tunnel: <TUNNEL_UUID>
+credentials-file: /Users/luismelchor/.cloudflared/<TUNNEL_UUID>.json
+
+ingress:
+  - hostname: lucho101.com
+    service: http://localhost:3000
+  - hostname: www.lucho101.com
+    service: http://localhost:3000
+  - service: http_status:404

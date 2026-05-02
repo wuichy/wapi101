@@ -32,7 +32,8 @@
       "Bash(grep -E \"\\(ngrok|node_modules|\\\\.env$|app-state\\)\")",
       "Bash(git rm *)",
       "Bash(git -c user.email=you@example.com -c user.name=\"Reelance\" commit -m \"Excluir ngrok del repo\")",
-      "Bash(grep -E \"\\(ngrok|node_modules|\\\\.env$\\)\")"
+      "Bash(grep -E \"\\(ngrok|node_modules|\\\\.env$\\)\")",
+      "Bash(open /Users/luismelchor/Desktop/ReelanceHub/HANDOFF.md)"
     ]
   }
 }

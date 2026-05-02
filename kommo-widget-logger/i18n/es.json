@@ -1,0 +1,11 @@
+{
+  "widget": {
+    "name": "Reelance Hub registrar mensaje",
+    "description": "Registra en Reelance Hub los mensajes que tus bots automáticos envían por WhatsApp (plantillas a 24h+, recordatorios, seguimientos). No envía nada al cliente: solo deja constancia en tu inbox.",
+    "short_description": "Tracker de plantillas WhatsApp",
+    "tour_description": "Agrega un bloque después de cada envío de plantilla automática para que aparezca en tu inbox de Reelance Hub."
+  },
+  "settings": {
+    "webhook_url": "URL del webhook (no editar)"
+  }
+}

@@ -1,15 +1,162 @@
 const axios = require('axios');
+const crypto = require('crypto');
+const fs = require('fs');
 const express = require('express');
 const path = require('path');
 const config = require('./lib/config');
 const store = require('./lib/store');
 const kommo = require('./lib/kommo');
+const auth = require('./lib/auth');
+const push = require('./lib/push');
 
 const app = express();
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+const uploadsDir = path.join(__dirname, 'data', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// ── Módulo WooCommerce → Kommo ─────────────────────────────────────
+// Mount ANTES del express.json global para que el verify HMAC del
+// módulo capture el rawBody correctamente. Las rutas /wc/* son
+// públicas (el webhook valida con HMAC, no con auth de sesión).
+// Aislado: si este módulo falla, /wc/* devuelve error pero el chat
+// principal sigue funcionando intacto.
+app.use('/wc', require('./reelance-hub-woocommerce-kommo'));
+
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+// Login endpoints (public — auth middleware lets them through)
+app.get('/login', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.post('/login', (req, res) => {
+  if (!auth.isAuthEnabled()) {
+    return res.status(500).json({ error: 'La autenticación no está configurada.' });
+  }
+
+  const submitted = req.body?.password || '';
+  if (!auth.passwordMatches(submitted)) {
+    return res.status(401).json({ error: 'Contraseña incorrecta.' });
+  }
+
+  const cookie = auth.signSession({ user: 'admin' });
+  res.setHeader('Set-Cookie', auth.buildSessionCookie(cookie));
+  res.json({ ok: true });
+});
+
+app.post('/logout', (_req, res) => {
+  res.setHeader('Set-Cookie', auth.buildLogoutCookie());
+  res.json({ ok: true });
+});
+
+// Auth gate for everything below
+app.use(auth.requireAuth);
+
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(uploadsDir, { maxAge: '7d' }));
+
+// ── Preview HTML con OpenGraph para que WhatsApp muestre miniatura del archivo ──
+// Cuando un agente manda una imagen, en lugar de pasar la URL cruda al cliente
+// (que llega como kommo.cc/K/... texto), pasamos esta URL HTML que WhatsApp
+// fetchea y descubre meta og:image → muestra preview con la imagen inline.
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg']);
+
+app.get('/preview/:filename', (req, res) => {
+  const safe = path.basename(String(req.params.filename || ''));
+  const filePath = path.join(uploadsDir, safe);
+  if (!safe || !fs.existsSync(filePath)) {
+    return res.status(404).send('Archivo no encontrado');
+  }
+  const ext = path.extname(safe).toLowerCase();
+  const isImage = IMAGE_EXTS.has(ext);
+  const baseUrl = config.appBaseUrl.replace(/\/$/, '');
+  const fileUrl = `${baseUrl}/uploads/${encodeURIComponent(safe)}`;
+  const selfUrl = `${baseUrl}/preview/${encodeURIComponent(safe)}`;
+  // Nombre original sin el ID UUID que prepende saveAttachmentFromDataUrl
+  const displayName = safe.replace(/^[a-f0-9]{12,}-/, '');
+  const titulo = isImage ? '📷 Imagen' : '📎 Archivo';
+  const desc   = `${displayName} — Reelance Hub`;
+
+  const ogImage = isImage ? `
+    <meta property="og:image" content="${fileUrl}" />
+    <meta property="og:image:secure_url" content="${fileUrl}" />
+    <meta property="og:image:type" content="image/${ext.slice(1) === 'jpg' ? 'jpeg' : ext.slice(1)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="1200" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="${fileUrl}" />` : `
+    <meta name="twitter:card" content="summary" />`;
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${titulo}</title>
+<meta property="og:type" content="${isImage ? 'image' : 'website'}" />
+<meta property="og:title" content="${titulo}" />
+<meta property="og:description" content="${desc}" />
+<meta property="og:url" content="${selfUrl}" />
+<meta property="og:site_name" content="Reelance Hub" />${ogImage}
+<style>
+  *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f7;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .card{max-width:560px;width:100%;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.08);overflow:hidden}
+  .card-body{padding:24px}
+  .file{display:block;width:100%;border-radius:10px}
+  h1{font-size:18px;margin:0 0 6px;font-weight:600}
+  p{margin:0;color:#666;font-size:14px}
+  .btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#007aff;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px}
+</style>
+</head>
+<body>
+  <div class="card">
+    ${isImage ? `<img class="file" src="${fileUrl}" alt="${displayName}" />` : ''}
+    <div class="card-body">
+      <h1>${titulo}</h1>
+      <p>${displayName}</p>
+      ${!isImage ? `<a class="btn" href="${fileUrl}" download>Descargar</a>` : ''}
+    </div>
+  </div>
+</body>
+</html>`;
+
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(html);
+});
+
+function sanitizeFilename(name) {
+  return String(name || 'archivo')
+    .replace(/[^\w.\-]+/g, '_')
+    .slice(-80) || 'archivo';
+}
+
+function saveAttachmentFromDataUrl(attachment) {
+  if (!attachment?.dataUrl) {
+    return null;
+  }
+
+  const match = String(attachment.dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) {
+    return null;
+  }
+
+  const buffer = Buffer.from(match[2], 'base64');
+  const safeName = sanitizeFilename(attachment.name);
+  const id = crypto.randomBytes(6).toString('hex');
+  const filename = `${id}-${safeName}`;
+  fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+
+  return {
+    filename,
+    url: `${config.appBaseUrl.replace(/\/$/, '')}/uploads/${filename}`,
+    name: attachment.name || safeName,
+    type: attachment.type || match[1] || 'application/octet-stream'
+  };
+}
 
 function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -351,6 +498,67 @@ async function backfillMissingPhones(chats, limit = 8) {
   );
 }
 
+// Cache de pipelines/statuses (Kommo)
+const PIPELINES_TTL_MS = 60 * 60 * 1000; // 1 hora
+let pipelinesCache = { data: {}, fetchedAt: 0 };
+
+async function getPipelinesMap() {
+  const now = Date.now();
+  if (pipelinesCache.fetchedAt + PIPELINES_TTL_MS > now && Object.keys(pipelinesCache.data).length) {
+    return pipelinesCache.data;
+  }
+  try {
+    const data = await kommo.fetchPipelinesMap();
+    pipelinesCache = { data, fetchedAt: now };
+    return data;
+  } catch (_e) {
+    return pipelinesCache.data || {};
+  }
+}
+
+async function backfillLeadTags(chats, limit = 6) {
+  const TAG_TTL = 5 * 60 * 1000;
+  const now = Date.now();
+  const pending = chats
+    .filter((chat) => {
+      if (!chat.entityId) return false;
+      if (normalizeEntityType(chat.entityType) !== 'lead') return false;
+      if ((chat.leadInfoFetchedAt || chat.tagsFetchedAt || 0) + TAG_TTL > now) return false;
+      return true;
+    })
+    .slice(0, limit);
+
+  if (!pending.length) {
+    return;
+  }
+
+  await Promise.allSettled(
+    pending.map(async (chat) => {
+      try {
+        const detail = await kommo.fetchLeadDetail(chat.entityId);
+        store.setChatLeadInfo(chat.chatId, detail);
+      } catch (_e) { /* ignore */ }
+    })
+  );
+}
+
+// Anota pipelineName/statusName en cada chat usando el cache de pipelines
+function decorateChatsWithPipelineNames(chats, pipelinesMap) {
+  if (!pipelinesMap || !Object.keys(pipelinesMap).length) return chats;
+  return chats.map((chat) => {
+    const pid = chat.pipelineId;
+    const sid = chat.statusId;
+    if (!pid) return chat;
+    const pipeline = pipelinesMap[pid];
+    if (!pipeline) return chat;
+    return {
+      ...chat,
+      pipelineName: pipeline.name || null,
+      statusName: (sid && pipeline.statuses[sid]) || null
+    };
+  });
+}
+
 function registerWebhookMessage(payload) {
   const rawMessage = payload?.message?.add?.[0];
   const rawTalk = payload?.talk?.add?.[0] || payload?.talk?.update?.[0];
@@ -431,22 +639,40 @@ function registerWebhookMessage(payload) {
   });
 
   if (rawMessage || chatWebhookMessage) {
-    store.addMessageToChat(canonicalChatId, {
+    const direction = detectMessageDirection(rawMessage, chatWebhookMessage);
+    const wasAdded = store.addMessageToChat(canonicalChatId, {
       id: rawMessage?.id || chatWebhookMessage?.message?.id || `${chatId}-${normalizedTimestamp}`,
       text: normalizedText,
       timestamp: normalizedTimestamp,
-      direction: detectMessageDirection(rawMessage, chatWebhookMessage),
+      direction,
       deliveryStatus: 'recibido'
     });
+
+    // Disparar push solo si el mensaje fue realmente nuevo (no duplicado)
+    // y solo para incoming. El tag 'chat-${id}' colapsa pushes consecutivos
+    // del mismo chat para evitar acumulación en pantalla.
+    if (wasAdded && direction === 'incoming') {
+      const senderName = normalizedAuthorName || 'Cliente';
+      push.sendToAll({
+        title: senderName,
+        body: normalizedText.slice(0, 140),
+        tag: `chat-${canonicalChatId}`,
+        chatId: canonicalChatId,
+        url: '/'
+      }).catch((err) => {
+        console.error('Push send error:', err.message);
+      });
+    }
   }
 
   if (normalizedContactId) {
     enrichChatTitle(canonicalChatId, normalizedContactId).catch(() => {});
   }
 
-  if (chatId) {
-    syncChatMessages(chatId, canonicalChatId).catch(() => {});
-  }
+  // syncChatMessages está desactivado: el endpoint /api/v4/chats/{id}/messages
+  // no existe en Kommo (solo está disponible vía amojo custom channels).
+  // Confiamos en los webhooks add_message + nuestro log-outgoing para tener
+  // la historia completa.
 }
 
 app.get('/auth/kommo/url', asyncHandler(async (_req, res) => {
@@ -474,6 +700,39 @@ app.get('/auth/kommo/callback', asyncHandler(async (req, res) => {
   res.redirect('/');
 }));
 
+// ─────────────────────────────────────────────────────────────
+// /healthz — endpoint público para monitoreo externo (UptimeRobot, etc.)
+// Devuelve 200 si el server responde; 503 si Kommo está desconectado.
+// Sin auth para que servicios externos puedan pingearlo.
+// ─────────────────────────────────────────────────────────────
+const healthzStats = { hits: 0, last: null, byUserAgent: {} };
+
+app.get('/healthz', (req, res) => {
+  try {
+    const ua = String(req.headers['user-agent'] || '').slice(0, 80);
+    healthzStats.hits += 1;
+    healthzStats.last = Date.now();
+    healthzStats.byUserAgent[ua] = (healthzStats.byUserAgent[ua] || 0) + 1;
+
+    const state = store.readState();
+    const kommoOk = Boolean(state.kommo?.tokens?.access_token);
+    if (!kommoOk) {
+      return res.status(503).json({ ok: false, reason: 'kommo_disconnected' });
+    }
+    res.status(200).json({ ok: true, version: config.appVersion, ts: Date.now() });
+  } catch (err) {
+    res.status(500).json({ ok: false, reason: 'state_read_error', message: err.message });
+  }
+});
+
+// Endpoint de inspección (auth) — para verificar quién pinguea /healthz
+app.get('/api/debug/healthz-stats', (_req, res) => {
+  res.json({
+    ...healthzStats,
+    lastHumanReadable: healthzStats.last ? new Date(healthzStats.last).toLocaleString('es-MX') : null
+  });
+});
+
 app.get('/api/status', (_req, res) => {
   const state = store.readState();
 
@@ -490,17 +749,72 @@ app.get('/api/status', (_req, res) => {
   });
 });
 
+app.get('/api/push/vapid-public-key', (_req, res) => {
+  res.json({ publicKey: config.push.publicKey || null });
+});
+
+app.post('/api/push/subscribe', asyncHandler(async (req, res) => {
+  const sub = req.body?.subscription || req.body;
+  if (!sub?.endpoint) {
+    return res.status(400).json({ error: 'La suscripción debe incluir endpoint y keys.' });
+  }
+  push.addSubscription({
+    endpoint: sub.endpoint,
+    keys: sub.keys,
+    userAgent: req.headers['user-agent'] || null
+  });
+  res.json({ ok: true });
+}));
+
+app.post('/api/push/unsubscribe', asyncHandler(async (req, res) => {
+  const endpoint = req.body?.endpoint;
+  if (!endpoint) {
+    return res.status(400).json({ error: 'Falta el endpoint.' });
+  }
+  push.removeSubscription(endpoint);
+  res.json({ ok: true });
+}));
+
+app.post('/api/push/test', asyncHandler(async (_req, res) => {
+  const result = await push.sendToAll({
+    title: 'Reelance Hub',
+    body: 'Test de notificación push.',
+    url: '/'
+  });
+  res.json(result);
+}));
+
 app.get('/api/chats', asyncHandler(async (_req, res) => {
   const chats = store.getChatList();
-  await backfillMissingPhones(chats);
+  const [pipelinesMap] = await Promise.all([
+    getPipelinesMap(),
+    backfillMissingPhones(chats),
+    backfillLeadTags(chats)
+  ]);
 
+  const fresh = store.getChatList();
   res.json({
-    chats: store.getChatList()
+    chats: decorateChatsWithPipelineNames(fresh, pipelinesMap)
   });
 }));
 
 app.post('/api/chats/:chatId/read', (req, res) => {
   store.markChatRead(req.params.chatId);
+  res.status(204).send();
+});
+
+app.post('/api/chats/:chatId/unread', (req, res) => {
+  store.markChatUnread(req.params.chatId);
+  res.status(204).send();
+});
+
+app.post('/api/chats/:chatId/pin', (req, res) => {
+  store.setChatPinned(req.params.chatId, true);
+  res.status(204).send();
+});
+
+app.delete('/api/chats/:chatId/pin', (req, res) => {
+  store.setChatPinned(req.params.chatId, false);
   res.status(204).send();
 });
 
@@ -528,7 +842,10 @@ app.post('/api/chats/:chatId/messages', asyncHandler(async (req, res) => {
 }));
 
 async function handleSendMessage(req, res, chatId) {
-  const text = String(req.body?.text || '').trim();
+  const rawText = String(req.body?.text || '').trim();
+  const attachmentInput = req.body?.attachment && typeof req.body.attachment === 'object'
+    ? req.body.attachment
+    : null;
   const state = store.readState();
   const chat = state.chats[chatId];
 
@@ -536,26 +853,97 @@ async function handleSendMessage(req, res, chatId) {
     return res.status(404).json({ error: 'No encontré esa conversación.' });
   }
 
-  if (!text) {
-    return res.status(400).json({ error: 'Escribe un mensaje antes de enviarlo.' });
+  if (!rawText && !attachmentInput) {
+    return res.status(400).json({ error: 'Escribe un mensaje o adjunta un archivo antes de enviarlo.' });
   }
 
   if (!chat.entityId) {
     return res.status(400).json({ error: 'Esta conversación todavía no tiene entidad de Kommo asociada.' });
   }
 
+  let savedAttachment = null;
+  if (attachmentInput) {
+    try {
+      savedAttachment = saveAttachmentFromDataUrl(attachmentInput);
+    } catch (error) {
+      return res.status(400).json({ error: `No pude guardar el adjunto: ${error.message}` });
+    }
+
+    if (!savedAttachment) {
+      return res.status(400).json({ error: 'El adjunto vino sin contenido válido.' });
+    }
+
+    // ── Pre-upload a Kommo DESACTIVADO temporalmente ──
+    // El endpoint /api/v4/chat/uploads no existe (404) y el Drive API requiere
+    // cookies de sesión (no acepta OAuth Bearer). Pendiente de respuesta de soporte.
+    // Mientras: usamos /preview/:filename con OG tags para que WhatsApp muestre
+    // miniatura del archivo automáticamente.
+    /*
+    try {
+      const localPath = path.join(uploadsDir, savedAttachment.filename);
+      const fileBuffer = fs.readFileSync(localPath);
+      const kommoFile = await kommo.uploadChatFile(fileBuffer, savedAttachment.name, savedAttachment.type, chat.chatId || null);
+      if (kommoFile?.uuid) savedAttachment.kommoUuid = kommoFile.uuid;
+    } catch (uploadErr) {
+      console.error('Kommo upload error:', uploadErr.message);
+    }
+    */
+  }
+
+  // URL de preview HTML — WhatsApp fetchea la página y descubre og:image.
+  // Si llega como link en un mensaje de texto, muestra miniatura inline.
+  const previewUrl = savedAttachment
+    ? `${config.appBaseUrl.replace(/\/$/, '')}/preview/${encodeURIComponent(savedAttachment.filename)}`
+    : null;
+
+  // displayText: lo que aparece en la app local (URL cruda directa al archivo)
+  const displayText = savedAttachment
+    ? (rawText ? `${rawText}\n${savedAttachment.url}` : savedAttachment.url)
+    : rawText;
+
+  // replyText: lo que se manda al cliente vía WhatsApp.
+  // Para adjuntos: caption + preview URL en línea separada (WhatsApp expande la URL).
+  // Para texto puro: solo el texto.
+  const replyText = savedAttachment
+    ? (rawText ? `${rawText}\n${previewUrl}` : previewUrl)
+    : (rawText || '');
+
+  // Siempre 'text' por ahora — el bot manda show type:"text" con la URL del preview
+  // y WhatsApp se encarga del resto vía OG tags.
+  const replyType = 'text';
+
+  store.pushSalesbotDebug({
+    type: 'send_message_prepared',
+    chatId,
+    rawTextLength: rawText.length,
+    rawTextPreview: rawText.slice(0, 60),
+    hasAttachment: Boolean(savedAttachment),
+    attachmentName: savedAttachment?.name || null,
+    previewUrl: previewUrl || null,
+    replyType,
+    finalTextPreview: replyText.slice(0, 120),
+    finalTextLength: replyText.length
+  });
+
   const localMessageId = `local-${Date.now()}`;
 
   store.addMessageToChat(chatId, {
     id: localMessageId,
-    text,
+    text: displayText,
     timestamp: Date.now(),
     direction: 'outgoing',
-    deliveryStatus: config.kommo.salesbotId ? 'en cola' : 'pendiente de bot'
+    deliveryStatus: config.kommo.salesbotId ? 'en cola' : 'pendiente de bot',
+    status: 'pending',
+    attachment: savedAttachment
+      ? { name: savedAttachment.name, type: savedAttachment.type, url: savedAttachment.url }
+      : null
   });
 
   store.queuePendingReply(buildPendingReplyKeys(chat), {
-    text,
+    text: replyText,
+    attachmentUrl: savedAttachment?.url || null,
+    attachmentUuid: savedAttachment?.kommoUuid || null, // UUID de Kommo para media real
+    attachmentType: replyType,
     chatId,
     contactId: chat.contactId || null,
     entityId: chat.entityId,
@@ -644,6 +1032,96 @@ async function handleSendMessage(req, res, chatId) {
     mode: config.kommo.salesbotId ? 'salesbot' : 'queued'
   });
 }
+
+// Endpoint público para que los salesbots de Kommo registren mensajes salientes
+// que ellos mandaron por WhatsApp (vía send_message nativo). Así esos mensajes
+// también aparecen en Reelance Hub.
+app.post('/webhooks/kommo/log-outgoing', (req, res) => {
+  const returnUrl = req.body?.return_url || null;
+
+  res.status(200).json({ ok: true }); // responder rápido, procesar async
+
+  // CRÍTICO: widget_request pausa el bot hasta que se llame return_url.
+  // Sin esta llamada el bot queda atascado en este bloque para siempre,
+  // bloqueando el timer y todos los pasos siguientes.
+  if (returnUrl) {
+    kommo.callReturnUrl(returnUrl, {})
+      .then(() => store.pushSalesbotDebug({ type: 'log_outgoing_return_url_ok' }))
+      .catch((err) => {
+        store.pushSalesbotDebug({ type: 'log_outgoing_return_url_error', message: err.message });
+        console.error('Error log-outgoing return_url:', err.message);
+      });
+  } else {
+    store.pushSalesbotDebug({ type: 'log_outgoing_no_return_url' });
+  }
+
+  setImmediate(() => {
+    try {
+      // Kommo envía los placeholders resueltos dentro de body.data, NO en body directamente.
+      // Por compatibilidad probamos ambos: primero data.*, luego top-level.
+      const data = req.body?.data || {};
+      const text = String(data.text || data.message || req.body?.text || req.body?.message || '').trim();
+      const leadId = (data.lead_id || req.body?.lead_id) ? String(data.lead_id || req.body.lead_id).trim() : null;
+      const contactId = (data.contact_id || req.body?.contact_id) ? String(data.contact_id || req.body.contact_id).trim() : null;
+
+      store.pushSalesbotDebug({
+        type: 'log_outgoing_received',
+        leadId,
+        contactId,
+        textLength: text.length,
+        hasReturnUrl: Boolean(returnUrl),
+        rawBodyKeys: Object.keys(req.body || {}),
+        rawDataKeys: Object.keys(data)
+      });
+
+      if (!text) {
+        store.pushSalesbotDebug({ type: 'log_outgoing_skipped', reason: 'no_text' });
+        return;
+      }
+
+      if (!leadId && !contactId) {
+        store.pushSalesbotDebug({ type: 'log_outgoing_skipped', reason: 'no_entity' });
+        return;
+      }
+
+      const canonicalChatId = store.consolidateChats({
+        entityId: leadId,
+        contactId
+      });
+
+      if (!canonicalChatId) {
+        store.pushSalesbotDebug({
+          type: 'log_outgoing_no_chat',
+          leadId,
+          contactId
+        });
+        return;
+      }
+
+      const messageId = `salesbot-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+      const wasAdded = store.addMessageToChat(canonicalChatId, {
+        id: messageId,
+        text,
+        timestamp: Date.now(),
+        direction: 'outgoing',
+        deliveryStatus: 'enviado por salesbot',
+        status: 'sent'
+      });
+
+      store.pushSalesbotDebug({
+        type: 'log_outgoing_done',
+        chatId: canonicalChatId,
+        wasAdded
+      });
+    } catch (error) {
+      console.error('Error en log-outgoing:', error.message);
+      store.pushSalesbotDebug({
+        type: 'log_outgoing_error',
+        message: error.message
+      });
+    }
+  });
+});
 
 app.post('/webhooks/kommo', (req, res) => {
   res.status(200).send('ok');
@@ -749,11 +1227,17 @@ app.post('/api/kommo/salesbot/handoff', asyncHandler(async (req, res) => {
   });
   const responsePayload = {
     data: {
-      reply_text: pendingReply?.text || '',
-      has_reply: pendingReply ? '1' : '0',
-      reply_channel_id: String(config.kommo.sourceId || requestedSourceId || '')
-    },
-    execute_handlers: []
+      // reply_text nunca vacío (Kommo envía literal "{{json.reply_text}}" si está vacío)
+      reply_text: pendingReply
+        ? (pendingReply.text || pendingReply.attachmentUrl || '—')
+        : '',
+      // reply_url: UUID de Kommo si se pre-subió (media real), si no la URL pública
+      reply_url:  pendingReply
+        ? (pendingReply.attachmentUuid || pendingReply.attachmentUrl || '')
+        : '',
+      reply_type: pendingReply ? (pendingReply.attachmentType || 'text') : '',
+      has_reply:  pendingReply ? '1' : '0'
+    }
   };
 
   store.pushSalesbotDebug({
@@ -767,7 +1251,7 @@ app.post('/api/kommo/salesbot/handoff', asyncHandler(async (req, res) => {
     store.upsertChat(pendingReply.chatId, (chat) => {
       chat.messages = chat.messages.map((item) => {
         if (item.id === pendingReply.localMessageId) {
-          return { ...item, deliveryStatus: 'entregado al bot' };
+          return { ...item, deliveryStatus: 'entregado al bot', status: 'sent' };
         }
 
         return item;
@@ -817,6 +1301,257 @@ app.get('/api/debug/salesbot', (_req, res) => {
   });
 });
 
+// Probe 3: confirmar/descartar drive auth + sources/channels disponibles
+app.get('/api/debug/probe-final', asyncHandler(async (_req, res) => {
+  const FormData = require('form-data');
+  const { Buffer } = require('buffer');
+  const tinyPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=',
+    'base64'
+  );
+
+  const baseUrl = kommo.getBaseUrl();
+  const token = await kommo.getValidAccessToken();
+
+  // 1. amojo_id correcto (probar con cada parámetro individualmente)
+  const amojoTests = [];
+  for (const w of ['amojo_id', 'amojo_rights_id', 'users_groups', 'task_types', 'datetime_settings']) {
+    try {
+      const r = await axios.get(`${baseUrl}/api/v4/account?with=${w}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 4000,
+        validateStatus: () => true
+      });
+      amojoTests.push({
+        with: w,
+        status: r.status,
+        amojoIdInBody: r.data?.amojo_id || null,
+        bodyKeys: r.status === 200 ? Object.keys(r.data || {}).slice(0, 15) : null
+      });
+    } catch (e) {
+      amojoTests.push({ with: w, error: e.message });
+    }
+  }
+
+  // 2. Drive auth: probar 4 métodos en drive-01
+  const driveAuthTests = [];
+  const driveUrl = 'https://drive-01.kommo.com/api/v4/uploads';
+  const authVariants = [
+    { name: 'Bearer',         headers: { Authorization: `Bearer ${token}` } },
+    { name: 'X-Auth-Token',   headers: { 'X-Auth-Token': token } },
+    { name: 'No auth',        headers: {} },
+    { name: 'Bearer + amojo', headers: { Authorization: `Bearer ${token}`, 'X-Account-ID': 'ventasreelancemx' } }
+  ];
+  for (const a of authVariants) {
+    try {
+      const form = new FormData();
+      form.append('file', tinyPng, { filename: 'p.png', contentType: 'image/png' });
+      const r = await axios.post(driveUrl, form, {
+        headers: { ...form.getHeaders(), ...a.headers },
+        timeout: 4000,
+        validateStatus: () => true
+      });
+      driveAuthTests.push({
+        auth: a.name,
+        status: r.status,
+        body: typeof r.data === 'object' ? JSON.stringify(r.data).slice(0, 300) : String(r.data).slice(0, 200),
+        responseHeaders: {
+          'www-authenticate': r.headers['www-authenticate'] || null,
+          'x-error-code': r.headers['x-error-code'] || null
+        }
+      });
+    } catch (err) {
+      driveAuthTests.push({ auth: a.name, error: err.message });
+    }
+  }
+
+  // 3. Sources de chat disponibles (canales WhatsApp activos)
+  let sources = null;
+  try {
+    const r = await axios.get(`${baseUrl}/api/v4/sources`, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 4000,
+      validateStatus: () => true
+    });
+    sources = { status: r.status, body: typeof r.data === 'object' ? JSON.stringify(r.data).slice(0, 1000) : String(r.data).slice(0, 500) };
+  } catch (e) {
+    sources = { error: e.message };
+  }
+
+  res.json({ amojoTests, driveAuthTests, sources });
+}));
+
+// Probe 2: encontrar drive shard + amojo_id correctos
+app.get('/api/debug/probe-drive', asyncHandler(async (_req, res) => {
+  const FormData = require('form-data');
+  const { Buffer } = require('buffer');
+
+  const tinyPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=',
+    'base64'
+  );
+
+  const baseUrl = kommo.getBaseUrl();
+  const token = await kommo.getValidAccessToken();
+
+  // 1. Obtener amojo_id correctamente con ?with
+  let accountWithAmojo = null;
+  try {
+    accountWithAmojo = await kommo.apiRequest('get', '/api/v4/account?with=amojo_id,amojo_rights_id,version');
+  } catch (e) {
+    accountWithAmojo = { error: e.message };
+  }
+
+  // 2. Probar todos los shards de drive (01-10) con varios paths
+  const drivePaths = ['/v1.0/files', '/api/v4/uploads', '/upload', '/v1/files', '/files/upload'];
+  const driveResults = [];
+  for (let shard = 1; shard <= 10; shard++) {
+    const shardStr = String(shard).padStart(2, '0');
+    for (const driveP of drivePaths) {
+      const url = `https://drive-${shardStr}.kommo.com${driveP}`;
+      try {
+        const form = new FormData();
+        form.append('file', tinyPng, { filename: 'probe.png', contentType: 'image/png' });
+        const r = await axios.post(url, form, {
+          headers: { ...form.getHeaders(), Authorization: `Bearer ${token}` },
+          timeout: 4000,
+          validateStatus: () => true
+        });
+        // Solo guardamos si NO es 404 (404 = path no existe en este shard)
+        if (r.status !== 404) {
+          driveResults.push({
+            url,
+            status: r.status,
+            body: typeof r.data === 'object' ? JSON.stringify(r.data).slice(0, 300) : String(r.data).slice(0, 200)
+          });
+        }
+      } catch (err) {
+        if (err.response?.status && err.response.status !== 404) {
+          driveResults.push({
+            url,
+            status: err.response.status,
+            body: err.response.data ? JSON.stringify(err.response.data).slice(0, 300) : null
+          });
+        }
+        // ENOTFOUND, ECONNREFUSED → shard no existe, ignorar
+      }
+    }
+  }
+
+  // 3. Probar POST a /api/v4/chats/{chatId}/messages (chat real del state)
+  const state = store.readState();
+  const sampleChat = Object.values(state.chats || {})
+    .find((c) => c?.chatId && c.chatId.includes('-'));
+  const chatMessageProbes = [];
+  if (sampleChat?.chatId) {
+    const probes = [
+      {
+        name: 'POST /api/v4/chats/{id}/messages text',
+        url: `${baseUrl}/api/v4/chats/${sampleChat.chatId}/messages`,
+        body: { type: 'text', text: 'probe' }
+      },
+      {
+        name: 'POST /api/v4/chats/messages',
+        url: `${baseUrl}/api/v4/chats/messages`,
+        body: { chat_id: sampleChat.chatId, type: 'text', text: 'probe' }
+      }
+    ];
+    for (const p of probes) {
+      try {
+        const r = await axios.post(p.url, p.body, {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          timeout: 4000,
+          validateStatus: () => true
+        });
+        chatMessageProbes.push({
+          name: p.name,
+          url: p.url,
+          status: r.status,
+          body: typeof r.data === 'object' ? JSON.stringify(r.data).slice(0, 300) : String(r.data).slice(0, 200)
+        });
+      } catch (err) {
+        chatMessageProbes.push({
+          name: p.name,
+          url: p.url,
+          status: err.response?.status || null,
+          error: err.message,
+          body: err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : null
+        });
+      }
+    }
+  }
+
+  res.json({
+    accountWithAmojo,
+    sampleChatId: sampleChat?.chatId || null,
+    driveResultsNon404: driveResults,
+    chatMessageProbes
+  });
+}));
+
+// Diagnóstico: prueba múltiples endpoints de Kommo para encontrar el correcto
+// para subida de archivos. Devuelve el status HTTP de cada uno.
+app.get('/api/debug/probe-uploads', asyncHandler(async (_req, res) => {
+  const FormData = require('form-data');
+  const { Buffer } = require('buffer');
+
+  // PNG mínimo (1x1 transparente) para no enviar archivos reales
+  const tinyPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=',
+    'base64'
+  );
+
+  const baseUrl = kommo.getBaseUrl();
+  const token = await kommo.getValidAccessToken();
+
+  const subdomain = baseUrl.replace(/^https?:\/\//, '').replace(/\.kommo\.com.*$/, '');
+  const accountInfo = await kommo.fetchAccountInfo().catch((e) => ({ error: e.message }));
+  const amojoId = accountInfo?.amojo_id || null;
+
+  const candidates = [
+    { name: 'v4 chat/uploads',           url: `${baseUrl}/api/v4/chat/uploads` },
+    { name: 'v4 chats/uploads',          url: `${baseUrl}/api/v4/chats/uploads` },
+    { name: 'v4 uploads',                url: `${baseUrl}/api/v4/uploads` },
+    { name: 'v4 chat/upload',            url: `${baseUrl}/api/v4/chat/upload` },
+    { name: 'v4 files',                  url: `${baseUrl}/api/v4/files` },
+    { name: 'v4 _DRIVE_/uploads',        url: `${baseUrl}/api/v4/account/_DRIVE_/uploads` },
+    { name: 'amojo /v2/origin/uploads',  url: `https://amojo.kommo.com/v2/origin/${amojoId || 'X'}/uploads`, skipAuth: true },
+    { name: 'drive shard uploads',       url: `https://drive-04.kommo.com/api/v4/uploads` }
+  ];
+
+  const results = [];
+  for (const c of candidates) {
+    try {
+      const form = new FormData();
+      form.append('file', tinyPng, { filename: 'probe.png', contentType: 'image/png' });
+      const headers = { ...form.getHeaders() };
+      if (!c.skipAuth) headers.Authorization = `Bearer ${token}`;
+      const r = await axios.post(c.url, form, { headers, timeout: 8000, validateStatus: () => true });
+      results.push({
+        name: c.name,
+        url: c.url,
+        status: r.status,
+        body: typeof r.data === 'object' ? JSON.stringify(r.data).slice(0, 300) : String(r.data).slice(0, 300)
+      });
+    } catch (err) {
+      results.push({
+        name: c.name,
+        url: c.url,
+        error: err.message,
+        status: err.response?.status || null,
+        body: err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : null
+      });
+    }
+  }
+
+  res.json({
+    subdomain,
+    amojoId,
+    accountInfoError: accountInfo?.error || null,
+    results
+  });
+}));
+
 app.get('/api/quick-replies', (_req, res) => {
   res.json({
     items: store.getQuickReplies()
@@ -837,6 +1572,15 @@ app.post('/api/quick-replies', (req, res) => {
 
   if (!name) {
     return res.status(400).json({ error: 'La respuesta rápida necesita un nombre.' });
+  }
+
+  const normalizedName = name.toLocaleLowerCase('es');
+  const conflict = store.getQuickReplies().find(
+    (item) => item.id !== id && item.name.toLocaleLowerCase('es') === normalizedName
+  );
+
+  if (conflict) {
+    return res.status(409).json({ error: `Ya existe una respuesta rápida con el título "${conflict.name}". Elige otro título.` });
   }
 
   store.upsertQuickReply({

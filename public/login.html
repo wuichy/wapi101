@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reelance Hub · Acceder</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body.login-body {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      background: var(--bg);
+      padding: 20px;
+    }
+
+    .login-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow-md);
+      padding: 32px 28px;
+      width: min(360px, 100%);
+    }
+
+    .login-card h1 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .login-card .eyebrow {
+      margin: 0 0 20px;
+    }
+
+    .login-card form {
+      display: grid;
+      gap: 12px;
+    }
+
+    .login-card input {
+      width: 100%;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      font-size: 15px;
+      background: var(--panel);
+      color: var(--text);
+      outline: none;
+      transition: border-color 150ms;
+    }
+
+    .login-card input:focus {
+      border-color: var(--brand);
+    }
+
+    .login-card button {
+      border: none;
+      border-radius: 10px;
+      background: var(--brand);
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 11px;
+      cursor: pointer;
+      transition: background 120ms;
+    }
+
+    .login-card button:hover {
+      background: var(--brand-dark);
+    }
+
+    .login-error {
+      color: var(--danger);
+      font-size: 13px;
+      margin: 0;
+      min-height: 18px;
+    }
+  </style>
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <p class="eyebrow">Reelance Hub</p>
+    <h1>Acceder</h1>
+    <form id="loginForm">
+      <input id="passwordInput" type="password" placeholder="Contraseña" autocomplete="current-password" required />
+      <p id="loginError" class="login-error"></p>
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const errorBox = document.getElementById('loginError');
+    const passwordInput = document.getElementById('passwordInput');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorBox.textContent = '';
+
+      const password = passwordInput.value;
+      const submitBtn = form.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Entrando…';
+
+      try {
+        const response = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          errorBox.textContent = data.error || 'Contraseña incorrecta.';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Entrar';
+          passwordInput.select();
+          return;
+        }
+
+        const params = new URLSearchParams(location.search);
+        const next = params.get('next') || '/';
+        location.href = next;
+      } catch (err) {
+        errorBox.textContent = err.message || 'Error de red.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Entrar';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -3,14 +3,14 @@
     "name": "widget.name",
     "description": "widget.description",
     "short_description": "widget.short_description",
-    "version": "1.0.4",
+    "version": "1.0.24",
     "interface_version": 2,
     "init_once": true,
     "locale": ["es", "en"],
     "installation": true,
     "support": {
-      "link": "https://tu-app.ngrok-free.app",
-      "email": "noreply@example.com"
+      "link": "https://lucho101.com",
+      "email": "noreply@lucho101.com"
     }
   },
   "locations": ["settings", "salesbot_designer"],
@@ -31,14 +31,25 @@
   },
   "salesbot_designer": {
     "logo": "/images/logo_main.png",
-    "reelance_reply_bridge": {
-      "name": "salesbot.handler_name",
+    "reelance_log_outgoing": {
+      "name": "Registrar mensaje en Reelance Hub",
       "settings": {
-        "webhook_url": {
-          "name": "salesbot.webhook_url",
-          "default_value": "https://TU-NGROK-URL.ngrok-free.app/api/kommo/salesbot/handoff",
+        "message_text": {
+          "name": "Texto del mensaje a registrar",
           "type": "text",
-          "manual": true
+          "required": false,
+          "default_value": "Escribe aquí el mensaje del bot"
+        }
+      }
+    },
+    "reelance_reply_bridge": {
+      "name": "Enviar desde Reelance Hub",
+      "settings": {
+        "message_text": {
+          "name": "Mensaje (opcional)",
+          "type": "text",
+          "required": false,
+          "default_value": "Mensaje del agente"
         }
       }
     }

@@ -1,5 +1,9 @@
 define(['jquery'], function () {
   return function ReelanceHubWidget() {
+    // URLs hardcodeadas — no dependen de params para evitar validación vacía en Kommo
+    const HANDOFF_URL    = 'https://lucho101.com/api/kommo/salesbot/handoff';
+    const LOG_URL        = 'https://lucho101.com/webhooks/kommo/log-outgoing';
+
     const createStep = (items) => ({
       question: items,
       require: []
@@ -11,71 +15,81 @@ define(['jquery'], function () {
       bind_actions: () => true,
       render: () => true,
 
-      onSalesbotDesignerSave: (_handlerCode, params) => {
-        const hookUrl = (params && params.webhook_url) || '';
+      onSalesbotDesignerSave: (handlerCode, params) => {
+        // ─── Handler 1: Bridge — llama al servidor para obtener el mensaje del
+        // agente y lo entrega al cliente via handler "show" nativo de Kommo.
+        if (handlerCode === 'reelance_reply_bridge') {
+          const requestStep = createStep([
+            {
+              handler: 'widget_request',
+              params: {
+                url: HANDOFF_URL,
+                data: {
+                  source:    'reelance_hub',
+                  lead_id:   '{{lead.id}}',
+                  contact_id:'{{contact.id}}',
+                  source_id: '{{lead.source_id}}'
+                }
+              }
+            },
+            { handler: 'goto', params: { type: 'question', step: 1 } }
+          ]);
 
-        // Paso 0: pedir el reply_text al webhook externo
-        const requestStep = createStep([
-          {
-            handler: 'widget_request',
-            params: {
-              url: hookUrl,
-              data: {
-                source: 'reelance_hub',
-                lead_id: '{{lead.id}}',
-                contact_id: '{{contact.id}}',
-                source_id: '{{lead.source_id}}',
-                message_text: '{{message_text}}'
+          const deliveryStep = createStep([
+            // Texto plano
+            {
+              handler: 'condition',
+              params: {
+                term1: '{{json.reply_type}}', term2: 'text', operation: '=',
+                result: [{ handler: 'show', params: { type: 'text',  value: '{{json.reply_text}}' } }]
+              }
+            },
+            // Imagen
+            {
+              handler: 'condition',
+              params: {
+                term1: '{{json.reply_type}}', term2: 'image', operation: '=',
+                result: [{ handler: 'show', params: { type: 'image', value: '{{json.reply_url}}' } }]
+              }
+            },
+            // Archivo / documento
+            {
+              handler: 'condition',
+              params: {
+                term1: '{{json.reply_type}}', term2: 'file', operation: '=',
+                result: [{ handler: 'show', params: { type: 'file',  value: '{{json.reply_url}}' } }]
+              }
+            },
+            { handler: 'stop', params: {} }
+          ]);
+
+          return JSON.stringify([requestStep, deliveryStep]);
+        }
+
+        // ─── Handler 2: Log — registra en Reelance Hub los mensajes salientes
+        // que el salesbot envió por plantillas de WhatsApp.
+        if (handlerCode === 'reelance_log_outgoing') {
+          const messageText = (params && params.message_text) || '';
+
+          const requestStep = createStep([
+            {
+              handler: 'widget_request',
+              params: {
+                url: LOG_URL,
+                data: {
+                  source:     'reelance_hub_log',
+                  lead_id:    '{{lead.id}}',
+                  contact_id: '{{contact.id}}',
+                  text:       messageText
+                }
               }
             }
-          },
-          {
-            handler: 'goto',
-            params: { type: 'question', step: 1 }
-          }
-        ]);
+          ]);
 
-        // Paso 1: si hay reply_text, enviarlo y parar.
-        // El widget mismo envía el mensaje — NO debe haber ningún bloque adicional
-        // de send_message después del widget en el salesbot.
-        const deliveryStep = createStep([
-          {
-            handler: 'condition',
-            params: {
-              term1: '{{json.has_reply}}',
-              term2: '1',
-              operation: '=',
-              result: [
-                {
-                  handler: 'send_external_message',
-                  params: {
-                    message: {
-                      type: 'external',
-                      text: '{{json.reply_text}}'
-                    },
-                    recipient: {
-                      type: 'main_contact',
-                      way_of_communication: 'last_active'
-                    },
-                    channels: [
-                      { id: '{{json.reply_channel_id}}' }
-                    ],
-                    on_error: {
-                      handler: 'show',
-                      params: {
-                        type: 'text',
-                        value: 'No pude enviar el mensaje al canal externo configurado.'
-                      }
-                    }
-                  }
-                }
-              ]
-            }
-          },
-          { handler: 'stop', params: {} }
-        ]);
+          return JSON.stringify([requestStep]);
+        }
 
-        return JSON.stringify([requestStep, deliveryStep]);
+        return JSON.stringify([]);
       },
 
       destroy: () => {},

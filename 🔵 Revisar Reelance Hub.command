@@ -1,0 +1,1 @@
+/Users/luismelchor/Desktop/ReelanceHub/scripts/revisar.command

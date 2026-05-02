@@ -1,0 +1,53 @@
+{
+  "widget": {
+    "name": "widget.name",
+    "description": "widget.description",
+    "short_description": "widget.short_description",
+    "version": "1.0.3",
+    "interface_version": 2,
+    "init_once": true,
+    "locale": ["es", "en"],
+    "installation": true,
+    "support": {
+      "link": "https://lucho101.com",
+      "email": "noreply@lucho101.com"
+    }
+  },
+  "locations": ["settings", "salesbot_designer"],
+  "tour": {
+    "is_tour": true,
+    "tour_images": {
+      "es": ["/images/logo_main.png"],
+      "en": ["/images/logo_main.png"]
+    },
+    "tour_description": "widget.tour_description"
+  },
+  "settings": {
+    "webhook_url": {
+      "name": "settings.webhook_url",
+      "type": "text",
+      "required": false,
+      "default_value": "https://lucho101.com/webhooks/kommo/log-outgoing"
+    }
+  },
+  "salesbot_designer": {
+    "logo": "/images/logo_main.png",
+    "log_template_sent": {
+      "name": "Registrar plantilla en Reelance Hub",
+      "settings": {
+        "message_text": {
+          "name": "Texto que se envió al cliente",
+          "type": "text",
+          "required": false,
+          "default_value": "Pega aquí el texto de la plantilla"
+        },
+        "tag": {
+          "name": "Etiqueta opcional (ej: Plantilla 30d)",
+          "type": "text",
+          "required": false,
+          "default_value": "Plantilla"
+        }
+      }
+    }
+  }
+}

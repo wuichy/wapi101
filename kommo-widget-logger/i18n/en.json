@@ -1,0 +1,11 @@
+{
+  "widget": {
+    "name": "Reelance Hub registrar mensaje",
+    "description": "Logs in Reelance Hub the messages your automated bots send via WhatsApp (24h+ templates, reminders, follow-ups). Sends nothing to the client: only records in your inbox.",
+    "short_description": "WhatsApp template tracker",
+    "tour_description": "Add a block after each automated template send so it appears in your Reelance Hub inbox."
+  },
+  "settings": {
+    "webhook_url": "Webhook URL (do not edit)"
+  }
+}

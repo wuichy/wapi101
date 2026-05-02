@@ -1,0 +1,19 @@
+{
+  "name": "reelance-app",
+  "version": "0.0.1",
+  "description": "App multi-canal con pipelines, leads, contactos e integraciones (WhatsApp/Messenger/Instagram/TikTok)",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "better-sqlite3": "^11.3.0",
+    "express": "^5.0.0",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
+    "web-push": "^3.6.7"
+  }
+}

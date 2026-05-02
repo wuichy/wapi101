@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Reelance CRM</title>
+
+  <!-- PWA / iOS / Mac standalone -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="application-name" content="Reelance" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Reelance" />
+  <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+  <div id="connBanner" class="conn-banner" hidden></div>
+  <div class="app">
+    <!-- ═════════ SIDEBAR ═════════ -->
+    <aside class="sidebar">
+      <a href="#" class="brand" aria-label="Reelance">
+        <span class="brand-mark">R</span>
+      </a>
+
+      <nav class="nav" id="nav">
+        <a href="#inicio" class="nav-item" data-view="inicio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8v10a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2V11z"/></svg>
+          <span>Inicio</span>
+        </a>
+        <a href="#chats" class="nav-item is-active" data-view="chats">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 01-4 4H8l-5 4V7a4 4 0 014-4h10a4 4 0 014 4z"/></svg>
+          <span>Chats</span>
+        </a>
+        <a href="#pipelines" class="nav-item" data-view="pipelines">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="4" height="16" rx="1"/><rect x="10" y="4" width="4" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
+          <span>Pipelines</span>
+        </a>
+        <a href="#expedientes" class="nav-item" data-view="expedientes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>Expedientes</span>
+        </a>
+        <a href="#contactos" class="nav-item" data-view="contactos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          <span>Contactos</span>
+        </a>
+        <a href="#plantillas" class="nav-item" data-view="plantillas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span>Plantillas</span>
+        </a>
+        <a href="#integraciones" class="nav-item" data-view="integraciones">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 005 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 5a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09A1.65 1.65 0 0015 5a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          <span>Integraciones</span>
+        </a>
+        <a href="#bot" class="nav-item" data-view="bot">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="12" y1="16" x2="12" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+          <span>Bot</span>
+        </a>
+        <a href="#ajustes" class="nav-item" data-view="ajustes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>
+          <span>Ajustes</span>
+        </a>
+      </nav>
+
+      <button class="nav-collapse-btn" id="navCollapseBtn" aria-label="Colapsar menú">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M13 5l-5 5 5 5"/></svg>
+      </button>
+
+      <div class="nav-advisor-bar">
+        <div class="nav-advisor-info" id="navAdvisorInfo">
+          <div class="nav-advisor-avatar" id="navAdvisorAvatar"></div>
+          <span class="nav-advisor-name" id="navAdvisorName">—</span>
+        </div>
+        <button class="nav-logout-btn" id="navLogoutBtn" title="Cerrar sesión">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ═════════ MAIN ═════════ -->
+    <main class="main">
+      <!-- ─── TOPBAR ─── -->
+      <header class="topbar">
+        <h1 class="topbar-title" id="topbarTitle">Chats</h1>
+        <div class="topbar-search kf-anchor" id="topbarSearchWrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="search" id="topbarSearchInput" placeholder="Buscar conversaciones..." autocomplete="off" />
+          <div class="kf-panel" id="plFilterPanel" hidden></div>
+        </div>
+        <!-- Pipeline-only controls, hidden on other views -->
+        <div class="topbar-pl-extras" id="topbarPlExtras" hidden>
+          <select id="plBoardSort" class="pl-sort-select">
+            <option value="createdAt">Más reciente</option>
+            <option value="updatedAt">Última actividad</option>
+            <option value="name">Nombre A–Z</option>
+            <option value="nameDesc">Nombre Z–A</option>
+          </select>
+          <button class="kf-filter-btn" id="plFilterBtn" title="Filtros">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M3 5h14M6 10h8M9 15h2"/></svg>
+            <span id="plFilterBadge" class="kf-badge" hidden>0</span>
+          </button>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-btn has-badge" aria-label="Notificaciones">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+            <span class="badge">2</span>
+          </button>
+          <button class="icon-btn" aria-label="Ayuda">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </button>
+          <button class="org-btn">
+            Reelance
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ─── VISTA: CHATS — clon de Reelance Hub (estilo Mac/iOS, iMessage) ─── -->
+      <section class="view view-chats" data-view="chats">
+        <div class="rh-clone">
+          <div class="rh-shell">
+            <!-- Sidebar interna estilo Reelance Hub -->
+            <aside class="rh-sidebar">
+              <div class="rh-brand-card">
+                <p class="rh-eyebrow">Reelance</p>
+                <h2>Inbox</h2>
+              </div>
+
+              <div class="rh-search-wrap">
+                <input type="search" placeholder="Buscar usuario, teléfono, mensaje..." />
+              </div>
+
+              <div class="rh-filter-pills">
+                <button class="rh-filter-pill rh-active">Todos <span class="rh-filter-pill-count" id="pillCountAll"></span></button>
+                <button class="rh-filter-pill">No leídos <span class="rh-filter-pill-count" id="pillCountUnread"></span></button>
+                <button class="rh-filter-pill">Fijados</button>
+                <button class="rh-filter-pill">WhatsApp</button>
+                <button class="rh-filter-pill">Instagram</button>
+                <button class="rh-filter-pill">Messenger</button>
+              </div>
+
+              <div class="rh-sidebar-actions">
+                <button class="rh-ghost-button rh-wide-button" id="rhNewTplBtn">+ Respuesta rápida</button>
+              </div>
+
+              <div class="rh-chat-list" id="rhChatList"><!-- JS --></div>
+            </aside>
+
+            <!-- Panel de conversación -->
+            <main class="rh-conversation-panel">
+              <header class="rh-conversation-header">
+                <div class="rh-conversation-heading">
+                  <p class="rh-conversation-title" id="rhChatTitle">María González</p>
+                  <div class="rh-conversation-meta">
+                    <span>+52 123 456 7890</span>
+                    <span class="rh-conversation-origin">
+                      <span class="rh-channel-badge">
+                        <span class="rh-channel-dot rh-channel-whatsapp"></span>
+                        WhatsApp
+                      </span>
+                    </span>
+                    <span class="rh-pipeline-stage">Ventas · Interesado</span>
+                  </div>
+                </div>
+              </header>
+
+              <section class="rh-messages" id="rhMessages"><!-- JS --></section>
+
+              <form class="rh-reply-form" onsubmit="event.preventDefault()">
+                <div class="rh-reply-input-row">
+                  <div class="rh-reply-tools">
+                    <button type="button" class="rh-icon-button" title="Adjuntar">⊕</button>
+                    <button type="button" class="rh-icon-button rh-tpl-trigger" id="rhTplTrigger" title="Plantillas">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                    </button>
+                  </div>
+                  <div class="rh-reply-compose">
+                    <textarea placeholder="Escribe un mensaje…" rows="1"></textarea>
+                  </div>
+                  <button type="submit" class="rh-send-button" title="Enviar">↑</button>
+                </div>
+              </form>
+            </main>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VISTA: PIPELINES ─── -->
+      <section class="view view-pipelines" data-view="pipelines" hidden>
+        <div class="pl-topbar">
+          <div class="pl-tabs" id="plTabs"></div>
+          <div class="pl-topbar-actions">
+            <button class="btn btn--ghost btn--sm" id="plManageBtn">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><circle cx="10" cy="10" r="3"/><path d="M10 2v2m0 12v2M4.2 4.2l1.4 1.4m8.8 8.8l1.4 1.4M2 10h2m12 0h2M4.2 15.8l1.4-1.4m8.8-8.8l1.4-1.4"/></svg>
+              Gestionar
+            </button>
+            <button class="btn btn--primary btn--sm" id="plNewPipelineBtn">+ Pipeline</button>
+          </div>
+        </div>
+        <div class="pl-board" id="plBoard"></div>
+        <div class="pl-empty" id="plEmpty" hidden>
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" width="56" height="56"><rect x="4" y="12" width="14" height="40" rx="3"/><rect x="25" y="12" width="14" height="28" rx="3"/><rect x="46" y="12" width="14" height="18" rx="3"/></svg>
+          <p>No tienes pipelines aún.<br>Crea el primero para organizar tus contactos.</p>
+          <button class="btn btn--primary" id="plNewPipelineBtn2">+ Crear pipeline</button>
+        </div>
+      </section>
+
+      <!-- Modal: gestionar pipeline (etapas) -->
+      <div class="modal-backdrop" id="plManageModal" hidden>
+        <div class="modal-box" style="max-width:560px">
+          <header class="modal-header">
+            <h2 id="plManageTitle">Gestionar pipeline</h2>
+            <button class="modal-close" data-close-pl-manage>×</button>
+          </header>
+          <div class="modal-body">
+            <div class="form-grid" style="margin-bottom:20px">
+              <label class="form-field">
+                <span>Nombre del pipeline</span>
+                <input type="text" id="plManageName" placeholder="Ej. Ventas" maxlength="60" />
+              </label>
+              <label class="form-field" style="max-width:120px">
+                <span>Color</span>
+                <input type="color" id="plManageColor" value="#2563eb" style="height:38px;padding:2px 4px;width:100%" />
+              </label>
+              <div class="form-field" style="max-width:80px">
+                <span>Icono</span>
+                <div class="pl-icon-picker-wrap">
+                  <button type="button" class="pl-icon-btn" id="plIconBtn" title="Elige un icono">
+                    <svg id="plIconPreview" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="12" cy="12" r="10"/></svg>
+                  </button>
+                  <input type="hidden" id="plManageIcon" value="" />
+                  <div class="pl-icon-dropdown" id="plIconDropdown" hidden></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pl-stages-section">
+              <div class="pl-stages-head">
+                <span>Etapas</span>
+                <button class="btn btn--ghost btn--sm" id="plAddStageBtn">+ Etapa</button>
+              </div>
+              <div id="plStagesList"></div>
+              <div id="plNewStageRow" hidden style="display:flex;gap:8px;margin-top:8px;align-items:center">
+                <input type="color" id="plNewStageColor" value="#94a3b8" style="width:38px;height:34px;padding:2px 3px;border:1px solid var(--border);border-radius:6px;flex-shrink:0" />
+                <input type="text" id="plNewStageName" placeholder="Nombre de etapa" class="form-input" style="flex:1" maxlength="60" />
+                <select id="plNewStageKind" style="height:34px;border:1px solid var(--border);border-radius:6px;padding:0 8px;font-size:13px;background:var(--bg);color:var(--text)">
+                  <option value="in_progress">En progreso</option>
+                  <option value="won">Ganado</option>
+                  <option value="lost">Perdido</option>
+                </select>
+                <button class="btn btn--primary btn--sm" id="plSaveNewStageBtn">Guardar</button>
+                <button class="btn btn--ghost btn--sm" id="plCancelNewStageBtn">×</button>
+              </div>
+            </div>
+          </div>
+          <footer class="modal-footer">
+            <button class="btn btn--danger-ghost" id="plDeletePipelineBtn" hidden>Eliminar pipeline</button>
+            <div style="flex:1"></div>
+            <button class="btn btn--ghost" data-close-pl-manage>Cancelar</button>
+            <button class="btn btn--primary" id="plSavePipelineBtn">Guardar</button>
+          </footer>
+        </div>
+      </div>
+
+      <!-- ─── VISTAS placeholder genéricas ─── -->
+      <!-- ─── VISTA: INICIO / DASHBOARD ─── -->
+      <section class="view view-inicio" data-view="inicio" hidden>
+        <div class="dash-shell">
+          <header class="dash-header">
+            <div>
+              <h1 class="dash-title">Dashboard</h1>
+              <p class="dash-subtitle" id="dashSubtitle">Cargando...</p>
+            </div>
+            <button class="btn btn--ghost btn--sm" id="dashRefreshBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Actualizar
+            </button>
+          </header>
+
+          <!-- Fila 1: mensajes enviados / recibidos -->
+          <div class="dash-row">
+            <div class="dash-card dash-card--received">
+              <div class="dash-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">Mensajes recibidos</span>
+                <span class="dash-card-value" id="dashMsgReceived">—</span>
+                <span class="dash-card-sub" id="dashMsgReceivedToday">— hoy</span>
+              </div>
+              <div class="dash-sparkline" id="sparkReceived"></div>
+            </div>
+
+            <div class="dash-card dash-card--sent">
+              <div class="dash-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">Mensajes enviados</span>
+                <span class="dash-card-value" id="dashMsgSent">—</span>
+                <span class="dash-card-sub" id="dashMsgSentToday">— hoy</span>
+              </div>
+              <div class="dash-sparkline" id="sparkSent"></div>
+            </div>
+          </div>
+
+          <!-- Fila 2: métricas secundarias -->
+          <div class="dash-row dash-row--sm">
+            <div class="dash-card dash-card--sm dash-card--convos">
+              <div class="dash-card-icon dash-card-icon--sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h8M8 14h5" stroke-linecap="round"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">Conversaciones</span>
+                <span class="dash-card-value" id="dashConvos">—</span>
+                <span class="dash-card-sub" id="dashConvosUnread">— sin leer</span>
+              </div>
+            </div>
+
+            <div class="dash-card dash-card--sm dash-card--contacts">
+              <div class="dash-card-icon dash-card-icon--sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">Contactos</span>
+                <span class="dash-card-value" id="dashContacts">—</span>
+                <span class="dash-card-sub" id="dashContactsToday">— hoy</span>
+              </div>
+            </div>
+
+            <div class="dash-card dash-card--sm dash-card--exps">
+              <div class="dash-card-icon dash-card-icon--sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">Expedientes</span>
+                <span class="dash-card-value" id="dashExps">—</span>
+                <span class="dash-card-sub">en total</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gráfica semanal -->
+          <div class="dash-chart-card">
+            <div class="dash-chart-header">
+              <span class="dash-chart-title">Actividad últimos 7 días</span>
+              <div class="dash-chart-legend">
+                <span class="dash-legend-dot dash-legend-received"></span>Recibidos
+                <span class="dash-legend-dot dash-legend-sent"></span>Enviados
+              </div>
+            </div>
+            <div class="dash-chart-wrap" id="dashChart">
+              <!-- barras SVG generadas por JS -->
+            </div>
+            <div class="dash-chart-labels" id="dashChartLabels"></div>
+          </div>
+        </div>
+      </section>
+      <!-- ─── VISTA: EXPEDIENTES ─── -->
+      <section class="view view-expedients" data-view="expedientes" hidden>
+        <div class="exp-toolbar">
+          <div class="kf-anchor" id="expFilterAnchor">
+            <div class="exp-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <input type="search" id="expSearch" placeholder="Buscar…" autocomplete="off" />
+            </div>
+            <div class="kf-panel" id="expFilterPanel" hidden></div>
+          </div>
+          <button class="kf-filter-btn" id="expFilterBtn" title="Filtros">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M3 5h14M6 10h8M9 15h2"/></svg>
+            <span id="expFilterBadge" class="kf-badge" hidden>0</span>
+          </button>
+          <div class="exp-toolbar-actions">
+            <div class="sort-wrapper">
+              <button class="btn btn--ghost btn--icon-label" id="expSortBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+                <span id="expSortLabel">Más reciente</span>
+              </button>
+              <div class="sort-dropdown" id="expSortDropdown" hidden>
+                <button class="sort-option" data-exp-sort="createdAt" data-exp-dir="desc" data-label="Más reciente">Más reciente</button>
+                <button class="sort-option" data-exp-sort="createdAt" data-exp-dir="asc"  data-label="Más antiguo">Más antiguo</button>
+                <button class="sort-option" data-exp-sort="name"      data-exp-dir="asc"  data-label="Nombre A→Z">Nombre A→Z</button>
+                <button class="sort-option" data-exp-sort="name"      data-exp-dir="desc" data-label="Nombre Z→A">Nombre Z→A</button>
+                <button class="sort-option" data-exp-sort="contact"   data-exp-dir="asc"  data-label="Contacto A→Z">Contacto A→Z</button>
+                <button class="sort-option" data-exp-sort="pipeline"  data-exp-dir="asc"  data-label="Pipeline A→Z">Pipeline A→Z</button>
+              </div>
+            </div>
+            <button class="btn btn--ghost" id="expImportBtn">Importar</button>
+            <button class="btn btn--ghost btn--icon-label" id="expFieldsBtn" title="Campos personalizados">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+              Campos
+            </button>
+            <button class="btn btn--primary" id="expAddBtn">+ Nuevo expediente</button>
+          </div>
+        </div>
+
+        <!-- Tabla -->
+        <div class="exp-table-wrap">
+          <table class="exp-table" id="expTable">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Contacto</th>
+                <th>Pipeline › Etapa</th>
+                <th>Etiquetas</th>
+                <th>Creado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="expTableBody"></tbody>
+          </table>
+          <div class="exp-empty" id="expEmpty" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><path d="M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            <p>No hay expedientes aún</p>
+            <button class="btn btn--primary" id="expAddBtnEmpty">+ Crear primer expediente</button>
+          </div>
+        </div>
+
+        <div class="paginator" id="expPaginator" hidden>
+          <div class="paginator-info" id="expPageInfo"></div>
+          <div class="paginator-controls">
+            <button class="paginator-btn" id="expPagePrev" disabled>‹</button>
+            <span class="paginator-pages" id="expPageNumbers"></span>
+            <button class="paginator-btn" id="expPageNext" disabled>›</button>
+          </div>
+          <select class="paginator-size" id="expPageSize">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- ─── VISTA: Detalle de expediente ─── -->
+      <section class="view view-exp-detail" data-view="exp-detail" hidden>
+        <div class="exp-detail-shell">
+          <!-- Panel izquierdo: info del expediente -->
+          <aside class="exp-detail-left">
+            <div class="exp-detail-topbar">
+              <button class="btn btn--ghost btn--sm exp-detail-back" id="expDetailBack">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                <span class="exp-detail-back-label">Expedientes</span>
+              </button>
+            </div>
+
+            <div class="exp-detail-info" id="expDetailInfo"><!-- JS --></div>
+            <div class="exp-detail-bots" id="expDetailBots"><!-- JS --></div>
+            <div class="exp-detail-delete-zone">
+              <button class="btn btn--danger btn--sm" id="expDetailDeleteBtn">Eliminar expediente</button>
+            </div>
+          </aside>
+
+          <!-- Panel derecho: conversaciones + chat -->
+          <main class="exp-detail-right rh-conversation-panel">
+            <header class="rh-conversation-header">
+              <div class="rh-conversation-heading">
+                <div class="exp-detail-convo-tabs" id="expDetailConvoTabs"></div>
+              </div>
+              <div class="exp-chat-search-wrap" id="expChatSearchWrap">
+                <svg class="exp-chat-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" class="exp-chat-search-input" id="expChatSearchInput" placeholder="Buscar en conversación…" autocomplete="off">
+                <button class="exp-chat-search-clear" id="expChatSearchClear" hidden title="Limpiar">✕</button>
+              </div>
+            </header>
+
+            <section class="rh-messages" id="expDetailMessages">
+              <p class="rh-messages-empty">Sin conversaciones aún.</p>
+            </section>
+
+            <form class="rh-reply-form" id="expDetailReplyForm" onsubmit="event.preventDefault()">
+              <div class="rh-reply-input-row">
+                <div class="rh-reply-tools">
+                  <button type="button" class="rh-icon-button rh-tpl-trigger" id="expDetailTplTrigger" title="Plantillas">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                  </button>
+                </div>
+                <div class="rh-reply-compose">
+                  <textarea placeholder="Escribe un mensaje…" rows="1" id="expDetailReplyText"></textarea>
+                </div>
+                <button type="submit" class="rh-send-button" title="Enviar">↑</button>
+              </div>
+            </form>
+          </main>
+        </div>
+      </section>
+
+      <!-- ─── MODAL: Expediente (crear / editar) ─── -->
+      <div class="modal" id="expModal" hidden>
+        <div class="modal-backdrop" data-close-exp></div>
+        <div class="modal-card modal-card--lg">
+          <header class="modal-header">
+            <h3 id="expModalTitle">Nuevo expediente</h3>
+            <button class="icon-btn" data-close-exp aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <form id="expForm" class="modal-body exp-form-grid">
+            <!-- Columna izquierda: datos principales -->
+            <div class="exp-form-main">
+              <div class="int-field">
+                <label>Nombre del expediente</label>
+                <input type="text" id="expName" placeholder="ej. Proyecto web, Cotización #001..." autocomplete="off" />
+              </div>
+
+              <div class="int-field">
+                <div class="exp-contact-label-row">
+                  <label>Contacto <span class="int-field-required">*</span></label>
+                  <button type="button" class="btn btn--xs btn--primary" id="expNewContactBtn">+ Crear contacto</button>
+                </div>
+                <div class="exp-contact-search">
+                  <input type="text" id="expContactSearch" placeholder="Buscar contacto por nombre, teléfono..." autocomplete="off" />
+                  <div class="exp-contact-results" id="expContactResults" hidden></div>
+                  <div class="exp-contact-selected" id="expContactSelected" hidden>
+                    <span id="expContactSelectedName"></span>
+                    <button type="button" class="exp-contact-clear" id="expContactClear">✕</button>
+                  </div>
+                </div>
+                <input type="hidden" id="expContactId" />
+
+                <!-- Mini-formulario inline para crear contacto rápido -->
+                <div class="exp-quick-contact" id="expQuickContact" hidden>
+                  <div class="exp-quick-contact-title">Nuevo contacto</div>
+                  <div class="exp-form-row">
+                    <div class="int-field" style="flex:1">
+                      <label>Nombre <span class="int-field-required">*</span></label>
+                      <input type="text" id="qcFirstName" placeholder="Nombre" autocomplete="off" />
+                    </div>
+                    <div class="int-field" style="flex:1">
+                      <label>Apellido</label>
+                      <input type="text" id="qcLastName" placeholder="Apellido" autocomplete="off" />
+                    </div>
+                  </div>
+                  <div class="exp-form-row">
+                    <div class="int-field" style="flex:1">
+                      <label>Teléfono</label>
+                      <input type="tel" id="qcPhone" placeholder="+52 55 0000 0000" autocomplete="off" />
+                    </div>
+                    <div class="int-field" style="flex:1">
+                      <label>Email</label>
+                      <input type="email" id="qcEmail" placeholder="correo@ejemplo.com" autocomplete="off" />
+                    </div>
+                  </div>
+                  <div id="qcError" class="int-error" hidden style="margin-top:8px"></div>
+                  <div class="exp-quick-contact-actions">
+                    <button type="button" class="btn btn--ghost btn--xs" id="qcCancelBtn">Cancelar</button>
+                    <button type="button" class="btn btn--primary btn--xs" id="qcSaveBtn">Crear y seleccionar</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="exp-form-row">
+                <div class="int-field" style="flex:1">
+                  <label>Pipeline <span class="int-field-required">*</span></label>
+                  <select id="expPipeline">
+                    <option value="">Selecciona pipeline...</option>
+                  </select>
+                </div>
+                <div class="int-field" style="flex:1">
+                  <label>Etapa <span class="int-field-required">*</span></label>
+                  <select id="expStage">
+                    <option value="">Selecciona etapa...</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="int-field">
+                <label>Etiquetas</label>
+                <div class="exp-tags-input" id="expTagsInput">
+                  <div class="exp-tags-chips" id="expTagsChips"></div>
+                  <input type="text" id="expTagsField" placeholder="Escribe una etiqueta y presiona Enter..." />
+                </div>
+              </div>
+            </div>
+
+            <!-- Columna derecha: campos personalizados -->
+            <div class="exp-form-custom" id="expCustomFields">
+              <!-- JS render -->
+            </div>
+          </form>
+
+          <div id="expModalError" class="int-error" style="margin:0 24px 12px" hidden></div>
+          <footer class="modal-footer">
+            <button type="button" class="btn btn--danger-ghost" id="expDeleteBtn" hidden>Eliminar expediente</button>
+            <div style="flex:1"></div>
+            <button type="button" class="btn btn--ghost" data-close-exp>Cancelar</button>
+            <button type="submit" form="expForm" class="btn btn--primary" id="expSaveBtn">Guardar</button>
+          </footer>
+        </div>
+      </div>
+
+      <!-- ─── MODAL: Campos personalizados ─── -->
+      <div class="modal" id="expFieldsModal" hidden>
+        <div class="modal-backdrop" data-close-fields></div>
+        <div class="modal-card modal-card--md">
+          <header class="modal-header">
+            <div>
+              <h3>Campos personalizados</h3>
+              <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">Se muestran en todos los expedientes</p>
+            </div>
+            <button class="icon-btn" data-close-fields aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="modal-body">
+            <div id="fieldDefsList" class="fields-defs-list"></div>
+            <div id="fieldDefsEmpty" class="exp-empty" style="padding:24px" hidden>
+              <p>No hay campos personalizados aún</p>
+            </div>
+            <div class="fields-add-row" id="fieldsAddRow">
+              <button class="btn btn--ghost" id="fieldsAddBtn">+ Agregar campo</button>
+            </div>
+            <!-- Formulario inline para nuevo campo -->
+            <div class="fields-new-form" id="fieldsNewForm" hidden>
+              <div class="int-field">
+                <label>Nombre del campo <span class="int-field-required">*</span></label>
+                <input type="text" id="newFieldLabel" placeholder="ej. Presupuesto, Fecha de entrega..." autocomplete="off" />
+              </div>
+              <div class="int-field">
+                <label>Tipo</label>
+                <div class="field-type-grid" id="fieldTypeGrid">
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="text" checked /><span>Texto</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="number" /><span>Número</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="toggle" /><span>Interruptor</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="select" /><span>Selección</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="multi_select" /><span>Multi-selección</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="date" /><span>Día</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="url" /><span>URL</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="long_text" /><span>Texto largo</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="birthday" /><span>Cumpleaños</span></label>
+                  <label class="field-type-option"><input type="radio" name="newFieldType" value="datetime" /><span>Fecha y hora</span></label>
+                </div>
+              </div>
+              <div class="int-field" id="fieldOptionsWrap" hidden>
+                <label>Opciones (una por línea)</label>
+                <textarea id="newFieldOptions" rows="3" placeholder="Opción 1&#10;Opción 2&#10;Opción 3"></textarea>
+              </div>
+              <div id="fieldsNewError" class="int-error" hidden></div>
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <button type="button" class="btn btn--ghost" id="fieldsNewCancel">Cancelar</button>
+                <button type="button" class="btn btn--primary" id="fieldsNewSave">Agregar campo</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── MODAL: Importar expedientes ─── -->
+      <div class="modal" id="expImportModal" hidden>
+        <div class="modal-backdrop" data-close-exp-import></div>
+        <div class="modal-card modal-card--lg">
+          <header class="modal-header">
+            <h3>Importar expedientes</h3>
+            <button class="icon-btn" data-close-exp-import>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="modal-body">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+              Pega el listado de expedientes. Cada línea es un expediente. Campos separados por coma:
+              <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px">Nombre, Contacto (nombre o teléfono), Pipeline, Etapa</code>
+            </p>
+            <textarea id="expImportText" rows="10" placeholder="Mi Expediente, Juan García, Ventas, Nuevo&#10;Proyecto X, +52 55 1234 5678, Proyectos, En revisión" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:13px;resize:vertical;box-sizing:border-box;outline:none;"></textarea>
+            <div id="expImportPreview" style="margin-top:16px"></div>
+          </div>
+          <footer class="modal-footer">
+            <button type="button" class="btn btn--ghost" data-close-exp-import>Cancelar</button>
+            <button type="button" class="btn btn--ghost" id="expImportParseBtn">Vista previa</button>
+            <button type="button" class="btn btn--primary" id="expImportSaveBtn" disabled>Importar</button>
+          </footer>
+        </div>
+      </div>
+      <!-- ─── VISTA: CONTACTOS ─── -->
+      <section class="view view-customers" data-view="contactos" hidden>
+        <div class="customers-toolbar">
+          <div class="customers-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="search" id="customerSearch" placeholder="Buscar por nombre, teléfono o email..." />
+          </div>
+          <div class="sort-menu">
+            <button class="btn btn--ghost" id="sortToggle" aria-haspopup="true" aria-expanded="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
+              <span id="sortLabel">Más recientes</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-left:6px"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="sort-dropdown" id="sortDropdown" hidden role="menu">
+              <button class="sort-option" data-sort-by="createdAt" data-sort-dir="desc" data-label="Más recientes">📅 Más recientes primero</button>
+              <button class="sort-option" data-sort-by="createdAt" data-sort-dir="asc"  data-label="Más antiguos">🕰️ Más antiguos primero</button>
+              <div class="sort-separator"></div>
+              <button class="sort-option" data-sort-by="name" data-sort-dir="asc"  data-label="Nombre A-Z">🔤 Nombre A → Z</button>
+              <button class="sort-option" data-sort-by="name" data-sort-dir="desc" data-label="Nombre Z-A">🔤 Nombre Z → A</button>
+              <div class="sort-separator"></div>
+              <button class="sort-option" data-sort-by="expedientCount" data-sort-dir="desc" data-label="Más expedientes">⭐ Más expedientes primero</button>
+              <button class="sort-option" data-sort-by="expedientCount" data-sort-dir="asc"  data-label="Menos expedientes">⬇ Menos expedientes primero</button>
+            </div>
+          </div>
+          <button class="btn btn--ghost" id="importCustomersBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Importar
+          </button>
+          <button class="btn btn--primary" id="newCustomerBtn">+ Nuevo contacto</button>
+        </div>
+        <div class="customers-table">
+          <div class="customers-row customers-row--head">
+            <div class="th">Nombre</div>
+            <div class="th">Teléfono</div>
+            <div class="th">Email</div>
+            <div class="th">Etiquetas</div>
+            <div class="th">Expedientes</div>
+            <div class="th">Creado</div>
+            <div class="th"></div>
+          </div>
+          <div id="customersList"><!-- JS render --></div>
+        </div>
+        <div class="paginator" id="customersPaginator" hidden>
+          <div class="paginator-left">
+            <span>Mostrar</span>
+            <select id="customersPageSize">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+            <span class="paginator-summary" id="customersSummary"></span>
+          </div>
+          <div class="paginator-right" id="customersPages"></div>
+        </div>
+      </section>
+
+      <!-- ─── MODAL: Importar contactos ─── -->
+      <div class="modal" id="importModal" hidden>
+        <div class="modal-backdrop" data-close-import></div>
+        <div class="modal-card modal-card--lg">
+          <header class="modal-header">
+            <h3>Importar contactos</h3>
+            <button class="icon-btn" data-close-import aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+
+          <div class="modal-body">
+            <div class="import-tabs">
+              <button class="import-tab is-active" data-import-tab="paste">📋 Pegar texto</button>
+              <button class="import-tab" data-import-tab="file">📁 Subir archivo</button>
+            </div>
+
+            <!-- Tab: Pegar texto -->
+            <div class="import-pane is-active" data-pane="paste">
+              <div class="import-help">
+                <strong>Formato:</strong> <code>nombre, apellido, correo, teléfono</code> — un contacto por línea.
+                <br/>Si falta un campo, déjalo vacío entre dos comas. Acepta <code>,</code> <code>;</code> <code>tab</code> o <code>|</code> como separador.
+              </div>
+              <div class="import-example">
+                <span class="import-example-label">Ejemplo:</span>
+                <pre>María, González, maria@gmail.com, +52 5512345678
+Carlos, Ramírez, carlos@x.com, +52 2223334444
+Ana, , ana@hotmail.com, 5551112222</pre>
+              </div>
+              <textarea id="importTextarea" rows="8" placeholder="Pega aquí tus contactos…&#10;María, González, maria@gmail.com, +52 5512345678&#10;Carlos, Ramírez, carlos@x.com, +52 2223334444"></textarea>
+              <div class="import-actions">
+                <button class="btn btn--primary" id="importPasteBtn">Procesar</button>
+              </div>
+            </div>
+
+            <!-- Tab: Subir archivo -->
+            <div class="import-pane" data-pane="file">
+              <div class="import-help">
+                Acepta <strong>CSV</strong> (<code>.csv</code> o <code>.txt</code>). Si tu archivo es de <strong>Excel</strong>, ábrelo y haz <em>Archivo → Guardar como → CSV (delimitado por comas)</em>.
+                <br/>Detecto automáticamente el separador y, si la primera línea tiene encabezados (nombre, email, etc.), la ignoro.
+              </div>
+              <label class="import-dropzone" for="importFileInput" id="importDropzone">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span class="import-dropzone-title">Click para elegir o arrastra un archivo aquí</span>
+                <span class="import-dropzone-sub">CSV, TXT — máximo 5 MB</span>
+              </label>
+              <input type="file" id="importFileInput" accept=".csv,.txt,text/csv,text/plain" hidden />
+              <div id="importFileName" class="import-file-name" hidden></div>
+            </div>
+
+            <!-- Preview (compartido por ambos tabs) -->
+            <div class="import-preview" id="importPreview" hidden>
+              <div class="import-preview-summary" id="importSummary"></div>
+              <div class="import-preview-table">
+                <div class="import-preview-row import-preview-row--head">
+                  <div>Nombre</div><div>Apellido</div><div>Email</div><div>Teléfono</div><div>Estado</div>
+                </div>
+                <div id="importPreviewBody"></div>
+              </div>
+              <label class="import-bulk-tag">
+                <span>Etiquetar todos los importados (opcional):</span>
+                <input type="text" id="importBulkTag" placeholder="Ej: Importación marzo 2026" />
+              </label>
+              <div class="import-dupe-policy">
+                <span>Si un contacto ya existe (mismo teléfono o email):</span>
+                <div class="import-dupe-options">
+                  <label><input type="radio" name="dupePolicy" value="skip" checked /> Omitir</label>
+                  <label><input type="radio" name="dupePolicy" value="update" /> Actualizar datos</label>
+                  <label><input type="radio" name="dupePolicy" value="create" /> Crear duplicado igual</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn--ghost" data-close-import>Cancelar</button>
+            <button type="button" class="btn btn--primary" id="importConfirmBtn" disabled>Importar</button>
+          </footer>
+        </div>
+      </div>
+
+      <!-- ─── MODAL: Nuevo contacto ─── -->
+      <div class="modal" id="customerModal" hidden>
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-card">
+          <header class="modal-header">
+            <h3 id="customerModalTitle">Nuevo contacto</h3>
+            <button class="icon-btn" data-close-modal aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <form id="customerForm" class="modal-body">
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Nombre <span class="required">*</span></span>
+                <input type="text" name="firstName" required autocomplete="off" />
+              </label>
+              <label class="form-field">
+                <span>Apellido</span>
+                <input type="text" name="lastName" autocomplete="off" />
+              </label>
+              <label class="form-field">
+                <span>Teléfono</span>
+                <input type="tel" name="phone" placeholder="+52 123 456 7890" autocomplete="off" />
+              </label>
+              <label class="form-field">
+                <span>Email</span>
+                <input type="email" name="email" placeholder="contacto@ejemplo.com" autocomplete="off" />
+              </label>
+              <div class="form-field form-field--full">
+                <span>Etiquetas <small style="color:var(--text-muted);font-weight:400">— escribe y presiona Enter o coma</small></span>
+                <div class="tag-input" id="tagInputBox">
+                  <div class="tag-input-chips" id="tagInputChips"></div>
+                  <input type="text" id="tagInputField" placeholder="Ej: VIP, Interesado, Frecuente..." />
+                </div>
+              </div>
+            </div>
+
+            <!-- Sección Expedientes -->
+            <div class="modal-section" id="expedientsSection">
+              <div class="modal-section-head">
+                <h4>Expedientes <small id="expedientsSectionCount"></small></h4>
+                <button type="button" class="btn btn--ghost" id="addExpedientBtn">+ Agregar expediente</button>
+              </div>
+              <div id="editExpedientsList" class="edit-expedients-list"></div>
+              <p class="settings-note" id="expedientsEmptyNote" hidden>Este contacto no tiene expedientes. Crea uno para asociarlo a un pipeline y etapa.</p>
+            </div>
+
+            <footer class="modal-footer">
+              <button type="button" class="btn btn--ghost" data-close-modal>Cancelar</button>
+              <button type="submit" class="btn btn--primary">Guardar contacto</button>
+            </footer>
+          </form>
+        </div>
+      </div>
+      <!-- ─── VISTA: PLANTILLAS ─── -->
+      <section class="view view-templates" data-view="plantillas" hidden>
+        <div class="tpl-layout">
+          <div class="tpl-header">
+            <h2 class="tpl-title">Plantillas</h2>
+            <button class="btn btn--primary btn--sm" id="tplNewBtn">+ Nueva plantilla</button>
+          </div>
+          <div class="tpl-tabs">
+            <button class="tpl-tab is-active" data-tab="wa_api">WhatsApp API <span class="tpl-tab-badge" id="tplBadgeWa">0</span></button>
+            <button class="tpl-tab" data-tab="free_form">Libres <span class="tpl-tab-badge" id="tplBadgeFree">0</span></button>
+          </div>
+          <div class="tpl-list" id="tplList">
+            <div class="tpl-empty" id="tplEmpty">No hay plantillas todavía.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── MODAL: Plantilla ─── -->
+      <div class="modal" id="tplModal" hidden>
+        <div class="modal-backdrop" id="tplModalBackdrop"></div>
+        <div class="modal-card modal-card--md tpl-modal-card">
+          <header class="modal-header">
+            <h3 id="tplModalTitle">Nueva plantilla</h3>
+            <button class="icon-btn" id="tplModalClose" aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="modal-body">
+            <!-- Tipo -->
+            <div class="int-field">
+              <label>Tipo de plantilla</label>
+              <div class="tpl-type-toggle">
+                <label class="tpl-type-opt">
+                  <input type="radio" name="tplType" value="wa_api" id="tplTypeWaApi" />
+                  <span>📱 WhatsApp API</span>
+                </label>
+                <label class="tpl-type-opt">
+                  <input type="radio" name="tplType" value="free_form" id="tplTypeFreeForm" checked />
+                  <span>💬 Libre</span>
+                </label>
+              </div>
+            </div>
+            <!-- Nombre para mostrar -->
+            <div class="int-field">
+              <label for="tplDisplayName">Nombre para mostrar</label>
+              <input type="text" class="int-input" id="tplDisplayName" placeholder="Ej: Bienvenida al cliente" />
+            </div>
+            <!-- Nombre interno -->
+            <div class="int-field">
+              <label for="tplName">Nombre interno <span class="tpl-hint-inline">(minúsculas, sin espacios — requerido por Meta)</span></label>
+              <input type="text" class="int-input" id="tplName" placeholder="ej. bienvenida_cliente" />
+            </div>
+            <!-- Categoría + Idioma (solo WA API) -->
+            <div class="tpl-wa-fields">
+              <div class="tpl-two-col">
+                <div class="int-field">
+                  <label for="tplCategory">Categoría</label>
+                  <select class="int-input" id="tplCategory">
+                    <option value="UTILITY">UTILITY — Transaccional</option>
+                    <option value="MARKETING">MARKETING — Promocional</option>
+                    <option value="AUTHENTICATION">AUTHENTICATION — Verificación</option>
+                  </select>
+                </div>
+                <div class="int-field">
+                  <label for="tplLanguage">Idioma</label>
+                  <select class="int-input" id="tplLanguage">
+                    <option value="es_MX">Español (México)</option>
+                    <option value="es">Español (España)</option>
+                    <option value="en_US">Inglés (EE.UU.)</option>
+                    <option value="en">Inglés</option>
+                    <option value="pt_BR">Portugués (Brasil)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <!-- Header -->
+            <div class="int-field">
+              <label for="tplHeader">Encabezado <span class="tpl-hint-inline">(opcional, máx 60 chars)</span></label>
+              <input type="text" class="int-input" id="tplHeader" placeholder="Texto del encabezado" maxlength="60" />
+            </div>
+            <!-- Body -->
+            <div class="int-field">
+              <label for="tplBody">Cuerpo del mensaje <span style="color:#dc2626">*</span></label>
+              <textarea class="int-input tpl-body-input" id="tplBody" rows="5" placeholder="Hola {nombre}, tu pedido está listo."></textarea>
+              <div class="tpl-var-row">
+                <span class="tpl-var-label">Insertar variable:</span>
+                <button type="button" class="tpl-var-btn" data-var="{nombre}">nombre</button>
+                <button type="button" class="tpl-var-btn" data-var="{apellido}">apellido</button>
+                <button type="button" class="tpl-var-btn" data-var="{telefono}">teléfono</button>
+                <button type="button" class="tpl-var-btn" data-var="{email}">email</button>
+                <button type="button" class="tpl-var-btn" data-var="{empresa}">empresa</button>
+              </div>
+            </div>
+            <!-- Footer -->
+            <div class="int-field">
+              <label for="tplFooter">Pie de página <span class="tpl-hint-inline">(opcional, máx 60 chars)</span></label>
+              <input type="text" class="int-input" id="tplFooter" placeholder="Texto del pie" maxlength="60" />
+            </div>
+            <p class="tpl-error-msg" id="tplError" hidden></p>
+          </div>
+          <footer class="modal-footer">
+            <button class="btn btn--secondary" id="tplModalCancel">Cancelar</button>
+            <button class="btn btn--primary" id="tplModalSave">Guardar plantilla</button>
+          </footer>
+        </div>
+      </div>
+      <!-- ─── VISTA: INTEGRACIONES ─── -->
+      <section class="view view-integrations" data-view="integraciones" hidden>
+        <div class="integrations-intro">
+          <h2>Integraciones</h2>
+          <p>Conecta tus canales de mensajería para recibir y responder desde Reelance. Las credenciales se guardan cifradas (AES-256-GCM) y nunca se exponen al navegador después de guardarlas.</p>
+        </div>
+        <div class="integrations-grid" id="integrationsGrid"><!-- JS render --></div>
+      </section>
+
+      <!-- ─── MODAL: Configurar integración manual ─── -->
+      <div class="modal" id="integrationModal" hidden>
+        <div class="modal-backdrop" data-close-int></div>
+        <div class="modal-card modal-card--lg">
+          <header class="modal-header">
+            <div class="int-modal-title">
+              <span class="int-icon" id="intModalIcon"></span>
+              <div>
+                <h3 id="intModalTitle">Configurar</h3>
+                <p id="intModalDesc" class="int-modal-desc"></p>
+              </div>
+            </div>
+            <button class="icon-btn" data-close-int aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <form id="integrationForm" class="modal-body">
+            <div id="intSetupSteps" class="int-setup-steps" hidden></div>
+            <div id="intFormFields" class="int-form-fields"></div>
+            <div id="intQrBox" class="int-qr-box" hidden>
+              <div id="intQrStatus" class="int-qr-status">Iniciando…</div>
+              <div id="intQrImageWrap" class="int-qr-image-wrap">
+                <div class="int-qr-spinner"></div>
+              </div>
+              <ol class="int-qr-steps">
+                <li>Abre <strong>WhatsApp</strong> en tu teléfono</li>
+                <li>Toca <strong>Configuración → Dispositivos vinculados</strong></li>
+                <li>Toca <strong>Vincular un dispositivo</strong> y escanea el QR</li>
+              </ol>
+              <button type="button" class="btn btn--ghost" id="intQrRefreshBtn">Generar QR nuevo</button>
+            </div>
+            <div id="intWebhookBox" class="int-webhook-box" hidden>
+              <h4>URL del Webhook</h4>
+              <p class="int-webhook-help">Pega esta URL en el dashboard del proveedor para recibir eventos.</p>
+              <div class="int-webhook-row">
+                <code id="intWebhookUrl"></code>
+                <button type="button" class="btn btn--ghost" id="intWebhookCopy">Copiar</button>
+              </div>
+              <p class="int-webhook-events" id="intWebhookEvents"></p>
+            </div>
+            <div id="intError" class="int-error" hidden></div>
+            <a id="intDocsLink" class="int-docs-link" href="#" target="_blank" rel="noopener" hidden>Documentación oficial →</a>
+          </form>
+          <footer class="modal-footer">
+            <button type="button" class="btn btn--danger-ghost" id="intDisconnectBtn" hidden>Desconectar</button>
+            <div style="flex:1"></div>
+            <button type="button" class="btn btn--ghost" data-close-int>Cancelar</button>
+            <button type="submit" form="integrationForm" class="btn btn--primary" id="intSubmitBtn">Conectar</button>
+          </footer>
+        </div>
+      </div>
+
+      <!-- ─── MODAL: Pipeline / Etapa de enrutamiento ─── -->
+      <div class="modal" id="routingModal" hidden>
+        <div class="modal-backdrop" data-close-routing></div>
+        <div class="modal-card modal-card--sm">
+          <header class="modal-header">
+            <h3>¿Dónde llegan los mensajes?</h3>
+            <button class="icon-btn" data-close-routing aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="modal-body">
+            <p class="routing-intro">Los mensajes nuevos de esta integración crearán expedientes automáticamente. Elige dónde deben llegar.</p>
+            <div class="routing-fields">
+              <div class="form-group">
+                <label>Pipeline</label>
+                <select id="routingPipelineSelect"><option value="">Cargando...</option></select>
+              </div>
+              <div class="form-group">
+                <label>Etapa inicial</label>
+                <select id="routingStageSelect"><option value="">Selecciona un pipeline primero</option></select>
+              </div>
+            </div>
+          </div>
+          <footer class="modal-footer">
+            <button type="button" class="btn btn--ghost" id="routingSkipBtn">Usar predeterminado</button>
+            <div style="flex:1"></div>
+            <button type="button" class="btn btn--primary" id="routingSaveBtn">Guardar</button>
+          </footer>
+        </div>
+      </div>
+
+      <!-- ─── MODAL: Webhook saliente ─── -->
+      <div class="modal" id="whModal" hidden>
+        <div class="modal-backdrop" data-close-wh></div>
+        <div class="modal-card modal-card--lg">
+          <header class="modal-header">
+            <h3 id="whModalTitle">Agregar Webhook</h3>
+            <button class="icon-btn" data-close-wh aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <form id="whForm" class="modal-body">
+            <div class="int-form-fields">
+              <div class="int-field">
+                <label>Nombre</label>
+                <input type="text" name="name" id="whName" placeholder="Mi Zapier" autocomplete="off" />
+              </div>
+              <div class="int-field">
+                <label>URL <span class="int-field-required">*</span></label>
+                <input type="url" name="url" id="whUrl" placeholder="https://hooks.zapier.com/hooks/catch/..." autocomplete="off" />
+              </div>
+              <div class="int-field">
+                <label>Eventos que activan este webhook</label>
+                <div id="whEvents" class="wh-events-grid"><!-- JS render --></div>
+              </div>
+              <div class="int-field">
+                <label>Secret HMAC (opcional)</label>
+                <input type="password" name="secret" id="whSecret" autocomplete="off" placeholder="String secreto para verificar la firma" />
+                <div class="int-field-help">Si lo configuras, cada llamada incluirá el header X-Reelance-Signature con la firma HMAC-SHA256.</div>
+              </div>
+            </div>
+            <div id="whError" class="int-error" hidden></div>
+          </form>
+          <footer class="modal-footer">
+            <button type="button" class="btn btn--danger-ghost" id="whDeleteBtn" hidden>Eliminar</button>
+            <div style="flex:1"></div>
+            <button type="button" class="btn btn--ghost" data-close-wh>Cancelar</button>
+            <button type="submit" form="whForm" class="btn btn--primary" id="whSubmitBtn">Guardar</button>
+          </footer>
+        </div>
+      </div>
+      <!-- ─── VISTA: BOT ─── -->
+      <section class="view view-bot" data-view="bot" hidden>
+
+        <!-- Lista de bots -->
+        <div id="botListView">
+          <div class="view-toolbar">
+            <div class="toolbar-left">
+              <h1 class="view-title">Bots</h1>
+              <p class="view-subtitle">Crea flujos automáticos de mensajes para tus contactos.</p>
+            </div>
+            <button class="btn btn--primary" id="botCreateBtn">+ Crear bot</button>
+          </div>
+          <div id="botList"></div>
+          <div id="botEmpty" class="empty-state" hidden>
+            <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="10" y="20" width="44" height="32" rx="6"/>
+              <circle cx="32" cy="14" r="5"/>
+              <path d="M32 19v5"/>
+              <circle cx="22" cy="36" r="2" fill="currentColor" stroke="none"/>
+              <circle cx="32" cy="36" r="2" fill="currentColor" stroke="none"/>
+              <circle cx="42" cy="36" r="2" fill="currentColor" stroke="none"/>
+            </svg>
+            <p>Aún no tienes bots.<br>Crea el primero para automatizar tus conversaciones.</p>
+            <button class="btn btn--primary" id="botCreateBtn2">+ Crear bot</button>
+          </div>
+        </div>
+
+        <!-- Constructor de bot -->
+        <div id="botBuilder" hidden>
+          <div class="bot-builder-topbar">
+            <button class="btn btn--ghost btn--sm" id="botBackBtn">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 5l-5 5 5 5"/></svg>
+              Bots
+            </button>
+            <input class="bot-builder-name-input" id="botBuilderName" placeholder="Nombre del bot" maxlength="80" />
+            <div class="bot-builder-topbar-right">
+              <label class="bot-enabled-label">
+                <span>Activo</span>
+                <span class="sb-toggle">
+                  <input type="checkbox" id="botBuilderEnabled" />
+                  <span class="sb-thumb"></span>
+                </span>
+              </label>
+              <button class="btn btn--danger-ghost" id="botBuilderDelete" hidden>Eliminar</button>
+              <button class="btn btn--primary" id="botBuilderSave">Guardar</button>
+            </div>
+          </div>
+
+          <div class="bot-builder-body">
+            <!-- Disparador -->
+            <div class="sb-trigger-card">
+              <div class="sb-card-label">DISPARADOR</div>
+              <div class="sb-trigger-row">
+                <select id="sbTriggerType">
+                  <option value="keyword">Palabra clave en mensaje</option>
+                  <option value="new_contact">Nuevo contacto creado</option>
+                  <option value="pipeline_stage">Expediente entra a etapa</option>
+                  <option value="always">Cualquier mensaje entrante</option>
+                  <option value="outbound">Manual / Outbound (tú inicias)</option>
+                </select>
+                <input type="text" id="sbTriggerValue" placeholder='p.ej. "precio", "hola", "info"' />
+                <div id="sbTriggerStageWrap" hidden style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+                  <select id="sbTriggerPipeline"><option value="">— Pipeline —</option></select>
+                  <div style="position:relative;display:flex;align-items:center">
+                    <span id="sbTriggerStageDot" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:transparent;pointer-events:none;flex-shrink:0;z-index:1"></span>
+                    <select id="sbTriggerStage" style="padding-left:28px;width:100%"><option value="">— Etapa —</option></select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Línea conectora -->
+            <div class="sb-connector"></div>
+
+            <!-- Pasos -->
+            <div id="sbStepsFlow"></div>
+
+            <!-- Botón agregar paso -->
+            <div class="sb-add-step-wrap">
+              <button class="sb-add-step-btn" id="sbAddStepBtn">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M10 4v12M4 10h12"/></svg>
+                Agregar paso
+              </button>
+              <!-- Picker de tipo de paso -->
+              <div class="sb-step-picker" id="sbStepPicker" hidden>
+                <button class="sb-step-type-btn" data-type="message">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><path d="M3 4h14a1 1 0 011 1v9a1 1 0 01-1 1H5l-3 3V5a1 1 0 011-1z"/></svg>
+                  Enviar mensaje
+                </button>
+                <button class="sb-step-type-btn" data-type="timer">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><circle cx="10" cy="11" r="7"/><path d="M10 7v4l2.5 2.5"/><path d="M8 2h4"/></svg>
+                  Temporizador
+                </button>
+                <button class="sb-step-type-btn" data-type="condition">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><path d="M10 3v14M3 10h14"/><circle cx="10" cy="10" r="3"/></svg>
+                  Condición
+                </button>
+                <button class="sb-step-type-btn" data-type="stage">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><rect x="2" y="5" width="16" height="12" rx="2"/><path d="M2 9h16"/><circle cx="6" cy="14" r="1" fill="currentColor" stroke="none"/></svg>
+                  Cambiar etapa
+                </button>
+                <button class="sb-step-type-btn" data-type="tag">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><path d="M3 3h7l7 7-7 7-7-7V3z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>
+                  Agregar etiqueta
+                </button>
+                <button class="sb-step-type-btn" data-type="assign">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><circle cx="10" cy="7" r="3.5"/><path d="M3 17a7 7 0 0114 0"/></svg>
+                  Asignar responsable
+                </button>
+                <button class="sb-step-type-btn" data-type="stop_bot">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>
+                  Parar bot
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VISTA: AJUSTES ─── -->
+      <section class="view view-settings" data-view="ajustes" hidden>
+        <div class="settings-shell">
+          <aside class="settings-nav">
+            <button class="settings-tab is-active" data-settings="usuarios">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+              Asesores
+            </button>
+            <button class="settings-tab" data-settings="ia">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>
+              IA
+            </button>
+            <button class="settings-tab" data-settings="notificaciones">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              Notificaciones
+            </button>
+            <button class="settings-tab" data-settings="papelera">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6m4-6v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+              Papelera
+            </button>
+          </aside>
+
+          <div class="settings-content">
+            <!-- ─── Asesores ─── -->
+            <div class="settings-pane is-active" data-settings="usuarios">
+              <div class="settings-head">
+                <div>
+                  <h2>Asesores</h2>
+                  <p>Crea asesores y define exactamente qué puede hacer cada uno. Los <strong>Administradores</strong> tienen acceso total.</p>
+                </div>
+                <button class="btn btn--primary" id="advisorNewBtn">+ Nuevo asesor</button>
+              </div>
+
+              <!-- Tabla -->
+              <div class="advisors-table" id="advisorsTable">
+                <div class="advisors-row advisors-row--head">
+                  <div>Asesor</div>
+                  <div>Acceso</div>
+                  <div>Rol</div>
+                  <div>Permisos</div>
+                  <div>Estado</div>
+                  <div></div>
+                </div>
+                <!-- JS render -->
+                <div class="advisors-empty" id="advisorsEmpty" hidden>
+                  No hay asesores aún.
+                </div>
+              </div>
+            </div>
+
+            <!-- ─── Modal: crear / editar asesor ─── -->
+            <div class="modal" id="advisorModal" hidden>
+              <div class="modal-backdrop" data-close-advisor></div>
+              <div class="modal-card modal-card--md">
+                <header class="modal-header">
+                  <h3 id="advisorModalTitle">Nuevo asesor</h3>
+                  <button class="icon-btn" data-close-advisor aria-label="Cerrar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </header>
+                <div class="modal-body adv-form">
+
+                  <!-- Datos básicos -->
+                  <div class="adv-section-title">Datos de acceso</div>
+                  <div class="adv-row">
+                    <div class="int-field" style="flex:1">
+                      <label>Nombre completo <span class="int-field-required">*</span></label>
+                      <input type="text" id="advName" placeholder="Ej. Marcela García" autocomplete="off" />
+                    </div>
+                    <div class="int-field" style="flex:1">
+                      <label>Usuario <span class="int-field-required">*</span></label>
+                      <input type="text" id="advUsername" placeholder="marcela" autocomplete="off" />
+                    </div>
+                  </div>
+                  <div class="adv-row">
+                    <div class="int-field" style="flex:1">
+                      <label>Email</label>
+                      <input type="email" id="advEmail" placeholder="marcela@empresa.com" autocomplete="off" />
+                    </div>
+                    <div class="int-field" style="flex:1">
+                      <label id="advPasswordLabel">Contraseña <span class="int-field-required">*</span></label>
+                      <input type="password" id="advPassword" placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
+                    </div>
+                  </div>
+
+                  <!-- Rol -->
+                  <div class="adv-section-title">Rol</div>
+                  <div class="adv-roles">
+                    <label class="adv-role-option" id="roleOptAdmin">
+                      <input type="radio" name="advRole" value="admin" />
+                      <div class="adv-role-card">
+                        <div class="adv-role-icon adv-role-icon--admin">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </div>
+                        <div>
+                          <div class="adv-role-name">Administrador</div>
+                          <div class="adv-role-desc">Acceso total al sistema</div>
+                        </div>
+                      </div>
+                    </label>
+                    <label class="adv-role-option" id="roleOptAsesor">
+                      <input type="radio" name="advRole" value="asesor" checked />
+                      <div class="adv-role-card">
+                        <div class="adv-role-icon adv-role-icon--asesor">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div>
+                          <div class="adv-role-name">Asesor</div>
+                          <div class="adv-role-desc">Acceso según permisos</div>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <!-- Permisos (solo visible para Asesor) -->
+                  <div id="advPermsSection">
+                    <div class="adv-section-title">Permisos del asesor</div>
+                    <div class="adv-perms-list">
+
+                      <label class="adv-perm-row">
+                        <div class="adv-perm-info">
+                          <div class="adv-perm-icon" style="background:rgba(59,130,246,.1);color:#3b82f6">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                          </div>
+                          <div>
+                            <div class="adv-perm-name">Escribir y editar</div>
+                            <div class="adv-perm-desc">Enviar mensajes, editar expedientes y contactos</div>
+                          </div>
+                        </div>
+                        <div class="adv-perm-toggle">
+                          <input type="checkbox" id="permWrite" class="adv-toggle-input" />
+                          <span class="adv-toggle-track"></span>
+                        </div>
+                      </label>
+
+                      <label class="adv-perm-row">
+                        <div class="adv-perm-info">
+                          <div class="adv-perm-icon" style="background:rgba(239,68,68,.1);color:#ef4444">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                          </div>
+                          <div>
+                            <div class="adv-perm-name">Eliminar registros</div>
+                            <div class="adv-perm-desc">Borrar expedientes, contactos y conversaciones</div>
+                          </div>
+                        </div>
+                        <div class="adv-perm-toggle">
+                          <input type="checkbox" id="permDelete" class="adv-toggle-input" />
+                          <span class="adv-toggle-track"></span>
+                        </div>
+                      </label>
+
+                      <label class="adv-perm-row">
+                        <div class="adv-perm-info">
+                          <div class="adv-perm-icon" style="background:rgba(245,158,11,.1);color:#f59e0b">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          </div>
+                          <div>
+                            <div class="adv-perm-name">Ver reportes</div>
+                            <div class="adv-perm-desc">Acceder al dashboard e historial de actividad</div>
+                          </div>
+                        </div>
+                        <div class="adv-perm-toggle">
+                          <input type="checkbox" id="permReports" class="adv-toggle-input" />
+                          <span class="adv-toggle-track"></span>
+                        </div>
+                      </label>
+
+                      <label class="adv-perm-row">
+                        <div class="adv-perm-info">
+                          <div class="adv-perm-icon" style="background:rgba(139,92,246,.1);color:#8b5cf6">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                          </div>
+                          <div>
+                            <div class="adv-perm-name">Gestionar asesores</div>
+                            <div class="adv-perm-desc">Crear, editar y desactivar otros asesores</div>
+                          </div>
+                        </div>
+                        <div class="adv-perm-toggle">
+                          <input type="checkbox" id="permManageAdvisors" class="adv-toggle-input" />
+                          <span class="adv-toggle-track"></span>
+                        </div>
+                      </label>
+
+                    </div>
+                  </div>
+
+                  <div id="advisorModalError" class="int-error" style="margin-top:8px" hidden></div>
+                </div>
+                <footer class="modal-footer">
+                  <button type="button" class="btn btn--danger-ghost btn--sm" id="advisorDeleteBtn" hidden>Eliminar asesor</button>
+                  <div style="flex:1"></div>
+                  <button type="button" class="btn btn--ghost" data-close-advisor>Cancelar</button>
+                  <button type="button" class="btn btn--primary" id="advisorSaveBtn">Guardar</button>
+                </footer>
+              </div>
+            </div>
+
+            <!-- ─── IA ─── -->
+            <div class="settings-pane" data-settings="ia">
+              <div class="settings-head">
+                <div>
+                  <h2>Inteligencia artificial</h2>
+                  <p>La IA puede sugerir o auto-responder mensajes a contactos. Puedes elegir un proveedor en la nube (Claude, GPT, Gemini) o uno <strong>local</strong> (Ollama con Gemma/Llama) que corre en tu Mac sin enviar datos a terceros.</p>
+                </div>
+              </div>
+
+              <div class="settings-card">
+                <h3>Proveedor</h3>
+                <div class="ai-providers">
+                  <label class="ai-provider is-selected">
+                    <input type="radio" name="ai-provider" value="anthropic" checked />
+                    <div class="ai-provider-name">Claude (Anthropic)</div>
+                    <div class="ai-provider-desc">Cloud · Recomendado · Calidad alta</div>
+                  </label>
+                  <label class="ai-provider">
+                    <input type="radio" name="ai-provider" value="openai" />
+                    <div class="ai-provider-name">GPT (OpenAI)</div>
+                    <div class="ai-provider-desc">Cloud · Alternativa popular</div>
+                  </label>
+                  <label class="ai-provider">
+                    <input type="radio" name="ai-provider" value="google" />
+                    <div class="ai-provider-name">Gemini (Google)</div>
+                    <div class="ai-provider-desc">Cloud · Económico</div>
+                  </label>
+                  <label class="ai-provider">
+                    <input type="radio" name="ai-provider" value="ollama" />
+                    <div class="ai-provider-name">Ollama (Local)</div>
+                    <div class="ai-provider-desc">Local · Gratis · Sin internet · Privado</div>
+                  </label>
+                </div>
+
+                <div class="form-grid">
+                  <label class="form-field">
+                    <span>Modelo</span>
+                    <input type="text" value="claude-opus-4-7" />
+                  </label>
+                  <label class="form-field">
+                    <span>API Key</span>
+                    <input type="password" placeholder="sk-ant-..." />
+                  </label>
+                  <label class="form-field form-field--full">
+                    <span>URL del servicio (solo para Ollama / Custom)</span>
+                    <input type="text" placeholder="http://localhost:11434" disabled />
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-card">
+                <h3>Información de la empresa</h3>
+                <p class="settings-note">La IA usará este texto como contexto para responder a contactos. Incluye: a qué se dedica tu empresa, productos/servicios, precios, políticas de envío, horarios, tono de respuesta deseado, etc.</p>
+                <textarea class="form-textarea" rows="10" placeholder="Ejemplo:&#10;&#10;Somos Reelance, vendemos cosméticos naturales en México.&#10;Producto estrella: Serum Facial ($1,200 MXN).&#10;Envíos a toda la república por DHL (2-3 días).&#10;Aceptamos tarjeta, transferencia y OXXO.&#10;Horario: L-V 9am-6pm.&#10;Tono: amable, cercano, usar 'tú' (no 'usted')."></textarea>
+              </div>
+
+              <div class="settings-card">
+                <h3>Comportamiento</h3>
+                <div class="form-grid">
+                  <label class="form-field form-field--switch">
+                    <span>Modo</span>
+                    <select>
+                      <option>Sugerir respuesta (vendedor revisa antes de enviar)</option>
+                      <option>Auto-responder (sin intervención humana)</option>
+                      <option>Solo lectura (clasifica expedientes, no responde)</option>
+                    </select>
+                  </label>
+                  <label class="form-field">
+                    <span>Temperatura (creatividad 0–1)</span>
+                    <input type="number" value="0.7" min="0" max="1" step="0.1" />
+                  </label>
+                  <label class="form-field">
+                    <span>Tokens máx por respuesta</span>
+                    <input type="number" value="2048" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-actions">
+                <button class="btn btn--primary">Guardar cambios</button>
+                <button class="btn btn--ghost">Probar conexión</button>
+              </div>
+            </div>
+
+            <!-- ─── Notificaciones ─── -->
+            <div class="settings-pane" data-settings="notificaciones">
+              <div class="settings-head">
+                <div>
+                  <h2>Notificaciones</h2>
+                  <p>Recibe alertas en este dispositivo cuando WhatsApp se desconecte, lleguen mensajes nuevos, o haya problemas en el servidor.</p>
+                </div>
+              </div>
+              <div class="notif-card">
+                <div class="notif-status" id="notifStatus">Estado: cargando…</div>
+                <div class="notif-actions">
+                  <button class="btn btn--primary" id="notifSubscribeBtn" hidden>Activar notificaciones</button>
+                  <button class="btn btn--ghost" id="notifUnsubscribeBtn" hidden>Desactivar en este dispositivo</button>
+                  <button class="btn btn--ghost" id="notifTestBtn" hidden>Enviar prueba</button>
+                </div>
+                <p class="notif-hint" id="notifHint"></p>
+              </div>
+              <h3 class="notif-section-title">Bitácora reciente</h3>
+              <div id="notifLog" class="notif-log"></div>
+            </div>
+
+            <!-- ─── Papelera ─── -->
+            <div class="settings-pane" data-settings="papelera">
+              <div class="settings-head">
+                <div>
+                  <h2>Papelera</h2>
+                  <p>Elementos eliminados. Puedes recuperarlos dentro de los <strong>30 días</strong> posteriores a su eliminación.</p>
+                </div>
+                <button class="btn btn--danger-ghost" id="trashEmptyAll">Vaciar papelera</button>
+              </div>
+
+              <div class="trash-filters">
+                <button class="trash-filter-btn is-active" data-filter="all">Todo</button>
+                <button class="trash-filter-btn" data-filter="contact">Contactos</button>
+                <button class="trash-filter-btn" data-filter="expedient">Expedientes</button>
+                <button class="trash-filter-btn" data-filter="pipeline">Pipelines</button>
+                <button class="trash-filter-btn" data-filter="stage">Etapas</button>
+                <button class="trash-filter-btn" data-filter="salsbot">Bots</button>
+              </div>
+
+              <div id="trashList" class="trash-list">
+                <div class="trash-empty-state">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6m4-6v6"/></svg>
+                  <p>La papelera está vacía</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VISTA: MI CUENTA ─── -->
+      <section class="view view-cuenta" data-view="cuenta" hidden>
+        <div class="cuenta-shell">
+          <!-- Avatar header -->
+          <div class="cuenta-hero">
+            <div class="account-avatar-wrap">
+              <img id="accountAvatarImg" src="https://i.pravatar.cc/80?img=12" alt="" />
+              <div class="account-avatar-initials" id="accountAvatarInitials" hidden>RL</div>
+            </div>
+            <div>
+              <div class="account-avatar-name" id="accountDisplayName">Reelance</div>
+              <div class="account-avatar-role">Administrador</div>
+            </div>
+          </div>
+
+          <!-- Datos personales -->
+          <div class="settings-card">
+            <h3>Información personal</h3>
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Nombre</span>
+                <input type="text" id="accFirstName" placeholder="Tu nombre" maxlength="60" />
+              </label>
+              <label class="form-field">
+                <span>Apellido</span>
+                <input type="text" id="accLastName" placeholder="Tu apellido" maxlength="60" />
+              </label>
+              <label class="form-field">
+                <span>Usuario</span>
+                <input type="text" id="accUsername" placeholder="nombre_usuario" maxlength="40" />
+              </label>
+              <label class="form-field">
+                <span>Teléfono</span>
+                <input type="tel" id="accPhone" placeholder="+52 55 1234 5678" maxlength="30" />
+              </label>
+              <label class="form-field form-field--full">
+                <span>Correo electrónico</span>
+                <input type="email" id="accEmail" placeholder="correo@ejemplo.com" maxlength="120" />
+              </label>
+            </div>
+            <div class="settings-actions" style="margin-top:16px">
+              <button class="btn btn--primary" id="accSaveProfile">Guardar cambios</button>
+            </div>
+          </div>
+
+          <!-- Cambiar contraseña -->
+          <div class="settings-card">
+            <h3>Cambiar contraseña</h3>
+            <div class="form-grid">
+              <label class="form-field form-field--full">
+                <span>Contraseña actual</span>
+                <input type="password" id="accCurrentPass" placeholder="••••••••" autocomplete="current-password" />
+              </label>
+              <label class="form-field">
+                <span>Nueva contraseña</span>
+                <input type="password" id="accNewPass" placeholder="••••••••" autocomplete="new-password" />
+              </label>
+              <label class="form-field">
+                <span>Confirmar contraseña</span>
+                <input type="password" id="accConfirmPass" placeholder="••••••••" autocomplete="new-password" />
+              </label>
+            </div>
+            <p id="accPassError" class="form-error" hidden></p>
+            <div class="settings-actions" style="margin-top:16px">
+              <button class="btn btn--primary" id="accSavePassword">Cambiar contraseña</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
+  <div class="rh-tpl-picker" id="rhTplPicker" hidden>
+    <div class="rh-tpl-picker-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      <span>Plantillas</span>
+      <input class="rh-tpl-search" id="rhTplSearch" placeholder="Buscar…" autocomplete="off">
+      <button class="rh-tpl-picker-close" id="rhTplPickerClose">✕</button>
+    </div>
+    <div class="rh-tpl-list" id="rhTplList"></div>
+  </div>
+</body>
+</html>

@@ -27,3 +27,18 @@ ngrok
 # Build / cache
 dist/
 .cache/
+
+# Claude (worktrees + local settings)
+.claude/worktrees/
+.claude/settings.local.json
+
+# Backups locales (no van a git, viven en iCloud o local-only)
+_safety-backups/
+
+# Binarios y archivos locales
+cloudflared
+*.pdf
+.env.bak
+
+# Carpeta de pruebas locales
+claude-pro-reelance/

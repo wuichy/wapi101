@@ -140,9 +140,10 @@ module.exports = function createWebhooksRouter(db) {
       }
       integration = externalId ? (findIntegration(provider, externalId) || findIntegrationByProvider(provider)) : findIntegrationByProvider(provider);
 
-      // Verificar firma con app_secret
-      if (integration?.credentials?.appSecret) {
-        const expected = hmacHex(integration.credentials.appSecret, raw);
+      // Verificar firma con app_secret (integración primero, .env como fallback global Meta)
+      const appSecret = integration?.credentials?.appSecret || process.env.META_APP_SECRET;
+      if (appSecret) {
+        const expected = hmacHex(appSecret, raw);
         if (!safeEqual(signature, expected)) {
           console.warn(`[webhook ${provider}] firma inválida`);
           return res.sendStatus(401);

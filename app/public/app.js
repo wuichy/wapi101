@@ -514,7 +514,7 @@ function renderCustomers() {
 
   root.innerHTML = CUSTOMERS.map((c) => `
     <div class="customers-row" data-id="${c.id}">
-      <div class="customer-cell-name">
+      <div class="customer-cell-name customer-cell-name--clickable" data-action="edit">
         <div class="customer-avatar">${getInitials(c)}</div>
         <div>
           <div class="customer-name">${escapeHtml(c.firstName)} ${escapeHtml(c.lastName || "")}</div>
@@ -714,7 +714,8 @@ function commitTagInput() {
 function setupCustomers() {
   document.getElementById("newCustomerBtn")?.addEventListener("click", () => openCustomerModal());
 
-  document.getElementById("customerSearch")?.addEventListener("input", (e) => {
+  document.getElementById("topbarSearchInput")?.addEventListener("input", (e) => {
+    if (document.body.dataset.viewActive !== 'contactos') return;
     CUSTOMER_FILTER = e.target.value;
     CUSTOMER_PAGE = 1; // al filtrar, volver a la primera página
     clearTimeout(setupCustomers._t);
@@ -1417,14 +1418,37 @@ function showView(viewName) {
   // Toggle pipeline-specific topbar controls
   const searchInput = document.getElementById('topbarSearchInput');
   const plExtras = document.getElementById('topbarPlExtras');
+  const topbarActions = document.getElementById('topbarActions');
   if (viewName === 'pipelines') {
     if (searchInput) { searchInput.placeholder = 'Buscar expediente…'; searchInput.value = PL_FILTERS.q || ''; }
     if (plExtras) plExtras.hidden = false;
     renderPipelinesBoard();
+  } else if (viewName === 'integraciones') {
+    if (searchInput) { searchInput.placeholder = 'Buscar integración…'; searchInput.value = ''; }
+    if (plExtras) plExtras.hidden = true;
+  } else if (viewName === 'bot') {
+    if (searchInput) { searchInput.placeholder = 'Buscar bots…'; searchInput.value = ''; }
+    if (plExtras) plExtras.hidden = true;
+  } else if (viewName === 'contactos') {
+    if (searchInput) { searchInput.placeholder = 'Buscar por nombre, teléfono o email...'; searchInput.value = CUSTOMER_FILTER || ''; }
+    if (plExtras) plExtras.hidden = true;
+  } else if (viewName === 'expedientes') {
+    if (searchInput) { searchInput.placeholder = 'Buscar expediente…'; searchInput.value = (EXP_FILTERS && EXP_FILTERS.q) || ''; }
+    if (plExtras) plExtras.hidden = true;
+  } else if (viewName === 'plantillas') {
+    if (searchInput) { searchInput.placeholder = 'Buscar plantilla…'; searchInput.value = (typeof _tplFilter !== 'undefined' ? _tplFilter : '') || ''; }
+    if (plExtras) plExtras.hidden = true;
   } else {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
   }
+  const cleanTopbar = (viewName === 'integraciones' || viewName === 'bot' || viewName === 'contactos' || viewName === 'expedientes' || viewName === 'plantillas');
+  if (title) title.hidden = cleanTopbar;
+  if (topbarActions) topbarActions.hidden = cleanTopbar || viewName === 'pipelines' || viewName === 'inicio';
+  const customersExtras = document.getElementById('topbarCustomersExtras');
+  if (customersExtras) customersExtras.hidden = (viewName !== 'contactos');
+  const expExtras = document.getElementById('topbarExpExtras');
+  if (expExtras) expExtras.hidden = (viewName !== 'expedientes');
   if (viewName === 'chats') loadConversations();
   if (viewName === 'inicio') loadDashboard();
 }
@@ -2330,7 +2354,12 @@ function renderExpDetailInfo() {
       <div class="exp-detail-field editable-field" data-field-id="pipeline" data-field-type="builtin">
         <span class="exp-detail-field-label">Pipeline</span>
         <div class="edf-cell">
-          <span class="exp-detail-field-value edf-display">${escapeHtml(exp.pipelineName || '—')}</span>
+          <span class="exp-detail-field-value edf-display">
+            <span class="exp-detail-stage-badge">
+              <span class="edf-stage-dot" style="background:${exp.pipelineColor || '#94a3b8'}"></span>
+              ${escapeHtml(exp.pipelineName || '—')}
+            </span>
+          </span>
           <select class="edf-input edf-select" id="edfPipelineSel" data-original="${exp.pipelineId}">${pipelineOptions}</select>
         </div>
       </div>
@@ -2506,6 +2535,90 @@ function updateStageDot(stageSel) {
   if (displayDot) displayDot.style.background = color;
 }
 
+// ── Picker modal genérico (pipeline / etapa) ──
+function openOptionPicker({ title, options, currentValue, onSelect }) {
+  const modal = document.getElementById('optionPickerModal');
+  const titleEl = document.getElementById('optionPickerTitle');
+  const listEl = document.getElementById('optionPickerList');
+  if (!modal || !titleEl || !listEl) return;
+
+  titleEl.textContent = title || 'Selecciona';
+  listEl.innerHTML = options.map((o) => `
+    <button type="button" class="option-picker-row${String(o.value) === String(currentValue) ? ' is-selected' : ''}" data-val="${escapeHtml(String(o.value))}">
+      ${o.color ? `<span class="option-picker-dot" style="background:${escapeHtml(o.color)}"></span>` : ''}
+      <span class="option-picker-label">${escapeHtml(o.label)}</span>
+      ${String(o.value) === String(currentValue) ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16" class="option-picker-check"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+    </button>
+  `).join('');
+
+  const close = () => {
+    modal.hidden = true;
+    listEl.innerHTML = '';
+    modal.querySelectorAll('[data-close-picker]').forEach(el => el.removeEventListener('click', close));
+    listEl.removeEventListener('click', onRowClick);
+    document.removeEventListener('keydown', onKey);
+  };
+  const onRowClick = (e) => {
+    const row = e.target.closest('.option-picker-row');
+    if (!row) return;
+    const val = row.dataset.val;
+    close();
+    onSelect(val);
+  };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+
+  modal.querySelectorAll('[data-close-picker]').forEach(el => el.addEventListener('click', close));
+  listEl.addEventListener('click', onRowClick);
+  document.addEventListener('keydown', onKey);
+  modal.hidden = false;
+}
+
+function openPipelinePicker() {
+  const sel = document.getElementById('edfPipelineSel');
+  if (!sel) return;
+  openOptionPicker({
+    title: 'Selecciona un pipeline',
+    options: PIPELINES.map(p => ({ value: p.id, label: p.name, color: p.color || '#94a3b8' })),
+    currentValue: sel.value,
+    onSelect: (val) => {
+      if (String(val) === String(sel.value)) return;
+      sel.value = val;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      const p = PIPELINES.find(x => String(x.id) === String(val));
+      const display = document.querySelector('.editable-field[data-field-id="pipeline"] .edf-display');
+      if (display && p) {
+        display.innerHTML = `<span class="exp-detail-stage-badge"><span class="edf-stage-dot" style="background:${p.color || '#94a3b8'}"></span>${escapeHtml(p.name)}</span>`;
+      }
+    }
+  });
+}
+
+function openStagePicker() {
+  const stageSel = document.getElementById('edfStageSel');
+  const pipelineSel = document.getElementById('edfPipelineSel');
+  if (!stageSel || !pipelineSel) { console.warn('[stage-picker] selects no encontrados'); return; }
+  let pipeline = PIPELINES.find(p => String(p.id) === String(pipelineSel.value));
+  if (!pipeline) pipeline = PIPELINES.find(p => Array.isArray(p.stages) && p.stages.length) || PIPELINES[0];
+  if (!pipeline) { console.warn('[stage-picker] no hay pipelines cargados'); return; }
+  const stages = Array.isArray(pipeline.stages) ? pipeline.stages : [];
+  if (!stages.length) { console.warn('[stage-picker] el pipeline no tiene etapas', pipeline); return; }
+  openOptionPicker({
+    title: `Etapa de "${pipeline.name}"`,
+    options: stages.map(s => ({ value: s.id, label: s.name, color: s.color || '#94a3b8' })),
+    currentValue: stageSel.value,
+    onSelect: (val) => {
+      if (String(val) === String(stageSel.value)) return;
+      stageSel.value = val;
+      stageSel.dispatchEvent(new Event('change', { bubbles: true }));
+      const stage = stages.find(s => String(s.id) === String(val));
+      const display = document.querySelector('.editable-field[data-field-id="stage"] .edf-display');
+      if (display && stage) {
+        display.innerHTML = `<span class="exp-detail-stage-badge"><span class="edf-stage-dot" style="background:${stage.color || '#94a3b8'}"></span>${escapeHtml(stage.name)}</span>`;
+      }
+    }
+  });
+}
+
 function setupExpDetailEditing() {
   const root = document.getElementById('expDetailInfo');
   if (!root) return;
@@ -2541,10 +2654,13 @@ function setupExpDetailEditing() {
     checkForChanges();
   });
 
-  // Click on a field → enter edit mode (just toggle display/input, no save bar yet)
+  // Click on a field → enter edit mode (pipeline & stage open a picker modal instead)
   root.querySelectorAll('.editable-field').forEach((field) => {
     field.addEventListener('click', (e) => {
       if (e.target.closest('.edf-input') || e.target.closest('.exp-detail-actions-bar')) return;
+      const fieldId = field.dataset.fieldId;
+      if (fieldId === 'pipeline') { openPipelinePicker(); return; }
+      if (fieldId === 'stage')    { openStagePicker();    return; }
       const cell = field.querySelector('.edf-cell');
       if (!cell) return;
       cell.classList.add('is-editing');
@@ -3283,9 +3399,10 @@ async function importExpedients() {
 }
 
 function setupExpedients() {
-  // Buscar (text — syncs with EXP_FILTERS)
+  // Buscar (text — syncs with EXP_FILTERS via topbar search when on expedientes view)
   let _expSearchTimer = null;
-  document.getElementById('expSearch')?.addEventListener('input', (e) => {
+  document.getElementById('topbarSearchInput')?.addEventListener('input', (e) => {
+    if (document.body.dataset.viewActive !== 'expedientes') return;
     clearTimeout(_expSearchTimer);
     _expSearchTimer = setTimeout(() => {
       EXP_FILTERS.q = e.target.value.trim();
@@ -3418,6 +3535,21 @@ let sbBots = [];
 let sbCurrentId = null;   // null = nuevo
 let sbSteps = [];         // steps del bot en edición
 let sbStepCounter = 0;
+let sbTagIds = [];        // tag IDs asignados al bot en edición
+let _botTags = [];
+let _botTagFilter = null; // null = todos, number = id de tag
+
+const BOT_TAG_PALETTE = ['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e','#10b981','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#ec4899','#94a3b8'];
+
+async function loadBotTags() {
+  try {
+    const data = await api('GET', '/api/bot-tags');
+    _botTags = data.items || [];
+  } catch (e) {
+    _botTags = [];
+    console.error('loadBotTags', e);
+  }
+}
 
 const SB_STEP_LABELS = {
   message:   'Enviar mensaje',
@@ -3438,10 +3570,35 @@ const SB_TRIGGER_LABELS = {
 
 async function loadSalsbots() {
   try {
+    await loadBotTags();
     const data = await api('GET', '/api/bot');
     sbBots = data.items || [];
     renderBotList();
   } catch (e) { console.error('loadSalsbots', e); }
+}
+
+function renderBotTagFilters() {
+  const root = document.getElementById('botTagFilters');
+  if (!root) return;
+  const allActive = _botTagFilter === null ? 'is-active' : '';
+  const tagPills = _botTags.map(t => `
+    <button type="button" class="bot-tag-filter ${_botTagFilter === t.id ? 'is-active' : ''}" data-bot-tag-filter="${t.id}">
+      <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>
+      ${escHtml(t.name)}
+    </button>
+  `).join('');
+  root.innerHTML = `
+    <button type="button" class="bot-tag-filter ${allActive}" data-bot-tag-filter="">Todos</button>
+    ${tagPills}
+    <button type="button" class="bot-tag-manage-btn" id="botTagManageBtn" title="Gestionar etiquetas">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><circle cx="10" cy="10" r="3"/><path d="M10 2v2m0 12v2M4.2 4.2l1.4 1.4m8.8 8.8l1.4 1.4M2 10h2m12 0h2M4.2 15.8l1.4-1.4m8.8-8.8l1.4-1.4"/></svg>
+      Etiquetas
+    </button>`;
+}
+
+function botRowTagsHtml(bot) {
+  if (!Array.isArray(bot.tags) || !bot.tags.length) return '';
+  return `<span class="bot-row-tags">${bot.tags.map(t => `<span class="bot-tag-pill" style="--tag-color:${escHtml(t.color)};background:${escHtml(t.color)}1a;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</span>`).join('')}</span>`;
 }
 
 function renderBotList() {
@@ -3449,12 +3606,24 @@ function renderBotList() {
   const empty = document.getElementById('botEmpty');
   if (!list) return;
 
+  renderBotTagFilters();
+
+  const visibleBots = _botTagFilter === null
+    ? sbBots
+    : sbBots.filter(b => Array.isArray(b.tags) && b.tags.some(t => t.id === _botTagFilter));
+
   if (!sbBots.length) {
     list.innerHTML = '';
     empty.hidden = false;
     return;
   }
   empty.hidden = true;
+
+  if (!visibleBots.length) {
+    list.innerHTML = `<div class="bot-list-empty-filter">Ningún bot tiene esta etiqueta.</div>`;
+    return;
+  }
+
   list.innerHTML = `
     <div class="bot-list-table">
       <div class="bot-list-head">
@@ -3464,9 +3633,9 @@ function renderBotList() {
         <div>Activo</div>
         <div></div>
       </div>
-      ${sbBots.map(b => `
+      ${visibleBots.map(b => `
         <div class="bot-list-row" data-bot-id="${b.id}">
-          <div class="bot-row-name">${escHtml(b.name)}</div>
+          <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}</div>
           <div class="bot-row-trigger">${SB_TRIGGER_LABELS[b.trigger_type] || b.trigger_type}${b.trigger_value ? `: "${escHtml(b.trigger_value)}"` : ''}</div>
           <div class="bot-row-steps">${b.steps.length} paso${b.steps.length !== 1 ? 's' : ''}</div>
           <div>
@@ -3493,9 +3662,11 @@ function openBotBuilder(bot) {
         return { ...s, _id: s._id || `s${i}` };
       })
     : [];
+  sbTagIds = bot && Array.isArray(bot.tags) ? bot.tags.map(t => t.id) : [];
 
   document.getElementById('botListView').hidden = true;
   document.getElementById('botBuilder').hidden = false;
+  renderBotBuilderTags();
 
   // Mostrar botón Eliminar solo cuando se edita un bot existente
   const delBtn = document.getElementById('botBuilderDelete');
@@ -3685,20 +3856,30 @@ function buildStepBody(step) {
     case 'stage': {
       const _curPl = (PIPELINES || []).find(p => p.id == c.pipelineId);
       const _curStage = _curPl?.stages?.find(s => s.id == c.stageId);
-      const _curColor = _curStage?.color || '';
+      const _curStageColor = _curStage?.color || '';
+      const _curPlColor = _curPl?.color || '';
+      const _plLabel = _curPl ? escHtml(_curPl.name) : '— Selecciona pipeline —';
+      const _stLabel = _curStage ? escHtml(_curStage.name) : (c.pipelineId ? '— Selecciona etapa —' : '— Primero elige pipeline —');
       return `
         <label>Pipeline</label>
-        <select data-field="pipelineId" data-sid="${sid}" class="sb-pipeline-sel">
-          <option value="">— Selecciona pipeline —</option>
+        <button type="button" class="sb-picker-btn sb-pipeline-btn" data-sid="${sid}">
+          <span class="sb-picker-dot" data-pl-dot-sid="${sid}" style="background:${_curPlColor || 'transparent'}"></span>
+          <span class="sb-picker-label" data-pl-label-sid="${sid}">${_plLabel}</span>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" class="sb-picker-chev"><polyline points="6 8 10 12 14 8"/></svg>
+        </button>
+        <select data-field="pipelineId" data-sid="${sid}" class="sb-pipeline-sel" hidden>
+          <option value="">—</option>
           ${(PIPELINES || []).map(p => `<option value="${p.id}" ${c.pipelineId==p.id?'selected':''}>${escHtml(p.name)}</option>`).join('')}
         </select>
         <label>Etapa</label>
-        <div class="sb-stage-wrap" style="position:relative;display:flex;align-items:center">
-          <span class="sb-stage-dot" data-dot-sid="${sid}" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:${_curColor || 'transparent'};pointer-events:none;flex-shrink:0"></span>
-          <select data-field="stageId" data-sid="${sid}" class="sb-stage-sel" style="padding-left:28px;width:100%">
-            ${buildStageOptionsWithColor(c.pipelineId, c.stageId)}
-          </select>
-        </div>`;
+        <button type="button" class="sb-picker-btn sb-stage-btn" data-sid="${sid}">
+          <span class="sb-picker-dot" data-dot-sid="${sid}" style="background:${_curStageColor || 'transparent'}"></span>
+          <span class="sb-picker-label" data-st-label-sid="${sid}">${_stLabel}</span>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" class="sb-picker-chev"><polyline points="6 8 10 12 14 8"/></svg>
+        </button>
+        <select data-field="stageId" data-sid="${sid}" class="sb-stage-sel" hidden>
+          ${buildStageOptionsWithColor(c.pipelineId, c.stageId)}
+        </select>`;
     }
     case 'tag':
       return `
@@ -3964,17 +4145,78 @@ function setupBot() {
     if (plSel) {
       const sid = plSel.dataset.sid;
       const stageSel = document.querySelector(`.sb-stage-sel[data-sid="${sid}"]`);
-      if (stageSel) stageSel.innerHTML = buildStageOptionsWithColor(plSel.value, null);
-      const dot = document.querySelector(`.sb-stage-dot[data-dot-sid="${sid}"]`);
+      if (stageSel) {
+        stageSel.innerHTML = buildStageOptionsWithColor(plSel.value, null);
+        stageSel.value = '';
+      }
+      const dot = document.querySelector(`.sb-picker-dot[data-dot-sid="${sid}"]`);
       if (dot) dot.style.background = 'transparent';
+      const stLabel = document.querySelector(`.sb-picker-label[data-st-label-sid="${sid}"]`);
+      if (stLabel) stLabel.textContent = plSel.value ? '— Selecciona etapa —' : '— Primero elige pipeline —';
       return;
     }
     const stageSel = e.target.closest('.sb-stage-sel');
     if (stageSel) {
       const sid = stageSel.dataset.sid;
-      const dot = document.querySelector(`.sb-stage-dot[data-dot-sid="${sid}"]`);
+      const dot = document.querySelector(`.sb-picker-dot[data-dot-sid="${sid}"]`);
       const opt = stageSel.options[stageSel.selectedIndex];
       if (dot) dot.style.background = opt?.dataset?.color || 'transparent';
+    }
+  });
+
+  // Pipeline / Stage picker buttons (replace native select dropdowns)
+  document.getElementById('sbStepsFlow')?.addEventListener('click', (e) => {
+    const plBtn = e.target.closest('.sb-pipeline-btn');
+    if (plBtn) {
+      e.preventDefault();
+      const sid = plBtn.dataset.sid;
+      const sel = document.querySelector(`.sb-pipeline-sel[data-sid="${sid}"]`);
+      if (!sel) return;
+      openOptionPicker({
+        title: 'Selecciona un pipeline',
+        options: (PIPELINES || []).map(p => ({ value: p.id, label: p.name, color: p.color || '#94a3b8' })),
+        currentValue: sel.value,
+        onSelect: (val) => {
+          if (String(val) === String(sel.value)) return;
+          sel.value = val;
+          const p = (PIPELINES || []).find(x => String(x.id) === String(val));
+          const plLabel = document.querySelector(`.sb-picker-label[data-pl-label-sid="${sid}"]`);
+          const plDot = document.querySelector(`.sb-picker-dot[data-pl-dot-sid="${sid}"]`);
+          if (plLabel && p) plLabel.textContent = p.name;
+          if (plDot) plDot.style.background = p?.color || 'transparent';
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          sel.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+      return;
+    }
+    const stBtn = e.target.closest('.sb-stage-btn');
+    if (stBtn) {
+      e.preventDefault();
+      const sid = stBtn.dataset.sid;
+      const stageSel = document.querySelector(`.sb-stage-sel[data-sid="${sid}"]`);
+      const plSel = document.querySelector(`.sb-pipeline-sel[data-sid="${sid}"]`);
+      if (!stageSel || !plSel) return;
+      const pipeline = (PIPELINES || []).find(p => String(p.id) === String(plSel.value));
+      if (!pipeline) { toast('Primero selecciona un pipeline', 'error'); return; }
+      const stages = Array.isArray(pipeline.stages) ? pipeline.stages : [];
+      if (!stages.length) { toast('Este pipeline no tiene etapas', 'error'); return; }
+      openOptionPicker({
+        title: `Etapa de "${pipeline.name}"`,
+        options: stages.map(s => ({ value: s.id, label: s.name, color: s.color || '#94a3b8' })),
+        currentValue: stageSel.value,
+        onSelect: (val) => {
+          if (String(val) === String(stageSel.value)) return;
+          stageSel.value = val;
+          const stage = stages.find(s => String(s.id) === String(val));
+          const stLabel = document.querySelector(`.sb-picker-label[data-st-label-sid="${sid}"]`);
+          const dot = document.querySelector(`.sb-picker-dot[data-dot-sid="${sid}"]`);
+          if (stLabel && stage) stLabel.textContent = stage.name;
+          if (dot) dot.style.background = stage?.color || 'transparent';
+          stageSel.dispatchEvent(new Event('change', { bubbles: true }));
+          stageSel.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
     }
   });
 
@@ -4018,10 +4260,11 @@ function setupBot() {
     }
     const steps = collectAllSteps().map(({ _id, ...rest }) => rest);
     try {
+      const payload = { name, enabled, trigger_type, trigger_value, steps, tagIds: sbTagIds };
       if (sbCurrentId) {
-        await api('PATCH', `/api/bot/${sbCurrentId}`, { name, enabled, trigger_type, trigger_value, steps });
+        await api('PATCH', `/api/bot/${sbCurrentId}`, payload);
       } else {
-        const data = await api('POST', '/api/bot', { name, enabled, trigger_type, trigger_value, steps });
+        const data = await api('POST', '/api/bot', payload);
         sbCurrentId = data.item.id;
       }
       toast('Bot guardado', 'success');
@@ -4029,6 +4272,197 @@ function setupBot() {
       closeBotBuilder();
     } catch (err) { toast(err.message, 'error'); }
   });
+
+  // ─── Tag filter (botón "Todos" + cada tag) ───
+  document.getElementById('botTagFilters')?.addEventListener('click', (e) => {
+    const filterBtn = e.target.closest('[data-bot-tag-filter]');
+    if (filterBtn) {
+      const v = filterBtn.dataset.botTagFilter;
+      _botTagFilter = v === '' ? null : Number(v);
+      renderBotList();
+      return;
+    }
+    if (e.target.closest('#botTagManageBtn')) openBotTagsManager();
+  });
+
+  // ─── Builder: + Etiqueta + remove pill ───
+  document.getElementById('botBuilderTags')?.addEventListener('click', (e) => {
+    const remove = e.target.closest('[data-remove-tag]');
+    if (remove) {
+      const id = Number(remove.dataset.removeTag);
+      sbTagIds = sbTagIds.filter(x => x !== id);
+      renderBotBuilderTags();
+      return;
+    }
+    if (e.target.closest('#botBuilderAddTagBtn')) openBotBuilderTagPicker();
+  });
+
+  // ─── Tag manager modal listeners ───
+  document.querySelectorAll('[data-close-bot-tags]').forEach(el => {
+    el.addEventListener('click', closeBotTagsManager);
+  });
+  document.getElementById('botTagCreateForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nameEl  = document.getElementById('botTagNewName');
+    const colorEl = document.querySelector('#botTagNewColors .bot-tag-swatch.is-selected');
+    const name = (nameEl?.value || '').trim();
+    const color = colorEl?.dataset.color || BOT_TAG_PALETTE[0];
+    if (!name) { toast('Escribe un nombre', 'error'); return; }
+    try {
+      await api('POST', '/api/bot-tags', { name, color });
+      nameEl.value = '';
+      await loadBotTags();
+      renderBotTagsManagerList();
+      renderBotTagFilters();
+      renderBotBuilderTags();
+      toast('Etiqueta creada', 'success');
+    } catch (err) { toast(err.message, 'error'); }
+  });
+  document.getElementById('botTagsManagerList')?.addEventListener('click', async (e) => {
+    const editBtn = e.target.closest('[data-edit-tag]');
+    if (editBtn) {
+      const id = Number(editBtn.dataset.editTag);
+      const t = _botTags.find(x => x.id === id);
+      if (!t) return;
+      const newName = prompt('Nuevo nombre:', t.name);
+      if (newName === null) return;
+      try {
+        await api('PUT', `/api/bot-tags/${id}`, { name: newName.trim(), color: t.color });
+        await loadBotTags();
+        renderBotTagsManagerList();
+        renderBotTagFilters();
+        renderBotList();
+        renderBotBuilderTags();
+      } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+    const colorBtn = e.target.closest('[data-tag-color-pick]');
+    if (colorBtn) {
+      const id    = Number(colorBtn.dataset.tagColorPick);
+      const color = colorBtn.dataset.color;
+      const t = _botTags.find(x => x.id === id);
+      if (!t) return;
+      try {
+        await api('PUT', `/api/bot-tags/${id}`, { name: t.name, color });
+        await loadBotTags();
+        renderBotTagsManagerList();
+        renderBotTagFilters();
+        renderBotList();
+        renderBotBuilderTags();
+      } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+    const delBtn = e.target.closest('[data-delete-tag]');
+    if (delBtn) {
+      const id = Number(delBtn.dataset.deleteTag);
+      const t = _botTags.find(x => x.id === id);
+      if (!t) return;
+      if (!confirm(`¿Eliminar la etiqueta "${t.name}"?\nSe quitará de todos los bots que la tengan.`)) return;
+      try {
+        await api('DELETE', `/api/bot-tags/${id}`);
+        if (_botTagFilter === id) _botTagFilter = null;
+        sbTagIds = sbTagIds.filter(x => x !== id);
+        await loadBotTags();
+        await loadSalsbots();
+        renderBotTagsManagerList();
+        renderBotBuilderTags();
+        toast('Etiqueta eliminada', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    }
+  });
+}
+
+function renderBotBuilderTags() {
+  const root = document.getElementById('botBuilderTags');
+  if (!root) return;
+  const assigned = _botTags.filter(t => sbTagIds.includes(t.id));
+  const pills = assigned.map(t => `
+    <span class="bot-tag-pill" style="background:${escHtml(t.color)}1a;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66">
+      <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>
+      ${escHtml(t.name)}
+      <button type="button" class="bot-tag-remove" data-remove-tag="${t.id}" aria-label="Quitar">×</button>
+    </span>
+  `).join('');
+  root.innerHTML = `
+    ${pills}
+    <button type="button" class="bot-tag-add-btn" id="botBuilderAddTagBtn">+ Etiqueta</button>`;
+}
+
+function openBotBuilderTagPicker() {
+  const available = _botTags.filter(t => !sbTagIds.includes(t.id));
+  if (!_botTags.length) {
+    openBotTagsManager();
+    return;
+  }
+  if (!available.length) {
+    toast('Ya asignaste todas las etiquetas a este bot', 'info');
+    return;
+  }
+  openOptionPicker({
+    title: 'Agregar etiqueta',
+    options: available.map(t => ({ value: t.id, label: t.name, color: t.color })),
+    currentValue: null,
+    onSelect: (val) => {
+      const id = Number(val);
+      if (!sbTagIds.includes(id)) sbTagIds.push(id);
+      renderBotBuilderTags();
+    }
+  });
+}
+
+function openBotTagsManager() {
+  const modal = document.getElementById('botTagsManagerModal');
+  if (!modal) return;
+  renderBotTagPalette();
+  renderBotTagsManagerList();
+  modal.hidden = false;
+}
+
+function closeBotTagsManager() {
+  const modal = document.getElementById('botTagsManagerModal');
+  if (modal) modal.hidden = true;
+}
+
+function renderBotTagPalette() {
+  const root = document.getElementById('botTagNewColors');
+  if (!root) return;
+  root.innerHTML = BOT_TAG_PALETTE.map((c, i) => `
+    <button type="button" class="bot-tag-swatch ${i === 0 ? 'is-selected' : ''}" data-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>
+  `).join('');
+  root.addEventListener('click', (e) => {
+    const sw = e.target.closest('.bot-tag-swatch');
+    if (!sw) return;
+    root.querySelectorAll('.bot-tag-swatch').forEach(b => b.classList.remove('is-selected'));
+    sw.classList.add('is-selected');
+  }, { once: false });
+}
+
+function renderBotTagsManagerList() {
+  const root = document.getElementById('botTagsManagerList');
+  if (!root) return;
+  if (!_botTags.length) {
+    root.innerHTML = '<div class="bot-tag-manager-empty">Aún no hay etiquetas. Crea la primera arriba.</div>';
+    return;
+  }
+  root.innerHTML = _botTags.map(t => `
+    <div class="bot-tag-manager-row">
+      <div class="bot-tag-pill" style="background:${escHtml(t.color)}1a;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66">
+        <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>
+        ${escHtml(t.name)}
+      </div>
+      <div class="bot-tag-row-colors">
+        ${BOT_TAG_PALETTE.map(c => `<button type="button" class="bot-tag-swatch-sm ${c === t.color ? 'is-selected' : ''}" data-tag-color-pick="${t.id}" data-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>`).join('')}
+      </div>
+      <div class="bot-tag-row-actions">
+        <button type="button" class="icon-btn icon-btn--ghost" data-edit-tag="${t.id}" aria-label="Renombrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button type="button" class="icon-btn icon-btn--ghost" data-delete-tag="${t.id}" aria-label="Eliminar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+        </button>
+      </div>
+    </div>
+  `).join('');
 }
 
 // ════════════════════════════════
@@ -4735,12 +5169,13 @@ function setupFilterButtons() {
     if (plPanel && !plPanel.hidden) {
       if (!plAnchor?.contains(e.target) && !plExtras?.contains(e.target)) plPanel.hidden = true;
     }
-    // exp panel
-    const expPanel  = document.getElementById('expFilterPanel');
-    const expAnchor = document.getElementById('expFilterAnchor');
-    const expBtn    = document.getElementById('expFilterBtn');
+    // exp panel — anchored to topbar search + topbar exp extras
+    const expPanel   = document.getElementById('expFilterPanel');
+    const expAnchor  = document.getElementById('topbarSearchWrap');
+    const expExtras  = document.getElementById('topbarExpExtras');
+    const expBtn     = document.getElementById('expFilterBtn');
     if (expPanel && !expPanel.hidden) {
-      if (!expAnchor?.contains(e.target) && !expBtn?.contains(e.target)) expPanel.hidden = true;
+      if (!expAnchor?.contains(e.target) && !expExtras?.contains(e.target) && !expBtn?.contains(e.target)) expPanel.hidden = true;
     }
   });
 
@@ -5651,6 +6086,7 @@ function setupTplPicker() {
 let _tplTab = 'wa_api';
 let _tplItems = [];
 let _tplEditId = null;
+let _tplFilter = '';
 
 async function loadTemplates() {
   try {
@@ -5664,7 +6100,17 @@ function renderTemplates() {
   const empty = document.getElementById('tplEmpty');
   if (!list) return;
 
-  const filtered = _tplItems.filter(t => t.type === _tplTab);
+  const q = (_tplFilter || '').trim().toLowerCase();
+  const matchesQuery = (t) => {
+    if (!q) return true;
+    return (
+      (t.displayName || '').toLowerCase().includes(q) ||
+      (t.name || '').toLowerCase().includes(q) ||
+      (t.body || '').toLowerCase().includes(q) ||
+      (t.category || '').toLowerCase().includes(q)
+    );
+  };
+  const filtered = _tplItems.filter(t => t.type === _tplTab && matchesQuery(t));
 
   // Update badges
   const waCount   = _tplItems.filter(t => t.type === 'wa_api').length;
@@ -5837,6 +6283,17 @@ function setupTemplates() {
       _tplTab = btn.dataset.tab;
       renderTemplates();
     });
+  });
+
+  // Topbar search drives template filter when on plantillas view
+  let _tplSearchDebounce;
+  document.getElementById('topbarSearchInput')?.addEventListener('input', (e) => {
+    if (document.body.dataset.viewActive !== 'plantillas') return;
+    clearTimeout(_tplSearchDebounce);
+    _tplSearchDebounce = setTimeout(() => {
+      _tplFilter = e.target.value;
+      renderTemplates();
+    }, 200);
   });
 
   // New button

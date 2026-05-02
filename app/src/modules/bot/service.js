@@ -1,26 +1,47 @@
-function hydrate(row) {
+function tagsFor(db, botId) {
+  return db.prepare(`
+    SELECT t.id, t.name, t.color
+    FROM bot_tags t
+    JOIN salsbot_tag_assignments a ON a.tag_id = t.id
+    WHERE a.bot_id = ?
+    ORDER BY t.name COLLATE NOCASE
+  `).all(botId);
+}
+
+function setTags(db, botId, tagIds) {
+  const ids = Array.isArray(tagIds) ? [...new Set(tagIds.map(Number).filter(n => Number.isFinite(n)))] : null;
+  if (ids === null) return;
+  db.prepare('DELETE FROM salsbot_tag_assignments WHERE bot_id = ?').run(botId);
+  const ins = db.prepare('INSERT OR IGNORE INTO salsbot_tag_assignments (bot_id, tag_id) VALUES (?, ?)');
+  const txn = db.transaction((arr) => arr.forEach(tid => ins.run(botId, tid)));
+  txn(ids);
+}
+
+function hydrate(db, row) {
   return {
     ...row,
     enabled: !!row.enabled,
     steps: JSON.parse(row.steps || '[]'),
+    tags: tagsFor(db, row.id),
   };
 }
 
 function list(db) {
-  return db.prepare('SELECT * FROM salsbots ORDER BY created_at DESC').all().map(hydrate);
+  return db.prepare('SELECT * FROM salsbots ORDER BY created_at DESC').all().map(r => hydrate(db, r));
 }
 
 function getById(db, id) {
   const row = db.prepare('SELECT * FROM salsbots WHERE id = ?').get(id);
   if (!row) throw new Error('Salesbot no encontrado');
-  return hydrate(row);
+  return hydrate(db, row);
 }
 
-function create(db, { name, enabled = 0, trigger_type = 'keyword', trigger_value = '', steps = [] }) {
+function create(db, { name, enabled = 0, trigger_type = 'keyword', trigger_value = '', steps = [], tagIds }) {
   if (!name || !name.trim()) throw new Error('El nombre es requerido');
   const r = db.prepare(
     'INSERT INTO salsbots (name, enabled, trigger_type, trigger_value, steps) VALUES (?, ?, ?, ?, ?)'
   ).run(name.trim(), enabled ? 1 : 0, trigger_type, trigger_value || '', JSON.stringify(steps));
+  setTags(db, r.lastInsertRowid, tagIds);
   return getById(db, r.lastInsertRowid);
 }
 
@@ -37,11 +58,11 @@ function update(db, id, patch) {
     JSON.stringify(Array.isArray(next.steps) ? next.steps : current.steps),
     id
   );
+  if (Array.isArray(patch.tagIds)) setTags(db, id, patch.tagIds);
   return getById(db, id);
 }
 
 function remove(db, id, { deletedBy } = {}) {
-  // Guardar snapshot en papelera antes de borrar (recuperable 30 días)
   const row = db.prepare('SELECT * FROM salsbots WHERE id = ?').get(id);
   if (!row) throw new Error('Salesbot no encontrado');
 

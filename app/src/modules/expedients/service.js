@@ -29,6 +29,7 @@ function hydrate(db, row) {
     contactName:  row.contact_name || null,
     pipelineId:   row.pipeline_id,
     pipelineName: row.pipeline_name || null,
+    pipelineColor: row.pipeline_color || null,
     stageId:      row.stage_id,
     stageName:    row.stage_name || null,
     stageKind:    row.stage_kind || null,
@@ -51,6 +52,7 @@ const BASE_SELECT = `
   SELECT e.*,
     (c.first_name || COALESCE(' ' || c.last_name, '')) AS contact_name,
     p.name AS pipeline_name,
+    p.color AS pipeline_color,
     s.name AS stage_name,
     s.kind AS stage_kind,
     s.color AS stage_color

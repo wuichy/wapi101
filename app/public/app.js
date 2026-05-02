@@ -169,9 +169,13 @@ async function loadConversations() {
         externalId: r.external_id,
         contactId: r.contact_id,
         contactName: [r.contact_first_name, r.contact_last_name].filter(Boolean).join(' ').trim() || null,
+        name: [r.contact_first_name, r.contact_last_name].filter(Boolean).join(' ').trim() || r.contact_phone || '—',
         contactPhone: r.contact_phone,
+        phone: r.contact_phone || '',
         lastMessage: r.last_message,
         lastMessageAt: r.last_message_at,
+        lastIncomingAt: r.last_incoming_at,  // ← para el badge 24h de WhatsApp Business API
+        time: r.last_message_at ? new Date(r.last_message_at * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '',
         unreadCount: r.unread_count || 0,
         botPaused: !!r.bot_paused,
         _personalHidden: !!r.hidden_at,

@@ -1565,6 +1565,15 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
             <!-- ─── Tokens de máquina (solo admin) ─── -->
             <div class="settings-pane" data-settings="tokens-maquina" data-admin-only hidden>
+              <div class="deploy-card" id="deployCard">
+                <div class="deploy-card-info">
+                  <h3>Despliegue de versión</h3>
+                  <p class="deploy-version" id="deployVersion">Cargando versión actual…</p>
+                  <p class="deploy-status" id="deployStatus" hidden></p>
+                </div>
+                <button class="btn btn--primary" id="deployBtn">🚀 Desplegar última versión</button>
+              </div>
+
               <div class="settings-head">
                 <div>
                   <h2>Tokens de máquina</h2>

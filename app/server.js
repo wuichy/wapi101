@@ -165,6 +165,7 @@ mountSafe('/api/outgoing-webhooks',  require('./src/modules/outgoing-webhooks/ro
 mountSafe('/api/bot',                require('./src/modules/bot/routes'));
 mountSafe('/api/bot-tags',           require('./src/modules/bot-tags/routes'));
 mountSafe('/api/machine-tokens',     require('./src/modules/machine-tokens/routes'));
+mountSafe('/api/admin',              require('./src/modules/admin/routes'));
 mountSafe('/api/conversations',      require('./src/modules/conversations/routes'));
 mountSafe('/api/personal-chat',      require('./src/modules/personal-chat/routes'));
 mountSafe('/api/templates',          require('./src/modules/templates/routes'));

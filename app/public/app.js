@@ -1400,6 +1400,70 @@ async function loadMachineTokens() {
   }
 }
 
+async function loadDeployVersion() {
+  const el = document.getElementById('deployVersion');
+  if (!el) return;
+  try {
+    const v = await api('GET', '/api/admin/version');
+    const date = v.date ? new Date(v.date).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    el.innerHTML = `Versión actual: <code>${escHtml(v.commit || '?')}</code> · ${escHtml(v.subject || '')} <span class="deploy-date">${escHtml(date)}</span>`;
+  } catch (err) {
+    el.textContent = 'No se pudo leer la versión actual';
+  }
+}
+
+async function runDeploy() {
+  const btn = document.getElementById('deployBtn');
+  const status = document.getElementById('deployStatus');
+  if (!btn || !status) return;
+  if (!confirm('¿Desplegar última versión? El server se reinicia ~3 segundos.')) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Desplegando…';
+  status.hidden = false;
+  status.className = 'deploy-status deploy-status--info';
+  status.textContent = 'Bajando cambios desde GitHub…';
+  let result;
+  try {
+    result = await api('POST', '/api/admin/deploy', {});
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = '🚀 Desplegar última versión';
+    status.className = 'deploy-status deploy-status--error';
+    status.textContent = '❌ ' + (err.message || 'Falló el deploy');
+    return;
+  }
+  if (result.noChanges) {
+    btn.disabled = false;
+    btn.textContent = '🚀 Desplegar última versión';
+    status.className = 'deploy-status deploy-status--ok';
+    status.textContent = `✓ Ya estás en la última versión (${result.after}). Sin cambios que aplicar.`;
+    return;
+  }
+  status.textContent = `✓ Cambios bajados: ${result.before} → ${result.after} "${result.subject}". Reiniciando server…`;
+  await waitForServerHealth(status);
+  status.className = 'deploy-status deploy-status--ok';
+  status.textContent = '✓ Deploy completado. Recargando…';
+  await new Promise(r => setTimeout(r, 800));
+  if ('caches' in window) {
+    try { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); } catch (_) {}
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set('_cb', Date.now().toString(36));
+  window.location.replace(url.toString());
+}
+
+async function waitForServerHealth(status) {
+  for (let i = 0; i < 30; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const r = await fetch('/healthz', { cache: 'no-store' });
+      if (r.ok) return true;
+    } catch (_) {}
+    if (status) status.textContent = `Reiniciando server… (${i + 1}s)`;
+  }
+  return false;
+}
+
 function renderMachineTokens() {
   const table = document.getElementById('mtTable');
   const empty = document.getElementById('mtEmpty');
@@ -1442,6 +1506,8 @@ function escapeHtml(s) {
 }
 
 function setupMachineTokens() {
+  document.getElementById('deployBtn')?.addEventListener('click', runDeploy);
+
   const newBtn       = document.getElementById('mtNewBtn');
   const newModal     = document.getElementById('mtNewModal');
   const newName      = document.getElementById('mtNewName');
@@ -1688,7 +1754,7 @@ function setupSettingsTabs() {
       tabs.forEach((t) => t.classList.toggle("is-active", t === tab));
       panes.forEach((p) => p.classList.toggle("is-active", p.dataset.settings === target));
       if (target === 'papelera') loadTrash();
-      if (target === 'tokens-maquina') loadMachineTokens();
+      if (target === 'tokens-maquina') { loadMachineTokens(); loadDeployVersion(); }
     });
   });
   document.querySelectorAll(".ai-provider input").forEach((input) => {

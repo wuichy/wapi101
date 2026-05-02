@@ -148,15 +148,46 @@ El token de máquina sirve para mover **datos** (contactos, mensajes, expediente
 
 ### Flujo "compu nueva, quiero cambios de código"
 
-1. Generas token en Ajustes → la IA puede operar datos (no necesitas más para esto)
-2. Si además quieres que la IA edite código:
-   - Clona el repo en la compu nueva: `git clone git@github.com:wuichy/reelance-woocommerre-github.git`
-   - Tu llave SSH tiene que estar autorizada en GitHub (si no, agrégala en https://github.com/settings/keys)
-   - La IA edita archivos localmente y hace `git push` a `main`
-3. Para que los cambios lleguen a `lucho101.com`:
-   - Abres `lucho101.com` en navegador, login con password admin
-   - Ajustes → Tokens de máquina → arriba aparece la card **"Despliegue de versión"**
-   - Click en **🚀 Desplegar última versión** → el server hace `git pull` + reinicio solo (~3s)
+**Paso 1 — Token (cambios de datos)**
+Generas token en Ajustes → la IA puede leer/escribir datos del CRM. Si solo vas a pedirle cosas como "manda este mensaje" o "buscame contactos", aquí terminas.
+
+**Paso 2 — Setup de GitHub (solo si vas a editar código)**
+
+Pídele esto a la IA en la compu nueva (Claude Code es lo más fácil):
+
+```
+Necesito setup de git para clonar el repo wuichy/reelance-woocommerre-github
+de GitHub. Hazlo así:
+
+1. Genera una llave SSH ed25519 nueva con email luis@reelance.mx (o el que use Luis):
+     ssh-keygen -t ed25519 -C "luis@reelance.mx" -f ~/.ssh/id_ed25519 -N ""
+   Si ya existe ~/.ssh/id_ed25519, NO la sobrescribas — úsala.
+
+2. Muéstrame la llave pública para que la copie:
+     cat ~/.ssh/id_ed25519.pub
+
+3. Espera a que Luis la autorice en https://github.com/settings/keys
+   (él hace click en "New SSH key", pega la llave, le pone nombre tipo
+   "MacBook nueva 2026" y guarda).
+
+4. Cuando me confirme, prueba la conexión:
+     ssh -T git@github.com
+   Debe responder "Hi wuichy! You've successfully authenticated…"
+
+5. Clona el repo en /Users/<usuario>/dev/:
+     mkdir -p ~/dev && cd ~/dev
+     git clone git@github.com:wuichy/reelance-woocommerre-github.git
+     cd reelance-woocommerre-github
+     git remote -v   # confirma que apunta a GitHub
+```
+
+**Paso 3 — La IA edita código y hace push**
+Una vez clonado, le pides cambios normalmente ("agrega un botón X", "arregla el bug Y") y la IA hace `git add`, `git commit`, `git push origin main`.
+
+**Paso 4 — Tú aprietas Deploy**
+- Abres `lucho101.com` en navegador, login con password admin
+- Ajustes → Tokens de máquina → arriba aparece la card **"Despliegue de versión"**
+- Click en **🚀 Desplegar última versión** → el server hace `git pull` + reinicio solo (~3s)
 
 **El botón Deploy bloquea explícitamente machine tokens** (anti-escalada). Solo funciona con sesión de navegador autenticada con password — para que ninguna IA pueda autodeployarse cambios sin que tú apruebes.
 

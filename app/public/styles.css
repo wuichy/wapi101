@@ -5137,6 +5137,75 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .rh-toast--success { background: #166534; }
 .rh-toast--error   { background: #991b1b; }
 
+/* ═══════ Modo personal /chat ═══════ */
+/* Oculta sidebar nav, topbar de vista, y todo lo que no sea chat */
+body.personal-mode .rh-nav,
+body.personal-mode .nav,
+body.personal-mode #navSidebar,
+body.personal-mode .topbar:not(.rh-conversation-topbar),
+body.personal-mode .view:not(.view-chats),
+body.personal-mode [data-view]:not([data-view="chats"]) {
+  display: none !important;
+}
+body.personal-mode .view-chats,
+body.personal-mode [data-view="chats"] {
+  display: flex !important;
+  width: 100vw !important;
+  margin-left: 0 !important;
+}
+body.personal-mode .main {
+  margin-left: 0 !important;
+  width: 100vw !important;
+}
+
+/* Toggle "Mostrar ocultos" en sidebar */
+.rh-personal-toggle {
+  padding: 10px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 13px;
+}
+.rh-personal-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #475569;
+}
+
+/* Botón "ocultar" en cada chat de la lista (solo modo personal) */
+.rh-chat-item {
+  position: relative;
+}
+.rh-chat-hide-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.rh-chat-item:hover .rh-chat-hide-btn { display: flex; }
+.rh-chat-hide-btn:hover { background: rgba(220, 38, 38, 0.2); }
+.rh-chat-hide-btn--unhide {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+  font-size: 12px;
+  display: flex;
+}
+.rh-chat-hide-btn--unhide:hover { background: rgba(34, 197, 94, 0.22); }
+
 /* ═══════ Tokens de máquina ═══════ */
 .mt-actions { display: flex; gap: 8px; }
 .mt-help { margin-top: 8px; font-size: 13px; }

@@ -166,6 +166,7 @@ mountSafe('/api/bot',                require('./src/modules/bot/routes'));
 mountSafe('/api/bot-tags',           require('./src/modules/bot-tags/routes'));
 mountSafe('/api/machine-tokens',     require('./src/modules/machine-tokens/routes'));
 mountSafe('/api/conversations',      require('./src/modules/conversations/routes'));
+mountSafe('/api/personal-chat',      require('./src/modules/personal-chat/routes'));
 mountSafe('/api/templates',          require('./src/modules/templates/routes'));
 mountSafe('/api/stats',              require('./src/modules/stats/routes'));
 mountSafe('/api/advisors',           require('./src/modules/advisors/routes'));
@@ -187,6 +188,12 @@ if (config.env !== 'production') {
     next();
   });
 }
+// Ruta /chat — sirve la SPA con marker para que el frontend active "modo personal"
+// (chat-only, vista personal por asesor con hides + tags propios).
+app.get('/chat', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.listen(config.port, config.host, () => {

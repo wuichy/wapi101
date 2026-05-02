@@ -155,11 +155,34 @@ setInterval(() => {
 
 async function loadConversations() {
   try {
-    const params = new URLSearchParams();
-    if (CHAT_SEARCH) params.set('q', CHAT_SEARCH);
-    if (CHAT_FILTER_PROVIDER) params.set('provider', CHAT_FILTER_PROVIDER);
-    if (CHAT_FILTER_UNREAD) params.set('unread', '1');
-    const data = await api('GET', `/api/conversations?${params}`);
+    let data;
+    if (window.PERSONAL_MODE) {
+      // /chat — vista personal del asesor, con hides propios
+      const params = new URLSearchParams();
+      if (window.PERSONAL_SHOW_HIDDEN) params.set('showHidden', '1');
+      params.set('limit', '200');
+      data = await api('GET', `/api/personal-chat/conversations?${params}`);
+      // El endpoint personal devuelve campos planos — normalizar a la forma esperada por renderChatList
+      data.items = (data.items || []).map(r => ({
+        id: r.id,
+        provider: r.provider,
+        externalId: r.external_id,
+        contactId: r.contact_id,
+        contactName: [r.contact_first_name, r.contact_last_name].filter(Boolean).join(' ').trim() || null,
+        contactPhone: r.contact_phone,
+        lastMessage: r.last_message,
+        lastMessageAt: r.last_message_at,
+        unreadCount: r.unread_count || 0,
+        botPaused: !!r.bot_paused,
+        _personalHidden: !!r.hidden_at,
+      }));
+    } else {
+      const params = new URLSearchParams();
+      if (CHAT_SEARCH) params.set('q', CHAT_SEARCH);
+      if (CHAT_FILTER_PROVIDER) params.set('provider', CHAT_FILTER_PROVIDER);
+      if (CHAT_FILTER_UNREAD) params.set('unread', '1');
+      data = await api('GET', `/api/conversations?${params}`);
+    }
     CONVERSATIONS = data.items || [];
     renderChatList();
     // Actualizar badges de los filtros
@@ -204,14 +227,21 @@ function renderChatList() {
     return;
   }
 
-  root.innerHTML = CONVERSATIONS.map((c) => `
-    <button class="rh-chat-item ${c.id === ACTIVE_CONVO_ID ? "rh-active" : ""}" data-id="${c.id}">
+  root.innerHTML = CONVERSATIONS.map((c) => {
+    const personalAction = window.PERSONAL_MODE
+      ? (c._personalHidden
+          ? `<button class="rh-chat-hide-btn rh-chat-hide-btn--unhide" data-personal-action="unhide" data-id="${c.id}" title="Desocultar">↩</button>`
+          : `<button class="rh-chat-hide-btn" data-personal-action="hide" data-id="${c.id}" title="Ocultar (solo de tu vista)">×</button>`)
+      : '';
+    return `
+    <div role="button" tabindex="0" class="rh-chat-item ${c.id === ACTIVE_CONVO_ID ? "rh-active" : ""}" data-id="${c.id}">
+      ${personalAction}
       <div class="rh-chat-item-top">
-        <strong class="rh-chat-name">${escapeHtml(c.name)}</strong>
-        <span class="rh-chat-time">${escapeHtml(c.time)}</span>
+        <strong class="rh-chat-name">${escapeHtml(c.name || c.contactName || '—')}</strong>
+        <span class="rh-chat-time">${escapeHtml(c.time || '')}</span>
       </div>
-      <p class="rh-chat-phone">${escapeHtml(c.phone)}</p>
-      <p class="rh-chat-preview">${escapeHtml(c.lastMessage)}</p>
+      <p class="rh-chat-phone">${escapeHtml(c.phone || c.contactPhone || '')}</p>
+      <p class="rh-chat-preview">${escapeHtml(c.lastMessage || '')}</p>
       <div class="rh-chat-badges">
         <span class="rh-chat-origin">
           <span class="rh-channel-badge">
@@ -222,12 +252,40 @@ function renderChatList() {
         ${wa24Html(c.provider, c.lastIncomingAt)}
         ${c.unreadCount ? `<span class="rh-chat-unread-dot"></span>` : ""}
       </div>
-    </button>
-  `).join("");
+    </div>
+  `;
+  }).join("");
 
   root.querySelectorAll(".rh-chat-item").forEach((el) => {
-    el.addEventListener("click", () => openConversation(Number(el.dataset.id)));
+    el.addEventListener("click", (e) => {
+      // Si clic fue en el botón de hide/unhide del modo personal, no abrir conversación
+      const action = e.target.closest('[data-personal-action]');
+      if (action) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = Number(action.dataset.id);
+        const kind = action.dataset.personalAction;
+        handlePersonalChatAction(id, kind);
+        return;
+      }
+      openConversation(Number(el.dataset.id));
+    });
   });
+}
+
+async function handlePersonalChatAction(convoId, kind) {
+  try {
+    if (kind === 'hide') {
+      await api('POST', `/api/personal-chat/conversations/${convoId}/hide`);
+      toast('Chat ocultado de tu vista', 'success');
+    } else if (kind === 'unhide') {
+      await api('POST', `/api/personal-chat/conversations/${convoId}/unhide`);
+      toast('Chat desocultado', 'success');
+    }
+    await loadConversations();
+  } catch (err) {
+    toast(err.message || 'Error', 'error');
+  }
 }
 
 async function openConversation(convoId) {
@@ -6014,9 +6072,33 @@ function _rhToast(msg, type = 'success') {
 }
 
 // ═══════ Bootstrap ═══════
+// Detectar si estamos en /chat (vista personal del asesor)
+window.PERSONAL_MODE = (window.location.pathname === '/chat' || window.location.pathname === '/chat/');
+window.PERSONAL_SHOW_HIDDEN = false;
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Redirigir a login si no hay token
-  if (!getToken()) { window.location.href = '/login.html'; return; }
+  if (!getToken()) {
+    const redir = window.PERSONAL_MODE ? '?redirect=/chat' : '';
+    window.location.href = '/login.html' + redir;
+    return;
+  }
+
+  // En /chat: aplicar UI limpia (oculta nav lateral, fuerza vista chats)
+  if (window.PERSONAL_MODE) {
+    document.body.classList.add('personal-mode');
+    localStorage.setItem('lastView', 'chats');
+    // Mostrar toggle "Mostrar ocultos" + hookup
+    const toggleWrap = document.getElementById('rhPersonalToggle');
+    const toggleInput = document.getElementById('rhPersonalShowHidden');
+    if (toggleWrap) toggleWrap.hidden = false;
+    if (toggleInput) {
+      toggleInput.addEventListener('change', () => {
+        window.PERSONAL_SHOW_HIDDEN = toggleInput.checked;
+        loadConversations();
+      });
+    }
+  }
 
   // Mostrar nombre del asesor y configurar logout
   const _advisor = getAdvisor();

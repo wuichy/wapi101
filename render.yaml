@@ -28,3 +28,17 @@ services:
         sync: false
       - key: KOMMO_SOURCE_ID
         sync: false
+      - key: WC_WEBHOOK_SECRET
+        sync: false
+      - key: WC_PHONE_PREFIX
+        value: "+521"
+      - key: KOMMO_PIPELINE_CLIENTES_ID
+        sync: false
+      - key: KOMMO_STATUS_RECIENTES_ID
+        sync: false
+      - key: KOMMO_FIELD_LAST_ORDER_DATE
+        sync: false
+      - key: KOMMO_CLIENTE_TAG
+        value: Cliente
+      - key: KOMMO_BOTS_TO_STOP_ON_ORDER
+        sync: false

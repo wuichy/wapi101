@@ -5459,4 +5459,13 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   border: 1px solid #bfdbfe;
   font-weight: 600;
 }
-.tpl-var-label--free { margin-left: 8px; color: #94a3b8; font-size: 12px; }
+.tpl-var-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* Variables numéricas {{N}} → solo en wa_api (default, sin .is-free) */
+.tpl-modal-card:not(.is-free) .tpl-var-group--free { display: none; }
+/* Variables básicas {nombre} → solo en free_form */
+.tpl-modal-card.is-free .tpl-var-group--num { display: none; }

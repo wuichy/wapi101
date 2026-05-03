@@ -968,14 +968,21 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <label for="tplBody">Cuerpo del mensaje <span style="color:#dc2626">*</span></label>
               <textarea class="int-input tpl-body-input" id="tplBody" rows="5" placeholder="Hola {{1}}, tu pedido {{2}} ya está en camino."></textarea>
               <div class="tpl-var-row">
-                <span class="tpl-var-label">Insertar variable:</span>
-                <button type="button" class="tpl-var-btn tpl-var-btn--num" data-var-num>+ Variable</button>
-                <span class="tpl-var-label tpl-var-label--free">(básicas):</span>
-                <button type="button" class="tpl-var-btn" data-var="{nombre}">nombre</button>
-                <button type="button" class="tpl-var-btn" data-var="{apellido}">apellido</button>
-                <button type="button" class="tpl-var-btn" data-var="{telefono}">teléfono</button>
-                <button type="button" class="tpl-var-btn" data-var="{email}">email</button>
-                <button type="button" class="tpl-var-btn" data-var="{empresa}">empresa</button>
+                <!-- Variables numeradas — solo wa_api (Meta API) -->
+                <span class="tpl-var-group tpl-var-group--num">
+                  <span class="tpl-var-label">Variables:</span>
+                  <button type="button" class="tpl-var-btn tpl-var-btn--num" data-var-num>+ {{N}}</button>
+                  <span class="tpl-hint-inline">se reemplazan al enviar (Meta requiere ejemplo)</span>
+                </span>
+                <!-- Básicas — solo free_form (respuestas rápidas) -->
+                <span class="tpl-var-group tpl-var-group--free">
+                  <span class="tpl-var-label">Auto-rellenar con:</span>
+                  <button type="button" class="tpl-var-btn" data-var="{nombre}">nombre</button>
+                  <button type="button" class="tpl-var-btn" data-var="{apellido}">apellido</button>
+                  <button type="button" class="tpl-var-btn" data-var="{telefono}">teléfono</button>
+                  <button type="button" class="tpl-var-btn" data-var="{email}">email</button>
+                  <button type="button" class="tpl-var-btn" data-var="{empresa}">empresa</button>
+                </span>
               </div>
             </div>
 

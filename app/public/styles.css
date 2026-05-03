@@ -5642,6 +5642,20 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   font-size: 12px;
   cursor: help;
 }
+
+/* Modo edición inline en tag manager (templates) */
+.tpl-tag-row--editing {
+  background: #f8fafc;
+  border-color: #93c5fd !important;
+  box-shadow: inset 0 0 0 2px #93c5fd33;
+}
+.tpl-tag-edit-name {
+  flex: 0 0 160px;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+}
 /* Selector de tags dentro del modal de plantilla */
 .tpl-tags-pickers {
   display: flex;

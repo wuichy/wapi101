@@ -4855,7 +4855,51 @@ function renderBotTagsManagerList() {
 // ════════════════════════════════
 // Etiquetas de plantillas (mismo patrón que bot tags)
 // ════════════════════════════════
-const TPL_TAG_PALETTE = ['#94a3b8', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+let _tplTagEditingId = null; // id de la tag actualmente en modo edición inline
+const TPL_TAG_PALETTE = [
+  '#94a3b8', // gris
+  '#3b82f6', // azul
+  '#10b981', // verde
+  '#f59e0b', // ámbar
+  '#ef4444', // rojo
+  '#8b5cf6', // violeta
+  '#ec4899', // rosa
+  '#14b8a6', // teal
+  '#f97316', // naranja
+  '#0f172a', // negro (texto blanco)
+  '#facc15', // amarillo brillante
+  '#84cc16', // lima
+  '#06b6d4', // cian
+  '#d946ef', // fucsia
+  '#92400e', // café
+];
+
+// Calcula si un color hex es "oscuro" (luminance < 128) — usado para decidir
+// si la pill debe llevar fondo sólido + texto blanco (color oscuro) o fondo
+// tintado + texto color (color claro).
+function isDarkColor(hex) {
+  if (!hex) return false;
+  const c = String(hex).replace('#', '');
+  if (c.length !== 6) return false;
+  const r = parseInt(c.substr(0, 2), 16);
+  const g = parseInt(c.substr(2, 2), 16);
+  const b = parseInt(c.substr(4, 2), 16);
+  if ([r, g, b].some(x => Number.isNaN(x))) return false;
+  // YIQ luminance — pondera verde más alto porque el ojo humano es más sensible al verde
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq < 140;  // umbral conservador para que el azul oscuro también caiga en "dark"
+}
+
+// Devuelve el style inline para una pill, escogiendo contraste adecuado:
+// - color oscuro → bg sólido del color + texto blanco
+// - color claro → bg tintado 10% + texto del color (legible sobre tinte claro)
+function tplTagPillStyle(color) {
+  const c = color || '#94a3b8';
+  if (isDarkColor(c)) {
+    return `background:${escHtml(c)};color:#fff;border-color:${escHtml(c)}`;
+  }
+  return `background:${escHtml(c)}1a;color:${escHtml(c)};border-color:${escHtml(c)}66`;
+}
 
 function renderTplTagsPickers() {
   const root = document.getElementById('tplTagsPickers');
@@ -4866,7 +4910,10 @@ function renderTplTagsPickers() {
   }
   root.innerHTML = _tplTags.map(t => {
     const on = _tplDraftTagIds.includes(t.id);
-    return `<button type="button" class="bot-tag-pill ${on ? 'is-on' : 'is-off'}" data-toggle-tag="${t.id}" style="background:${escHtml(t.color)}${on ? '' : '12'};color:${escHtml(t.color)};border-color:${escHtml(t.color)}66"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</button>`;
+    const styleStr = on
+      ? tplTagPillStyle(t.color)
+      : `background:${escHtml(t.color)}12;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66`;
+    return `<button type="button" class="bot-tag-pill ${on ? 'is-on' : 'is-off'}" data-toggle-tag="${t.id}" style="${styleStr}"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</button>`;
   }).join('');
 }
 
@@ -4895,25 +4942,42 @@ function renderTplTagsManagerList() {
     root.innerHTML = '<div class="bot-tag-manager-empty">Aún no hay etiquetas. Crea la primera arriba.</div>';
     return;
   }
-  root.innerHTML = _tplTags.map(t => `
-    <div class="bot-tag-manager-row">
-      <div class="bot-tag-pill" style="background:${escHtml(t.color)}1a;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66">
-        <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>
-        ${escHtml(t.name)}
+  root.innerHTML = _tplTags.map(t => {
+    if (_tplTagEditingId === t.id) {
+      // Modo edición inline: input nombre + paleta de colores + guardar/cancelar
+      return `
+        <div class="bot-tag-manager-row tpl-tag-row--editing" data-id="${t.id}">
+          <input type="text" class="int-input tpl-tag-edit-name" value="${escHtml(t.name)}" maxlength="32" />
+          <div class="bot-tag-row-colors">
+            ${TPL_TAG_PALETTE.map(c => `<button type="button" class="bot-tag-swatch-sm ${c === (t._draftColor || t.color) ? 'is-selected' : ''}" data-tpl-tag-edit-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>`).join('')}
+          </div>
+          <div class="bot-tag-row-actions">
+            <button type="button" class="btn btn--sm btn--primary" data-save-tpl-tag="${t.id}">Guardar</button>
+            <button type="button" class="btn btn--sm btn--secondary" data-cancel-tpl-tag="${t.id}">Cancelar</button>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="bot-tag-manager-row" data-id="${t.id}">
+        <div class="bot-tag-pill" style="${tplTagPillStyle(t.color)}">
+          <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>
+          ${escHtml(t.name)}
+        </div>
+        <div class="bot-tag-row-colors">
+          ${TPL_TAG_PALETTE.map(c => `<button type="button" class="bot-tag-swatch-sm ${c === t.color ? 'is-selected' : ''}" data-tpl-tag-color-pick="${t.id}" data-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>`).join('')}
+        </div>
+        <div class="bot-tag-row-actions">
+          <button type="button" class="icon-btn icon-btn--ghost" data-edit-tpl-tag="${t.id}" aria-label="Editar nombre y color">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button type="button" class="icon-btn icon-btn--ghost" data-delete-tpl-tag="${t.id}" aria-label="Eliminar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="bot-tag-row-colors">
-        ${TPL_TAG_PALETTE.map(c => `<button type="button" class="bot-tag-swatch-sm ${c === t.color ? 'is-selected' : ''}" data-tpl-tag-color-pick="${t.id}" data-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>`).join('')}
-      </div>
-      <div class="bot-tag-row-actions">
-        <button type="button" class="icon-btn icon-btn--ghost" data-edit-tpl-tag="${t.id}" aria-label="Renombrar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button type="button" class="icon-btn icon-btn--ghost" data-delete-tpl-tag="${t.id}" aria-label="Eliminar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-        </button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 async function createTplTag(name, color) {
@@ -6716,7 +6780,7 @@ function renderTplTagFilters() {
 
 function tplRowTagsHtml(tpl) {
   if (!Array.isArray(tpl.tags) || !tpl.tags.length) return '';
-  return `<span class="bot-row-tags">${tpl.tags.map(t => `<span class="bot-tag-pill" style="--tag-color:${escHtml(t.color)};background:${escHtml(t.color)}1a;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</span>`).join('')}</span>`;
+  return `<span class="bot-row-tags">${tpl.tags.map(t => `<span class="bot-tag-pill" style="--tag-color:${escHtml(t.color)};${tplTagPillStyle(t.color)}"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</span>`).join('')}</span>`;
 }
 
 function _applyTplSort(arr) {
@@ -6829,7 +6893,7 @@ function renderTemplates() {
       const header = document.createElement('div');
       header.className = 'tpl-group-header';
       const tagPillHtml = g.tag
-        ? `<span class="bot-tag-pill" style="background:${escHtml(g.tag.color)}1a;color:${escHtml(g.tag.color)};border-color:${escHtml(g.tag.color)}66"><span class="bot-tag-dot" style="background:${escHtml(g.tag.color)}"></span>${escHtml(g.tag.name)}</span>`
+        ? `<span class="bot-tag-pill" style="${tplTagPillStyle(g.tag.color)}"><span class="bot-tag-dot" style="background:${escHtml(g.tag.color)}"></span>${escHtml(g.tag.name)}</span>`
         : '<span class="tpl-group-no-tag">— Sin etiqueta —</span>';
       header.innerHTML = `${tagPillHtml} <span class="tpl-group-count">${g.items.length}</span>`;
       list.appendChild(header);
@@ -7616,21 +7680,62 @@ function setupTemplates() {
   });
   // Acciones por fila en el manager
   document.getElementById('tplTagsManagerList')?.addEventListener('click', async (e) => {
+    // Quick-pick de color (modo no-edición — se guarda directo)
     const colorBtn = e.target.closest('[data-tpl-tag-color-pick]');
     if (colorBtn) {
       await updateTplTag(Number(colorBtn.dataset.tplTagColorPick), { color: colorBtn.dataset.color });
       return;
     }
+
+    // Entrar en modo edición inline (nombre + color)
     const editBtn = e.target.closest('[data-edit-tpl-tag]');
     if (editBtn) {
-      const id = Number(editBtn.dataset.editTplTag);
-      const cur = _tplTags.find(t => t.id === id);
-      const name = prompt('Nuevo nombre:', cur?.name || '');
-      if (name && name.trim() && name.trim() !== cur?.name) {
-        await updateTplTag(id, { name: name.trim(), color: cur.color });
-      }
+      _tplTagEditingId = Number(editBtn.dataset.editTplTag);
+      // Inicializa _draftColor con el color actual
+      const cur = _tplTags.find(t => t.id === _tplTagEditingId);
+      if (cur) cur._draftColor = cur.color;
+      renderTplTagsManagerList();
+      // Focus en el input de nombre
+      setTimeout(() => {
+        document.querySelector('.tpl-tag-row--editing .tpl-tag-edit-name')?.focus();
+      }, 50);
       return;
     }
+
+    // En modo edición — selección de color (solo cambia draft)
+    const editColorBtn = e.target.closest('[data-tpl-tag-edit-color]');
+    if (editColorBtn) {
+      const cur = _tplTags.find(t => t.id === _tplTagEditingId);
+      if (cur) cur._draftColor = editColorBtn.dataset.tplTagEditColor;
+      renderTplTagsManagerList();
+      setTimeout(() => document.querySelector('.tpl-tag-row--editing .tpl-tag-edit-name')?.focus(), 50);
+      return;
+    }
+
+    // Guardar edición (nombre + color)
+    const saveBtn = e.target.closest('[data-save-tpl-tag]');
+    if (saveBtn) {
+      const id = Number(saveBtn.dataset.saveTplTag);
+      const cur = _tplTags.find(t => t.id === id);
+      const newName = document.querySelector('.tpl-tag-row--editing .tpl-tag-edit-name')?.value.trim();
+      if (!newName) { toast('El nombre no puede quedar vacío', 'error'); return; }
+      try {
+        await updateTplTag(id, { name: newName, color: cur._draftColor || cur.color });
+        _tplTagEditingId = null;
+        renderTplTagsManagerList();
+      } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+
+    // Cancelar edición
+    const cancelBtn = e.target.closest('[data-cancel-tpl-tag]');
+    if (cancelBtn) {
+      _tplTagEditingId = null;
+      renderTplTagsManagerList();
+      return;
+    }
+
+    // Eliminar
     const delBtn = e.target.closest('[data-delete-tpl-tag]');
     if (delBtn) await deleteTplTag(Number(delBtn.dataset.deleteTplTag));
   });

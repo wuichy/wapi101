@@ -6867,6 +6867,11 @@ function renderTemplates() {
     const createdLabel = t.createdAt
       ? `<span class="tpl-card-date" title="${new Date(t.createdAt * 1000).toLocaleString('es-MX')}">📅 ${escHtml(relTime(t.createdAt))}</span>`
       : '';
+    const usedByBotsHtml = (Array.isArray(t.usedByBots) && t.usedByBots.length)
+      ? `<div class="tpl-card-bots"><span class="tpl-card-bots-label">🤖 Usado en:</span>${
+          t.usedByBots.map(b => `<button type="button" class="tpl-card-bot-pill" data-go-to-bot="${b.id}" title="Abrir bot">${escHtml(b.name)}</button>`).join('')
+        }</div>`
+      : '';
     card.innerHTML = `
       <div class="tpl-card-icon ${isWa ? 'wa' : 'free'}">${isWa ? '📱' : '💬'}</div>
       <div class="tpl-card-body">
@@ -6877,6 +6882,7 @@ function renderTemplates() {
         </div>
         ${rejectionInfo}
         <div class="tpl-card-body-text">${escHtml(t.body)}</div>
+        ${usedByBotsHtml}
       </div>
       <div class="tpl-card-actions">
         ${isWa && (t.waStatus === 'draft' || t.waStatus === 'rejected') ? `<button class="btn btn--sm btn--primary tpl-submit-btn" data-id="${t.id}">${t.waStatus === 'rejected' ? 'Reenviar' : 'Enviar a Meta'}</button>` : ''}
@@ -7915,6 +7921,24 @@ function setupTemplates() {
 
   // Card actions (delegated)
   document.getElementById('tplList')?.addEventListener('click', async (e) => {
+    // Click en pastilla "Usado en: <bot>" → abrir el bot builder
+    const botPill = e.target.closest('[data-go-to-bot]');
+    if (botPill) {
+      const botId = Number(botPill.dataset.goToBot);
+      const bot = sbBots.find(b => b.id === botId);
+      if (bot) {
+        showView('bot');
+        openBotBuilder(bot);
+      } else {
+        // Si sbBots no se ha cargado todavía, recarga y reintenta
+        await loadSalsbots();
+        const fresh = sbBots.find(b => b.id === botId);
+        if (fresh) { showView('bot'); openBotBuilder(fresh); }
+        else toast('No se encontró el bot', 'error');
+      }
+      return;
+    }
+
     const id = Number(e.target.dataset.id);
     if (!id) return;
     if (e.target.classList.contains('tpl-edit-btn')) {

@@ -5643,6 +5643,39 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   cursor: help;
 }
 
+/* "Usado en: <bot>" — pastilla CUADRADA (no pill redonda) clickable */
+.tpl-card-bots {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.tpl-card-bots-label {
+  color: #64748b;
+  font-weight: 500;
+}
+.tpl-card-bot-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;  /* cuadrada, NO 999px */
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.tpl-card-bot-pill:hover {
+  background: #dbeafe;
+  transform: translateY(-1px);
+  box-shadow: 0 1px 3px rgba(29,78,216,0.25);
+}
+.tpl-card-bot-pill:active { transform: translateY(0); }
+
 /* Modo edición inline en tag manager (templates) */
 .tpl-tag-row--editing {
   background: #f8fafc;

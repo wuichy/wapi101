@@ -169,6 +169,29 @@ async function uploadHeaderToMeta(db, buffer, mimetype) {
   return uploadJson.h;
 }
 
+// Escanea todos los bots y devuelve un map { templateId → [{ id, name }, ...] }
+// para mostrar en cada plantilla qué bots la están usando (step type 'template').
+function _buildBotsByTplMap(db) {
+  const map = {};
+  try {
+    const bots = db.prepare('SELECT id, name, steps FROM salsbots').all();
+    for (const bot of bots) {
+      let steps = [];
+      try { steps = JSON.parse(bot.steps || '[]'); } catch { continue; }
+      const seen = new Set();
+      for (const s of (steps || [])) {
+        if (s?.type !== 'template') continue;
+        const tid = Number(s.config?.templateId);
+        if (!tid || seen.has(tid)) continue;
+        seen.add(tid);
+        if (!map[tid]) map[tid] = [];
+        map[tid].push({ id: bot.id, name: bot.name });
+      }
+    }
+  } catch (_) { /* tabla no existe o error — ignorar */ }
+  return map;
+}
+
 function list(db, { type } = {}) {
   const where = type ? 'WHERE type = ?' : '';
   const params = type ? [type] : [];
@@ -186,7 +209,12 @@ function list(db, { type } = {}) {
       tagsByTpl[r.template_id].push({ id: r.id, name: r.name, color: r.color });
     });
   } catch (_) { /* migration aún no aplicada */ }
-  return rows.map(r => ({ ...row(r), tags: tagsByTpl[r.id] || [] }));
+  const botsByTpl = _buildBotsByTplMap(db);
+  return rows.map(r => ({
+    ...row(r),
+    tags: tagsByTpl[r.id] || [],
+    usedByBots: botsByTpl[r.id] || [],
+  }));
 }
 
 function getById(db, id) {
@@ -202,6 +230,7 @@ function getById(db, id) {
        ORDER BY tt.name COLLATE NOCASE
     `).all(id);
   } catch (_) { out.tags = []; }
+  out.usedByBots = _buildBotsByTplMap(db)[id] || [];
   return out;
 }
 

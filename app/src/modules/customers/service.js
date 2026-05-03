@@ -21,7 +21,8 @@ function hydrate(db, row) {
   const tags = db.prepare('SELECT tag FROM contact_tags WHERE contact_id = ? ORDER BY id').all(row.id).map((r) => r.tag);
   const expedients = db.prepare(`
     SELECT e.id, e.name, e.value, e.pipeline_id, e.stage_id,
-           p.name AS pipeline_name, s.name AS stage_name, s.kind AS stage_kind
+           p.name AS pipeline_name, p.color AS pipeline_color,
+           s.name AS stage_name, s.color AS stage_color, s.kind AS stage_kind
     FROM expedients e
     JOIN pipelines p ON p.id = e.pipeline_id
     JOIN stages s ON s.id = e.stage_id
@@ -44,8 +45,10 @@ function hydrate(db, row) {
       value: e.value || 0,
       pipelineId: e.pipeline_id,
       pipelineName: e.pipeline_name,
+      pipelineColor: e.pipeline_color,
       stageId: e.stage_id,
       stageName: e.stage_name,
+      stageColor: e.stage_color,
       stageKind: e.stage_kind
     }))
   };

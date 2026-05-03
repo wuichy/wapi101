@@ -819,6 +819,9 @@ function renderEditExpedients() {
     const pipeline = PIPELINES.find((p) => p.id === pipelineId) || PIPELINES[0];
     const stages = pipeline?.stages || [];
     const stageId = exp.stageId && stages.some((s) => s.id === exp.stageId) ? exp.stageId : stages[0]?.id;
+    const currentStage = stages.find((s) => s.id === stageId);
+    const pipelineColor = pipeline?.color || '#94a3b8';
+    const stageColor = currentStage?.color || '#94a3b8';
 
     return `
       <div class="edit-exp-row ${exp._isNew ? "is-new" : ""}" data-idx="${idx}">
@@ -828,15 +831,21 @@ function renderEditExpedients() {
         </label>
         <label>
           <span>Pipeline</span>
-          <select data-field="pipelineId">
-            ${PIPELINES.map((p) => `<option value="${p.id}" ${p.id === pipelineId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
-          </select>
+          <div class="edit-exp-select-wrap">
+            <span class="edit-exp-color-dot" style="background:${escapeHtml(pipelineColor)}" data-color-for="pipelineId"></span>
+            <select data-field="pipelineId">
+              ${PIPELINES.map((p) => `<option value="${p.id}" data-color="${escapeHtml(p.color || '#94a3b8')}" ${p.id === pipelineId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+            </select>
+          </div>
         </label>
         <label>
           <span>Etapa</span>
-          <select data-field="stageId">
-            ${stages.map((s) => `<option value="${s.id}" ${s.id === stageId ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("")}
-          </select>
+          <div class="edit-exp-select-wrap">
+            <span class="edit-exp-color-dot" style="background:${escapeHtml(stageColor)}" data-color-for="stageId"></span>
+            <select data-field="stageId">
+              ${stages.map((s) => `<option value="${s.id}" data-color="${escapeHtml(s.color || '#94a3b8')}" ${s.id === stageId ? "selected" : ""}>${escapeHtml(s.name)}</option>`).join("")}
+            </select>
+          </div>
         </label>
         <label>
           <span>Valor (MXN)</span>
@@ -866,6 +875,14 @@ function renderEditExpedients() {
         if (field === "pipelineId" || field === "stageId") v = Number(v);
         else if (field === "value") v = Number(v) || 0;
         EDIT_EXPEDIENTS[idx][field] = v;
+
+        // Actualizar el puntito de color sin re-renderizar (más fluido)
+        if (field === "pipelineId" || field === "stageId") {
+          const opt = el.options[el.selectedIndex];
+          const newColor = opt?.dataset.color || '#94a3b8';
+          const dot = row.querySelector(`[data-color-for="${field}"]`);
+          if (dot) dot.style.background = newColor;
+        }
 
         // Si cambió pipeline, resetear stage al primero del nuevo pipeline
         if (field === "pipelineId") {

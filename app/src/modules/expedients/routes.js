@@ -62,8 +62,9 @@ module.exports = function createExpedientsRouter(db) {
   });
 
   router.post('/', (req, res, next) => {
+    let item;
     try {
-      const item = service.create(db, req.body || {});
+      item = service.create(db, req.body || {});
       activity.log(db, {
         expedientId: item.id,
         contactId:   item.contactId,
@@ -74,7 +75,23 @@ module.exports = function createExpedientsRouter(db) {
       });
       res.status(201).json({ item });
     }
-    catch (e) { res.status(400).json({ error: e.message }); }
+    catch (e) { return res.status(400).json({ error: e.message }); }
+
+    // Disparar bot 'pipeline_stage' al crear el expediente. Antes solo se
+    // disparaba en el PATCH (cuando ya existía y se cambiaba la etapa);
+    // ahora también al crearlo desde Contactos / Expedientes / Pipelines.
+    try {
+      if (item?.stageId) {
+        botEngine.triggerPipelineStage(db, {
+          expedientId: item.id,
+          contactId:   item.contactId,
+          pipelineId:  item.pipelineId,
+          stageId:     item.stageId,
+        });
+      }
+    } catch (e) {
+      console.error('[expedients] error disparando bot al crear:', e.message);
+    }
   });
 
   router.patch('/:id', (req, res, next) => {

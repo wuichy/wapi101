@@ -465,9 +465,27 @@ function renderMessages() {
     const bubbleClass = (dir === 'outgoing' && m.status === 'failed') ? 'rh-bubble is-failed' : 'rh-bubble';
     const errLine = (dir === 'outgoing' && m.status === 'failed' && m.errorReason)
       ? `<div class="rh-msg-error">⚠ ${escapeHtml(m.errorReason)}</div>` : '';
+    // Render del media (si lo trae). Imagen → <img>; PDF/doc → tarjeta clickable.
+    let mediaHtml = '';
+    if (m.mediaUrl) {
+      const url = m.mediaUrl;
+      const isImg = /\.(jpe?g|png|gif|webp)$/i.test(url) || (m.body === '' && /\/uploads\/chat-media\//.test(url));
+      const isPdfOrDoc = /\.(pdf|docx?|xlsx?|pptx?|txt)$/i.test(url);
+      if (isImg) {
+        mediaHtml = `<a href="${escapeHtml(url)}" target="_blank" class="rh-msg-media-img"><img src="${escapeHtml(url)}" alt="adjunto" loading="lazy" /></a>`;
+      } else if (isPdfOrDoc) {
+        const filename = url.split('/').pop() || 'documento';
+        const ext = (filename.match(/\.([a-zA-Z0-9]{1,8})$/)?.[1] || 'doc').toUpperCase();
+        mediaHtml = `<a href="${escapeHtml(url)}" target="_blank" class="rh-msg-media-doc"><span class="rh-msg-media-icon">📎</span><span class="rh-msg-media-meta"><span class="rh-msg-media-name">${escapeHtml(filename)}</span><span class="rh-msg-media-ext">${ext}</span></span></a>`;
+      } else {
+        mediaHtml = `<a href="${escapeHtml(url)}" target="_blank" class="rh-msg-media-doc"><span class="rh-msg-media-icon">📁</span><span class="rh-msg-media-name">${escapeHtml(url.split('/').pop() || 'archivo')}</span></a>`;
+      }
+    }
+    const bodyText = m.body ? `<div class="rh-bubble-text">${escapeHtml(m.body).replace(/\n/g, "<br/>")}</div>` : '';
+    const bubbleInner = mediaHtml + bodyText;
     return `
       <article class="rh-message rh-${dir}">
-        <div class="${bubbleClass}">${escapeHtml(m.body).replace(/\n/g, "<br/>")}</div>
+        <div class="${bubbleClass} ${mediaHtml ? 'has-media' : ''}">${bubbleInner || escapeHtml(m.body).replace(/\n/g, "<br/>")}</div>
         ${errLine}
         <div class="rh-message-foot${dir === 'outgoing' ? ' rh-foot-out' : ''}">${footContent}</div>
       </article>`;
@@ -7174,6 +7192,145 @@ function refreshReplyFormState() {
   updateReplyFormState(convo);
 }
 
+// ════════ Adjuntos en chat (etapa 1: imagen + PDF/documento) ════════
+let _rhPendingAttachment = null; // { file, dataUrl, type, mimetype, filename }
+
+function setupAttachMenu() {
+  const btn  = document.getElementById('rhAttachBtn');
+  const menu = document.getElementById('rhAttachMenu');
+  const imgInput = document.getElementById('rhAttachImageInput');
+  const docInput = document.getElementById('rhAttachDocInput');
+  if (!btn || !menu) return;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (menu.hidden) return;
+    if (!menu.contains(e.target) && e.target !== btn) menu.hidden = true;
+  });
+
+  menu.querySelectorAll('[data-attach]').forEach(opt => {
+    opt.addEventListener('click', () => {
+      menu.hidden = true;
+      const type = opt.dataset.attach;
+      if (type === 'image') imgInput?.click();
+      if (type === 'document') docInput?.click();
+    });
+  });
+
+  imgInput?.addEventListener('change', (e) => onAttachFileSelected(e.target.files?.[0], 'image'));
+  docInput?.addEventListener('change', (e) => onAttachFileSelected(e.target.files?.[0], 'document'));
+
+  document.querySelectorAll('[data-close-attach-preview]').forEach(el => {
+    el.addEventListener('click', closeAttachPreview);
+  });
+  document.getElementById('rhAttachPreviewModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'rhAttachPreviewModal') closeAttachPreview();
+  });
+  document.getElementById('rhAttachSendBtn')?.addEventListener('click', sendAttachmentNow);
+}
+
+function onAttachFileSelected(file, type) {
+  if (!file) return;
+  // Validación rápida en cliente; backend re-valida.
+  const limits = { image: 5 * 1024 * 1024, document: 100 * 1024 * 1024 };
+  if (file.size > limits[type]) {
+    toast(`El archivo excede el límite (${(limits[type]/1024/1024).toFixed(0)}MB)`, 'warning');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    _rhPendingAttachment = {
+      file,
+      dataUrl: reader.result,
+      type,
+      mimetype: file.type || (type === 'image' ? 'image/jpeg' : 'application/octet-stream'),
+      filename: file.name,
+    };
+    showAttachPreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function showAttachPreview() {
+  const att = _rhPendingAttachment;
+  if (!att) return;
+  const modal = document.getElementById('rhAttachPreviewModal');
+  const content = document.getElementById('rhAttachPreviewContent');
+  const title = document.getElementById('rhAttachPreviewTitle');
+  if (!modal || !content) return;
+
+  title.textContent = att.type === 'image' ? 'Enviar imagen' : 'Enviar documento';
+
+  if (att.type === 'image') {
+    content.innerHTML = `<img src="${att.dataUrl}" alt="preview" class="rh-attach-img-preview" />`;
+  } else {
+    const sizeKb = (att.file.size / 1024).toFixed(1);
+    const ext = (att.filename.match(/\.([a-zA-Z0-9]{1,8})$/)?.[1] || 'doc').toUpperCase();
+    content.innerHTML = `
+      <div class="rh-attach-doc-card">
+        <div class="rh-attach-doc-icon">📎</div>
+        <div class="rh-attach-doc-info">
+          <div class="rh-attach-doc-name">${escapeHtml(att.filename)}</div>
+          <div class="rh-attach-doc-meta">${ext} · ${sizeKb} KB</div>
+        </div>
+      </div>`;
+  }
+  document.getElementById('rhAttachCaption').value = '';
+  modal.hidden = false;
+  setTimeout(() => document.getElementById('rhAttachCaption')?.focus(), 50);
+}
+
+function closeAttachPreview() {
+  document.getElementById('rhAttachPreviewModal').hidden = true;
+  _rhPendingAttachment = null;
+  // Limpiar inputs file para que vuelvan a disparar change si eligen el mismo archivo
+  const imgInput = document.getElementById('rhAttachImageInput');
+  const docInput = document.getElementById('rhAttachDocInput');
+  if (imgInput) imgInput.value = '';
+  if (docInput) docInput.value = '';
+}
+
+async function sendAttachmentNow() {
+  const att = _rhPendingAttachment;
+  if (!att) return;
+  const form = document.querySelector('.rh-reply-form');
+  const convoId = Number(form?.dataset.convoId);
+  if (!convoId) { toast('Selecciona una conversación primero', 'warning'); return; }
+  // Bloquear si ventana 24h cerrada (solo plantillas permitidas)
+  const convo = CONVERSATIONS.find(c => c.id === convoId);
+  if (isWaWindowClosed(convo)) {
+    toast('⏰ Ventana 24h cerrada — no puedes enviar archivos, solo plantillas', 'warning');
+    return;
+  }
+  const caption = document.getElementById('rhAttachCaption').value.trim();
+  const sendBtn = document.getElementById('rhAttachSendBtn');
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…'; }
+  try {
+    const msg = await api('POST', `/api/conversations/${convoId}/media`, {
+      data: att.dataUrl,
+      mimetype: att.mimetype,
+      filename: att.filename,
+      caption: caption || null,
+    });
+    CHAT_MESSAGES.push(msg);
+    renderMessages();
+    closeAttachPreview();
+    toast('Archivo enviado', 'success');
+    if (convo) {
+      convo.lastMessage = caption || (att.type === 'image' ? '📷 Imagen' : '📎 Documento');
+      convo.time = msg.time || '';
+      renderChatList();
+    }
+  } catch (err) {
+    toast(err.message || 'Error enviando archivo', 'error');
+  } finally {
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Enviar'; }
+  }
+}
+
 function setupReplyForm() {
   const form = document.querySelector('.rh-reply-form');
   if (!form) return;
@@ -7543,6 +7700,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupChatSearch();
   setupChatFilters();
   setupReplyForm();
+  setupAttachMenu();
 
   // Bot toggle handler (usa conversación cuando está disponible)
   document.getElementById('rhBotToggle')?.addEventListener('click', async () => {

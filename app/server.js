@@ -68,9 +68,9 @@ function mountSafe(mountPath, factory) {
 mountSafe('/webhooks', require('./src/modules/integrations/webhooks'));
 
 // JSON parser global para el resto.
-// 10mb porque uploads de header media (templates WhatsApp) llegan en base64
-// y la expansión 4/3 hace que un archivo de 5MB raw → ~7MB de JSON.
-app.use(express.json({ limit: '10mb' }));
+// 150mb para soportar adjuntos de chat (PDFs hasta 100MB → ~133MB en base64).
+// Imágenes y videos pequeños caben holgadamente. La expansión base64 es 4/3.
+app.use(express.json({ limit: '150mb' }));
 
 // VAPID public key — público (cliente lo necesita para suscribirse antes de login)
 app.get('/api/push/vapid-public-key', (_req, res) => {

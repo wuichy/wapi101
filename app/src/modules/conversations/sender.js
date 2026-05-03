@@ -20,6 +20,12 @@ async function sendWhatsAppLite(db, convo, text) {
   return manager.sendText(convo.integrationId, convo.externalId, text);
 }
 
+async function sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, caption, mediaType }) {
+  if (!convo.integrationId) throw new Error('Conversación sin integración asociada');
+  const manager = require('../integrations/whatsapp-web/manager');
+  return manager.sendMedia(convo.integrationId, convo.externalId, { buffer, mimetype, filename, caption, mediaType });
+}
+
 function _getWAClientCreds(db, convo) {
   let phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   let accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -51,6 +57,58 @@ async function sendWhatsApp(db, convo, text) {
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(friendlyMetaError(data.error) || `HTTP ${res.status}`);
   return data.messages?.[0]?.id || null;
+}
+
+// Envía un archivo (imagen/documento/video/audio) por WhatsApp Cloud API.
+// Flujo de 2 pasos sin URL pública (Opción A: archivo nunca queda expuesto):
+//   1) POST /<phone_number_id>/media (multipart) → media_id
+//   2) POST /<phone_number_id>/messages con { type, <type>: { id, caption?, filename? } }
+async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, caption, mediaType }) {
+  if (!buffer || !buffer.length) throw new Error('Archivo vacío');
+  const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
+  const version = process.env.META_GRAPH_VERSION || 'v22.0';
+
+  // Step 1 — subir a Meta /media (multipart). FormData nativo de Node 18+.
+  const fd = new FormData();
+  fd.append('messaging_product', 'whatsapp');
+  fd.append('type', mimetype);
+  // Blob requiere el filename para que Meta acepte ciertos tipos (PDF, etc.)
+  const blob = new Blob([buffer], { type: mimetype });
+  fd.append('file', blob, filename || 'file');
+  const upRes = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/media`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: fd,
+  });
+  const upJson = await upRes.json().catch(() => ({}));
+  if (!upRes.ok || !upJson.id) {
+    throw new Error(`Subida de archivo: ${friendlyMetaError(upJson?.error) || `HTTP ${upRes.status}`}`);
+  }
+  const mediaId = upJson.id;
+
+  // Step 2 — enviar mensaje referenciando el media_id
+  const typeKey = mediaType; // image | document | video | audio
+  const mediaPayload = { id: mediaId };
+  if (caption && (typeKey === 'image' || typeKey === 'video' || typeKey === 'document')) {
+    mediaPayload.caption = caption;
+  }
+  if (typeKey === 'document' && filename) mediaPayload.filename = filename;
+
+  const sendRes = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to: convo.externalId,
+      type: typeKey,
+      [typeKey]: mediaPayload,
+    }),
+  });
+  const sendJson = await sendRes.json().catch(() => ({}));
+  if (!sendRes.ok || sendJson.error) {
+    throw new Error(friendlyMetaError(sendJson?.error) || `HTTP ${sendRes.status}`);
+  }
+  return sendJson.messages?.[0]?.id || null;
 }
 
 // Resuelve el valor de un placeholder leyendo del contacto según contactField.
@@ -199,4 +257,4 @@ function getIntegrationCreds(db, integrationId) {
   return decryptJson(row.credentials_enc) || null;
 }
 
-module.exports = { sendMessage, sendWhatsApp, sendWhatsAppTemplate, sendWhatsAppLite, sendMessenger, sendInstagram, sendTelegram, getIntegrationCreds };
+module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendInstagram, sendTelegram, getIntegrationCreds };

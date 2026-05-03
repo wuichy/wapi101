@@ -191,6 +191,28 @@ async function sendText(integrationId, externalId, text) {
   return result?.key?.id || null;
 }
 
+// Envía un archivo (imagen/documento/video/audio) por Baileys.
+// mediaType: 'image' | 'document' | 'video' | 'audio'
+async function sendMedia(integrationId, externalId, { buffer, mimetype, filename, caption, mediaType }) {
+  const session = sessions.get(integrationId);
+  if (!session?.sock) throw new Error('Sesión de WhatsApp Web no inicializada');
+  if (session.status !== 'connected') throw new Error(`WhatsApp Web no conectado (estado: ${session.status})`);
+  if (!buffer || !buffer.length) throw new Error('Archivo vacío');
+
+  const num = String(externalId).replace(/[^0-9]/g, '');
+  if (!num) throw new Error('Número inválido');
+  const jid = `${num}@s.whatsapp.net`;
+
+  let payload;
+  if (mediaType === 'image')      payload = { image: buffer, caption: caption || '' };
+  else if (mediaType === 'video') payload = { video: buffer, caption: caption || '', mimetype };
+  else if (mediaType === 'audio') payload = { audio: buffer, mimetype: mimetype || 'audio/ogg' };
+  else                            payload = { document: buffer, mimetype, fileName: filename || 'archivo', caption: caption || '' };
+
+  const result = await session.sock.sendMessage(jid, payload);
+  return result?.key?.id || null;
+}
+
 function getStatus(integrationId) {
   const s = sessions.get(integrationId);
   if (!s) return { status: 'not_started' };
@@ -249,6 +271,7 @@ module.exports = {
   setHandlers,
   startSession,
   sendText,
+  sendMedia,
   getStatus,
   stopSession,
   listSessions,

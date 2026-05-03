@@ -251,7 +251,29 @@
               <form class="rh-reply-form" onsubmit="event.preventDefault()">
                 <div class="rh-reply-input-row">
                   <div class="rh-reply-tools">
-                    <button type="button" class="rh-icon-button" title="Adjuntar">⊕</button>
+                    <div class="rh-attach-wrap">
+                      <button type="button" class="rh-icon-button" id="rhAttachBtn" title="Adjuntar archivo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      </button>
+                      <div class="rh-attach-menu" id="rhAttachMenu" hidden>
+                        <button type="button" class="rh-attach-option" data-attach="image">
+                          <span class="rh-attach-ico">📷</span>
+                          <div>
+                            <div class="rh-attach-label">Imagen</div>
+                            <div class="rh-attach-hint">JPG, PNG (máx 5MB)</div>
+                          </div>
+                        </button>
+                        <button type="button" class="rh-attach-option" data-attach="document">
+                          <span class="rh-attach-ico">📎</span>
+                          <div>
+                            <div class="rh-attach-label">Documento</div>
+                            <div class="rh-attach-hint">PDF, Word, Excel (máx 100MB)</div>
+                          </div>
+                        </button>
+                      </div>
+                      <input type="file" id="rhAttachImageInput" accept="image/jpeg,image/png" hidden />
+                      <input type="file" id="rhAttachDocInput" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,.doc,.docx,.xls,.xlsx,.txt" hidden />
+                    </div>
                     <button type="button" class="rh-icon-button rh-tpl-trigger" id="rhTplTrigger" title="Plantillas">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                     </button>
@@ -263,6 +285,27 @@
                 </div>
               </form>
             </main>
+          </div>
+        </div>
+
+        <!-- Modal: preview del adjunto antes de enviar -->
+        <div class="modal-backdrop" id="rhAttachPreviewModal" hidden>
+          <div class="modal-box" style="max-width:520px">
+            <header class="modal-header">
+              <h2 id="rhAttachPreviewTitle">Vista previa</h2>
+              <button class="modal-close" data-close-attach-preview>×</button>
+            </header>
+            <div class="modal-body">
+              <div class="rh-attach-preview" id="rhAttachPreviewContent"></div>
+              <label class="form-field" style="margin-top:14px">
+                <span>Mensaje (opcional)</span>
+                <textarea id="rhAttachCaption" rows="3" placeholder="Añade un texto al archivo…" maxlength="1024"></textarea>
+              </label>
+            </div>
+            <footer class="modal-footer">
+              <button class="btn btn--ghost" data-close-attach-preview>Cancelar</button>
+              <button class="btn btn--primary" id="rhAttachSendBtn">Enviar</button>
+            </footer>
           </div>
         </div>
       </section>

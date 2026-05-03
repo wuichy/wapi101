@@ -1768,6 +1768,18 @@ function setupSettingsTabs() {
       input.closest(".ai-provider").classList.add("is-selected");
     });
   });
+
+  // Switch: mostrar alarmas de leads estancados en pipelines
+  const alarmsToggle = document.getElementById('cfgPlAlarmsEnabled');
+  if (alarmsToggle) {
+    const enabled = (() => { try { return localStorage.getItem('plAlarmsEnabled') !== '0'; } catch { return true; } })();
+    alarmsToggle.checked = enabled;
+    alarmsToggle.addEventListener('change', () => {
+      try { localStorage.setItem('plAlarmsEnabled', alarmsToggle.checked ? '1' : '0'); } catch {}
+      // Re-renderizar el tablero si está visible para reflejar el cambio
+      if (document.body.dataset.viewActive === 'pipelines') renderPipelinesBoard();
+    });
+  }
 }
 
 // ═══════ Integraciones ═══════
@@ -5380,8 +5392,13 @@ function renderPipelinesBoard() {
     if (expByStage[e.stageId]) expByStage[e.stageId].push(e);
   }
 
+  const showAlarms = (() => { try { return localStorage.getItem('plAlarmsEnabled') !== '0'; } catch { return true; } })();
+  const nowSec = Math.floor(Date.now() / 1000);
+
   board.innerHTML = pipeline.stages.map(stage => {
     const cards = expByStage[stage.id] || [];
+    const staleSec = stage.stale_hours ? Number(stage.stale_hours) * 3600 : 0;
+    const alarmActive = !!stage.stale_hours;
     return `
       <div class="pl-column" data-stage-id="${stage.id}" data-drop-stage="${stage.id}">
         <div class="pl-col-header">
@@ -5393,16 +5410,26 @@ function renderPipelinesBoard() {
           <span class="pl-col-count">${cards.length}</span>
         </div>
         <div class="pl-col-body">
-          ${cards.length ? cards.map(e => `
-            <div class="pl-card" data-exp-id="${e.id}" draggable="true">
+          ${cards.length ? cards.map(e => {
+            const enteredAt = e.stageEnteredAt || e.updatedAt || e.createdAt;
+            const isStale = showAlarms && staleSec && enteredAt && (nowSec - enteredAt) > staleSec;
+            const overdueLabel = isStale ? `<span class="pl-card-stale-pill" title="Lleva más de ${stage.stale_hours}h en esta etapa">⚠ Estancado</span>` : '';
+            return `
+            <div class="pl-card ${isStale ? 'is-stale' : ''}" data-exp-id="${e.id}" draggable="true">
               <div class="pl-card-name ${e.nameIsAuto ? 'is-auto-name' : ''}">${escHtml(e.name || 'Sin nombre')}</div>
               <div class="pl-card-contact">${escHtml(e.contactName || '—')}</div>
               <div class="pl-card-footer">
-                <div class="pl-card-tags">${(e.tags || []).slice(0,2).map(t => `<span class="pl-card-tag">${escHtml(t)}</span>`).join('')}</div>
+                <div class="pl-card-tags">${overdueLabel}${(e.tags || []).slice(0,2).map(t => `<span class="pl-card-tag">${escHtml(t)}</span>`).join('')}</div>
                 <span class="pl-card-date">${fmtDate(e.createdAt)}</span>
               </div>
-            </div>
-          `).join('') : `<div class="pl-col-empty">Sin expedientes</div>`}
+            </div>`;
+          }).join('') : `<div class="pl-col-empty">Sin expedientes</div>`}
+        </div>
+        <div class="pl-col-footer">
+          <button class="pl-col-alarm-btn ${alarmActive ? 'is-active' : ''}" data-stage-alarm="${stage.id}" title="${alarmActive ? `Marca rojo a leads con +${stage.stale_hours}h aquí. Click para cambiar` : 'Configurar alarma de leads estancados'}">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M10 2a5 5 0 0 0-5 5v3l-2 3h14l-2-3V7a5 5 0 0 0-5-5z"/><path d="M8 16a2 2 0 0 0 4 0"/></svg>
+            ${alarmActive ? `Alarma: ${stage.stale_hours}h` : 'Alarma'}
+          </button>
         </div>
       </div>`;
   }).join('');
@@ -6493,11 +6520,46 @@ function setupPipelines() {
 
   // Click card → open expedient detail (from pipelines)
   document.getElementById('plBoard')?.addEventListener('click', e => {
+    // Botón de alarma — configura el umbral de estancado de la etapa
+    const alarmBtn = e.target.closest('[data-stage-alarm]');
+    if (alarmBtn) {
+      e.stopPropagation();
+      handleStageAlarmClick(Number(alarmBtn.dataset.stageAlarm));
+      return;
+    }
     if (e.target.closest('.pl-card[draggable]') && e.defaultPrevented) return;
     const card = e.target.closest('.pl-card');
     if (!card) return;
     openExpDetail(Number(card.dataset.expId), 'pipelines');
   });
+}
+
+// Configurar la alarma de estancado para una etapa
+async function handleStageAlarmClick(stageId) {
+  let stage = null;
+  for (const p of PIPELINES || []) {
+    const s = p.stages?.find(x => x.id === stageId);
+    if (s) { stage = s; break; }
+  }
+  if (!stage) return;
+  const current = stage.stale_hours || '';
+  const msg = `¿Cuántas horas debe permanecer un expediente en "${stage.name}" antes de marcarse en rojo?\n\nDeja vacío para desactivar la alarma. Tip: 24 = 1 día, 168 = 1 semana.`;
+  const input = prompt(msg, current);
+  if (input === null) return; // cancelado
+  const trimmed = input.trim();
+  let payload;
+  if (trimmed === '') {
+    payload = { stale_hours: null };
+  } else {
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n <= 0) { toast('Ingresa un número de horas mayor a 0', 'warning'); return; }
+    payload = { stale_hours: Math.round(n) };
+  }
+  try {
+    await api('PATCH', `/api/pipelines/stages/${stageId}`, payload);
+    await loadPipelinesKanban();
+    toast(payload.stale_hours ? `Alarma configurada: ${payload.stale_hours}h` : 'Alarma desactivada', 'success');
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 // ─── Chat search ───

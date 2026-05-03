@@ -45,6 +45,7 @@ function hydrate(db, row) {
     })),
     createdAt:    row.created_at,
     updatedAt:    row.updated_at,
+    stageEnteredAt: row.stage_entered_at || row.created_at,
   };
 }
 
@@ -123,8 +124,8 @@ function create(db, { contactId, pipelineId, stageId, name, value = 0, tags = []
 
   const trimmedName = name?.trim() || null;
   const r = db.prepare(`
-    INSERT INTO expedients (contact_id, pipeline_id, stage_id, name, value, name_is_auto)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO expedients (contact_id, pipeline_id, stage_id, name, value, name_is_auto, stage_entered_at)
+    VALUES (?, ?, ?, ?, ?, ?, unixepoch())
   `).run(contactId, pipelineId, stageId, trimmedName, Number(value) || 0, trimmedName ? 0 : 1);
 
   const id = r.lastInsertRowid;
@@ -162,7 +163,12 @@ function update(db, id, { pipelineId, stageId, name, value, tags, fieldValues, c
   }
   if (value !== undefined) { fields.push('value = ?'); params.push(Number(value) || 0); }
   if (pipelineId !== undefined) { fields.push('pipeline_id = ?'); params.push(pipelineId); }
-  if (stageId !== undefined) { fields.push('stage_id = ?'); params.push(stageId); }
+  if (stageId !== undefined && stageId !== row.stage_id) {
+    fields.push('stage_id = ?'); params.push(stageId);
+    fields.push('stage_entered_at = unixepoch()');
+  } else if (stageId !== undefined) {
+    fields.push('stage_id = ?'); params.push(stageId);
+  }
   if (fields.length) {
     fields.push('updated_at = unixepoch()');
     params.push(id);

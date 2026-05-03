@@ -744,6 +744,62 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
 .settings-head h2 { margin: 0 0 6px; font-size: 22px; }
 .settings-head p { margin: 0; color: var(--text-muted); max-width: 600px; }
 
+/* Configuraciones — secciones tipo card con filas de switches */
+.cfg-section {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.cfg-section-title {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+.cfg-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 12px 0;
+  border-top: 1px solid #f1f5f9;
+}
+.cfg-row:first-of-type { border-top: none; padding-top: 0; }
+.cfg-row-info { flex: 1; min-width: 0; }
+.cfg-row-title { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+.cfg-row-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.cfg-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px; height: 22px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.cfg-switch input { opacity: 0; width: 0; height: 0; }
+.cfg-switch-slider {
+  position: absolute; inset: 0;
+  background: #cbd5e1;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background .18s;
+}
+.cfg-switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  left: 3px; top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(15,23,42,.2);
+  transition: transform .18s;
+}
+.cfg-switch input:checked + .cfg-switch-slider { background: var(--primary); }
+.cfg-switch input:checked + .cfg-switch-slider::before { transform: translateX(18px); }
+
 .settings-card {
   background: #fff;
   border: 1px solid var(--border);
@@ -3761,6 +3817,59 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   color: var(--text-muted);
   font-size: 12px;
   padding: 24px 8px;
+}
+
+/* Footer de columna con botón de alarma de estancado */
+.pl-col-footer {
+  padding: 8px 8px 12px;
+  border-top: 1px dashed transparent;
+}
+.pl-col-alarm-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px dashed #fecaca;
+  background: transparent;
+  color: #dc2626;
+  border-radius: 8px;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity .12s, background .12s, border-style .12s;
+}
+.pl-col-alarm-btn:hover {
+  opacity: 1;
+  background: #fef2f2;
+  border-style: solid;
+}
+.pl-col-alarm-btn.is-active {
+  opacity: 1;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+/* Tarjetas estancadas — borde rojo y leve tinte */
+.pl-card.is-stale {
+  border-color: #fca5a5;
+  background: #fff7f7;
+  box-shadow: 0 0 0 1px #fca5a566 inset;
+}
+.pl-card-stale-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: #fee2e2;
+  color: #b91c1c;
+  margin-right: 4px;
 }
 
 /* Empty state */

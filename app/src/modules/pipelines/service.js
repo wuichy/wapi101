@@ -1,5 +1,5 @@
 function toStage(s) {
-  return { id: s.id, name: s.name, color: s.color, sortOrder: s.sort_order, kind: s.kind, bot_id: s.bot_id || null };
+  return { id: s.id, name: s.name, color: s.color, sortOrder: s.sort_order, kind: s.kind, bot_id: s.bot_id || null, stale_hours: s.stale_hours || null };
 }
 function toPipeline(p, stages) {
   return { id: p.id, name: p.name, color: p.color, icon: p.icon || null, sortOrder: p.sort_order, stages };
@@ -89,8 +89,9 @@ function updateStage(db, id, patch) {
   const newColor  = patch.color !== undefined ? patch.color : s.color;
   const newKind   = patch.kind  !== undefined ? patch.kind  : s.kind;
   const newBotId  = 'bot_id' in patch ? (patch.bot_id ? Number(patch.bot_id) : null) : s.bot_id;
-  db.prepare('UPDATE stages SET name=?, color=?, kind=?, bot_id=? WHERE id=?')
-    .run(newName, newColor, newKind, newBotId, id);
+  const newStale  = 'stale_hours' in patch ? (patch.stale_hours ? Number(patch.stale_hours) : null) : s.stale_hours;
+  db.prepare('UPDATE stages SET name=?, color=?, kind=?, bot_id=?, stale_hours=? WHERE id=?')
+    .run(newName, newColor, newKind, newBotId, newStale, id);
   return db.prepare('SELECT * FROM stages WHERE id = ?').get(id);
 }
 

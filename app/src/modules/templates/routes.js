@@ -39,6 +39,15 @@ module.exports = function templatesRoutes(db) {
   });
 
   // Submit WA API template to Meta for approval
+  // Reglas de Meta para headers de plantilla (defensa server-side).
+  const TPL_MEDIA_RULES = {
+    'image/jpeg':        { format: 'IMAGE',    maxBytes: 5  * 1024 * 1024 },
+    'image/png':         { format: 'IMAGE',    maxBytes: 5  * 1024 * 1024 },
+    'video/mp4':         { format: 'VIDEO',    maxBytes: 16 * 1024 * 1024 },
+    'video/3gpp':        { format: 'VIDEO',    maxBytes: 16 * 1024 * 1024 },
+    'application/pdf':   { format: 'DOCUMENT', maxBytes: 100 * 1024 * 1024 },
+  };
+
   // Subir media para el HEADER de una plantilla (IMAGE/VIDEO/DOCUMENT).
   // Recibe { data: "<base64 con o sin prefijo data:>", mimetype: "image/jpeg" }.
   // Sube a Meta vía Resumable Upload y guarda el handle en la plantilla.
@@ -51,19 +60,28 @@ module.exports = function templatesRoutes(db) {
       const { data, mimetype } = req.body || {};
       if (!data || !mimetype) return res.status(400).json({ error: 'data y mimetype requeridos' });
 
+      const rule = TPL_MEDIA_RULES[mimetype];
+      if (!rule) {
+        return res.status(400).json({
+          error: `Formato no aceptado por Meta: ${mimetype}. Usa JPEG/PNG (imagen), MP4/3GPP (video) o PDF (documento).`,
+        });
+      }
+
       const cleanB64 = String(data).replace(/^data:[^;]+;base64,/, '');
       const buffer = Buffer.from(cleanB64, 'base64');
       if (!buffer.length) return res.status(400).json({ error: 'archivo vacío' });
-      if (buffer.length > 5 * 1024 * 1024) return res.status(400).json({ error: 'archivo demasiado grande (máx 5MB)' });
-
-      const formatFromMime = mimetype.startsWith('image/') ? 'IMAGE'
-                           : mimetype.startsWith('video/') ? 'VIDEO'
-                           : 'DOCUMENT';
+      if (buffer.length > rule.maxBytes) {
+        const maxMb = (rule.maxBytes / 1024 / 1024).toFixed(0);
+        const myMb  = (buffer.length / 1024 / 1024).toFixed(1);
+        return res.status(400).json({
+          error: `Archivo de ${myMb}MB excede el máximo para ${rule.format} (${maxMb}MB).`,
+        });
+      }
 
       const handle = await svc.uploadHeaderToMeta(db, buffer, mimetype);
-      svc.update(db, id, { headerType: formatFromMime, headerMediaHandle: handle });
+      svc.update(db, id, { headerType: rule.format, headerMediaHandle: handle });
 
-      res.json({ ok: true, handle, headerType: formatFromMime });
+      res.json({ ok: true, handle, headerType: rule.format });
     } catch (e) {
       res.status(400).json({ error: e.message });
     }

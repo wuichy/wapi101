@@ -74,9 +74,18 @@ function buildComponents(template) {
     components.push({ type: 'HEADER', format: 'TEXT', text: template.header });
   }
 
-  // BODY (siempre)
+  // BODY (siempre). Si tiene variables {{1}}, {{2}}, … Meta exige un example.
   if (template.body) {
-    components.push({ type: 'BODY', text: template.body });
+    const comp = { type: 'BODY', text: template.body };
+    const varNums = [...template.body.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
+    if (varNums.length) {
+      const max = Math.max(...varNums);
+      // Genera ejemplos placeholder ("Ejemplo 1", "Ejemplo 2", ...) — Meta solo
+      // los necesita para que su revisor entienda el formato.
+      const examples = Array.from({ length: max }, (_, i) => `Ejemplo ${i + 1}`);
+      comp.example = { body_text: [examples] };
+    }
+    components.push(comp);
   }
 
   // FOOTER

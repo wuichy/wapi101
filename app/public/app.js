@@ -6854,18 +6854,75 @@ function setupTemplates() {
     });
   });
 
-  // Captura de archivo
+  // Captura de archivo — valida tipo y tamaño según las reglas de Meta para
+  // headers de plantilla, y avisa al usuario antes de gastar el upload.
+  const TPL_MEDIA_RULES = {
+    IMAGE:    { mimes: ['image/jpeg', 'image/png'],          maxBytes: 5  * 1024 * 1024, label: 'JPEG o PNG' },
+    VIDEO:    { mimes: ['video/mp4', 'video/3gpp'],          maxBytes: 16 * 1024 * 1024, label: 'MP4 (con audio)' },
+    DOCUMENT: { mimes: ['application/pdf'],                  maxBytes: 100 * 1024 * 1024, label: 'PDF' },
+  };
   document.getElementById('tplHeaderFile')?.addEventListener('change', (e) => {
     const f = e.target.files?.[0];
     if (!f) { _tplDraftMediaFile = null; return; }
-    if (f.size > 5 * 1024 * 1024) {
-      toast('Archivo muy grande (máx 5MB)', 'error');
+
+    const ht = document.querySelector('input[name="tplHeaderType"]:checked')?.value || 'TEXT';
+    const rules = TPL_MEDIA_RULES[ht];
+    const status = document.getElementById('tplHeaderMediaStatus');
+
+    if (!rules) {
+      toast('Cambia primero el tipo de header (Imagen / Video / Documento)', 'error');
       e.target.value = '';
       return;
     }
+
+    if (!rules.mimes.includes(f.type)) {
+      const msg = `Meta NO acepta este archivo en headers de plantilla. Para tipo "${ht}" usa: ${rules.label}. Tu archivo es ${f.type || 'desconocido'}.`;
+      if (status) status.textContent = '⚠️ ' + msg;
+      toast(msg, 'error', 6000);
+      e.target.value = '';
+      _tplDraftMediaFile = null;
+      return;
+    }
+
+    if (f.size > rules.maxBytes) {
+      const maxMb = (rules.maxBytes / 1024 / 1024).toFixed(0);
+      const myMb  = (f.size / 1024 / 1024).toFixed(1);
+      const msg = `Archivo muy grande para ${ht} (${myMb}MB; máx ${maxMb}MB).`;
+      if (status) status.textContent = '⚠️ ' + msg;
+      toast(msg, 'error', 6000);
+      e.target.value = '';
+      _tplDraftMediaFile = null;
+      return;
+    }
+
+    // Para imágenes: verificar dimensiones mínimas (192×192 según Meta).
+    if (ht === 'IMAGE') {
+      const url = URL.createObjectURL(f);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        if (img.naturalWidth < 192 || img.naturalHeight < 192) {
+          const msg = `Imagen muy chica (${img.naturalWidth}×${img.naturalHeight}). Meta requiere mínimo 192×192 px.`;
+          if (status) status.textContent = '⚠️ ' + msg;
+          toast(msg, 'error', 6000);
+          e.target.value = '';
+          _tplDraftMediaFile = null;
+          return;
+        }
+        _tplDraftMediaFile = f;
+        if (status) status.textContent = `✓ Listo: ${f.name} · ${(f.size/1024).toFixed(0)} KB · ${img.naturalWidth}×${img.naturalHeight}`;
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        toast('No se pudo leer la imagen — ¿está corrupta?', 'error');
+        e.target.value = '';
+      };
+      img.src = url;
+      return;
+    }
+
     _tplDraftMediaFile = f;
-    const status = document.getElementById('tplHeaderMediaStatus');
-    if (status) status.textContent = `Listo: ${f.name} (${(f.size/1024).toFixed(0)} KB)`;
+    if (status) status.textContent = `✓ Listo: ${f.name} · ${(f.size/1024).toFixed(0)} KB`;
   });
 
   // Botones — agregar / cambiar tipo / quitar

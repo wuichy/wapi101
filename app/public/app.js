@@ -842,9 +842,16 @@ function renderEditExpedients() {
           <span>Valor (MXN)</span>
           <input type="number" data-field="value" value="${exp.value || 0}" step="0.01" />
         </label>
-        <button type="button" class="edit-exp-delete" data-action="remove-exp" title="Eliminar expediente">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-        </button>
+        <div class="edit-exp-actions">
+          ${!exp._isNew && exp.id ? `
+            <button type="button" class="edit-exp-open" data-action="open-exp" data-exp-id="${exp.id}" title="Abrir detalle completo (etiquetas, campos, actividad, chat)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 18l6-6-6-6"/></svg>
+              Abrir detalle
+            </button>` : ''}
+          <button type="button" class="edit-exp-delete" data-action="remove-exp" title="Eliminar expediente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+          </button>
+        </div>
       </div>
     `;
   }).join("");
@@ -875,6 +882,15 @@ function renderEditExpedients() {
         EDIT_EXPEDIENTS.splice(idx, 1);
         renderEditExpedients();
       }
+    });
+    // Abrir detalle completo del expediente — cierra el modal del contacto y navega
+    row.querySelector('[data-action="open-exp"]')?.addEventListener("click", () => {
+      const expId = Number(row.querySelector('[data-action="open-exp"]').dataset.expId);
+      if (!expId) return;
+      // Cerrar modal del contacto antes de navegar
+      const modal = document.getElementById('customerModal');
+      if (modal) modal.hidden = true;
+      openExpDetail(expId, 'contactos');
     });
   });
 }

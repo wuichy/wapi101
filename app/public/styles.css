@@ -2580,21 +2580,47 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
 }
 .edit-exp-row input:focus,
 .edit-exp-row select:focus { border-color: var(--accent); }
+.edit-exp-actions {
+  display: flex;
+  align-items: end;
+  gap: 6px;
+  align-self: end;
+}
 .edit-exp-delete {
   width: 32px; height: 32px;
-  align-self: end;
   display: grid; place-items: center;
   border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
   transition: background .15s, color .15s;
 }
-.edit-exp-delete:hover { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+.edit-exp-delete:hover { background: rgba(239, 68, 68, 0.1); color: var(--danger, #ef4444); }
 .edit-exp-delete svg { width: 16px; height: 16px; }
+
+.edit-exp-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+  font-family: inherit;
+}
+.edit-exp-open:hover { background: var(--accent-dark, #1d4ed8); }
+.edit-exp-open svg { width: 12px; height: 12px; flex-shrink: 0; }
 
 @media (max-width: 600px) {
   .edit-exp-row { grid-template-columns: 1fr 1fr; }
-  .edit-exp-delete { grid-column: 2; justify-self: end; }
+  .edit-exp-actions { grid-column: 2; justify-self: end; }
 }
 
 /* ═══════ Tag colors — contactos=verde, expedientes=azul ═══════ */

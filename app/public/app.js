@@ -7278,17 +7278,26 @@ function _readFileAsBase64(file) {
 // ─── Modal "Enviar plantilla" (wa_api con variables) ───────────────────
 let _sendTplCtx = null; // { tpl, convoId }
 
-function _resolvePlaceholderForPreview(ph, contact) {
+// Resuelve el valor de un placeholder mapeado, leyendo del contacto real
+// (con fallback a los datos parciales del convo si no hay contacto).
+function _resolvePlaceholderForPreview(ph, convo, contact) {
   if (!ph?.contactField) return null;
-  if (ph.contactField === 'first_name')  return contact?.contactName?.split(' ')[0] || contact?.first_name || '';
-  if (ph.contactField === 'last_name')   return (contact?.contactName?.split(' ').slice(1).join(' ')) || contact?.last_name || '';
-  if (ph.contactField === 'full_name')   return contact?.contactName || '';
-  if (ph.contactField === 'phone')       return contact?.contactPhone || contact?.phone || '';
-  if (ph.contactField === 'email')       return contact?.email || '';
+  const cf = ph.contactField;
+  // Preferir contact (datos completos), caer al convo si falta
+  if (cf === 'first_name') return contact?.firstName || convo?.name?.split(' ')[0] || '';
+  if (cf === 'last_name')  return contact?.lastName  || (convo?.name?.split(' ').slice(1).join(' ') || '');
+  if (cf === 'full_name') {
+    if (contact?.firstName || contact?.lastName) {
+      return [contact.firstName, contact.lastName].filter(Boolean).join(' ');
+    }
+    return convo?.name || '';
+  }
+  if (cf === 'phone') return contact?.phone || convo?.phone || '';
+  if (cf === 'email') return contact?.email || '';
   return null;
 }
 
-function openSendTemplateModal(tpl, convoId) {
+async function openSendTemplateModal(tpl, convoId) {
   _sendTplCtx = { tpl, convoId };
   const modal = document.getElementById('sendTplModal');
   const meta  = document.getElementById('sendTplMeta');
@@ -7299,10 +7308,18 @@ function openSendTemplateModal(tpl, convoId) {
 
   const convo = CONVERSATIONS.find(c => c.id === convoId);
 
+  // Cargar el contacto REAL (con first_name/last_name/email separados) para
+  // poder llenar correctamente los placeholders mapeados.
+  let contact = null;
+  if (convo?.contactId) {
+    try { contact = await api('GET', `/api/contacts/${convo.contactId}`); } catch (_) {}
+  }
+  _sendTplCtx.contact = contact;
+
   // Header con preview de body + nombre
   meta.innerHTML = `
     <div class="send-tpl-name"><strong>${escapeHtml(tpl.displayName || tpl.name)}</strong>
-      <span class="tpl-hint-inline">→ ${escapeHtml(convo?.contactName || convo?.contactPhone || 'contacto')}</span></div>
+      <span class="tpl-hint-inline">→ ${escapeHtml(convo?.name || convo?.phone || 'contacto')}</span></div>
     <div class="send-tpl-body">${escapeHtml(tpl.body || '')}</div>
   `;
 
@@ -7316,7 +7333,7 @@ function openSendTemplateModal(tpl, convoId) {
     const rows = [];
     for (let i = 0; i < max; i++) {
       const ph = phs[i] || {};
-      const auto = _resolvePlaceholderForPreview(ph, convo);
+      const auto = _resolvePlaceholderForPreview(ph, convo, contact);
       if (auto !== null && auto !== '') {
         // Mapeado y con valor — solo mostrar
         rows.push(`
@@ -7326,14 +7343,23 @@ function openSendTemplateModal(tpl, convoId) {
             <span class="send-tpl-var-auto">${escapeHtml(auto)} <em class="tpl-hint-inline">(auto del contacto)</em></span>
           </div>
         `);
+      } else if (ph.contactField) {
+        // Mapeado pero el contacto no tiene ese campo → input rojo de "falta"
+        rows.push(`
+          <div class="send-tpl-var-row">
+            <span class="tpl-placeholder-num">{{${i + 1}}}</span>
+            <span class="send-tpl-var-label">${escapeHtml(ph.label || '')}</span>
+            <input class="int-input send-tpl-var-input send-tpl-var-input--missing" data-i="${i}" placeholder="⚠️ El contacto no tiene ${escapeHtml(ph.contactField)} — escríbelo aquí" />
+          </div>
+        `);
       } else {
-        // Manual o sin dato → input para llenar ahora
+        // Manual → input para llenar ahora
         const placeholder = ph.label || ph.example || `Valor para {{${i + 1}}}`;
         rows.push(`
           <div class="send-tpl-var-row">
             <span class="tpl-placeholder-num">{{${i + 1}}}</span>
             <span class="send-tpl-var-label">${escapeHtml(ph.label || '')}</span>
-            <input class="int-input send-tpl-var-input" data-i="${i}" value="${escapeHtml(ph.example || '')}" placeholder="${escapeHtml(placeholder)}" />
+            <input class="int-input send-tpl-var-input" data-i="${i}" placeholder="${escapeHtml(placeholder)}" />
           </div>
         `);
       }

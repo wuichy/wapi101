@@ -5495,6 +5495,10 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   padding: 6px 10px;
   border-radius: 6px;
 }
+.send-tpl-var-input--missing {
+  border-color: #fca5a5 !important;
+  background: #fef2f2;
+}
 
 /* Bot step type "template" — editor */
 .sb-tpl-preview {

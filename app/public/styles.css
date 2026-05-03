@@ -3872,6 +3872,47 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   margin-right: 4px;
 }
 
+/* Modal de alarma de etapa */
+.alarm-help {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #78350f;
+  line-height: 1.5;
+}
+.alarm-type-desc {
+  margin: 8px 0 16px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  min-height: 36px;
+}
+.alarm-time-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.alarm-time-row .form-field { margin-bottom: 0; }
+#alarmModal .form-field { margin-bottom: 14px; }
+#alarmModal .form-field > span { display: block; font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+#alarmModal .form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  outline: none;
+  box-sizing: border-box;
+}
+#alarmModal .form-input:focus { border-color: var(--accent); }
+
 /* Empty state */
 .pl-empty {
   flex: 1;

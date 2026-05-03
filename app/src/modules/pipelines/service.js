@@ -1,5 +1,16 @@
 function toStage(s) {
-  return { id: s.id, name: s.name, color: s.color, sortOrder: s.sort_order, kind: s.kind, bot_id: s.bot_id || null, stale_hours: s.stale_hours || null };
+  let alarmMeta = null;
+  if (s.alarm_meta) {
+    try { alarmMeta = JSON.parse(s.alarm_meta); } catch { alarmMeta = null; }
+  }
+  return {
+    id: s.id, name: s.name, color: s.color, sortOrder: s.sort_order, kind: s.kind,
+    bot_id: s.bot_id || null,
+    stale_hours: s.stale_hours || null, // legacy, mantenido por compat
+    alarm_type: s.alarm_type || null,
+    alarm_threshold_seconds: s.alarm_threshold_seconds || null,
+    alarm_meta: alarmMeta,
+  };
 }
 function toPipeline(p, stages) {
   return { id: p.id, name: p.name, color: p.color, icon: p.icon || null, sortOrder: p.sort_order, stages };
@@ -90,8 +101,18 @@ function updateStage(db, id, patch) {
   const newKind   = patch.kind  !== undefined ? patch.kind  : s.kind;
   const newBotId  = 'bot_id' in patch ? (patch.bot_id ? Number(patch.bot_id) : null) : s.bot_id;
   const newStale  = 'stale_hours' in patch ? (patch.stale_hours ? Number(patch.stale_hours) : null) : s.stale_hours;
-  db.prepare('UPDATE stages SET name=?, color=?, kind=?, bot_id=?, stale_hours=? WHERE id=?')
-    .run(newName, newColor, newKind, newBotId, newStale, id);
+  const newAlarmType = 'alarm_type' in patch ? (patch.alarm_type || null) : s.alarm_type;
+  const newAlarmThreshold = 'alarm_threshold_seconds' in patch
+    ? (patch.alarm_threshold_seconds ? Number(patch.alarm_threshold_seconds) : null)
+    : s.alarm_threshold_seconds;
+  let newAlarmMeta = s.alarm_meta;
+  if ('alarm_meta' in patch) {
+    if (patch.alarm_meta == null) newAlarmMeta = null;
+    else if (typeof patch.alarm_meta === 'string') newAlarmMeta = patch.alarm_meta;
+    else newAlarmMeta = JSON.stringify(patch.alarm_meta);
+  }
+  db.prepare('UPDATE stages SET name=?, color=?, kind=?, bot_id=?, stale_hours=?, alarm_type=?, alarm_threshold_seconds=?, alarm_meta=? WHERE id=?')
+    .run(newName, newColor, newKind, newBotId, newStale, newAlarmType, newAlarmThreshold, newAlarmMeta, id);
   return db.prepare('SELECT * FROM stages WHERE id = ?').get(id);
 }
 

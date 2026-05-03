@@ -40,6 +40,7 @@ function hydrateConvo(db, row) {
     time:           fmtTime(row.last_message_at),
     unreadCount:    row.unread_count || 0,
     botPaused:      !!row.bot_paused,
+    botPausedAt:    row.bot_paused_at || null,
     createdAt:      row.created_at,
   };
 }
@@ -187,7 +188,8 @@ function markRead(db, conversationId) {
 }
 
 function setBotPaused(db, conversationId, paused) {
-  db.prepare('UPDATE conversations SET bot_paused = ? WHERE id = ?').run(paused ? 1 : 0, conversationId);
+  db.prepare('UPDATE conversations SET bot_paused = ?, bot_paused_at = ? WHERE id = ?')
+    .run(paused ? 1 : 0, paused ? Math.floor(Date.now()/1000) : null, conversationId);
 }
 
 module.exports = { list, getById, findOrCreate, addMessage, listMessages, markRead, setBotPaused, fmtTime };

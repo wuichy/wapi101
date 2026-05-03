@@ -46,9 +46,15 @@ function hydrate(db, row) {
     createdAt:    row.created_at,
     updatedAt:    row.updated_at,
     stageEnteredAt: row.stage_entered_at || row.created_at,
+    lastIncomingAt: row.last_incoming_at || null,
+    lastMessageAt:  row.last_message_at  || null,
+    botPaused:      !!row.conv_bot_paused,
+    botPausedAt:    row.bot_paused_at || null,
   };
 }
 
+// Subquery: una sola fila por contact_id con stats de la conversación más reciente
+// (un contacto puede tener varias conversaciones por proveedor — tomamos la más activa).
 const BASE_SELECT = `
   SELECT e.*,
     (c.first_name || COALESCE(' ' || c.last_name, '')) AS contact_name,
@@ -56,11 +62,24 @@ const BASE_SELECT = `
     p.color AS pipeline_color,
     s.name AS stage_name,
     s.kind AS stage_kind,
-    s.color AS stage_color
+    s.color AS stage_color,
+    conv.last_incoming_at AS last_incoming_at,
+    conv.last_message_at  AS last_message_at,
+    conv.bot_paused       AS conv_bot_paused,
+    conv.bot_paused_at    AS bot_paused_at
   FROM expedients e
   JOIN contacts c ON c.id = e.contact_id
   JOIN pipelines p ON p.id = e.pipeline_id
   JOIN stages s ON s.id = e.stage_id
+  LEFT JOIN (
+    SELECT contact_id,
+           MAX(last_incoming_at) AS last_incoming_at,
+           MAX(last_message_at)  AS last_message_at,
+           MAX(bot_paused)       AS bot_paused,
+           MAX(bot_paused_at)    AS bot_paused_at
+      FROM conversations
+     GROUP BY contact_id
+  ) conv ON conv.contact_id = e.contact_id
 `;
 
 function list(db, { search = '', page = 1, pageSize = 50, sortBy = 'createdAt', sortDir = 'desc', tags = [], fieldFilters = {} } = {}) {

@@ -5397,8 +5397,7 @@ function renderPipelinesBoard() {
 
   board.innerHTML = pipeline.stages.map(stage => {
     const cards = expByStage[stage.id] || [];
-    const staleSec = stage.stale_hours ? Number(stage.stale_hours) * 3600 : 0;
-    const alarmActive = !!stage.stale_hours;
+    const alarmActive = !!stage.alarm_type;
     return `
       <div class="pl-column" data-stage-id="${stage.id}" data-drop-stage="${stage.id}">
         <div class="pl-col-header">
@@ -5411,9 +5410,8 @@ function renderPipelinesBoard() {
         </div>
         <div class="pl-col-body">
           ${cards.length ? cards.map(e => {
-            const enteredAt = e.stageEnteredAt || e.updatedAt || e.createdAt;
-            const isStale = showAlarms && staleSec && enteredAt && (nowSec - enteredAt) > staleSec;
-            const overdueLabel = isStale ? `<span class="pl-card-stale-pill" title="Lleva más de ${stage.stale_hours}h en esta etapa">⚠ Estancado</span>` : '';
+            const isStale = showAlarms && evalStageAlarm(stage, e, nowSec);
+            const overdueLabel = isStale ? `<span class="pl-card-stale-pill" title="${escHtml(alarmReason(stage))}">⚠ ${escHtml(alarmShortLabel(stage.alarm_type))}</span>` : '';
             return `
             <div class="pl-card ${isStale ? 'is-stale' : ''}" data-exp-id="${e.id}" draggable="true">
               <div class="pl-card-name ${e.nameIsAuto ? 'is-auto-name' : ''}">${escHtml(e.name || 'Sin nombre')}</div>
@@ -5425,12 +5423,13 @@ function renderPipelinesBoard() {
             </div>`;
           }).join('') : `<div class="pl-col-empty">Sin expedientes</div>`}
         </div>
+        ${showAlarms ? `
         <div class="pl-col-footer">
-          <button class="pl-col-alarm-btn ${alarmActive ? 'is-active' : ''}" data-stage-alarm="${stage.id}" title="${alarmActive ? `Marca rojo a leads con +${stage.stale_hours}h aquí. Click para cambiar` : 'Configurar alarma de leads estancados'}">
+          <button class="pl-col-alarm-btn ${alarmActive ? 'is-active' : ''}" data-stage-alarm="${stage.id}" title="${alarmActive ? alarmReason(stage) + ' — click para cambiar' : 'Configurar alarma de leads estancados'}">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M10 2a5 5 0 0 0-5 5v3l-2 3h14l-2-3V7a5 5 0 0 0-5-5z"/><path d="M8 16a2 2 0 0 0 4 0"/></svg>
-            ${alarmActive ? `Alarma: ${stage.stale_hours}h` : 'Alarma'}
+            ${alarmActive ? alarmButtonLabel(stage) : 'Alarma'}
           </button>
-        </div>
+        </div>` : ''}
       </div>`;
   }).join('');
 
@@ -6534,7 +6533,132 @@ function setupPipelines() {
   });
 }
 
-// Configurar la alarma de estancado para una etapa
+// ════════ Sistema de alarmas por etapa ════════
+const ALARM_TYPE_LABELS = {
+  time_in_stage:        '⏱ Tiempo en la etapa',
+  awaiting_our_reply:   '💬 Sin respuesta nuestra',
+  no_activity:          '🥶 Lead frío',
+  lead_no_reply:        '📤 Lead no respondió',
+  missing_tag:          '🏷 Falta etiqueta',
+  value_threshold:      '💰 Lead grande estancado',
+  bot_paused:           '🤖 Bot pausado',
+  empty_field:          '📋 Campo vacío',
+};
+const ALARM_TYPE_DESCS = {
+  time_in_stage:        'El expediente lleva más del tiempo permitido sin moverse de esta etapa.',
+  awaiting_our_reply:   'El lead te escribió y nadie le ha respondido en el tiempo configurado. La más urgente.',
+  no_activity:          'No hay mensajes (entrantes ni salientes) en el chat hace más del tiempo configurado. Lead enfriándose.',
+  lead_no_reply:        'Le escribiste al lead y no contestó en el tiempo configurado. Hora de un follow-up.',
+  missing_tag:          'El lead lleva en la etapa más del tiempo y no tiene la etiqueta requerida.',
+  value_threshold:      'Lead con valor mayor al mínimo lleva tiempo estancado en la etapa. Prioriza los más caros.',
+  bot_paused:           'El bot está pausado en este chat hace más del tiempo configurado.',
+  empty_field:          'El expediente lleva en la etapa más del tiempo y un campo personalizado sigue vacío.',
+};
+const ALARM_TYPES_NEED_TIME = new Set(['time_in_stage', 'awaiting_our_reply', 'no_activity', 'lead_no_reply', 'missing_tag', 'value_threshold', 'bot_paused', 'empty_field']);
+
+function fmtDuration(seconds) {
+  if (!seconds) return '';
+  const s = Number(seconds);
+  if (s % 86400 === 0) { const n = s / 86400; return `${n}d`; }
+  if (s % 3600 === 0)  { const n = s / 3600;  return `${n}h`; }
+  if (s % 60 === 0)    { const n = s / 60;    return `${n}m`; }
+  return `${s}s`;
+}
+function alarmShortLabel(type) {
+  if (type === 'awaiting_our_reply') return 'Esperando respuesta';
+  if (type === 'no_activity')        return 'Lead frío';
+  if (type === 'lead_no_reply')      return 'Sin respuesta';
+  if (type === 'missing_tag')        return 'Falta etiqueta';
+  if (type === 'value_threshold')    return 'Lead grande estancado';
+  if (type === 'bot_paused')         return 'Bot pausado';
+  if (type === 'empty_field')        return 'Campo vacío';
+  return 'Estancado';
+}
+function alarmButtonLabel(stage) {
+  if (!stage.alarm_type) return 'Alarma';
+  const ico = (ALARM_TYPE_LABELS[stage.alarm_type] || '').slice(0, 2);
+  const t = stage.alarm_threshold_seconds ? fmtDuration(stage.alarm_threshold_seconds) : '';
+  return `${ico} ${t}`.trim();
+}
+function alarmReason(stage) {
+  if (!stage.alarm_type) return '';
+  const lbl = ALARM_TYPE_LABELS[stage.alarm_type] || stage.alarm_type;
+  const t = stage.alarm_threshold_seconds ? ` (${fmtDuration(stage.alarm_threshold_seconds)})` : '';
+  return `${lbl}${t}`;
+}
+
+// Evalúa si un expediente cumple la condición de alarma de su etapa actual.
+function evalStageAlarm(stage, e, nowSec) {
+  if (!stage.alarm_type) return false;
+  const sec  = Number(stage.alarm_threshold_seconds || 0);
+  const meta = stage.alarm_meta || {};
+  const tIn  = e.stageEnteredAt || e.updatedAt || e.createdAt;
+  switch (stage.alarm_type) {
+    case 'time_in_stage':
+      return sec > 0 && tIn && (nowSec - tIn) > sec;
+    case 'awaiting_our_reply': {
+      // Lead escribió, nadie le contestó después
+      if (!e.lastIncomingAt) return false;
+      const leadIsLast = !e.lastMessageAt || e.lastIncomingAt >= e.lastMessageAt - 1;
+      return sec > 0 && leadIsLast && (nowSec - e.lastIncomingAt) > sec;
+    }
+    case 'no_activity': {
+      const lastAny = Math.max(e.lastIncomingAt || 0, e.lastMessageAt || 0);
+      return sec > 0 && lastAny > 0 && (nowSec - lastAny) > sec;
+    }
+    case 'lead_no_reply': {
+      // Le escribimos último, no contestaron
+      if (!e.lastMessageAt) return false;
+      const weAreLast = !e.lastIncomingAt || e.lastMessageAt > e.lastIncomingAt;
+      return sec > 0 && weAreLast && (nowSec - e.lastMessageAt) > sec;
+    }
+    case 'missing_tag': {
+      const tagName = (meta.tag || '').trim().toLowerCase();
+      if (!tagName) return false;
+      const tags = (e.tags || []).map(t => String(t).toLowerCase());
+      if (tags.includes(tagName)) return false;
+      return sec > 0 && tIn && (nowSec - tIn) > sec;
+    }
+    case 'value_threshold': {
+      const minVal = Number(meta.minValue || 0);
+      if (Number(e.value || 0) < minVal) return false;
+      return sec > 0 && tIn && (nowSec - tIn) > sec;
+    }
+    case 'bot_paused':
+      if (!e.botPaused || !e.botPausedAt) return false;
+      return sec > 0 && (nowSec - e.botPausedAt) > sec;
+    case 'empty_field': {
+      const fieldId = Number(meta.fieldId || 0);
+      if (!fieldId) return false;
+      const fv = (e.fieldValues || []).find(f => Number(f.fieldId) === fieldId);
+      const empty = !fv || fv.value == null || String(fv.value).trim() === '';
+      if (!empty) return false;
+      return sec > 0 && tIn && (nowSec - tIn) > sec;
+    }
+  }
+  return false;
+}
+
+// Convierte cantidad+unidad → segundos
+function alarmTimeToSeconds(amount, unit) {
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (unit === 'days')    return Math.round(n * 86400);
+  if (unit === 'hours')   return Math.round(n * 3600);
+  if (unit === 'minutes') return Math.round(n * 60);
+  return Math.round(n);
+}
+// Reverso: segundos → mejor unidad legible
+function alarmSecondsToTime(seconds) {
+  const s = Number(seconds || 0);
+  if (s % 86400 === 0 && s >= 86400) return { amount: s / 86400, unit: 'days' };
+  if (s % 3600 === 0 && s >= 3600)   return { amount: s / 3600,  unit: 'hours' };
+  if (s % 60 === 0 && s >= 60)       return { amount: s / 60,    unit: 'minutes' };
+  return { amount: s, unit: 'seconds' };
+}
+
+let _alarmEditingStageId = null;
+
 async function handleStageAlarmClick(stageId) {
   let stage = null;
   for (const p of PIPELINES || []) {
@@ -6542,24 +6666,117 @@ async function handleStageAlarmClick(stageId) {
     if (s) { stage = s; break; }
   }
   if (!stage) return;
-  const current = stage.stale_hours || '';
-  const msg = `¿Cuántas horas debe permanecer un expediente en "${stage.name}" antes de marcarse en rojo?\n\nDeja vacío para desactivar la alarma. Tip: 24 = 1 día, 168 = 1 semana.`;
-  const input = prompt(msg, current);
-  if (input === null) return; // cancelado
-  const trimmed = input.trim();
-  let payload;
-  if (trimmed === '') {
-    payload = { stale_hours: null };
+  _alarmEditingStageId = stageId;
+
+  const modal = document.getElementById('alarmModal');
+  document.getElementById('alarmModalStageName').textContent = `· ${stage.name}`;
+  document.getElementById('alarmType').value = stage.alarm_type || '';
+  // Cargar campos custom para el selector empty_field
+  await populateAlarmFieldSelect(stage);
+  // Pre-llenar valores
+  if (stage.alarm_threshold_seconds) {
+    const t = alarmSecondsToTime(stage.alarm_threshold_seconds);
+    document.getElementById('alarmTimeAmount').value = t.amount;
+    document.getElementById('alarmTimeUnit').value   = t.unit;
   } else {
-    const n = Number(trimmed);
-    if (!Number.isFinite(n) || n <= 0) { toast('Ingresa un número de horas mayor a 0', 'warning'); return; }
-    payload = { stale_hours: Math.round(n) };
+    document.getElementById('alarmTimeAmount').value = '';
+    document.getElementById('alarmTimeUnit').value   = 'hours';
+  }
+  document.getElementById('alarmTagName').value     = stage.alarm_meta?.tag || '';
+  document.getElementById('alarmMinValue').value    = stage.alarm_meta?.minValue || '';
+  document.getElementById('alarmFieldSelect').value = stage.alarm_meta?.fieldId || '';
+  document.getElementById('alarmDeleteBtn').hidden  = !stage.alarm_type;
+  updateAlarmModalUI();
+  modal.hidden = false;
+}
+
+function updateAlarmModalUI() {
+  const type = document.getElementById('alarmType').value;
+  document.getElementById('alarmTypeDesc').textContent = ALARM_TYPE_DESCS[type] || (type === '' ? 'Selecciona una condición para activar la alarma.' : '');
+  document.getElementById('alarmTimeRow').hidden  = !ALARM_TYPES_NEED_TIME.has(type);
+  document.getElementById('alarmTagRow').hidden   = type !== 'missing_tag';
+  document.getElementById('alarmValueRow').hidden = type !== 'value_threshold';
+  document.getElementById('alarmFieldRow').hidden = type !== 'empty_field';
+}
+
+async function populateAlarmFieldSelect(stage) {
+  const sel = document.getElementById('alarmFieldSelect');
+  if (!sel) return;
+  try {
+    const data = await api('GET', '/api/expedients/field-defs');
+    const items = data.items || [];
+    sel.innerHTML = '<option value="">— Selecciona un campo —</option>' +
+      items.map(f => `<option value="${f.id}">${escHtml(f.label)}</option>`).join('');
+    if (stage.alarm_meta?.fieldId) sel.value = stage.alarm_meta.fieldId;
+  } catch (_) {
+    sel.innerHTML = '<option value="">No se pudieron cargar los campos</option>';
+  }
+}
+
+function closeAlarmModal() {
+  document.getElementById('alarmModal').hidden = true;
+  _alarmEditingStageId = null;
+}
+
+async function saveAlarmFromModal() {
+  if (!_alarmEditingStageId) return;
+  const type = document.getElementById('alarmType').value;
+  let payload;
+  if (!type) {
+    payload = { alarm_type: null, alarm_threshold_seconds: null, alarm_meta: null, stale_hours: null };
+  } else {
+    let seconds = null;
+    if (ALARM_TYPES_NEED_TIME.has(type)) {
+      const amount = document.getElementById('alarmTimeAmount').value;
+      const unit   = document.getElementById('alarmTimeUnit').value;
+      seconds = alarmTimeToSeconds(amount, unit);
+      if (!seconds) { toast('Ingresa una cantidad de tiempo válida', 'warning'); return; }
+    }
+    const meta = {};
+    if (type === 'missing_tag') {
+      const tag = document.getElementById('alarmTagName').value.trim();
+      if (!tag) { toast('Ingresa el nombre de la etiqueta', 'warning'); return; }
+      meta.tag = tag;
+    }
+    if (type === 'value_threshold') {
+      const minValue = Number(document.getElementById('alarmMinValue').value);
+      if (!(minValue > 0)) { toast('Ingresa un valor mínimo mayor a 0', 'warning'); return; }
+      meta.minValue = minValue;
+    }
+    if (type === 'empty_field') {
+      const fieldId = Number(document.getElementById('alarmFieldSelect').value);
+      if (!fieldId) { toast('Selecciona un campo personalizado', 'warning'); return; }
+      meta.fieldId = fieldId;
+    }
+    payload = {
+      alarm_type: type,
+      alarm_threshold_seconds: seconds,
+      alarm_meta: Object.keys(meta).length ? meta : null,
+      stale_hours: null,
+    };
   }
   try {
-    await api('PATCH', `/api/pipelines/stages/${stageId}`, payload);
+    await api('PATCH', `/api/pipelines/stages/${_alarmEditingStageId}`, payload);
+    closeAlarmModal();
     await loadPipelinesKanban();
-    toast(payload.stale_hours ? `Alarma configurada: ${payload.stale_hours}h` : 'Alarma desactivada', 'success');
+    toast(payload.alarm_type ? 'Alarma configurada' : 'Alarma desactivada', 'success');
   } catch (err) { toast(err.message, 'error'); }
+}
+
+function setupAlarmModal() {
+  document.querySelectorAll('[data-close-alarm]').forEach(el => {
+    el.addEventListener('click', closeAlarmModal);
+  });
+  document.getElementById('alarmModal')?.addEventListener('click', e => {
+    if (e.target.id === 'alarmModal') closeAlarmModal();
+  });
+  document.getElementById('alarmType')?.addEventListener('change', updateAlarmModalUI);
+  document.getElementById('alarmSaveBtn')?.addEventListener('click', saveAlarmFromModal);
+  document.getElementById('alarmDeleteBtn')?.addEventListener('click', async () => {
+    if (!confirm('¿Quitar la alarma de esta etapa?')) return;
+    document.getElementById('alarmType').value = '';
+    await saveAlarmFromModal();
+  });
 }
 
 // ─── Chat search ───
@@ -6945,6 +7162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupIntegrations();
   setupExpedients();
   setupPipelines();
+  setupAlarmModal();
   setupAccount();
   setupChatSearch();
   setupChatFilters();

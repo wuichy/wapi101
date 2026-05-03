@@ -172,12 +172,46 @@ async function uploadHeaderToMeta(db, buffer, mimetype) {
 function list(db, { type } = {}) {
   const where = type ? 'WHERE type = ?' : '';
   const params = type ? [type] : [];
-  return db.prepare(`SELECT * FROM message_templates ${where} ORDER BY created_at DESC`).all(...params).map(row);
+  const rows = db.prepare(`SELECT * FROM message_templates ${where} ORDER BY created_at DESC`).all(...params);
+  // Cargar tags asignados (en una sola query) para no hacer N+1
+  const tagsByTpl = {};
+  try {
+    const tagRows = db.prepare(`
+      SELECT tta.template_id, tt.id, tt.name, tt.color
+        FROM template_tag_assignments tta
+        JOIN template_tags tt ON tt.id = tta.tag_id
+    `).all();
+    tagRows.forEach(r => {
+      if (!tagsByTpl[r.template_id]) tagsByTpl[r.template_id] = [];
+      tagsByTpl[r.template_id].push({ id: r.id, name: r.name, color: r.color });
+    });
+  } catch (_) { /* migration aún no aplicada */ }
+  return rows.map(r => ({ ...row(r), tags: tagsByTpl[r.id] || [] }));
 }
 
 function getById(db, id) {
   const r = db.prepare('SELECT * FROM message_templates WHERE id = ?').get(id);
-  return r ? row(r) : null;
+  if (!r) return null;
+  const out = row(r);
+  try {
+    out.tags = db.prepare(`
+      SELECT tt.id, tt.name, tt.color
+        FROM template_tag_assignments tta
+        JOIN template_tags tt ON tt.id = tta.tag_id
+       WHERE tta.template_id = ?
+       ORDER BY tt.name COLLATE NOCASE
+    `).all(id);
+  } catch (_) { out.tags = []; }
+  return out;
+}
+
+function setTags(db, templateId, tagIds) {
+  const trx = db.transaction(() => {
+    db.prepare('DELETE FROM template_tag_assignments WHERE template_id = ?').run(templateId);
+    const ins = db.prepare('INSERT OR IGNORE INTO template_tag_assignments (template_id, tag_id) VALUES (?, ?)');
+    for (const t of (tagIds || [])) ins.run(templateId, Number(t));
+  });
+  trx();
 }
 
 function create(db, { type = 'free_form', name, displayName, category = 'UTILITY', language = 'es_MX',
@@ -335,4 +369,4 @@ function row(r) {
   };
 }
 
-module.exports = { list, getById, create, update, remove, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta };
+module.exports = { list, getById, create, update, remove, setTags, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta };

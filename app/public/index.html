@@ -882,6 +882,8 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <button class="tpl-tab is-active" data-tab="wa_api">WhatsApp API <span class="tpl-tab-badge" id="tplBadgeWa">0</span></button>
             <button class="tpl-tab" data-tab="free_form">Libres <span class="tpl-tab-badge" id="tplBadgeFree">0</span></button>
           </div>
+          <!-- Filtros + ordenamiento (mismo patrón que en bots) -->
+          <div class="tpl-tag-filters" id="tplTagFilters"><!-- JS render --></div>
           <div class="tpl-list" id="tplList">
             <div class="tpl-empty" id="tplEmpty">No hay plantillas todavía.</div>
           </div>
@@ -1004,6 +1006,11 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <label>Botones <span class="tpl-hint-inline">(opcional, máx 3 — todos QUICK_REPLY o hasta 2 CTA)</span></label>
               <div class="tpl-buttons-list" id="tplButtonsList"><!-- JS render --></div>
               <button type="button" class="btn btn--ghost btn--sm" id="tplAddButtonBtn">+ Agregar botón</button>
+            </div>
+            <!-- Etiquetas (organizativas, no van a Meta) -->
+            <div class="int-field">
+              <label>Etiquetas <span class="tpl-hint-inline">(para organizar y filtrar — no se envían a Meta)</span></label>
+              <div class="tpl-tags-pickers" id="tplTagsPickers"><!-- JS render --></div>
             </div>
             <p class="tpl-error-msg" id="tplError" hidden></p>
           </div>
@@ -1827,6 +1834,27 @@ Ana, , ana@hotmail.com, 5551112222</pre>
           <button type="submit" class="btn btn--primary btn--sm">+ Crear</button>
         </form>
         <div class="bot-tag-manager-list" id="botTagsManagerList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Modal: Etiquetas de plantillas (mismo patrón que bots) ─── -->
+  <div class="modal" id="tplTagsManagerModal" hidden>
+    <div class="modal-backdrop" data-close-tpl-tags></div>
+    <div class="modal-card modal-card--md">
+      <header class="modal-header">
+        <h3>Etiquetas de plantillas</h3>
+        <button class="icon-btn" data-close-tpl-tags aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </header>
+      <div class="modal-body">
+        <form class="bot-tag-form" id="tplTagCreateForm">
+          <input type="text" id="tplTagNewName" placeholder="Nombre de la etiqueta" maxlength="32" autocomplete="off" />
+          <div class="bot-tag-color-picker" id="tplTagNewColors"></div>
+          <button type="submit" class="btn btn--primary btn--sm">+ Crear</button>
+        </form>
+        <div class="bot-tag-manager-list" id="tplTagsManagerList"></div>
       </div>
     </div>
   </div>

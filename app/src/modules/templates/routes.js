@@ -125,6 +125,17 @@ module.exports = function templatesRoutes(db) {
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
+  // Asignar/reemplazar etiquetas de una plantilla.
+  // Body: { tagIds: [1, 2, 3] }  (array de ids; reemplaza todo)
+  r.put('/:id/tags', (req, res) => {
+    const id = Number(req.params.id);
+    const tmpl = svc.getById(db, id);
+    if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    const tagIds = Array.isArray(req.body?.tagIds) ? req.body.tagIds : [];
+    svc.setTags(db, id, tagIds);
+    res.json(svc.getById(db, id));
+  });
+
   // Sync all pending templates
   r.post('/sync-all', async (req, res) => {
     try {

@@ -7092,12 +7092,12 @@ function renderTplPlaceholdersBox() {
     const opt = (val, lbl) => `<option value="${val}"${cf===val?' selected':''}>${lbl}</option>`;
     const dropdownHtml = `
       <select class="int-input tpl-ph-field" data-i="${i}" data-field="contactField" title="¿De qué campo del contacto se llena al enviar?">
-        ${opt('', '— Manual (lo escribes al enviar) —')}
-        ${opt('first_name', 'Nombre del contacto')}
-        ${opt('last_name',  'Apellido del contacto')}
-        ${opt('full_name',  'Nombre completo del contacto')}
-        ${opt('phone',      'Teléfono del contacto')}
-        ${opt('email',      'Email del contacto')}
+        ${opt('', '— Manual —')}
+        ${opt('first_name', 'Nombre')}
+        ${opt('last_name',  'Apellido')}
+        ${opt('full_name',  'Nombre completo')}
+        ${opt('phone',      'Teléfono')}
+        ${opt('email',      'Email')}
       </select>`;
 
     if (cf) {

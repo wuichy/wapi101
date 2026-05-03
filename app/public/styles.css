@@ -5439,18 +5439,38 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .tpl-placeholder-row {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 /* Mapeado a campo del contacto: 3 cols (num · dropdown · preview) */
 .tpl-placeholder-row--mapped {
-  grid-template-columns: 60px 220px 1fr;
+  grid-template-columns: 50px 150px minmax(0, 1fr);
 }
-/* Manual: 4 cols (num · dropdown · label · example) */
+/* Manual: 4 cols (num · dropdown · label · example) — minmax(0,1fr)
+   permite a los inputs encogerse en lugar de overflow horizontal */
 .tpl-placeholder-row--manual {
-  grid-template-columns: 60px 220px 1fr 1.2fr;
+  grid-template-columns: 50px 130px minmax(0, 1fr) minmax(0, 1fr);
 }
-.tpl-ph-field { font-size: 13px; }
+.tpl-ph-field {
+  font-size: 13px;
+  min-width: 0;  /* permite shrink dentro del grid */
+}
+.tpl-placeholder-row input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+@media (max-width: 700px) {
+  /* Apilado en pantallas chicas */
+  .tpl-placeholder-row--mapped,
+  .tpl-placeholder-row--manual {
+    grid-template-columns: 50px 1fr;
+  }
+  .tpl-placeholder-row--manual > input {
+    grid-column: 1 / -1;
+    margin-left: 56px;
+  }
+}
 .tpl-ph-auto-preview {
   font-size: 13px;
   color: #15803d;

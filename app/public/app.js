@@ -473,14 +473,20 @@ function renderMessages() {
     const bubbleClass = (dir === 'outgoing' && m.status === 'failed') ? 'rh-bubble is-failed' : 'rh-bubble';
     const errLine = (dir === 'outgoing' && m.status === 'failed' && m.errorReason)
       ? `<div class="rh-msg-error">⚠ ${escapeHtml(m.errorReason)}</div>` : '';
-    // Render del media (si lo trae). Imagen → <img>; PDF/doc → tarjeta clickable.
+    // Render del media (si lo trae). Detecta tipo por extensión.
     let mediaHtml = '';
     if (m.mediaUrl) {
       const url = m.mediaUrl;
-      const isImg = /\.(jpe?g|png|gif|webp)$/i.test(url) || (m.body === '' && /\/uploads\/chat-media\//.test(url));
+      const isImg = /\.(jpe?g|png|gif|webp)$/i.test(url);
+      const isVideo = /\.(mp4|3gp|mov|webm)$/i.test(url);
+      const isAudio = /\.(mp3|ogg|m4a|aac|opus|wav)$/i.test(url);
       const isPdfOrDoc = /\.(pdf|docx?|xlsx?|pptx?|txt)$/i.test(url);
       if (isImg) {
         mediaHtml = `<a href="${escapeHtml(url)}" target="_blank" class="rh-msg-media-img"><img src="${escapeHtml(url)}" alt="adjunto" loading="lazy" /></a>`;
+      } else if (isVideo) {
+        mediaHtml = `<video src="${escapeHtml(url)}" controls class="rh-msg-media-video" preload="metadata"></video>`;
+      } else if (isAudio) {
+        mediaHtml = `<audio src="${escapeHtml(url)}" controls class="rh-msg-media-audio" preload="metadata"></audio>`;
       } else if (isPdfOrDoc) {
         const filename = url.split('/').pop() || 'documento';
         const ext = (filename.match(/\.([a-zA-Z0-9]{1,8})$/)?.[1] || 'doc').toUpperCase();
@@ -7262,8 +7268,92 @@ function refreshReplyFormState() {
   updateReplyFormState(convo);
 }
 
-// ════════ Adjuntos en chat (etapa 1: imagen + PDF/documento) ════════
+// ════════ Adjuntos en chat (imagen, video, audio, doc + grabación) ════════
 let _rhPendingAttachment = null; // { file, dataUrl, type, mimetype, filename }
+let _rhRecorder = null;          // { mediaRecorder, chunks, stream, startTime, ui }
+
+// Inicia grabación de audio desde el micrófono. Muestra panel modal con onda
+// animada, contador de duración y botones Enviar / Cancelar.
+async function startVoiceRecording() {
+  if (_rhRecorder) return; // ya grabando
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    toast('No se pudo acceder al micrófono — revisa permisos del navegador', 'error');
+    return;
+  }
+
+  // Crear panel modal de grabación
+  const overlay = document.createElement('div');
+  overlay.className = 'rh-recorder-overlay';
+  overlay.innerHTML = `
+    <div class="rh-recorder-panel">
+      <div class="rh-recorder-pulse"></div>
+      <div class="rh-recorder-time" id="rhRecTime">0:00</div>
+      <p class="rh-recorder-hint">Grabando audio…</p>
+      <div class="rh-recorder-actions">
+        <button type="button" class="btn btn--ghost" id="rhRecCancel">Cancelar</button>
+        <button type="button" class="btn btn--primary" id="rhRecStop">⏹ Detener y enviar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // MediaRecorder con MIME aceptado por WhatsApp (ogg/opus o mp4)
+  let mimeType = 'audio/ogg;codecs=opus';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/webm;codecs=opus';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = '';
+  const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+  const startTime = Date.now();
+  const timeEl = overlay.querySelector('#rhRecTime');
+  const tickInterval = setInterval(() => {
+    const sec = Math.floor((Date.now() - startTime) / 1000);
+    timeEl.textContent = `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+  }, 250);
+
+  _rhRecorder = { mediaRecorder: rec, chunks, stream, startTime, overlay, tickInterval };
+  rec.start();
+
+  function cleanup() {
+    clearInterval(tickInterval);
+    stream.getTracks().forEach(t => t.stop());
+    overlay.remove();
+    _rhRecorder = null;
+  }
+
+  overlay.querySelector('#rhRecCancel').addEventListener('click', () => {
+    rec.stop();
+    chunks.length = 0; // descartar
+    cleanup();
+    toast('Grabación cancelada', 'info');
+  });
+
+  overlay.querySelector('#rhRecStop').addEventListener('click', () => {
+    rec.onstop = () => {
+      cleanup();
+      if (!chunks.length) return;
+      const blob = new Blob(chunks, { type: rec.mimeType || 'audio/ogg' });
+      // Convertir a base64 e ir directo al modal de preview con caption
+      const reader = new FileReader();
+      reader.onload = () => {
+        const ext = rec.mimeType?.includes('ogg') ? 'ogg' : (rec.mimeType?.includes('webm') ? 'webm' : 'mp3');
+        _rhPendingAttachment = {
+          file: blob,
+          dataUrl: reader.result,
+          type: 'audio',
+          mimetype: blob.type || 'audio/ogg',
+          filename: `nota-voz-${Date.now()}.${ext}`,
+        };
+        showAttachPreview();
+      };
+      reader.readAsDataURL(blob);
+    };
+    rec.stop();
+  });
+}
 
 function setupAttachMenu() {
   const btn  = document.getElementById('rhAttachBtn');
@@ -7281,17 +7371,25 @@ function setupAttachMenu() {
     if (!menu.contains(e.target) && e.target !== btn) menu.hidden = true;
   });
 
+  const vidInput = document.getElementById('rhAttachVideoInput');
+  const audInput = document.getElementById('rhAttachAudioInput');
+
   menu.querySelectorAll('[data-attach]').forEach(opt => {
     opt.addEventListener('click', () => {
       menu.hidden = true;
       const type = opt.dataset.attach;
-      if (type === 'image') imgInput?.click();
-      if (type === 'document') docInput?.click();
+      if (type === 'image')        imgInput?.click();
+      if (type === 'document')     docInput?.click();
+      if (type === 'video')        vidInput?.click();
+      if (type === 'audio')        audInput?.click();
+      if (type === 'record-audio') startVoiceRecording();
     });
   });
 
   imgInput?.addEventListener('change', (e) => onAttachFileSelected(e.target.files?.[0], 'image'));
   docInput?.addEventListener('change', (e) => onAttachFileSelected(e.target.files?.[0], 'document'));
+  vidInput?.addEventListener('change', (e) => onAttachFileSelected(e.target.files?.[0], 'video'));
+  audInput?.addEventListener('change', (e) => onAttachFileSelected(e.target.files?.[0], 'audio'));
 
   document.querySelectorAll('[data-close-attach-preview]').forEach(el => {
     el.addEventListener('click', closeAttachPreview);
@@ -7304,19 +7402,25 @@ function setupAttachMenu() {
 
 function onAttachFileSelected(file, type) {
   if (!file) return;
-  // Validación rápida en cliente; backend re-valida.
-  const limits = { image: 5 * 1024 * 1024, document: 100 * 1024 * 1024 };
+  // Límites por tipo (cliente; el backend re-valida según provider)
+  const limits = {
+    image:    5  * 1024 * 1024,
+    video:    16 * 1024 * 1024,
+    audio:    16 * 1024 * 1024,
+    document: 100 * 1024 * 1024,
+  };
   if (file.size > limits[type]) {
     toast(`El archivo excede el límite (${(limits[type]/1024/1024).toFixed(0)}MB)`, 'warning');
     return;
   }
   const reader = new FileReader();
   reader.onload = () => {
+    const fallbackMime = ({ image: 'image/jpeg', video: 'video/mp4', audio: 'audio/mpeg' })[type] || 'application/octet-stream';
     _rhPendingAttachment = {
       file,
       dataUrl: reader.result,
       type,
-      mimetype: file.type || (type === 'image' ? 'image/jpeg' : 'application/octet-stream'),
+      mimetype: file.type || fallbackMime,
       filename: file.name,
     };
     showAttachPreview();
@@ -7332,10 +7436,22 @@ function showAttachPreview() {
   const title = document.getElementById('rhAttachPreviewTitle');
   if (!modal || !content) return;
 
-  title.textContent = att.type === 'image' ? 'Enviar imagen' : 'Enviar documento';
+  const titles = { image: 'Enviar imagen', video: 'Enviar video', audio: 'Enviar audio', document: 'Enviar documento' };
+  title.textContent = titles[att.type] || 'Enviar archivo';
 
   if (att.type === 'image') {
     content.innerHTML = `<img src="${att.dataUrl}" alt="preview" class="rh-attach-img-preview" />`;
+  } else if (att.type === 'video') {
+    content.innerHTML = `<video src="${att.dataUrl}" controls class="rh-attach-video-preview"></video>`;
+  } else if (att.type === 'audio') {
+    content.innerHTML = `
+      <div class="rh-attach-audio-preview">
+        <div class="rh-attach-audio-icon">🎵</div>
+        <div class="rh-attach-audio-info">
+          <div class="rh-attach-audio-name">${escapeHtml(att.filename)}</div>
+          <audio src="${att.dataUrl}" controls style="width:100%;margin-top:8px"></audio>
+        </div>
+      </div>`;
   } else {
     const sizeKb = (att.file.size / 1024).toFixed(1);
     const ext = (att.filename.match(/\.([a-zA-Z0-9]{1,8})$/)?.[1] || 'doc').toUpperCase();
@@ -7357,10 +7473,10 @@ function closeAttachPreview() {
   document.getElementById('rhAttachPreviewModal').hidden = true;
   _rhPendingAttachment = null;
   // Limpiar inputs file para que vuelvan a disparar change si eligen el mismo archivo
-  const imgInput = document.getElementById('rhAttachImageInput');
-  const docInput = document.getElementById('rhAttachDocInput');
-  if (imgInput) imgInput.value = '';
-  if (docInput) docInput.value = '';
+  ['rhAttachImageInput','rhAttachVideoInput','rhAttachAudioInput','rhAttachDocInput'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
 }
 
 async function sendAttachmentNow() {
@@ -7390,7 +7506,8 @@ async function sendAttachmentNow() {
     closeAttachPreview();
     toast('Archivo enviado', 'success');
     if (convo) {
-      convo.lastMessage = caption || (att.type === 'image' ? '📷 Imagen' : '📎 Documento');
+      const previewByType = { image: '📷 Imagen', video: '🎬 Video', audio: '🎵 Audio', document: '📎 Documento' };
+      convo.lastMessage = caption || previewByType[att.type] || '📎 Archivo';
       convo.time = msg.time || '';
       renderChatList();
     }

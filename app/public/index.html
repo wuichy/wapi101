@@ -263,6 +263,27 @@
                             <div class="rh-attach-hint">JPG, PNG (máx 5MB)</div>
                           </div>
                         </button>
+                        <button type="button" class="rh-attach-option" data-attach="video">
+                          <span class="rh-attach-ico">🎬</span>
+                          <div>
+                            <div class="rh-attach-label">Video</div>
+                            <div class="rh-attach-hint">MP4, 3GP (máx 16MB)</div>
+                          </div>
+                        </button>
+                        <button type="button" class="rh-attach-option" data-attach="audio">
+                          <span class="rh-attach-ico">🎵</span>
+                          <div>
+                            <div class="rh-attach-label">Audio</div>
+                            <div class="rh-attach-hint">MP3, OGG, AAC (máx 16MB)</div>
+                          </div>
+                        </button>
+                        <button type="button" class="rh-attach-option" data-attach="record-audio">
+                          <span class="rh-attach-ico">🎙</span>
+                          <div>
+                            <div class="rh-attach-label">Grabar audio</div>
+                            <div class="rh-attach-hint">Mantén presionado para grabar</div>
+                          </div>
+                        </button>
                         <button type="button" class="rh-attach-option" data-attach="document">
                           <span class="rh-attach-ico">📎</span>
                           <div>
@@ -272,6 +293,8 @@
                         </button>
                       </div>
                       <input type="file" id="rhAttachImageInput" accept="image/jpeg,image/png" hidden />
+                      <input type="file" id="rhAttachVideoInput" accept="video/mp4,video/3gpp,.mp4,.3gp" hidden />
+                      <input type="file" id="rhAttachAudioInput" accept="audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,.mp3,.ogg,.aac,.m4a" hidden />
                       <input type="file" id="rhAttachDocInput" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,.doc,.docx,.xls,.xlsx,.txt" hidden />
                     </div>
                     <button type="button" class="rh-icon-button rh-tpl-trigger" id="rhTplTrigger" title="Plantillas">

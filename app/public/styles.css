@@ -3293,6 +3293,86 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   border-radius: 6px;
   display: block;
 }
+.rh-attach-video-preview {
+  max-width: 100%;
+  max-height: 360px;
+  border-radius: 6px;
+  display: block;
+  background: #000;
+}
+.rh-attach-audio-preview {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid var(--rh-border);
+  border-radius: 10px;
+}
+.rh-attach-audio-icon { font-size: 36px; }
+.rh-attach-audio-info { width: 100%; text-align: center; }
+.rh-attach-audio-name { font-size: 13px; font-weight: 500; color: var(--rh-text); margin-bottom: 4px; }
+
+/* Render de video y audio dentro del chat */
+.rh-msg-media-video {
+  display: block;
+  max-width: 320px;
+  width: 100%;
+  border-radius: 8px;
+  background: #000;
+}
+.rh-msg-media-audio {
+  display: block;
+  max-width: 320px;
+  width: 100%;
+  margin: 4px;
+}
+
+/* Overlay y panel de grabación de audio en vivo */
+.rh-recorder-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(6px);
+}
+.rh-recorder-panel {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px 40px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  min-width: 320px;
+}
+.rh-recorder-pulse {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ef4444 0%, #dc2626 80%);
+  animation: rhRecPulse 1.2s infinite ease-in-out;
+}
+@keyframes rhRecPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, .6); transform: scale(1); }
+  50%      { box-shadow: 0 0 0 18px rgba(239, 68, 68, 0);  transform: scale(1.08); }
+}
+.rh-recorder-time {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--rh-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.rh-recorder-hint { color: var(--rh-muted); font-size: 13px; margin: 0; }
+.rh-recorder-actions { display: flex; gap: 10px; margin-top: 8px; }
 .rh-attach-doc-card {
   display: flex;
   align-items: center;

@@ -2774,6 +2774,13 @@ body[data-view-active="chats"] .main { background: #f2f2f7; }
   line-height: 1;
   flex-shrink: 0;
 }
+.rh-wa24-pill.is-expired {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
 .rh-chat-pin-icon { color: #c2952a; flex-shrink: 0; line-height: 0; }
 .rh-chat-name {
   font-size: 14px;

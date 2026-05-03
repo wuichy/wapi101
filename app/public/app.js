@@ -125,12 +125,16 @@ function fmtMsgTime(ts) {
   return `${date} · ${time}`;
 }
 
-// Returns 24h countdown pill HTML — inline inside the badges row
+// Returns 24h countdown pill HTML — inline inside the badges row.
+// Solo aplica a WhatsApp Business API ('whatsapp'). Cuando la ventana de 24h
+// se cierra, el pill cambia a "Caducada" en rojo más oscuro en vez de desaparecer.
 function wa24Html(provider, lastIncomingAt) {
   if (provider !== 'whatsapp' || !lastIncomingAt) return '';
   const deadlineMs = lastIncomingAt * 1000 + 24 * 60 * 60 * 1000;
   const diffMs = deadlineMs - Date.now();
-  if (diffMs <= 0) return '';
+  if (diffMs <= 0) {
+    return `<span class="rh-wa24-pill is-expired" data-deadline="${deadlineMs}" title="Han pasado más de 24h desde el último mensaje del lead. Solo puedes enviar plantillas aprobadas.">Caducada</span>`;
+  }
   const h  = Math.floor(diffMs / 3_600_000);
   const m  = Math.floor((diffMs % 3_600_000) / 60_000);
   const s  = Math.floor((diffMs % 60_000) / 1_000);
@@ -140,12 +144,20 @@ function wa24Html(provider, lastIncomingAt) {
   return `<span class="rh-wa24-pill" data-deadline="${deadlineMs}">24h · ${hh}:${mm}:${ss}</span>`;
 }
 
-// Ticker global — actualiza todos los pills visibles cada segundo
+// Ticker global — actualiza todos los pills visibles cada segundo.
+// Cuando el countdown llega a cero el pill se convierte en "Caducada" (no se quita).
 setInterval(() => {
   document.querySelectorAll('.rh-wa24-pill[data-deadline]').forEach(el => {
     const deadlineMs = Number(el.dataset.deadline);
     const diffMs = deadlineMs - Date.now();
-    if (diffMs <= 0) { el.remove(); return; }
+    if (diffMs <= 0) {
+      if (!el.classList.contains('is-expired')) {
+        el.classList.add('is-expired');
+        el.textContent = 'Caducada';
+        el.title = 'Han pasado más de 24h desde el último mensaje del lead. Solo puedes enviar plantillas aprobadas.';
+      }
+      return;
+    }
     const h  = Math.floor(diffMs / 3_600_000);
     const m  = Math.floor((diffMs % 3_600_000) / 60_000);
     const s  = Math.floor((diffMs % 60_000) / 1_000);

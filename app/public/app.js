@@ -1695,6 +1695,7 @@ function showView(viewName) {
   if (viewName === 'pipelines') {
     if (searchInput) { searchInput.placeholder = 'Buscar expediente…'; searchInput.value = PL_FILTERS.q || ''; }
     if (plExtras) plExtras.hidden = false;
+    renderPipelineViewSwitch();
     renderPipelinesBoard();
   } else if (viewName === 'integraciones') {
     if (searchInput) { searchInput.placeholder = 'Buscar integración…'; searchInput.value = ''; }
@@ -5231,6 +5232,11 @@ function setupAccount() {
 // PIPELINES KANBAN
 // ════════════════════════════════
 let PL_ACTIVE_ID = null;   // pipeline seleccionado en el tablero
+// Modo de vista: 'kanban' (tablero) o 'list' (lista con selección múltiple)
+let PL_VIEW_MODE = (() => {
+  try { return localStorage.getItem('plViewMode') || 'kanban'; } catch { return 'kanban'; }
+})();
+let PL_LIST_SELECTED = new Set();  // ids de expedientes seleccionados en modo lista
 let PL_MANAGE_ID = null;   // pipeline abierto en el modal de gestión
 let PL_EXP_CACHE = [];     // expedientes para el kanban
 let PL_SEARCH   = '';      // filtro texto del kanban (legacy, aliased below)
@@ -5291,6 +5297,22 @@ function renderPipelineTabs() {
   }).join('');
 }
 
+// Cambia entre vista 'kanban' (tablero) y 'list' (lista con selección múltiple).
+// Persiste preferencia en localStorage.
+function setPipelineViewMode(mode) {
+  PL_VIEW_MODE = mode;
+  try { localStorage.setItem('plViewMode', mode); } catch {}
+  PL_LIST_SELECTED.clear();
+  renderPipelinesBoard();
+  renderPipelineViewSwitch();
+}
+
+function renderPipelineViewSwitch() {
+  document.querySelectorAll('[data-pl-view]').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.plView === PL_VIEW_MODE);
+  });
+}
+
 function renderPipelinesBoard() {
   const board = document.getElementById('plBoard');
   const empty = document.getElementById('plEmpty');
@@ -5303,6 +5325,15 @@ function renderPipelinesBoard() {
   }
   board.hidden = false;
   if (empty) empty.hidden = true;
+
+  // Si está en modo lista, delegar al renderer de lista y salir
+  if (PL_VIEW_MODE === 'list') {
+    renderPipelinesList();
+    return;
+  }
+  // Si veníamos de modo lista, asegurar que el contenedor del tablero
+  // está limpio antes de renderizar el kanban
+  board.classList.remove('pl-board--list');
 
   const pipeline = PIPELINES.find(p => p.id === PL_ACTIVE_ID) || PIPELINES[0];
   if (!pipeline) return;
@@ -5350,6 +5381,158 @@ function renderPipelinesBoard() {
   }).join('');
 
   setupKanbanDragDrop();
+}
+
+// Vista de lista — tabla con checkboxes y acciones en lote (eliminar / mover etapa)
+function renderPipelinesList() {
+  const board = document.getElementById('plBoard');
+  if (!board) return;
+
+  const pipeline = PIPELINES.find(p => p.id === PL_ACTIVE_ID) || PIPELINES[0];
+  if (!pipeline) return;
+
+  const filtered = applyExpFiltersClient(PL_EXP_CACHE.filter(e => e.pipelineId === pipeline.id), PL_FILTERS);
+  filtered.sort((a, b) => {
+    if (PL_SORT === 'name')      return (a.name || '').localeCompare(b.name || '');
+    if (PL_SORT === 'nameDesc')  return (b.name || '').localeCompare(a.name || '');
+    if (PL_SORT === 'updatedAt') return (b.updatedAt || 0) - (a.updatedAt || 0);
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+
+  // Limpiar selecciones de expedientes que ya no están en la lista filtrada
+  PL_LIST_SELECTED = new Set([...PL_LIST_SELECTED].filter(id => filtered.some(e => e.id === id)));
+
+  const stagesById = {};
+  pipeline.stages.forEach(s => { stagesById[s.id] = s; });
+
+  const allSelected = filtered.length > 0 && filtered.every(e => PL_LIST_SELECTED.has(e.id));
+  const someSelected = filtered.some(e => PL_LIST_SELECTED.has(e.id));
+
+  board.classList.add('pl-board--list');
+  board.innerHTML = `
+    <div class="pl-list-bulkbar ${PL_LIST_SELECTED.size > 0 ? 'is-active' : ''}">
+      <div class="pl-list-bulkbar-info">
+        <strong>${PL_LIST_SELECTED.size}</strong> seleccionado${PL_LIST_SELECTED.size === 1 ? '' : 's'}
+        <button type="button" class="pl-list-bulk-clear" id="plListBulkClear">Limpiar</button>
+      </div>
+      <div class="pl-list-bulkbar-actions">
+        <select class="pl-list-bulk-stage" id="plListBulkStage">
+          <option value="">Mover a etapa…</option>
+          ${pipeline.stages.map(s => `<option value="${s.id}">${escHtml(s.name)}</option>`).join('')}
+        </select>
+        <button type="button" class="btn btn--sm btn--danger" id="plListBulkDelete">🗑 Eliminar</button>
+      </div>
+    </div>
+    <div class="pl-list-table-wrap">
+      <table class="pl-list-table">
+        <thead>
+          <tr>
+            <th class="pl-list-col-check"><input type="checkbox" id="plListSelectAll" ${allSelected ? 'checked' : ''} ${someSelected && !allSelected ? 'data-indeterminate="1"' : ''} /></th>
+            <th class="pl-list-col-name">Nombre</th>
+            <th class="pl-list-col-stage">Etapa</th>
+            <th class="pl-list-col-contact">Contacto</th>
+            <th class="pl-list-col-value">Valor</th>
+            <th class="pl-list-col-date">Última actividad</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.length === 0
+            ? `<tr><td colspan="6" class="pl-list-empty-row">No hay expedientes en este pipeline.</td></tr>`
+            : filtered.map(e => {
+                const stage = stagesById[e.stageId];
+                const stageColor = stage?.color || '#94a3b8';
+                const stageName  = stage?.name  || '—';
+                const contactName = e.contactName || (e.contact && [e.contact.firstName, e.contact.lastName].filter(Boolean).join(' ')) || '—';
+                const lastTs = e.updatedAt || e.createdAt;
+                const isSelected = PL_LIST_SELECTED.has(e.id);
+                return `
+                  <tr class="pl-list-row ${isSelected ? 'is-selected' : ''}" data-exp-id="${e.id}">
+                    <td class="pl-list-col-check"><input type="checkbox" class="pl-list-check" data-exp-id="${e.id}" ${isSelected ? 'checked' : ''} /></td>
+                    <td class="pl-list-col-name"><a href="#" class="pl-list-name-link" data-open-exp="${e.id}">${escHtml(e.name || `LEAD-${e.id}`)}</a></td>
+                    <td class="pl-list-col-stage"><span class="pl-list-stage-pill" style="background:${stageColor}1a;color:${stageColor};border:1px solid ${stageColor}66"><span class="pl-list-stage-dot" style="background:${stageColor}"></span>${escHtml(stageName)}</span></td>
+                    <td class="pl-list-col-contact">${escHtml(contactName)}</td>
+                    <td class="pl-list-col-value">${e.value ? '$' + Number(e.value).toLocaleString() : '—'}</td>
+                    <td class="pl-list-col-date">${lastTs ? escHtml(relTime(lastTs)) : '—'}</td>
+                  </tr>`;
+              }).join('')
+          }
+        </tbody>
+      </table>
+    </div>`;
+
+  // Set indeterminate on the select-all checkbox if needed
+  const selectAll = document.getElementById('plListSelectAll');
+  if (selectAll && someSelected && !allSelected) selectAll.indeterminate = true;
+
+  setupPipelinesListHandlers(filtered, pipeline);
+}
+
+function setupPipelinesListHandlers(filtered, pipeline) {
+  // Checkbox individual
+  document.querySelectorAll('.pl-list-check').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const id = Number(e.target.dataset.expId);
+      if (e.target.checked) PL_LIST_SELECTED.add(id);
+      else PL_LIST_SELECTED.delete(id);
+      renderPipelinesList();
+    });
+  });
+  // Select all
+  document.getElementById('plListSelectAll')?.addEventListener('change', (e) => {
+    if (e.target.checked) filtered.forEach(x => PL_LIST_SELECTED.add(x.id));
+    else PL_LIST_SELECTED.clear();
+    renderPipelinesList();
+  });
+  // Limpiar selección
+  document.getElementById('plListBulkClear')?.addEventListener('click', () => {
+    PL_LIST_SELECTED.clear();
+    renderPipelinesList();
+  });
+  // Mover a etapa
+  document.getElementById('plListBulkStage')?.addEventListener('change', async (e) => {
+    const stageId = Number(e.target.value);
+    if (!stageId || !PL_LIST_SELECTED.size) return;
+    const stage = pipeline.stages.find(s => s.id === stageId);
+    if (!confirm(`¿Mover ${PL_LIST_SELECTED.size} expediente(s) a la etapa "${stage?.name}"?`)) {
+      e.target.value = '';
+      return;
+    }
+    const ids = [...PL_LIST_SELECTED];
+    let ok = 0, fail = 0;
+    for (const id of ids) {
+      try {
+        await api('PATCH', `/api/expedients/${id}`, { stageId });
+        ok++;
+      } catch (_) { fail++; }
+    }
+    PL_LIST_SELECTED.clear();
+    await loadPipelinesKanban();  // recarga datos y re-renderiza
+    toast(`${ok} movido${ok === 1 ? '' : 's'}${fail ? `, ${fail} fallaron` : ''}`, fail ? 'warning' : 'success');
+  });
+  // Eliminar
+  document.getElementById('plListBulkDelete')?.addEventListener('click', async () => {
+    if (!PL_LIST_SELECTED.size) return;
+    if (!confirm(`¿Eliminar ${PL_LIST_SELECTED.size} expediente(s)? Se mueven a la papelera (recuperables 30 días).`)) return;
+    const ids = [...PL_LIST_SELECTED];
+    let ok = 0, fail = 0;
+    for (const id of ids) {
+      try {
+        await api('DELETE', `/api/expedients/${id}`);
+        ok++;
+      } catch (_) { fail++; }
+    }
+    PL_LIST_SELECTED.clear();
+    await loadPipelinesKanban();
+    toast(`${ok} eliminado${ok === 1 ? '' : 's'}${fail ? `, ${fail} fallaron` : ''}`, fail ? 'warning' : 'success');
+  });
+  // Click en el nombre → abre detalle del expediente
+  document.querySelectorAll('[data-open-exp]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = Number(a.dataset.openExp);
+      openExpDetail(id, 'pipelines');
+    });
+  });
 }
 
 function _kdClearHighlight() {
@@ -5901,6 +6084,16 @@ function setupPipelines() {
   document.getElementById('plBoardSort')?.addEventListener('change', e => {
     PL_SORT = e.target.value;
     renderPipelinesBoard();
+  });
+
+  // View mode toggle (kanban / list)
+  document.getElementById('topbarPlExtras')?.addEventListener('click', e => {
+    const btn = e.target.closest('[data-pl-view]');
+    if (!btn) return;
+    const mode = btn.dataset.plView;
+    if (mode !== 'kanban' && mode !== 'list') return;
+    if (mode === PL_VIEW_MODE) return;
+    setPipelineViewMode(mode);
   });
 
   // Tab switch

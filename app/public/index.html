@@ -103,6 +103,16 @@
         </div>
         <!-- Pipeline-only controls, hidden on other views -->
         <div class="topbar-pl-extras" id="topbarPlExtras" hidden>
+          <div class="pl-view-switch" title="Cambia entre tablero (kanban) y lista">
+            <button type="button" class="pl-view-btn" data-pl-view="kanban" title="Tablero">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="3" width="4" height="14" rx="1"/><rect x="9" y="3" width="4" height="9" rx="1"/><rect x="15" y="3" width="4" height="6" rx="1"/></svg>
+              Tablero
+            </button>
+            <button type="button" class="pl-view-btn" data-pl-view="list" title="Lista con selección múltiple">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><line x1="3" y1="6" x2="17" y2="6"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="14" x2="17" y2="14"/></svg>
+              Lista
+            </button>
+          </div>
           <select id="plBoardSort" class="pl-sort-select">
             <option value="createdAt">Más reciente</option>
             <option value="updatedAt">Última actividad</option>

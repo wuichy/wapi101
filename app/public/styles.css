@@ -6556,6 +6556,11 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   align-items: center;
 }
 .tpl-btn-row .tpl-btn-extra { grid-column: 2 / 4; }
+.tpl-btn-extra.is-invalid {
+  border-color: #ef4444 !important;
+  background: #fef2f2;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.12);
+}
 .tpl-btn-remove {
   width: 28px;
   height: 28px;

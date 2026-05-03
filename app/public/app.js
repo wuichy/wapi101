@@ -9275,6 +9275,20 @@ function _collectTplPlaceholders() {
   return out;
 }
 
+// Marca en rojo el input de URL del botón problemático y lo enfoca para que
+// el usuario vea exactamente cuál corregir. La clase se quita cuando edita.
+function _highlightTplBtnUrlError(idx) {
+  document.querySelectorAll('.tpl-btn-extra').forEach(el => el.classList.remove('is-invalid'));
+  const row = document.querySelector(`#tplButtonsList .tpl-btn-row[data-i="${idx}"]`);
+  const input = row?.querySelector('.tpl-btn-extra');
+  if (input) {
+    input.classList.add('is-invalid');
+    input.focus();
+    input.select?.();
+    input.addEventListener('input', () => input.classList.remove('is-invalid'), { once: true });
+  }
+}
+
 function _collectTplButtons() {
   // Recolecta el state desde los inputs por si hubo cambios sin re-render
   const rows = document.querySelectorAll('#tplButtonsList .tpl-btn-row');
@@ -9354,6 +9368,30 @@ async function saveTpl() {
   if (!body) {
     if (errEl) { errEl.textContent = 'El cuerpo es obligatorio.'; errEl.hidden = false; }
     return;
+  }
+  // Validar URLs de los botones tipo URL — Meta rechaza URLs mal formadas
+  // y formatos como "ejemplo.com" sin protocolo.
+  for (let i = 0; i < buttons.length; i++) {
+    const btn = buttons[i];
+    if (btn.type !== 'URL') continue;
+    const urlValue = (btn.url || '').trim();
+    if (!urlValue) {
+      if (errEl) { errEl.textContent = `Botón #${i+1}: la URL es obligatoria para botones tipo "Abrir URL".`; errEl.hidden = false; }
+      _highlightTplBtnUrlError(i);
+      return;
+    }
+    if (!/^https?:\/\//i.test(urlValue)) {
+      if (errEl) { errEl.textContent = `Botón #${i+1}: la URL debe empezar con http:// o https://. Ejemplo: https://reelance.com.mx/promo`; errEl.hidden = false; }
+      _highlightTplBtnUrlError(i);
+      return;
+    }
+    try {
+      new URL(urlValue);
+    } catch (_) {
+      if (errEl) { errEl.textContent = `Botón #${i+1}: "${urlValue}" no es una URL válida. Verifica el formato.`; errEl.hidden = false; }
+      _highlightTplBtnUrlError(i);
+      return;
+    }
   }
   // WA API: nombre solo minúsculas, números y guión bajo (regla de Meta)
   if (type === 'wa_api') {

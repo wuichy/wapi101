@@ -1,5 +1,6 @@
 const https = require('https');
 const { decryptJson } = require('../../security/crypto');
+const { friendlyMetaError } = require('../integrations/meta-errors');
 
 const META_API_VERSION = 'v22.0';
 
@@ -148,8 +149,7 @@ async function uploadHeaderToMeta(db, buffer, mimetype) {
   });
   const sessionJson = await sessionRes.json().catch(() => ({}));
   if (!sessionRes.ok || !sessionJson.id) {
-    const msg = sessionJson?.error?.message || JSON.stringify(sessionJson);
-    throw new Error(`Resumable upload init failed: ${msg}`);
+    throw new Error(`Subiendo archivo a Meta: ${friendlyMetaError(sessionJson?.error)}`);
   }
 
   // Step 2 — upload bytes (note: header is OAuth, NOT Bearer, per Meta spec)
@@ -164,8 +164,7 @@ async function uploadHeaderToMeta(db, buffer, mimetype) {
   });
   const uploadJson = await uploadRes.json().catch(() => ({}));
   if (!uploadRes.ok || !uploadJson.h) {
-    const msg = uploadJson?.error?.message || JSON.stringify(uploadJson);
-    throw new Error(`Resumable upload bytes failed: ${msg}`);
+    throw new Error(`Subiendo bytes a Meta: ${friendlyMetaError(uploadJson?.error)}`);
   }
   return uploadJson.h;
 }
@@ -266,14 +265,7 @@ async function submitToMeta(db, id) {
     update(db, id, { waId: result.body.id, waStatus: 'pending' });
     return { success: true, waId: result.body.id, status: result.body.status };
   } else {
-    // Construir mensaje detallado para que el usuario sepa qué arreglar.
-    const err = result.body?.error || {};
-    const parts = [];
-    if (err.message) parts.push(err.message);
-    if (err.error_user_msg) parts.push(`(${err.error_user_msg})`);
-    if (err.error_data?.details) parts.push(`— ${err.error_data.details}`);
-    if (!parts.length) parts.push(JSON.stringify(result.body));
-    throw new Error(`Meta API error: ${parts.join(' ')}`);
+    throw new Error(friendlyMetaError(result.body?.error));
   }
 }
 
@@ -291,7 +283,7 @@ async function syncFromMeta(db, id) {
     update(db, id, { waStatus: newStatus, waRejectedReason: rejectedReason });
     return { success: true, status: newStatus, metaStatus: result.body.status, rejectedReason };
   } else {
-    throw new Error(`Meta API error: ${result.body?.error?.message || JSON.stringify(result.body)}`);
+    throw new Error(friendlyMetaError(result.body?.error));
   }
 }
 

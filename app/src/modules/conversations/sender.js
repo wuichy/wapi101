@@ -1,5 +1,6 @@
 // Shared send helpers used by both conversations/routes.js and bot/engine.js
 const { decryptJson } = require('../../security/crypto');
+const { friendlyMetaError } = require('../integrations/meta-errors');
 
 async function sendMessage(db, convo, text) {
   if (convo.provider === 'whatsapp')        return sendWhatsApp(db, convo, text);
@@ -48,7 +49,7 @@ async function sendWhatsApp(db, convo, text) {
     }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  if (!res.ok || data.error) throw new Error(friendlyMetaError(data.error) || `HTTP ${res.status}`);
   return data.messages?.[0]?.id || null;
 }
 
@@ -136,9 +137,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = []) {
   });
   const data = await res.json();
   if (!res.ok || data.error) {
-    const e = data.error || {};
-    const msg = [e.message, e.error_user_msg, e.error_data?.details].filter(Boolean).join(' — ');
-    throw new Error(msg || `HTTP ${res.status}`);
+    throw new Error(friendlyMetaError(data.error) || `HTTP ${res.status}`);
   }
   return { externalId: data.messages?.[0]?.id || null, renderedBody: bodyText.replace(/\{\{(\d+)\}\}/g, (_, n) => {
     const ph = tpl.bodyPlaceholders?.[Number(n) - 1];

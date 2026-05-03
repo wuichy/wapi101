@@ -6369,6 +6369,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   startChatPolling();
 });
 
+// Traduce códigos de wa_rejected_reason de Meta a texto entendible.
+const _META_REJECTED_LABELS = {
+  INVALID_FORMAT: 'Formato inválido. Revisa: {{N}} bien numeradas, footer sin URLs, ejemplos llenados, sin sintaxis {nombre} (una sola llave).',
+  TAG_CONTENT_MISMATCH: 'Contenido no coincide con la categoría. Si tiene "descuento" u "oferta" → cámbiala a MARKETING.',
+  PROMOTIONAL: 'Marcada como promocional pero está en categoría UTILITY. Cámbiala a MARKETING.',
+  CATEGORY_MISMATCH: 'Categoría incorrecta. Promociones → MARKETING; confirmaciones → UTILITY; OTPs → AUTHENTICATION.',
+  ABUSIVE_CONTENT: 'Contenido detectado como abusivo o spam. Suaviza el body.',
+  INVALID_VARIABLE_FORMAT: 'Variables mal formadas. Usa {{1}}, {{2}} consecutivos sin saltos.',
+  SCAM: 'Detectada como posible scam. Usa lenguaje neutral, no urgente.',
+  NONE: 'Sin razón específica',
+};
+function _friendlyRejectedReason(reason) {
+  if (!reason) return '';
+  return _META_REJECTED_LABELS[reason] || reason;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ─── Template picker (shared, used from both chat contexts) ──────────────────
 
@@ -6602,7 +6618,7 @@ function renderTemplates() {
     const statusLabel = { draft: 'Borrador', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
 
     const rejectionInfo = (isWa && t.waStatus === 'rejected' && t.waRejectedReason)
-      ? `<div class="tpl-rejected-reason">Motivo: ${escHtml(t.waRejectedReason)}</div>` : '';
+      ? `<div class="tpl-rejected-reason">Motivo: ${escHtml(_friendlyRejectedReason(t.waRejectedReason))}</div>` : '';
 
     card.innerHTML = `
       <div class="tpl-card-icon ${isWa ? 'wa' : 'free'}">${isWa ? '📱' : '💬'}</div>

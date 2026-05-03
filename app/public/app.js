@@ -6674,7 +6674,8 @@ async function loadTemplates() {
 // State para etiquetas y ordenamiento (mismo patrón que bots)
 let _tplTags = [];
 let _tplTagFilter = null;       // null = todas, number = id de tag
-let _tplSort = 'date_desc';     // date_desc | date_asc | name_asc | name_desc | tag
+let _tplSort = 'date_desc';     // date_desc | date_asc | name_asc | name_desc
+let _tplGroupByTag = false;     // si true, agrupa por etiqueta (sort se aplica dentro de cada grupo)
 
 async function loadTemplateTags() {
   try {
@@ -6701,8 +6702,12 @@ function renderTplTagFilters() {
       <option value="date_asc"${_tplSort === 'date_asc' ? ' selected' : ''}>Más vieja</option>
       <option value="name_asc"${_tplSort === 'name_asc' ? ' selected' : ''}>A → Z</option>
       <option value="name_desc"${_tplSort === 'name_desc' ? ' selected' : ''}>Z → A</option>
-      <option value="tag"${_tplSort === 'tag' ? ' selected' : ''}>Por etiqueta</option>
     </select>
+    <label class="tpl-group-toggle" title="Si está activo, agrupa por etiqueta. El orden se aplica dentro de cada grupo.">
+      <input type="checkbox" id="tplGroupByTagToggle" ${_tplGroupByTag ? 'checked' : ''} />
+      <span class="tpl-group-toggle-track"><span class="tpl-group-toggle-thumb"></span></span>
+      <span class="tpl-group-toggle-label">Agrupar por etiqueta</span>
+    </label>
     <button type="button" class="bot-tag-manage-btn" id="tplTagManageBtn" title="Gestionar etiquetas">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M3 3h7l7 7-7 7-7-7V3z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>
       Etiquetas
@@ -6720,21 +6725,33 @@ function _applyTplSort(arr) {
     case 'date_asc':  a.sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0)); break;
     case 'name_asc':  a.sort((x, y) => (x.displayName || x.name || '').localeCompare(y.displayName || y.name || '')); break;
     case 'name_desc': a.sort((x, y) => (y.displayName || y.name || '').localeCompare(x.displayName || x.name || '')); break;
-    case 'tag': {
-      // Ordena por nombre del primer tag, sin tag al final
-      a.sort((x, y) => {
-        const xt = (x.tags?.[0]?.name || '').toLowerCase();
-        const yt = (y.tags?.[0]?.name || '').toLowerCase();
-        if (!xt && !yt) return 0;
-        if (!xt) return 1;
-        if (!yt) return -1;
-        return xt.localeCompare(yt);
-      });
-      break;
-    }
     default: a.sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0));
   }
   return a;
+}
+
+// Agrupa plantillas por su PRIMERA etiqueta (alfabéticamente). Las que no
+// tienen etiqueta caen al grupo "Sin etiqueta" (al final). Una plantilla
+// con varias tags aparece UNA sola vez en su tag primaria — sin duplicar.
+function _groupTplByTag(arr) {
+  const groups = new Map(); // tagId | '__notag' → { tag, items[] }
+  for (const t of arr) {
+    const sortedTags = (t.tags || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+    const primary = sortedTags[0] || null;
+    const key = primary ? primary.id : '__notag';
+    if (!groups.has(key)) groups.set(key, { tag: primary, items: [] });
+    groups.get(key).items.push(t);
+  }
+  // Ordena los grupos: tags por nombre, "Sin etiqueta" al final
+  const sortedGroups = [...groups.values()].sort((a, b) => {
+    if (!a.tag && !b.tag) return 0;
+    if (!a.tag) return 1;
+    if (!b.tag) return -1;
+    return a.tag.name.localeCompare(b.tag.name);
+  });
+  // Aplica el sort dentro de cada grupo
+  sortedGroups.forEach(g => { g.items = _applyTplSort(g.items); });
+  return sortedGroups;
 }
 
 function renderTemplates() {
@@ -6770,22 +6787,19 @@ function renderTemplates() {
   if (badgeWa)   badgeWa.textContent   = waCount;
   if (badgeFree) badgeFree.textContent = freeCount;
 
-  // Remove old cards
-  list.querySelectorAll('.tpl-card').forEach(c => c.remove());
+  // Remove old cards y headers
+  list.querySelectorAll('.tpl-card, .tpl-group-header').forEach(c => c.remove());
 
   if (empty) empty.hidden = filtered.length > 0;
 
-  for (const t of filtered) {
+  function renderCard(t) {
     const card = document.createElement('div');
     card.className = 'tpl-card';
     card.dataset.id = t.id;
-
     const isWa = t.type === 'wa_api';
     const statusLabel = { draft: 'Borrador', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
-
     const rejectionInfo = (isWa && t.waStatus === 'rejected' && t.waRejectedReason)
       ? `<div class="tpl-rejected-reason">Motivo: ${escHtml(_friendlyRejectedReason(t.waRejectedReason))}</div>` : '';
-
     card.innerHTML = `
       <div class="tpl-card-icon ${isWa ? 'wa' : 'free'}">${isWa ? '📱' : '💬'}</div>
       <div class="tpl-card-body">
@@ -6802,8 +6816,23 @@ function renderTemplates() {
         <button class="btn btn--sm btn--secondary tpl-edit-btn" data-id="${t.id}">Editar</button>
         <button class="btn btn--sm btn--danger tpl-del-btn" data-id="${t.id}">✕</button>
       </div>`;
-
     list.appendChild(card);
+  }
+
+  if (_tplGroupByTag) {
+    const groups = _groupTplByTag(filtered);
+    for (const g of groups) {
+      const header = document.createElement('div');
+      header.className = 'tpl-group-header';
+      const tagPillHtml = g.tag
+        ? `<span class="bot-tag-pill" style="background:${escHtml(g.tag.color)}1a;color:${escHtml(g.tag.color)};border-color:${escHtml(g.tag.color)}66"><span class="bot-tag-dot" style="background:${escHtml(g.tag.color)}"></span>${escHtml(g.tag.name)}</span>`
+        : '<span class="tpl-group-no-tag">— Sin etiqueta —</span>';
+      header.innerHTML = `${tagPillHtml} <span class="tpl-group-count">${g.items.length}</span>`;
+      list.appendChild(header);
+      for (const t of g.items) renderCard(t);
+    }
+  } else {
+    for (const t of filtered) renderCard(t);
   }
 }
 
@@ -7501,6 +7530,10 @@ function setupTemplates() {
   document.addEventListener('change', (e) => {
     if (e.target.id === 'tplSortSelect') {
       _tplSort = e.target.value;
+      renderTemplates();
+    }
+    if (e.target.id === 'tplGroupByTagToggle') {
+      _tplGroupByTag = e.target.checked;
       renderTemplates();
     }
   });

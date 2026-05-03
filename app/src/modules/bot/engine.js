@@ -462,6 +462,45 @@ async function executeStep(db, step, ctx) {
       return true;
     }
 
+    case 'stop_and_start': {
+      // Termina el bot actual y dispara otro bot (mismo contacto, mismo expediente).
+      // No pausa la conversación — el nuevo bot toma el relevo.
+      const targetBotId = Number(c.targetBotId);
+      if (!targetBotId) {
+        _log('error', 'stop_and_start sin targetBotId — terminando bot actual sin lanzar otro');
+        return true;
+      }
+      const targetBot = db.prepare('SELECT * FROM salsbots WHERE id = ?').get(targetBotId);
+      if (!targetBot) {
+        _log('error', `stop_and_start: bot destino #${targetBotId} no existe`);
+        return true;
+      }
+      if (!targetBot.enabled) {
+        _log('info', `stop_and_start: bot destino "${targetBot.name}" está desactivado — no se ejecuta`);
+        return true;
+      }
+      // Hidratar steps
+      try { targetBot.steps = JSON.parse(targetBot.steps || '[]'); } catch { targetBot.steps = []; }
+      const nextDepth = (ctx.chainDepth || 0) + 1;
+      if (nextDepth > MAX_BOT_CHAIN_DEPTH) {
+        _log('error', `stop_and_start: chain depth ${nextDepth} excede el máximo (${MAX_BOT_CHAIN_DEPTH}). Posible bucle — abortando.`);
+        return true;
+      }
+      _log('info', `stop_and_start: terminando bot actual y lanzando "${targetBot.name}" (chain=${nextDepth})`);
+      runAsync(db, targetBot, {
+        convoId:       ctx.convoId,
+        contactId:     ctx.contactId,
+        messageBody:   '',
+        provider:      ctx.provider,
+        integrationId: ctx.integrationId,
+        expedientId:   ctx.expedientId,
+        pipelineId:    ctx.pipelineId,
+        stageId:       ctx.stageId,
+        chainDepth:    nextDepth,
+      });
+      return true;
+    }
+
     case 'condition': {
       // Basic condition: if false, skip remaining steps
       const passes = evaluateCondition(db, c, ctx);

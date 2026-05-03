@@ -539,22 +539,29 @@ function tagColor(tag) {
   return TAG_COLORS[Math.abs(h) % TAG_COLORS.length];
 }
 
-// Color del stage según su kind
+// Color real del stage. Usa stageColor de la BD (configurado en pipelines).
+// Fallback: colores por kind si la BD no devuelve color (compat).
 function stageColor(exp) {
+  if (exp.stageColor) return exp.stageColor;
   if (exp.stageKind === "won") return "#10b981";
   if (exp.stageKind === "lost") return "#ef4444";
-  return "#3b82f6";
+  return "#94a3b8";
 }
 
 function renderExpedientChips(expedients) {
   if (!expedients || !expedients.length) return '<span class="exp-chip-empty">—</span>';
-  return expedients.map((e) => `
-    <span class="exp-chip" title="${escapeHtml(e.name || "")} · $${e.value || 0}">
-      <span class="exp-chip-dot" style="background:${stageColor(e)}"></span>
-      <span class="exp-chip-pipeline">${escapeHtml(e.pipelineName)} ·</span>
-      <span class="exp-chip-stage">${escapeHtml(e.stageName)}</span>
+  return expedients.map((e) => {
+    const sColor = stageColor(e);
+    const pColor = e.pipelineColor || '#64748b';
+    return `
+    <span class="exp-chip" title="${escapeHtml(e.name || "")} · $${e.value || 0}" style="border-left:3px solid ${escapeHtml(pColor)};">
+      <span class="exp-chip-dot" style="background:${escapeHtml(sColor)}"></span>
+      <span class="exp-chip-pipeline" style="color:${escapeHtml(pColor)}">${escapeHtml(e.pipelineName)}</span>
+      <span class="exp-chip-arrow">→</span>
+      <span class="exp-chip-stage" style="background:${escapeHtml(sColor)}1a;color:${escapeHtml(sColor)};border:1px solid ${escapeHtml(sColor)}66">${escapeHtml(e.stageName)}</span>
     </span>
-  `).join("");
+  `;
+  }).join("");
 }
 
 async function loadCustomers() {
@@ -4056,14 +4063,15 @@ async function loadBotTags() {
 }
 
 const SB_STEP_LABELS = {
-  message:   'Enviar mensaje',
-  template:  'Enviar plantilla',
-  timer:     'Temporizador',
-  condition: 'Condición',
-  stage:     'Cambiar etapa',
-  tag:       'Agregar etiqueta',
-  assign:    'Asignar responsable',
-  stop_bot:  'Parar bot',
+  message:        'Enviar mensaje',
+  template:       'Enviar plantilla',
+  timer:          'Temporizador',
+  condition:      'Condición',
+  stage:          'Cambiar etapa',
+  tag:            'Agregar etiqueta',
+  assign:         'Asignar responsable',
+  stop_bot:       'Parar bot',
+  stop_and_start: 'Parar este bot e iniciar otro',
 };
 const SB_TRIGGER_LABELS = {
   keyword:        'Palabra clave',
@@ -4354,6 +4362,10 @@ function stepSummary(step) {
     }
     case 'assign':    return c.assignee || 'Sin asignar';
     case 'stop_bot':  return 'El bot deja de responder a este contacto';
+    case 'stop_and_start': {
+      const target = (sbBots || []).find(b => b.id === Number(c.targetBotId));
+      return target ? `Termina y arranca: ${target.name}` : 'Sin bot destino';
+    }
     default: return '';
   }
 }
@@ -4368,6 +4380,7 @@ function stepIconSvg(type) {
     tag:       `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M3 3h7l7 7-7 7-7-7V3z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>`,
     assign:    `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="7" r="3.5"/><path d="M3 17a7 7 0 0114 0"/></svg>`,
     stop_bot:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>`,
+    stop_and_start: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="3" y="3" width="6" height="6" rx="1"/><polygon points="11 14 17 11 17 17"/><path d="M9 17h2"/></svg>`,
   };
   return icons[type] || '';
 }
@@ -4540,6 +4553,22 @@ function buildStepBody(step) {
           A partir de este paso el bot <strong>dejará de responder</strong> a este contacto.<br>
           Un agente podrá reanudarlo manualmente desde la conversación.
         </p>`;
+    case 'stop_and_start': {
+      // Excluir el bot actual (no se puede auto-disparar)
+      const others = (sbBots || []).filter(b => b.id !== sbCurrentId);
+      const opts = others.length
+        ? others.map(b => `<option value="${b.id}" ${Number(c.targetBotId) === b.id ? 'selected' : ''}>${escHtml(b.name)}</option>`).join('')
+        : '<option value="">— No hay otros bots —</option>';
+      return `
+        <label>Bot a iniciar después</label>
+        <select data-field="targetBotId" data-sid="${sid}">
+          <option value="">— Selecciona un bot —</option>
+          ${opts}
+        </select>
+        <p style="font-size:12px;color:var(--text-muted);margin:8px 0 4px;line-height:1.5">
+          Este bot terminará y se ejecutará el bot seleccionado para el mismo contacto, en su mismo expediente.
+        </p>`;
+    }
     default: return '';
   }
 }
@@ -4568,18 +4597,17 @@ function renderStepsFlow() {
   const flow = document.getElementById('sbStepsFlow');
   if (!flow) return;
 
-  const hasStopBot = sbSteps.some(s => s.type === 'stop_bot');
-  const lastIsStop = sbSteps.length > 0 && sbSteps[sbSteps.length - 1].type === 'stop_bot';
+  const hasStopBot = sbSteps.some(s => s.type === 'stop_bot' || s.type === 'stop_and_start');
+  const lastIsTerminal = sbSteps.length > 0 && (sbSteps[sbSteps.length - 1].type === 'stop_bot' || sbSteps[sbSteps.length - 1].type === 'stop_and_start');
 
-  // Deshabilitar botón "Agregar módulo" si el último paso es stop_bot
-  const addBtn = document.getElementById('sbAddStepBtn');
-  if (addBtn) {
-    addBtn.disabled = lastIsStop;
-    addBtn.title = lastIsStop ? 'No se pueden agregar pasos después de "Parar bot"' : '';
-  }
+  // Ocultar el contenedor entero de "Agregar módulo" si el último paso es
+  // terminal (stop_bot o stop_and_start). No tiene sentido añadir pasos
+  // después de uno que termina la ejecución.
+  const addWrap = document.querySelector('.sb-add-step-wrap');
+  if (addWrap) addWrap.hidden = lastIsTerminal;
 
   flow.innerHTML = sbSteps.map((step, i) => {
-    const prevIsStop = i > 0 && sbSteps[i - 1].type === 'stop_bot';
+    const prevIsStop = i > 0 && (sbSteps[i - 1].type === 'stop_bot' || sbSteps[i - 1].type === 'stop_and_start');
     const insertAfterTarget = i === 0 ? '__top__' : sbSteps[i - 1]._id;
     const showInsert = i === 0 || !prevIsStop;
     return `

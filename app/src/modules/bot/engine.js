@@ -85,8 +85,19 @@ function triggerMessage(db, { convoId, contactId, messageBody, provider, integra
  * triggerPipelineStage — call when an expedient enters a stage.
  * Fires bots with trigger_type = 'pipeline_stage' whose trigger_value = stageId.
  */
-function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId }) {
-  _log('info', `triggerPipelineStage → expediente=${expedientId} contacto=${contactId} etapa=${stageId} (tipo=${typeof stageId})`);
+// Límite de profundidad para encadenamiento entre bots (bot A mueve a etapa →
+// dispara bot B → mueve a etapa → dispara bot C → …). Sin esto, bots con
+// triggers cíclicos hacen bucles infinitos.
+const MAX_BOT_CHAIN_DEPTH = 20;
+
+function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId, chainDepth = 0 }) {
+  _log('info', `triggerPipelineStage → expediente=${expedientId} contacto=${contactId} etapa=${stageId} (tipo=${typeof stageId}, chain=${chainDepth})`);
+
+  if (chainDepth > MAX_BOT_CHAIN_DEPTH) {
+    _log('error', `chain depth ${chainDepth} excede el máximo (${MAX_BOT_CHAIN_DEPTH}). Posible bucle de bots — abortando.`);
+    return;
+  }
+
   const bots = enabledBots(db);
   _log('info', `bots habilitados: ${bots.length} → ${bots.map(b => `${b.name}(trigger=${b.trigger_type},value=${b.trigger_value})`).join(', ')}`);
   for (const bot of bots) {
@@ -116,6 +127,7 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId 
         expedientId,
         pipelineId,
         stageId,
+        chainDepth,  // se propaga al ctx del run; lo usa el step 'stage' para incrementarlo
       });
     }
   }
@@ -380,8 +392,10 @@ async function executeStep(db, step, ctx) {
           'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? LIMIT 1'
         ).get(ctx.contactId, pipelineId);
 
+        let resolvedExpId = null;
         if (exp) {
           expedientSvc.update(db, exp.id, { stageId, pipelineId });
+          resolvedExpId = exp.id;
           _log('info', `expediente ${exp.id} movido a etapa ${stageId}`);
         } else {
           const created = expedientSvc.create(db, {
@@ -389,8 +403,22 @@ async function executeStep(db, step, ctx) {
             pipelineId,
             stageId,
           });
+          resolvedExpId = created.id;
           _log('info', `expediente creado (${created.id}) en pipeline ${pipelineId} etapa ${stageId}`);
         }
+
+        // Encadenar: dispara bots que escuchan la nueva etapa.
+        // Sin esto, una secuencia de bots por etapa solo correría hasta el
+        // primero (caso reportado por el user: bot etapa 1 mueve a 2 pero
+        // bot etapa 2 no se activaba). Pasamos chainDepth+1 para anti-loop.
+        const nextDepth = (ctx.chainDepth || 0) + 1;
+        triggerPipelineStage(db, {
+          expedientId: resolvedExpId,
+          contactId:   ctx.contactId,
+          pipelineId,
+          stageId,
+          chainDepth:  nextDepth,
+        });
       } catch (err) {
         _log('error', `error en step stage: ${err.message}`);
       }

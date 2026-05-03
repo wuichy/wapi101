@@ -5439,9 +5439,46 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .tpl-placeholder-row {
   display: grid;
-  grid-template-columns: 60px 1fr 1.2fr;
+  grid-template-columns: 60px 1fr 1fr 160px;
   gap: 8px;
   align-items: center;
+}
+.tpl-ph-field { font-size: 13px; }
+
+/* Modal "Enviar plantilla" */
+.send-tpl-meta {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.send-tpl-name { margin-bottom: 8px; color: #0f172a; }
+.send-tpl-name .tpl-hint-inline { margin-left: 6px; font-weight: 400; }
+.send-tpl-body {
+  font-size: 13px;
+  color: #475569;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.send-tpl-vars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.send-tpl-var-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 1.5fr;
+  gap: 8px;
+  align-items: center;
+}
+.send-tpl-var-label { font-size: 13px; color: #64748b; }
+.send-tpl-var-auto {
+  font-size: 13px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  padding: 6px 10px;
+  border-radius: 6px;
 }
 .tpl-placeholder-num {
   text-align: center;

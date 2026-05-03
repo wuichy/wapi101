@@ -1,8 +1,16 @@
 const { Router } = require('express');
+const path = require('path');
+const fs = require('fs');
 const svc = require('./service');
 
 module.exports = function templatesRoutes(db) {
   const r = Router();
+  // Carpeta donde guardamos el archivo del header (público vía express.static
+  // si el server lo monta como /uploads). Usamos el mismo dir que UPLOADS_DIR.
+  const uploadsDir = path.resolve(process.env.UPLOADS_DIR || './data/uploads');
+  const tplMediaDir = path.join(uploadsDir, 'template-media');
+  if (!fs.existsSync(tplMediaDir)) fs.mkdirSync(tplMediaDir, { recursive: true });
+  const APP_BASE_URL = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
 
   r.get('/', (req, res) => {
     try {
@@ -78,10 +86,25 @@ module.exports = function templatesRoutes(db) {
         });
       }
 
-      const handle = await svc.uploadHeaderToMeta(db, buffer, mimetype);
-      svc.update(db, id, { headerType: rule.format, headerMediaHandle: handle });
+      // Guarda el archivo localmente para poder referenciarlo al ENVIAR la
+      // plantilla (Meta acepta `link` en el send con URL pública).
+      const ext = mimetype === 'image/jpeg' ? 'jpg'
+                : mimetype === 'image/png'  ? 'png'
+                : mimetype === 'video/mp4'  ? 'mp4'
+                : mimetype === 'video/3gpp' ? '3gp'
+                : 'pdf';
+      const filename = `tpl-${id}-${Date.now()}.${ext}`;
+      fs.writeFileSync(path.join(tplMediaDir, filename), buffer);
+      const publicUrl = `${APP_BASE_URL}/uploads/template-media/${filename}`;
 
-      res.json({ ok: true, handle, headerType: rule.format });
+      const handle = await svc.uploadHeaderToMeta(db, buffer, mimetype);
+      svc.update(db, id, {
+        headerType: rule.format,
+        headerMediaHandle: handle,
+        headerMediaUrl: publicUrl,
+      });
+
+      res.json({ ok: true, handle, headerType: rule.format, headerMediaUrl: publicUrl });
     } catch (e) {
       res.status(400).json({ error: e.message });
     }

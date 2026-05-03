@@ -1013,6 +1013,29 @@ Ana, , ana@hotmail.com, 5551112222</pre>
           </footer>
         </div>
       </div>
+
+      <!-- ─── Modal: Enviar plantilla (wa_api con variables) ─── -->
+      <div class="modal" id="sendTplModal" hidden>
+        <div class="modal-backdrop" id="sendTplModalBackdrop"></div>
+        <div class="modal-card modal-card--md">
+          <header class="modal-header">
+            <h3>Enviar plantilla</h3>
+            <button class="icon-btn" id="sendTplModalClose" aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="modal-body">
+            <div class="send-tpl-meta" id="sendTplMeta"><!-- nombre + body preview --></div>
+            <div class="send-tpl-vars" id="sendTplVars"><!-- una fila por placeholder --></div>
+            <p class="tpl-error-msg" id="sendTplError" hidden></p>
+          </div>
+          <footer class="modal-footer">
+            <button class="btn btn--secondary" id="sendTplCancel">Cancelar</button>
+            <button class="btn btn--primary" id="sendTplGo">Enviar</button>
+          </footer>
+        </div>
+      </div>
+
       <!-- ─── VISTA: INTEGRACIONES ─── -->
       <section class="view view-integrations" data-view="integraciones" hidden>
         <div class="integrations-intro">

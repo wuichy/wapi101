@@ -198,6 +198,13 @@ app.get('/chat', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Sirve archivos subidos (media de plantillas, etc.) bajo /uploads.
+// Cache normal — los archivos no cambian (cada upload genera nombre único).
+app.use('/uploads', express.static(config.uploadsDir, {
+  maxAge: '1d',
+  index: false,
+}));
+
 // Estáticos — HTML/CSS/JS sin caché agresivo (always revalidate via ETag).
 // Imágenes/fonts mantienen el comportamiento default de express.static.
 // Esto evita que Safari/Cloudflare retengan versiones viejas tras un deploy:

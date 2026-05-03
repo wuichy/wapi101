@@ -19,10 +19,9 @@ async function sendWhatsAppLite(db, convo, text) {
   return manager.sendText(convo.integrationId, convo.externalId, text);
 }
 
-async function sendWhatsApp(db, convo, text) {
+function _getWAClientCreds(db, convo) {
   let phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   let accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
-
   if (convo.integrationId) {
     const row = db.prepare('SELECT credentials_enc FROM integrations WHERE id = ?').get(convo.integrationId);
     if (row?.credentials_enc) {
@@ -31,9 +30,12 @@ async function sendWhatsApp(db, convo, text) {
       if (creds.accessToken)   accessToken   = creds.accessToken;
     }
   }
-
   if (!phoneNumberId || !accessToken) throw new Error('No hay credenciales de WhatsApp configuradas');
+  return { phoneNumberId, accessToken };
+}
 
+async function sendWhatsApp(db, convo, text) {
+  const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
   const res = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
     method:  'POST',
@@ -45,10 +47,103 @@ async function sendWhatsApp(db, convo, text) {
       text: { body: text },
     }),
   });
-
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
   return data.messages?.[0]?.id || null;
+}
+
+// Resuelve el valor de un placeholder leyendo del contacto según contactField.
+// Si el campo no aplica o no hay dato, usa manualValues[index] como fallback.
+function _resolvePlaceholder(ph, contact, manualValues, idx) {
+  if (ph?.contactField) {
+    if (ph.contactField === 'first_name')  return contact?.first_name || '';
+    if (ph.contactField === 'last_name')   return contact?.last_name || '';
+    if (ph.contactField === 'full_name')   return [contact?.first_name, contact?.last_name].filter(Boolean).join(' ');
+    if (ph.contactField === 'phone')       return contact?.phone || '';
+    if (ph.contactField === 'email')       return contact?.email || '';
+  }
+  // Manual o fallback
+  return manualValues?.[idx] ?? '';
+}
+
+// Envía una plantilla wa_api APROBADA al cliente.
+//   templateId    → id en message_templates de la plantilla a enviar
+//   manualValues  → array (index = placeholder N-1) con valores para los Manual
+async function sendWhatsAppTemplate(db, convo, templateId, manualValues = []) {
+  const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
+
+  // Cargar plantilla con sus campos parseados (buttons, bodyPlaceholders).
+  const tplSvc = require('../templates/service');
+  const tpl = tplSvc.getById(db, Number(templateId));
+  if (!tpl) throw new Error('Plantilla no encontrada');
+  if (tpl.type !== 'wa_api') throw new Error('Solo plantillas WhatsApp API se envían como template');
+  if (tpl.waStatus !== 'approved') throw new Error(`Plantilla no aprobada por Meta (status: ${tpl.waStatus})`);
+
+  // Cargar el contacto para sustituir variables mapeadas.
+  const contact = db.prepare('SELECT id, first_name, last_name, phone, email FROM contacts WHERE id = ?').get(convo.contactId || convo.contact_id);
+
+  const components = [];
+
+  // HEADER con media — necesitamos un link público (preferimos headerMediaUrl
+  // que generamos al subir el archivo). Si no hay, error.
+  if (tpl.headerType === 'IMAGE' || tpl.headerType === 'VIDEO' || tpl.headerType === 'DOCUMENT') {
+    if (!tpl.headerMediaUrl) {
+      throw new Error('Plantilla con header media pero sin URL pública guardada — re-sube el archivo');
+    }
+    const fmtKey = tpl.headerType.toLowerCase(); // image | video | document
+    const param = { type: fmtKey };
+    param[fmtKey] = { link: tpl.headerMediaUrl };
+    components.push({ type: 'header', parameters: [param] });
+  }
+
+  // BODY — si tiene {{N}}, sustituir.
+  const bodyText = tpl.body || '';
+  const varNums = [...bodyText.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
+  if (varNums.length) {
+    const max = Math.max(...varNums);
+    const params = [];
+    for (let i = 0; i < max; i++) {
+      const ph = Array.isArray(tpl.bodyPlaceholders) ? tpl.bodyPlaceholders[i] : null;
+      const value = _resolvePlaceholder(ph, contact, manualValues, i);
+      if (!value) {
+        throw new Error(`Falta el valor para placeholder {{${i + 1}}} (${ph?.label || 'sin nombre'}). ${ph?.contactField ? 'El contacto no tiene ese campo.' : 'Es Manual — provee el valor al enviar.'}`);
+      }
+      params.push({ type: 'text', text: String(value) });
+    }
+    components.push({ type: 'body', parameters: params });
+  }
+
+  // BUTTONS — si la plantilla tiene URL buttons con variables {{N}} habría que
+  // pasar parameters. Por ahora soportamos botones sin variables (fijos), así
+  // que no se incluyen en components al enviar (Meta usa los del template).
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to: convo.externalId,
+    type: 'template',
+    template: {
+      name: tpl.name,
+      language: { code: tpl.language || 'es_MX' },
+      components,
+    },
+  };
+
+  const version = process.env.META_GRAPH_VERSION || 'v22.0';
+  const res = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    const e = data.error || {};
+    const msg = [e.message, e.error_user_msg, e.error_data?.details].filter(Boolean).join(' — ');
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  return { externalId: data.messages?.[0]?.id || null, renderedBody: bodyText.replace(/\{\{(\d+)\}\}/g, (_, n) => {
+    const ph = tpl.bodyPlaceholders?.[Number(n) - 1];
+    return _resolvePlaceholder(ph, contact, manualValues, Number(n) - 1);
+  }) };
 }
 
 async function sendMessenger(db, convo, text) {
@@ -105,4 +200,4 @@ function getIntegrationCreds(db, integrationId) {
   return decryptJson(row.credentials_enc) || null;
 }
 
-module.exports = { sendMessage, sendWhatsApp, sendWhatsAppLite, sendMessenger, sendInstagram, sendTelegram, getIntegrationCreds };
+module.exports = { sendMessage, sendWhatsApp, sendWhatsAppTemplate, sendWhatsAppLite, sendMessenger, sendInstagram, sendTelegram, getIntegrationCreds };

@@ -6412,15 +6412,26 @@ function _renderTplPickerList(query) {
     </button>`;
   }).join('');
 
-  // Click to insert
+  // Click — comportamiento depende del tipo de plantilla
   list.querySelectorAll('.rh-tpl-item:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => {
       const tpl = _tplItems.find(t => t.id === Number(btn.dataset.tplId));
-      if (!tpl || !_tplPickerCtx?.textarea) return;
+      if (!tpl || !_tplPickerCtx) return;
+
+      if (tpl.type === 'wa_api') {
+        // wa_api → abrir modal "Enviar plantilla" (auto-llena del contacto, pide manuales)
+        document.getElementById('rhTplPicker').hidden = true;
+        openSendTemplateModal(tpl, ACTIVE_CONVO_ID);
+        return;
+      }
+
+      // free_form → copiar texto al textarea (comportamiento clásico)
       const ta = _tplPickerCtx.textarea;
-      ta.value = tpl.body || '';
-      ta.dispatchEvent(new Event('input'));
-      ta.focus();
+      if (ta) {
+        ta.value = tpl.body || '';
+        ta.dispatchEvent(new Event('input'));
+        ta.focus();
+      }
       document.getElementById('rhTplPicker').hidden = true;
       _tplPickerCtx = null;
     });
@@ -6696,11 +6707,21 @@ function renderTplPlaceholdersBox() {
   list.innerHTML = _tplDraftPlaceholders.map((ph, i) => {
     const label   = (ph.label   || '').replace(/"/g, '&quot;');
     const example = (ph.example || '').replace(/"/g, '&quot;');
+    const cf      = ph.contactField || '';
+    const opt = (val, lbl) => `<option value="${val}"${cf===val?' selected':''}>${lbl}</option>`;
     return `
       <div class="tpl-placeholder-row" data-i="${i}">
         <span class="tpl-placeholder-num">{{${i + 1}}}</span>
         <input class="int-input tpl-ph-label"   data-i="${i}" data-field="label"   value="${label}"   placeholder="Nombre del placeholder (ej: Nombre)" maxlength="40" />
         <input class="int-input tpl-ph-example" data-i="${i}" data-field="example" value="${example}" placeholder="Valor de ejemplo (ej: Luis)" maxlength="60" />
+        <select class="int-input tpl-ph-field" data-i="${i}" data-field="contactField" title="¿De qué campo del contacto se llena al enviar?">
+          ${opt('', '— Manual —')}
+          ${opt('first_name', 'Nombre')}
+          ${opt('last_name', 'Apellido')}
+          ${opt('full_name', 'Nombre completo')}
+          ${opt('phone', 'Teléfono')}
+          ${opt('email', 'Email')}
+        </select>
       </div>
     `;
   }).join('');
@@ -6843,6 +6864,121 @@ function _readFileAsBase64(file) {
   });
 }
 
+// ─── Modal "Enviar plantilla" (wa_api con variables) ───────────────────
+let _sendTplCtx = null; // { tpl, convoId }
+
+function _resolvePlaceholderForPreview(ph, contact) {
+  if (!ph?.contactField) return null;
+  if (ph.contactField === 'first_name')  return contact?.contactName?.split(' ')[0] || contact?.first_name || '';
+  if (ph.contactField === 'last_name')   return (contact?.contactName?.split(' ').slice(1).join(' ')) || contact?.last_name || '';
+  if (ph.contactField === 'full_name')   return contact?.contactName || '';
+  if (ph.contactField === 'phone')       return contact?.contactPhone || contact?.phone || '';
+  if (ph.contactField === 'email')       return contact?.email || '';
+  return null;
+}
+
+function openSendTemplateModal(tpl, convoId) {
+  _sendTplCtx = { tpl, convoId };
+  const modal = document.getElementById('sendTplModal');
+  const meta  = document.getElementById('sendTplMeta');
+  const vars  = document.getElementById('sendTplVars');
+  const err   = document.getElementById('sendTplError');
+  if (!modal || !meta || !vars) return;
+  if (err) { err.hidden = true; err.textContent = ''; }
+
+  const convo = CONVERSATIONS.find(c => c.id === convoId);
+
+  // Header con preview de body + nombre
+  meta.innerHTML = `
+    <div class="send-tpl-name"><strong>${escapeHtml(tpl.displayName || tpl.name)}</strong>
+      <span class="tpl-hint-inline">→ ${escapeHtml(convo?.contactName || convo?.contactPhone || 'contacto')}</span></div>
+    <div class="send-tpl-body">${escapeHtml(tpl.body || '')}</div>
+  `;
+
+  const phs = Array.isArray(tpl.bodyPlaceholders) ? tpl.bodyPlaceholders : [];
+  const varNums = [...(tpl.body || '').matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
+  const max = varNums.length ? Math.max(...varNums) : 0;
+
+  if (!max) {
+    vars.innerHTML = '<p class="tpl-hint-inline">Esta plantilla no tiene variables — se envía tal cual.</p>';
+  } else {
+    const rows = [];
+    for (let i = 0; i < max; i++) {
+      const ph = phs[i] || {};
+      const auto = _resolvePlaceholderForPreview(ph, convo);
+      if (auto !== null && auto !== '') {
+        // Mapeado y con valor — solo mostrar
+        rows.push(`
+          <div class="send-tpl-var-row">
+            <span class="tpl-placeholder-num">{{${i + 1}}}</span>
+            <span class="send-tpl-var-label">${escapeHtml(ph.label || '')}</span>
+            <span class="send-tpl-var-auto">${escapeHtml(auto)} <em class="tpl-hint-inline">(auto del contacto)</em></span>
+          </div>
+        `);
+      } else {
+        // Manual o sin dato → input para llenar ahora
+        const placeholder = ph.label || ph.example || `Valor para {{${i + 1}}}`;
+        rows.push(`
+          <div class="send-tpl-var-row">
+            <span class="tpl-placeholder-num">{{${i + 1}}}</span>
+            <span class="send-tpl-var-label">${escapeHtml(ph.label || '')}</span>
+            <input class="int-input send-tpl-var-input" data-i="${i}" value="${escapeHtml(ph.example || '')}" placeholder="${escapeHtml(placeholder)}" />
+          </div>
+        `);
+      }
+    }
+    vars.innerHTML = rows.join('');
+  }
+
+  modal.hidden = false;
+}
+
+function closeSendTemplateModal() {
+  const modal = document.getElementById('sendTplModal');
+  if (modal) modal.hidden = true;
+  _sendTplCtx = null;
+}
+
+async function executeSendTemplate() {
+  const ctx = _sendTplCtx;
+  const errEl = document.getElementById('sendTplError');
+  if (!ctx) return;
+
+  // Recolectar valores manuales (los que tienen input)
+  const manualValues = [];
+  document.querySelectorAll('#sendTplVars .send-tpl-var-input').forEach(inp => {
+    const i = Number(inp.dataset.i);
+    manualValues[i] = inp.value.trim();
+  });
+
+  // Validar: no debe haber inputs vacíos
+  for (let i = 0; i < manualValues.length; i++) {
+    if (manualValues[i] !== undefined && manualValues[i] === '') {
+      if (errEl) { errEl.textContent = `Falta valor para {{${i + 1}}}`; errEl.hidden = false; }
+      return;
+    }
+  }
+
+  if (errEl) errEl.hidden = true;
+  const btn = document.getElementById('sendTplGo');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    await api('POST', `/api/conversations/${ctx.convoId}/send-template`, {
+      templateId: ctx.tpl.id,
+      manualValues,
+    });
+    closeSendTemplateModal();
+    toast('Plantilla enviada', 'success');
+    // Recargar mensajes para que aparezca el outgoing
+    if (typeof loadMessages === 'function') loadMessages(ctx.convoId);
+    if (typeof loadConversations === 'function') loadConversations();
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message || 'Error al enviar'; errEl.hidden = false; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; }
+  }
+}
+
 async function submitTplToMeta(id) {
   try {
     toast('Enviando a Meta…', 'info');
@@ -6903,6 +7039,12 @@ function setupTemplates() {
 
   // Save
   document.getElementById('tplModalSave')?.addEventListener('click', saveTpl);
+
+  // Modal "Enviar plantilla"
+  document.getElementById('sendTplModalClose')?.addEventListener('click', closeSendTemplateModal);
+  document.getElementById('sendTplCancel')?.addEventListener('click', closeSendTemplateModal);
+  document.getElementById('sendTplModalBackdrop')?.addEventListener('click', closeSendTemplateModal);
+  document.getElementById('sendTplGo')?.addEventListener('click', executeSendTemplate);
 
   // Type radio toggles WA fields
   document.querySelectorAll('input[name="tplType"]').forEach(r => {
@@ -7055,6 +7197,14 @@ function setupTemplates() {
     const field = e.target.dataset.field;
     if (field === 'label' || field === 'example') {
       _tplDraftPlaceholders[i][field] = e.target.value;
+    }
+  });
+  // Cambio de mapping (select)
+  document.getElementById('tplPlaceholdersList')?.addEventListener('change', (e) => {
+    const i = Number(e.target.dataset.i);
+    if (Number.isNaN(i) || !_tplDraftPlaceholders[i]) return;
+    if (e.target.dataset.field === 'contactField') {
+      _tplDraftPlaceholders[i].contactField = e.target.value;
     }
   });
 

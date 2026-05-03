@@ -249,12 +249,21 @@ function renderChatList() {
           ? `<button class="rh-chat-hide-btn rh-chat-hide-btn--unhide" data-personal-action="unhide" data-id="${c.id}" title="Desocultar">↩</button>`
           : `<button class="rh-chat-hide-btn" data-personal-action="hide" data-id="${c.id}" title="Ocultar (solo de tu vista)">×</button>`)
       : '';
+    const unread = c.unreadCount > 0;
+    const unreadBadge = unread
+      ? (c.unreadCount > 1
+          ? `<span class="rh-chat-unread-count">${c.unreadCount > 99 ? '99+' : c.unreadCount}</span>`
+          : `<span class="rh-chat-unread-dot"></span>`)
+      : '';
     return `
-    <div role="button" tabindex="0" class="rh-chat-item ${c.id === ACTIVE_CONVO_ID ? "rh-active" : ""}" data-id="${c.id}">
+    <div role="button" tabindex="0" class="rh-chat-item ${c.id === ACTIVE_CONVO_ID ? "rh-active" : ""} ${unread ? 'is-unread' : ''}" data-id="${c.id}">
       ${personalAction}
       <div class="rh-chat-item-top">
         <strong class="rh-chat-name">${escapeHtml(c.name || c.contactName || '—')}</strong>
-        <span class="rh-chat-time">${escapeHtml(c.time || '')}</span>
+        <span class="rh-chat-meta-right">
+          <span class="rh-chat-time">${escapeHtml(c.time || '')}</span>
+          ${unreadBadge}
+        </span>
       </div>
       <p class="rh-chat-phone">${escapeHtml(c.phone || c.contactPhone || '')}</p>
       <p class="rh-chat-preview">${escapeHtml(c.lastMessage || '')}</p>
@@ -266,7 +275,6 @@ function renderChatList() {
           </span>
         </span>
         ${wa24Html(c.provider, c.lastIncomingAt)}
-        ${c.unreadCount ? `<span class="rh-chat-unread-dot"></span>` : ""}
       </div>
     </div>
   `;

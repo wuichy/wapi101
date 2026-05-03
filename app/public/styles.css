@@ -2830,15 +2830,42 @@ body[data-view-active="chats"] .main { background: #f2f2f7; }
   border: 1px solid #d3e6b8;
   letter-spacing: 0.02em;
 }
-.rh-chat-unread-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--rh-brand);
+.rh-chat-meta-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
-  align-self: center;
-  margin-left: 6px;
 }
+.rh-chat-unread-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--rh-brand, #3b82f6);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, .15);
+}
+.rh-chat-unread-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--rh-brand, #3b82f6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1;
+}
+/* Tipografía más viva en chats no leídos (estilo WhatsApp/iOS) */
+.rh-chat-item.is-unread .rh-chat-name { font-weight: 700; }
+.rh-chat-item.is-unread .rh-chat-time {
+  color: var(--rh-brand, #3b82f6);
+  font-weight: 600;
+}
+.rh-chat-item.is-unread .rh-chat-preview { color: var(--rh-text); font-weight: 500; }
 .rh-pipeline-stage {
   display: inline-block;
   padding: 2px 8px;

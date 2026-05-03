@@ -25,6 +25,16 @@ module.exports = function templatesRoutes(db) {
     res.json(tmpl);
   });
 
+  // Reorder manual: body { orderedIds: [3,1,2,...] }
+  r.post('/reorder', (req, res) => {
+    try {
+      const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : null;
+      if (!orderedIds) return res.status(400).json({ error: 'orderedIds requerido (array)' });
+      svc.reorder(db, orderedIds);
+      res.json({ ok: true });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  });
+
   r.post('/', (req, res) => {
     try {
       const tmpl = svc.create(db, req.body);

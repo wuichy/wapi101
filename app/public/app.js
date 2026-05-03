@@ -8771,7 +8771,8 @@ async function loadTemplates() {
 // State para etiquetas y ordenamiento (mismo patrón que bots)
 let _tplTags = [];
 let _tplTagFilter = null;       // null = todas, number = id de tag
-let _tplSort = 'date_desc';     // date_desc | date_asc | name_asc | name_desc
+let _tplSort = (() => { try { return localStorage.getItem('tplSort') || 'manual'; } catch { return 'manual'; } })();
+function _persistTplSort(v) { try { localStorage.setItem('tplSort', v); } catch {} }
 let _tplGroupByTag = false;     // si true, agrupa por etiqueta (sort se aplica dentro de cada grupo)
 
 async function loadTemplateTags() {
@@ -8795,6 +8796,7 @@ function renderTplTagFilters() {
     <button type="button" class="bot-tag-filter ${allActive}" data-tpl-tag-filter="">Todas</button>
     ${tagPills}
     <select id="tplSortSelect" class="bot-sort-select" title="Ordenar plantillas">
+      <option value="manual"${_tplSort === 'manual' ? ' selected' : ''}>Manual (arrastrar)</option>
       <option value="date_desc"${_tplSort === 'date_desc' ? ' selected' : ''}>Más nueva</option>
       <option value="date_asc"${_tplSort === 'date_asc' ? ' selected' : ''}>Más vieja</option>
       <option value="name_asc"${_tplSort === 'name_asc' ? ' selected' : ''}>A → Z</option>
@@ -8819,6 +8821,7 @@ function tplRowTagsHtml(tpl) {
 function _applyTplSort(arr) {
   const a = [...arr];
   switch (_tplSort) {
+    case 'manual':    return a; // respetar el orden del backend (sort_order ASC)
     case 'date_asc':  a.sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0)); break;
     case 'name_asc':  a.sort((x, y) => (x.displayName || x.name || '').localeCompare(y.displayName || y.name || '')); break;
     case 'name_desc': a.sort((x, y) => (y.displayName || y.name || '').localeCompare(x.displayName || x.name || '')); break;
@@ -8893,6 +8896,10 @@ function renderTemplates() {
     const card = document.createElement('div');
     card.className = 'tpl-card';
     card.dataset.id = t.id;
+    if (_tplSort === 'manual') {
+      card.draggable = true;
+      card.classList.add('is-draggable');
+    }
     const isWa = t.type === 'wa_api';
     const statusLabel = { draft: 'Borrador', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
     const rejectionInfo = (isWa && t.waStatus === 'rejected' && t.waRejectedReason)
@@ -8905,8 +8912,17 @@ function renderTemplates() {
           t.usedByBots.map(b => `<button type="button" class="tpl-card-bot-pill" data-go-to-bot="${b.id}" title="Abrir bot">${escHtml(b.name)}</button>`).join('')
         }</div>`
       : '';
+    // Drag handle abajo del círculo del icono — solo visible en modo manual
+    const dragHandle = _tplSort === 'manual'
+      ? `<span class="tpl-card-drag-handle" title="Arrastra para reordenar">
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.5"/><circle cx="7.5" cy="2.5" r="1.5"/><circle cx="2.5" cy="7" r="1.5"/><circle cx="7.5" cy="7" r="1.5"/><circle cx="2.5" cy="11.5" r="1.5"/><circle cx="7.5" cy="11.5" r="1.5"/></svg>
+        </span>`
+      : '';
     card.innerHTML = `
-      <div class="tpl-card-icon ${isWa ? 'wa' : 'free'}">${isWa ? '📱' : '💬'}</div>
+      <div class="tpl-card-icon-wrap">
+        <div class="tpl-card-icon ${isWa ? 'wa' : 'free'}">${isWa ? '📱' : '💬'}</div>
+        ${dragHandle}
+      </div>
       <div class="tpl-card-body">
         <div class="tpl-card-name">${escHtml(t.displayName || t.name)} ${tplRowTagsHtml(t)}</div>
         <div class="tpl-card-meta">${isWa ? escHtml(t.category) + ' · ' + escHtml(t.language) + ' · ' : ''}
@@ -9668,6 +9684,54 @@ function setupTemplates() {
     });
   });
 
+  // ─── Drag & drop manual de plantillas (solo cuando _tplSort === 'manual') ───
+  let _tdDragId = null;
+  const tplListEl = document.getElementById('tplList');
+  if (tplListEl && !tplListEl._tdSetup) {
+    tplListEl._tdSetup = true;
+    tplListEl.addEventListener('dragstart', (e) => {
+      const card = e.target.closest('.tpl-card[draggable]');
+      if (!card) return;
+      _tdDragId = Number(card.dataset.id);
+      card.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(_tdDragId));
+    });
+    tplListEl.addEventListener('dragend', () => {
+      _tdDragId = null;
+      tplListEl.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('is-dragging', 'drag-over'));
+    });
+    tplListEl.addEventListener('dragover', (e) => {
+      if (!_tdDragId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const card = e.target.closest('.tpl-card');
+      tplListEl.querySelectorAll('.tpl-card').forEach(c => c.classList.toggle('drag-over', c === card && Number(c.dataset.id) !== _tdDragId));
+    });
+    tplListEl.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      if (!_tdDragId) return;
+      const target = e.target.closest('.tpl-card');
+      if (!target) return;
+      const targetId = Number(target.dataset.id);
+      if (targetId === _tdDragId) return;
+      // Reordenar _tplItems: mover dragId justo antes de targetId
+      const fromIdx = _tplItems.findIndex(t => t.id === _tdDragId);
+      const toIdx   = _tplItems.findIndex(t => t.id === targetId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [moved] = _tplItems.splice(fromIdx, 1);
+      const insertAt = _tplItems.findIndex(t => t.id === targetId);
+      _tplItems.splice(insertAt, 0, moved);
+      renderTemplates();
+      try {
+        await api('POST', '/api/templates/reorder', { orderedIds: _tplItems.map(t => t.id) });
+      } catch (err) {
+        toast(err.message || 'Error guardando orden', 'error');
+        await loadTemplates();
+      }
+    });
+  }
+
   // Topbar search drives template filter when on plantillas view
   let _tplSearchDebounce;
   document.getElementById('topbarSearchInput')?.addEventListener('input', (e) => {
@@ -9715,6 +9779,7 @@ function setupTemplates() {
   document.addEventListener('change', (e) => {
     if (e.target.id === 'tplSortSelect') {
       _tplSort = e.target.value;
+      _persistTplSort(_tplSort);
       renderTemplates();
     }
     if (e.target.id === 'tplGroupByTagToggle') {

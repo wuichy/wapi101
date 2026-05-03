@@ -195,7 +195,11 @@ function _buildBotsByTplMap(db) {
 function list(db, { type } = {}) {
   const where = type ? 'WHERE type = ?' : '';
   const params = type ? [type] : [];
-  const rows = db.prepare(`SELECT * FROM message_templates ${where} ORDER BY created_at DESC`).all(...params);
+  // Orden por sort_order (manual) si está set; los nulos al final por created_at desc.
+  const rows = db.prepare(`
+    SELECT * FROM message_templates ${where}
+    ORDER BY (sort_order IS NULL), sort_order ASC, created_at DESC
+  `).all(...params);
   // Cargar tags asignados (en una sola query) para no hacer N+1
   const tagsByTpl = {};
   try {
@@ -398,4 +402,13 @@ function row(r) {
   };
 }
 
-module.exports = { list, getById, create, update, remove, setTags, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta };
+// Persiste un orden manual de plantillas. Recibe array de ids en el orden deseado.
+function reorder(db, orderedIds) {
+  const stmt = db.prepare('UPDATE message_templates SET sort_order = ? WHERE id = ?');
+  const trx = db.transaction(() => {
+    orderedIds.forEach((id, idx) => stmt.run(idx, Number(id)));
+  });
+  trx();
+}
+
+module.exports = { list, getById, create, update, remove, reorder, setTags, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta };

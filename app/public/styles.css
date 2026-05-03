@@ -3301,7 +3301,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .bot-list-row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 90px 70px 40px;
+  grid-template-columns: 1.4fr 1fr 90px 70px 76px;
   column-gap: 16px;
   padding: 14px 16px;
   align-items: center;
@@ -3316,6 +3316,8 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .bot-row-date { font-size: 11px; color: var(--text-muted); }
 .bot-row-trigger { font-size: 12px; color: var(--text-muted); }
 .bot-row-steps { font-size: 12px; }
+.bot-row-actions { display: inline-flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.sb-clone-btn:hover { color: var(--accent); }
 
 /* ── Inline toggle ── */
 .sb-toggle {

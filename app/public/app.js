@@ -4013,7 +4013,10 @@ function renderBotList() {
               <span class="sb-thumb"></span>
             </label>
           </div>
-          <div>
+          <div class="bot-row-actions">
+            <button class="icon-btn icon-btn--ghost sb-clone-btn" data-id="${b.id}" aria-label="Clonar bot" title="Clonar bot">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M3 13V5a2 2 0 0 1 2-2h8"/></svg>
+            </button>
             <button class="icon-btn icon-btn--ghost sb-del-btn" data-id="${b.id}" aria-label="Eliminar">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><polyline points="3 6 17 6"/><path d="M8 6V4h4v2"/><rect x="5" y="6" width="10" height="11" rx="1"/><line x1="8" y1="9" x2="8" y2="15"/><line x1="12" y1="9" x2="12" y2="15"/></svg>
             </button>
@@ -4445,14 +4448,38 @@ function setupBot() {
 
   // Open existing bot on row click
   document.getElementById('botList')?.addEventListener('click', (e) => {
-    // No abrir el builder si el usuario clickeó el botón de eliminar o el toggle
+    // No abrir el builder si el usuario clickeó el botón de eliminar, clonar o el toggle
     if (e.target.closest('.sb-del-btn')) return;
+    if (e.target.closest('.sb-clone-btn')) return;
     if (e.target.closest('.sb-toggle')) return;
     const row = e.target.closest('.bot-list-row');
     if (!row) return;
     const id = Number(row.dataset.botId);
     const bot = sbBots.find(b => b.id === id);
     if (bot) openBotBuilder(bot);
+  });
+
+  // Clone bot (list)
+  document.getElementById('botList')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.sb-clone-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    const id = Number(btn.dataset.id);
+    const original = sbBots.find(b => b.id === id);
+    if (!original) return;
+    try {
+      const payload = {
+        name: `${original.name} (copia)`,
+        trigger_type: original.trigger_type,
+        trigger_value: original.trigger_value || null,
+        steps: JSON.parse(JSON.stringify(original.steps || [])),
+        enabled: 0,
+        tagIds: Array.isArray(original.tags) ? original.tags.map(t => t.id) : [],
+      };
+      await api('POST', '/api/bot', payload);
+      await loadSalsbots();
+      toast(`Bot "${original.name}" clonado (desactivado)`, 'success');
+    } catch (err) { toast(err.message, 'error'); }
   });
 
   // Enable toggle inline (list)
@@ -6702,6 +6729,30 @@ function _rhToast(msg, type = 'success') {
 window.PERSONAL_MODE = (window.location.pathname === '/chat' || window.location.pathname === '/chat/');
 window.PERSONAL_SHOW_HIDDEN = false;
 
+// Bloquea sugerencias de iCloud Keychain / contactos iOS / managers de password
+// en todos los inputs y textareas. Safari ignora `autocomplete="off"` para campos
+// que parecen "usuario/email/teléfono", así que reforzamos con atributos data-*
+// y un autocomplete poco común que las heurísticas no reconocen.
+function suppressAutofill(el) {
+  if (!el || el._antiAutofill) return;
+  el._antiAutofill = true;
+  // No tocar los password reales (login.html los necesita)
+  if (el.type === 'password') return;
+  el.setAttribute('autocomplete', 'off');
+  el.setAttribute('autocorrect', 'off');
+  el.setAttribute('autocapitalize', 'off');
+  el.setAttribute('spellcheck', 'false');
+  el.setAttribute('data-1p-ignore', 'true');
+  el.setAttribute('data-lpignore', 'true');
+  el.setAttribute('data-bwignore', 'true');
+  el.setAttribute('data-form-type', 'other');
+  el.setAttribute('aria-autocomplete', 'none');
+}
+function applyAntiAutofill(root = document) {
+  root.querySelectorAll('input, textarea').forEach(suppressAutofill);
+  root.querySelectorAll('form').forEach(f => f.setAttribute('autocomplete', 'off'));
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Redirigir a login si no hay token
   if (!getToken()) {
@@ -6789,6 +6840,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   document.getElementById('navCacheBtn')?.addEventListener('click', clearCacheAndReload);
   document.getElementById('navBrandCacheBtn')?.addEventListener('click', clearCacheAndReload);
+
+  // Bloquear autofill/sugerencias del navegador en inputs estáticos y dinámicos
+  applyAntiAutofill();
+  try {
+    const _afObserver = new MutationObserver(muts => {
+      for (const m of muts) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.matches?.('input, textarea, form')) suppressAutofill(node);
+          if (node.querySelectorAll) applyAntiAutofill(node);
+        }
+      }
+    });
+    _afObserver.observe(document.body, { childList: true, subtree: true });
+  } catch (_) {}
 
   setupTrash();
   setupNav();

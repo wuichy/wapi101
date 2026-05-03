@@ -27,7 +27,20 @@ function hydrate(db, row) {
 }
 
 function list(db) {
-  return db.prepare('SELECT * FROM salsbots ORDER BY created_at DESC').all().map(r => hydrate(db, r));
+  // Orden por sort_order si está set; los nulos al final con desempate por created_at DESC.
+  return db.prepare(`
+    SELECT * FROM salsbots
+    ORDER BY (sort_order IS NULL), sort_order ASC, created_at DESC
+  `).all().map(r => hydrate(db, r));
+}
+
+// Persiste un orden manual de bots. Recibe array de ids en el orden deseado.
+function reorder(db, orderedIds) {
+  const stmt = db.prepare('UPDATE salsbots SET sort_order = ? WHERE id = ?');
+  const trx = db.transaction(() => {
+    orderedIds.forEach((id, idx) => stmt.run(idx, Number(id)));
+  });
+  trx();
 }
 
 function getById(db, id) {
@@ -83,4 +96,4 @@ function remove(db, id, { deletedBy } = {}) {
   db.prepare('DELETE FROM salsbots WHERE id = ?').run(id);
 }
 
-module.exports = { list, getById, create, update, remove };
+module.exports = { list, getById, create, update, remove, reorder };

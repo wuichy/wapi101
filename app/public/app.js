@@ -3938,7 +3938,10 @@ let sbStepCounter = 0;
 let sbTagIds = [];        // tag IDs asignados al bot en edición
 let _botTags = [];
 let _botTagFilter = null; // null = todos, number = id de tag
-let _botSort = 'date_desc'; // date_desc | date_asc | name_asc | name_desc | tag
+// Recuperar preferencia de orden persistida
+let _botSort = (() => { try { return localStorage.getItem('botSort') || 'manual'; } catch { return 'manual'; } })();
+// Persistir cambios de orden
+function _persistBotSort(v) { try { localStorage.setItem('botSort', v); } catch {} }
 
 function formatBotDate(ts) {
   if (!ts) return '';
@@ -3950,6 +3953,10 @@ function formatBotDate(ts) {
 function sortBots(bots) {
   const arr = bots.slice();
   switch (_botSort) {
+    case 'manual':
+      // Respetar el orden que ya viene del backend (ORDER BY sort_order ASC).
+      // Si el bot no tiene sort_order, queda al final por created_at desc (lo hace el backend).
+      return arr;
     case 'name_asc':  return arr.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
     case 'name_desc': return arr.sort((a, b) => (b.name || '').localeCompare(a.name || '', 'es', { sensitivity: 'base' }));
     case 'date_asc':  return arr.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
@@ -4041,6 +4048,7 @@ function renderBotTagFilters() {
     <button type="button" class="bot-tag-filter ${allActive}" data-bot-tag-filter="">Todos</button>
     ${tagPills}
     <select id="botSortSelect" class="bot-sort-select" title="Ordenar bots">
+      <option value="manual"${_botSort === 'manual' ? ' selected' : ''}>Manual (arrastrar)</option>
       <option value="date_desc"${_botSort === 'date_desc' ? ' selected' : ''}>Más nuevo</option>
       <option value="date_asc"${_botSort === 'date_asc' ? ' selected' : ''}>Más viejo</option>
       <option value="name_asc"${_botSort === 'name_asc' ? ' selected' : ''}>A → Z</option>
@@ -4125,7 +4133,11 @@ function renderBotList() {
         <div></div>
       </div>
       ${visibleBots.map(b => `
-        <div class="bot-list-row" data-bot-id="${b.id}">
+        <div class="bot-list-row" data-bot-id="${b.id}" ${_botSort === 'manual' ? 'draggable="true"' : ''}>
+          ${_botSort === 'manual' ? `
+            <span class="bot-row-drag-handle" title="Arrastra para reordenar">
+              <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.5"/><circle cx="7.5" cy="2.5" r="1.5"/><circle cx="2.5" cy="7" r="1.5"/><circle cx="7.5" cy="7" r="1.5"/><circle cx="2.5" cy="11.5" r="1.5"/><circle cx="7.5" cy="11.5" r="1.5"/></svg>
+            </span>` : ''}
           <div class="bot-row-name-wrap">
             <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}</div>
             ${b.created_at ? `<div class="bot-row-date">Creado ${escHtml(formatBotDate(b.created_at))}</div>` : ''}
@@ -4976,9 +4988,59 @@ function setupBot() {
   document.getElementById('botTagFilters')?.addEventListener('change', (e) => {
     if (e.target && e.target.id === 'botSortSelect') {
       _botSort = e.target.value;
+      _persistBotSort(_botSort);
       renderBotList();
     }
   });
+
+  // ─── Drag & drop manual de bots (solo cuando _botSort === 'manual') ───
+  let _bdDragId = null;
+  const botList = document.getElementById('botList');
+  if (botList && !botList._bdSetup) {
+    botList._bdSetup = true;
+    botList.addEventListener('dragstart', (e) => {
+      const row = e.target.closest('.bot-list-row[draggable]');
+      if (!row) return;
+      _bdDragId = Number(row.dataset.botId);
+      row.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(_bdDragId));
+    });
+    botList.addEventListener('dragend', () => {
+      _bdDragId = null;
+      botList.querySelectorAll('.bot-list-row').forEach(r => r.classList.remove('is-dragging', 'drag-over'));
+    });
+    botList.addEventListener('dragover', (e) => {
+      if (!_bdDragId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const row = e.target.closest('.bot-list-row');
+      botList.querySelectorAll('.bot-list-row').forEach(r => r.classList.toggle('drag-over', r === row && Number(r.dataset.botId) !== _bdDragId));
+    });
+    botList.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      if (!_bdDragId) return;
+      const targetRow = e.target.closest('.bot-list-row');
+      if (!targetRow) return;
+      const targetId = Number(targetRow.dataset.botId);
+      if (targetId === _bdDragId) return;
+      // Reordenar sbBots: mover dragId justo antes de targetId
+      const fromIdx = sbBots.findIndex(b => b.id === _bdDragId);
+      const toIdx   = sbBots.findIndex(b => b.id === targetId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [moved] = sbBots.splice(fromIdx, 1);
+      const insertAt = sbBots.findIndex(b => b.id === targetId);
+      sbBots.splice(insertAt, 0, moved);
+      renderBotList();
+      // Persistir
+      try {
+        await api('POST', '/api/bot/reorder', { orderedIds: sbBots.map(b => b.id) });
+      } catch (err) {
+        toast(err.message || 'Error guardando orden', 'error');
+        await loadSalsbots(); // recargar
+      }
+    });
+  }
 
   // ─── Builder: + Etiqueta + remove pill + quick-create input ───
   document.getElementById('botBuilderTags')?.addEventListener('click', (e) => {

@@ -3628,6 +3628,28 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   transition: background 120ms;
   cursor: pointer;
 }
+/* Cuando está en modo manual (draggable) añadimos una columna inicial para el handle */
+.bot-list-row[draggable="true"] {
+  grid-template-columns: 20px 1.4fr 1fr 90px 70px 76px;
+  cursor: grab;
+}
+.bot-list-row[draggable="true"]:active { cursor: grabbing; }
+.bot-list-row.is-dragging { opacity: .4; }
+.bot-list-row.drag-over {
+  border-top: 2px solid var(--accent, #2563eb);
+  background: rgba(37,99,235,.06);
+}
+.bot-row-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: .6;
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+.bot-list-row:hover .bot-row-drag-handle { opacity: 1; color: var(--accent, #2563eb); }
 .bot-list-row:last-child { border-bottom: 0; }
 .bot-list-row:hover { background: var(--bg); }
 .bot-row-name-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

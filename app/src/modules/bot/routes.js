@@ -194,6 +194,16 @@ module.exports = function createBotRouter(db) {
   // ── CRUD ─────────────────────────────────────────────────────────────────────
   router.get('/', (_req, res) => res.json({ items: service.list(db) }));
 
+  // Reorder manual: body { orderedIds: [3, 1, 2, ...] }
+  router.post('/reorder', (req, res) => {
+    try {
+      const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : null;
+      if (!orderedIds) return res.status(400).json({ error: 'orderedIds requerido (array)' });
+      service.reorder(db, orderedIds);
+      res.json({ ok: true });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
   router.post('/', (req, res) => {
     try {
       res.status(201).json({ item: service.create(db, req.body) });

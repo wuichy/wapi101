@@ -3895,20 +3895,11 @@ async function loadSalsbots() {
   } catch (e) { console.error('loadSalsbots', e); }
 }
 
-// Layout de la lista de bots: 'v1' (compacto en grid) o 'v2' (card vertical, más aire)
-let _botListLayout = (() => {
-  try { return localStorage.getItem('botListLayout') || 'v1'; } catch { return 'v1'; }
-})();
-function setBotListLayout(v) {
-  _botListLayout = v;
-  try { localStorage.setItem('botListLayout', v); } catch {}
-  const list = document.getElementById('botList');
-  if (list) {
-    list.classList.toggle('bot-cards-v2', v === 'v2');
-    list.classList.toggle('bot-cards-v1', v === 'v1');
-  }
-  renderBotTagFilters();
-}
+// Layout de la lista de bots — fijado en 'v1' (el user eligió quedarse con
+// el layout compacto). El CSS de v2 sigue disponible por si se quiere
+// re-experimentar en el futuro, pero no hay UI para cambiarlo ahora.
+const _botListLayout = 'v1';
+try { localStorage.removeItem('botListLayout'); } catch {}
 
 function renderBotTagFilters() {
   const root = document.getElementById('botTagFilters');
@@ -3933,17 +3924,7 @@ function renderBotTagFilters() {
     <button type="button" class="bot-tag-manage-btn" id="botTagManageBtn" title="Gestionar etiquetas">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><circle cx="10" cy="10" r="3"/><path d="M10 2v2m0 12v2M4.2 4.2l1.4 1.4m8.8 8.8l1.4 1.4M2 10h2m12 0h2M4.2 15.8l1.4-1.4m8.8-8.8l1.4-1.4"/></svg>
       Etiquetas
-    </button>
-    <div class="bot-layout-switch" title="Cambia entre lista compacta (v1) y cards verticales (v2)">
-      <button type="button" class="bot-layout-btn ${_botListLayout === 'v1' ? 'is-active' : ''}" data-bot-layout="v1">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><line x1="3" y1="6" x2="17" y2="6"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="14" x2="17" y2="14"/></svg>
-        v1
-      </button>
-      <button type="button" class="bot-layout-btn ${_botListLayout === 'v2' ? 'is-active' : ''}" data-bot-layout="v2">
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="3" width="14" height="6" rx="1.5"/><rect x="3" y="11" width="14" height="6" rx="1.5"/></svg>
-        v2
-      </button>
-    </div>`;
+    </button>`;
 }
 
 // Resuelve un stage_id a { pipelineName, stageName, color } usando el global PIPELINES
@@ -4763,14 +4744,6 @@ function setupBot() {
     if (e.target.closest('#botBuilderAddTagBtn')) openBotBuilderTagPicker();
   });
 
-  // Switch v1/v2 del layout de la lista de bots
-  document.addEventListener('click', (e) => {
-    const layoutBtn = e.target.closest('[data-bot-layout]');
-    if (layoutBtn) {
-      setBotListLayout(layoutBtn.dataset.botLayout);
-    }
-  });
-
   // Botón "Usar plantilla básica" dentro del step "Enviar mensaje".
   // Delegamos a nivel de botBuilder porque las step-cards se re-renderizan.
   document.getElementById('botBuilder')?.addEventListener('click', (e) => {
@@ -4889,7 +4862,7 @@ function renderBotBuilderTags() {
   if (!root) return;
   const assigned = _botTags.filter(t => sbTagIds.includes(t.id));
   const pills = assigned.map(t => `
-    <span class="bot-tag-pill" style="background:${escHtml(t.color)}1a;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66">
+    <span class="bot-tag-pill" style="${tplTagPillStyle(t.color)}">
       <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>
       ${escHtml(t.name)}
       <button type="button" class="bot-tag-remove" data-remove-tag="${t.id}" aria-label="Quitar">×</button>

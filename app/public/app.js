@@ -7418,13 +7418,21 @@ async function openSendTemplateModal(tpl, convoId) {
           </div>
         `);
       } else {
-        // Manual → input para llenar ahora
+        // Manual — pero si es {{1}} y tenemos nombre del contacto, lo pre-llenamos
+        // como sugerencia (el usuario puede editarlo o solo darle Enviar).
+        let suggested = '';
+        if (i === 0) {
+          // {{1}} suele ser el nombre — pre-llenamos con nombre del contacto si lo hay
+          suggested = contact?.firstName || convo?.name?.split(' ')[0] || '';
+        }
         const placeholder = ph.label || ph.example || `Valor para {{${i + 1}}}`;
+        const valueAttr = suggested ? `value="${escapeHtml(suggested)}"` : '';
+        const hint = suggested ? '<em class="tpl-hint-inline">(sugerencia del contacto — puedes cambiarlo)</em>' : '';
         rows.push(`
           <div class="send-tpl-var-row">
             <span class="tpl-placeholder-num">{{${i + 1}}}</span>
-            <span class="send-tpl-var-label">${escapeHtml(ph.label || '')}</span>
-            <input class="int-input send-tpl-var-input" data-i="${i}" placeholder="${escapeHtml(placeholder)}" />
+            <span class="send-tpl-var-label">${escapeHtml(ph.label || '')} ${hint}</span>
+            <input class="int-input send-tpl-var-input" data-i="${i}" ${valueAttr} placeholder="${escapeHtml(placeholder)}" />
           </div>
         `);
       }

@@ -4841,6 +4841,39 @@ function setupBot() {
     openTplPickerForBotMessage(btn, textarea);
   });
 
+  // Helper: en inputs de creación de etiquetas, teclear "," dispara el submit
+  // (encapsula el texto como chip). También maneja pegar "tag1, tag2, tag3" — crea
+  // todos secuencialmente esperando el render entre cada uno.
+  if (!window._bindTagCommaCreateBound) {
+    window._bindTagCommaCreateBound = true;
+    window.bindTagCommaCreate = function bindTagCommaCreate(inputId, formId) {
+      const input = document.getElementById(inputId);
+      const form  = document.getElementById(formId);
+      if (!input || !form) return;
+      input.addEventListener('keydown', (e) => {
+        if (e.key === ',') {
+          e.preventDefault();
+          const value = input.value.trim();
+          if (!value) return;
+          form.requestSubmit();
+        }
+      });
+      input.addEventListener('input', async () => {
+        if (!input.value.includes(',')) return;
+        const parts = input.value.split(',').map(p => p.trim()).filter(Boolean);
+        if (parts.length < 2) return;
+        const lastPart = input.value.endsWith(',') ? '' : parts[parts.length - 1];
+        const toCreate = input.value.endsWith(',') ? parts : parts.slice(0, -1);
+        for (const name of toCreate) {
+          input.value = name;
+          form.requestSubmit();
+          await new Promise(r => setTimeout(r, 250));
+        }
+        input.value = lastPart;
+      });
+    };
+  }
+
   // ─── Tag manager modal listeners ───
   document.querySelectorAll('[data-close-bot-tags]').forEach(el => {
     el.addEventListener('click', closeBotTagsManager);
@@ -4862,6 +4895,10 @@ function setupBot() {
       toast('Etiqueta creada', 'success');
     } catch (err) { toast(err.message, 'error'); }
   });
+
+  // Crear etiqueta al teclear "," — encapsula como chip estilo input de tags moderno.
+  // Si pegan "vip, frecuente, mayorista" crea las 3 secuencialmente.
+  bindTagCommaCreate('botTagNewName', 'botTagCreateForm');
   document.getElementById('botTagsManagerList')?.addEventListener('click', async (e) => {
     const editBtn = e.target.closest('[data-edit-tag]');
     if (editBtn) {
@@ -8449,6 +8486,8 @@ function setupTemplates() {
       document.getElementById('tplTagNewName').value = '';
     } catch (err) { toast(err.message, 'error'); }
   });
+  // Crear etiqueta al teclear "," (chip-style)
+  bindTagCommaCreate('tplTagNewName', 'tplTagCreateForm');
   // Selector de color en el form de creación
   document.getElementById('tplTagNewColors')?.addEventListener('click', (e) => {
     const sw = e.target.closest('.bot-tag-swatch');

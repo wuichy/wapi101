@@ -261,6 +261,68 @@ module.exports = function createWebhooksRouter(db) {
     }
   }
 
+  // Detecta el tipo de media en un mensaje entrante de WhatsApp y devuelve
+  // { mediaId, mimetype, ext, caption, type } o null si no es media.
+  function _extractWhatsAppMedia(msg) {
+    const types = ['image', 'video', 'audio', 'document', 'sticker', 'voice'];
+    for (const t of types) {
+      const m = msg[t];
+      if (m && m.id) {
+        const ext = (m.mime_type || '').split('/')[1]?.split(';')[0]
+                  || (t === 'image' ? 'jpg' : t === 'video' ? 'mp4' : t === 'audio' ? 'ogg' : 'bin');
+        return {
+          type: t === 'sticker' ? 'image' : (t === 'voice' ? 'audio' : t),
+          mediaId: m.id,
+          mimetype: m.mime_type || 'application/octet-stream',
+          filename: m.filename || `${t}-${Date.now()}.${ext}`,
+          caption: m.caption || msg.caption || '',
+          ext,
+        };
+      }
+    }
+    return null;
+  }
+
+  // Descarga el archivo desde Meta (URL temporal de 5min, requiere token).
+  // Lo guarda en data/uploads/chat-media/ y actualiza la columna media_url
+  // del mensaje recién insertado.
+  async function _downloadAndStoreWhatsAppMedia(integration, msgRow, media) {
+    try {
+      const path = require('path');
+      const fs = require('fs');
+      const accessToken = integration?.credentials?.accessToken || process.env.WHATSAPP_ACCESS_TOKEN;
+      if (!accessToken) { console.warn('[webhook media] sin access token, no se puede descargar'); return; }
+      const version = process.env.META_GRAPH_VERSION || 'v22.0';
+
+      // Step 1 — obtener URL temporal
+      const metaRes = await fetch(`https://graph.facebook.com/${version}/${media.mediaId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const metaJson = await metaRes.json().catch(() => ({}));
+      if (!metaJson.url) { console.warn(`[webhook media] no se obtuvo URL para media ${media.mediaId}`); return; }
+
+      // Step 2 — descargar bytes (mismo token)
+      const dlRes = await fetch(metaJson.url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!dlRes.ok) { console.warn(`[webhook media] descarga falló: HTTP ${dlRes.status}`); return; }
+      const buffer = Buffer.from(await dlRes.arrayBuffer());
+
+      // Step 3 — guardar local con extensión correcta
+      const uploadsDir = path.resolve(process.env.UPLOADS_DIR || './data/uploads');
+      const chatMediaDir = path.join(uploadsDir, 'chat-media');
+      if (!fs.existsSync(chatMediaDir)) fs.mkdirSync(chatMediaDir, { recursive: true });
+      const safeExt = media.ext.replace(/[^a-z0-9]/gi, '').slice(0, 6) || 'bin';
+      const localName = `in-${msgRow.id}-${Date.now()}.${safeExt}`;
+      fs.writeFileSync(path.join(chatMediaDir, localName), buffer);
+      const localUrl = `/uploads/chat-media/${localName}`;
+
+      // Step 4 — actualizar el mensaje con la URL local
+      db.prepare('UPDATE messages SET media_url = ? WHERE id = ?').run(localUrl, msgRow.id);
+      console.log(`[webhook media] msg #${msgRow.id} → ${localUrl} (${(buffer.length/1024).toFixed(1)}KB)`);
+    } catch (err) {
+      console.error('[webhook media] error descargando:', err.message);
+    }
+  }
+
   function processWhatsAppMessages(payload, integration) {
     try {
       const routing = getIntegrationRouting(integration?.id);
@@ -270,7 +332,9 @@ module.exports = function createWebhooksRouter(db) {
           const value = change.value || {};
           for (const msg of (value.messages || [])) {
             const waId    = msg.from;
-            const body    = msg.text?.body || msg.caption || '';
+            const media   = _extractWhatsAppMedia(msg);
+            // body = caption (si existe) o '' si solo media. Para texto puro usa msg.text
+            const body    = msg.text?.body || media?.caption || msg.caption || '';
             const msgId   = msg.id;
             const ts      = msg.timestamp ? Number(msg.timestamp) : Math.floor(Date.now() / 1000);
             const profile = value.contacts?.find((c) => c.wa_id === waId);
@@ -284,7 +348,7 @@ module.exports = function createWebhooksRouter(db) {
               contactName:   name,
             });
 
-            convoSvc.addMessage(db, convo.id, {
+            const insertedMsg = convoSvc.addMessage(db, convo.id, {
               externalId: msgId,
               direction:  'incoming',
               provider:   'whatsapp',
@@ -292,6 +356,12 @@ module.exports = function createWebhooksRouter(db) {
               status:     'delivered',
               createdAt:  ts,
             });
+
+            // Si el mensaje trae media, descargar de Meta async y guardar local.
+            // No bloqueamos el webhook (Meta tiene timeout corto).
+            if (media && insertedMsg) {
+              _downloadAndStoreWhatsAppMedia(integration, insertedMsg, media);
+            }
 
             // Crear expediente si la integración tiene routing configurado
             ensureExpedient(convo.contact_id, routing);
@@ -304,7 +374,9 @@ module.exports = function createWebhooksRouter(db) {
               integrationId: integration?.id || null,
             });
 
-            pushIncomingMessage(db, convo, body, name || `+${waId}`);
+            const previewByType = { image: '📷 Imagen', video: '🎬 Video', audio: '🎵 Audio', document: '📎 Documento' };
+            const pushBody = body || (media ? (previewByType[media.type] || '📎 Archivo') : '');
+            pushIncomingMessage(db, convo, pushBody, name || `+${waId}`);
           }
         }
       }

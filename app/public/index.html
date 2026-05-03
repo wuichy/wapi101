@@ -1509,6 +1509,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               Configuraciones
             </button>
+            <button class="settings-tab" data-settings="reportes">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+              Reportes
+            </button>
             <button class="settings-tab" data-settings="tokens-maquina" data-admin-only hidden>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
               Tokens de máquina
@@ -1843,6 +1847,94 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     <span class="cfg-switch-slider"></span>
                   </label>
                 </div>
+              </div>
+            </div>
+
+            <!-- ─── Reportes / Soporte ─── -->
+            <div class="settings-pane" data-settings="reportes">
+              <div class="settings-head">
+                <div>
+                  <h2>Reportes</h2>
+                  <p>Reporta bugs, sugerencias o problemas de diseño con texto, fotos o videos. Los administradores los reciben y responden.</p>
+                </div>
+                <button class="btn btn--primary" id="reportNewBtn">+ Nuevo reporte</button>
+              </div>
+
+              <!-- Filtros de status (solo admin ve todos) -->
+              <div class="reports-filters" id="reportsFilters">
+                <button class="reports-filter is-active" data-rfilter="">Todos</button>
+                <button class="reports-filter" data-rfilter="open">Abiertos</button>
+                <button class="reports-filter" data-rfilter="in_progress">En progreso</button>
+                <button class="reports-filter" data-rfilter="resolved">Resueltos</button>
+                <button class="reports-filter" data-rfilter="wontfix">No se hará</button>
+              </div>
+
+              <div class="reports-list" id="reportsList"><!-- JS render --></div>
+              <div class="reports-empty" id="reportsEmpty" hidden>
+                <p>No hay reportes aún. Si encuentras un bug o tienes una idea, créalo arriba.</p>
+              </div>
+            </div>
+
+            <!-- ─── Modal: nuevo reporte ─── -->
+            <div class="modal-backdrop" id="reportModal" hidden>
+              <div class="modal-box" style="max-width:560px">
+                <header class="modal-header">
+                  <h2 id="reportModalTitle">Nuevo reporte</h2>
+                  <button class="modal-close" data-close-report>×</button>
+                </header>
+                <div class="modal-body">
+                  <div style="display:flex;gap:10px;margin-bottom:14px">
+                    <label class="form-field" style="flex:1">
+                      <span>Tipo</span>
+                      <select id="reportType" class="form-input">
+                        <option value="bug">🐛 Bug de código</option>
+                        <option value="design">🎨 Bug de diseño</option>
+                        <option value="suggestion">💡 Sugerencia</option>
+                        <option value="question">❓ Pregunta</option>
+                      </select>
+                    </label>
+                    <label class="form-field" style="flex:1">
+                      <span>Prioridad</span>
+                      <select id="reportPriority" class="form-input">
+                        <option value="low">Baja</option>
+                        <option value="medium" selected>Media</option>
+                        <option value="high">Alta</option>
+                        <option value="urgent">Urgente</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label class="form-field">
+                    <span>Título</span>
+                    <input type="text" id="reportTitle" class="form-input" placeholder="Resumen breve del problema" maxlength="120" />
+                  </label>
+                  <label class="form-field">
+                    <span>Descripción</span>
+                    <textarea id="reportBody" class="form-input" rows="6" placeholder="Pasos para reproducir, qué esperabas vs qué pasó, browser, etc."></textarea>
+                  </label>
+                  <label class="form-field">
+                    <span>Adjuntos (foto / video / screenshot — máx 50MB cada uno)</span>
+                    <input type="file" id="reportFiles" multiple accept="image/*,video/*" />
+                    <div id="reportFilesList" class="report-files-list"></div>
+                  </label>
+                </div>
+                <footer class="modal-footer">
+                  <button class="btn btn--ghost" data-close-report>Cancelar</button>
+                  <button class="btn btn--primary" id="reportSubmitBtn">Enviar reporte</button>
+                </footer>
+              </div>
+            </div>
+
+            <!-- ─── Modal: detalle/respuesta de un reporte ─── -->
+            <div class="modal-backdrop" id="reportDetailModal" hidden>
+              <div class="modal-box" style="max-width:640px">
+                <header class="modal-header">
+                  <h2 id="reportDetailTitle">Reporte</h2>
+                  <button class="modal-close" data-close-report-detail>×</button>
+                </header>
+                <div class="modal-body" id="reportDetailBody"></div>
+                <footer class="modal-footer">
+                  <button class="btn btn--ghost" data-close-report-detail>Cerrar</button>
+                </footer>
               </div>
             </div>
 

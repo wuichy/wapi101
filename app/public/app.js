@@ -1893,6 +1893,7 @@ function setupSettingsTabs() {
       panes.forEach((p) => p.classList.toggle("is-active", p.dataset.settings === target));
       if (target === 'papelera') loadTrash();
       if (target === 'tokens-maquina') { loadMachineTokens(); loadDeployVersion(); }
+      if (target === 'reportes') loadReports();
     });
   });
   document.querySelectorAll(".ai-provider input").forEach((input) => {
@@ -7274,6 +7275,231 @@ function refreshReplyFormState() {
   updateReplyFormState(convo);
 }
 
+// ════════ Reportes / Soporte ════════
+let _reportsCache = [];
+let _reportsFilter = '';
+let _reportPendingFiles = []; // [{ data, mimetype, filename, size }]
+
+const REPORT_TYPE_LABELS  = { bug: '🐛 Bug', design: '🎨 Diseño', suggestion: '💡 Sugerencia', question: '❓ Pregunta' };
+const REPORT_PRIORITY_LABELS = { low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente' };
+const REPORT_STATUS_LABELS   = { open: 'Abierto', in_progress: 'En progreso', resolved: 'Resuelto', wontfix: 'No se hará' };
+
+async function loadReports() {
+  try {
+    const params = _reportsFilter ? `?status=${_reportsFilter}` : '';
+    const data = await api('GET', `/api/reports${params}`);
+    _reportsCache = data.items || [];
+    renderReportsList();
+  } catch (err) {
+    console.error('loadReports', err);
+    toast(err.message, 'error');
+  }
+}
+
+function renderReportsList() {
+  const root = document.getElementById('reportsList');
+  const empty = document.getElementById('reportsEmpty');
+  if (!root) return;
+  if (_reportsCache.length === 0) {
+    root.innerHTML = '';
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  root.innerHTML = _reportsCache.map(r => {
+    const dt = new Date(r.createdAt * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const att = (r.attachments || []).length;
+    return `
+      <div class="report-card status-${r.status}" data-report-id="${r.id}">
+        <div class="report-card-head">
+          <span class="report-type">${REPORT_TYPE_LABELS[r.type] || r.type}</span>
+          <span class="report-prio prio-${r.priority}">${REPORT_PRIORITY_LABELS[r.priority] || r.priority}</span>
+          <span class="report-status status-${r.status}">${REPORT_STATUS_LABELS[r.status] || r.status}</span>
+          ${att > 0 ? `<span class="report-attach-count">📎 ${att}</span>` : ''}
+        </div>
+        <div class="report-title">${escapeHtml(r.title)}</div>
+        ${r.body ? `<div class="report-body-preview">${escapeHtml(r.body.slice(0, 160))}${r.body.length > 160 ? '…' : ''}</div>` : ''}
+        <div class="report-meta">
+          <span>${escapeHtml(r.advisorName || 'Asesor')}</span>
+          <span>·</span>
+          <span>${dt}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function setupReportsUI() {
+  // Click en filtro de status
+  document.getElementById('reportsFilters')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-rfilter]');
+    if (!btn) return;
+    document.querySelectorAll('#reportsFilters .reports-filter').forEach(b => b.classList.toggle('is-active', b === btn));
+    _reportsFilter = btn.dataset.rfilter;
+    loadReports();
+  });
+
+  // Click en una card de reporte → abrir detalle
+  document.getElementById('reportsList')?.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-report-id]');
+    if (!card) return;
+    openReportDetail(Number(card.dataset.reportId));
+  });
+
+  // Botón nuevo reporte
+  document.getElementById('reportNewBtn')?.addEventListener('click', openReportNewModal);
+  document.querySelectorAll('[data-close-report]').forEach(el => el.addEventListener('click', closeReportNewModal));
+  document.getElementById('reportModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'reportModal') closeReportNewModal();
+  });
+  document.querySelectorAll('[data-close-report-detail]').forEach(el => el.addEventListener('click', () => {
+    document.getElementById('reportDetailModal').hidden = true;
+  }));
+  document.getElementById('reportDetailModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'reportDetailModal') document.getElementById('reportDetailModal').hidden = true;
+  });
+
+  // File picker para adjuntos
+  document.getElementById('reportFiles')?.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(f => {
+      if (f.size > 50 * 1024 * 1024) {
+        toast(`${f.name} excede los 50MB, se omite`, 'warning');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        _reportPendingFiles.push({
+          data: reader.result,
+          mimetype: f.type || 'application/octet-stream',
+          filename: f.name,
+          size: f.size,
+        });
+        renderReportFilesList();
+      };
+      reader.readAsDataURL(f);
+    });
+    e.target.value = '';
+  });
+
+  // Submit
+  document.getElementById('reportSubmitBtn')?.addEventListener('click', submitReport);
+}
+
+function renderReportFilesList() {
+  const root = document.getElementById('reportFilesList');
+  if (!root) return;
+  root.innerHTML = _reportPendingFiles.map((f, i) => `
+    <div class="report-file-chip">
+      <span>${f.mimetype.startsWith('video/') ? '🎬' : '📷'} ${escapeHtml(f.filename)} (${(f.size/1024).toFixed(0)}KB)</span>
+      <button type="button" data-remove-rf="${i}">×</button>
+    </div>`).join('');
+  root.querySelectorAll('[data-remove-rf]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _reportPendingFiles.splice(Number(btn.dataset.removeRf), 1);
+      renderReportFilesList();
+    });
+  });
+}
+
+function openReportNewModal() {
+  document.getElementById('reportModal').hidden = false;
+  document.getElementById('reportTitle').value = '';
+  document.getElementById('reportBody').value = '';
+  document.getElementById('reportType').value = 'bug';
+  document.getElementById('reportPriority').value = 'medium';
+  _reportPendingFiles = [];
+  renderReportFilesList();
+  setTimeout(() => document.getElementById('reportTitle')?.focus(), 80);
+}
+
+function closeReportNewModal() {
+  document.getElementById('reportModal').hidden = true;
+  _reportPendingFiles = [];
+}
+
+async function submitReport() {
+  const title = document.getElementById('reportTitle').value.trim();
+  if (!title) { toast('Ingresa un título', 'warning'); return; }
+  const body = document.getElementById('reportBody').value.trim();
+  const type = document.getElementById('reportType').value;
+  const priority = document.getElementById('reportPriority').value;
+  const btn = document.getElementById('reportSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+  try {
+    await api('POST', '/api/reports', { type, priority, title, body, attachments: _reportPendingFiles });
+    closeReportNewModal();
+    toast('Reporte enviado. Gracias por la retroalimentación.', 'success');
+    loadReports();
+  } catch (err) {
+    toast(err.message || 'Error enviando reporte', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar reporte'; }
+  }
+}
+
+async function openReportDetail(id) {
+  try {
+    const data = await api('GET', `/api/reports/${id}`);
+    const r = data.item;
+    if (!r) return;
+    const modal = document.getElementById('reportDetailModal');
+    const titleEl = document.getElementById('reportDetailTitle');
+    const bodyEl = document.getElementById('reportDetailBody');
+    titleEl.textContent = r.title;
+    const dt = new Date(r.createdAt * 1000).toLocaleString('es-MX');
+    const attHtml = (r.attachments || []).map(a => {
+      if (a.mimetype?.startsWith('image/')) {
+        return `<a href="${escapeHtml(a.url)}" target="_blank"><img src="${escapeHtml(a.url)}" class="report-attach-img" /></a>`;
+      }
+      if (a.mimetype?.startsWith('video/')) {
+        return `<video src="${escapeHtml(a.url)}" controls class="report-attach-video"></video>`;
+      }
+      return `<a href="${escapeHtml(a.url)}" target="_blank">${escapeHtml(a.filename || 'adjunto')}</a>`;
+    }).join('');
+    const isAdmin = getAdvisor()?.role === 'admin';
+    const adminControls = isAdmin ? `
+      <div class="report-admin-controls">
+        <select id="reportStatusSelect">
+          ${Object.entries(REPORT_STATUS_LABELS).map(([k,v]) => `<option value="${k}" ${r.status === k ? 'selected' : ''}>${v}</option>`).join('')}
+        </select>
+        <textarea id="reportAdminResponse" rows="3" placeholder="Respuesta para el asesor (opcional)">${escapeHtml(r.adminResponse || '')}</textarea>
+        <button class="btn btn--primary btn--sm" id="reportAdminSaveBtn">Guardar</button>
+      </div>` : (r.adminResponse ? `
+      <div class="report-admin-response">
+        <strong>Respuesta del admin:</strong>
+        <p>${escapeHtml(r.adminResponse)}</p>
+      </div>` : '');
+
+    bodyEl.innerHTML = `
+      <div class="report-detail-meta">
+        <span>${REPORT_TYPE_LABELS[r.type]}</span> ·
+        <span>Prioridad: ${REPORT_PRIORITY_LABELS[r.priority]}</span> ·
+        <span class="report-status status-${r.status}">${REPORT_STATUS_LABELS[r.status]}</span>
+      </div>
+      <div class="report-detail-meta-2">${escapeHtml(r.advisorName || 'Asesor')} · ${dt}</div>
+      ${r.body ? `<div class="report-detail-body">${escapeHtml(r.body).replace(/\n/g, '<br>')}</div>` : ''}
+      ${attHtml ? `<div class="report-detail-attachments">${attHtml}</div>` : ''}
+      ${adminControls}
+    `;
+    modal.hidden = false;
+
+    if (isAdmin) {
+      document.getElementById('reportAdminSaveBtn')?.addEventListener('click', async () => {
+        const status = document.getElementById('reportStatusSelect').value;
+        const adminResponse = document.getElementById('reportAdminResponse').value.trim();
+        try {
+          await api('PATCH', `/api/reports/${id}`, { status, adminResponse });
+          toast('Reporte actualizado', 'success');
+          modal.hidden = true;
+          loadReports();
+        } catch (err) { toast(err.message, 'error'); }
+      });
+    }
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
 // ════════ Menú contextual (click derecho) en chat list ════════
 let _ctxConvoId = null;
 
@@ -8212,6 +8438,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAttachMenu();
   setupPersonalTagsUI();
   setupChatContextMenu();
+  setupReportsUI();
   if (window.PERSONAL_MODE) loadPersonalTags();
 
   // Bot toggle handler (usa conversación cuando está disponible)

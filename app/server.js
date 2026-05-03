@@ -175,6 +175,7 @@ mountSafe('/api/templates',          require('./src/modules/templates/routes'));
 mountSafe('/api/stats',              require('./src/modules/stats/routes'));
 mountSafe('/api/advisors',           require('./src/modules/advisors/routes'));
 mountSafe('/api/trash',              require('./src/modules/trash/routes'));
+mountSafe('/api/reports',            require('./src/modules/reports/routes'));
 mountSafe('/api/push',               require('./src/modules/notifications/routes'));
 
 // Manejador global de errores

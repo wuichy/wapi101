@@ -744,6 +744,103 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
 .settings-head h2 { margin: 0 0 6px; font-size: 22px; }
 .settings-head p { margin: 0; color: var(--text-muted); max-width: 600px; }
 
+/* Reportes / Soporte */
+.reports-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.reports-filter {
+  background: #f1f5f9;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: inherit;
+}
+.reports-filter.is-active { background: #fff; border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); }
+.reports-list { display: flex; flex-direction: column; gap: 10px; }
+.report-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color .12s, box-shadow .12s;
+}
+.report-card:hover { border-color: var(--accent, #2563eb); box-shadow: 0 2px 6px rgba(15,23,42,.06); }
+.report-card.status-resolved { opacity: .65; }
+.report-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.report-type, .report-prio, .report-status, .report-attach-count {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-weight: 600;
+}
+.report-type { background: #f1f5f9; color: var(--text); }
+.report-prio.prio-low      { background: #dbeafe; color: #1e40af; }
+.report-prio.prio-medium   { background: #fef3c7; color: #78350f; }
+.report-prio.prio-high     { background: #fed7aa; color: #9a3412; }
+.report-prio.prio-urgent   { background: #fecaca; color: #991b1b; }
+.report-status.status-open        { background: #dcfce7; color: #14532d; }
+.report-status.status-in_progress { background: #dbeafe; color: #1e3a8a; }
+.report-status.status-resolved    { background: #ede9fe; color: #5b21b6; }
+.report-status.status-wontfix     { background: #f1f5f9; color: var(--text-muted); }
+.report-attach-count { background: #f1f5f9; color: var(--text-muted); }
+.report-title { font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+.report-body-preview { font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-bottom: 8px; }
+.report-meta { display: flex; gap: 6px; font-size: 11px; color: var(--text-muted); }
+.reports-empty { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+.report-files-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.report-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 10px;
+  background: #f1f5f9;
+  border-radius: 99px;
+  font-size: 11px;
+}
+.report-file-chip button {
+  background: rgba(0,0,0,.1);
+  border: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.report-detail-meta { font-size: 13px; margin-bottom: 4px; }
+.report-detail-meta-2 { font-size: 11px; color: var(--text-muted); margin-bottom: 14px; }
+.report-detail-body { background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; line-height: 1.5; margin-bottom: 12px; }
+.report-detail-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.report-attach-img, .report-attach-video {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 6px;
+  display: block;
+}
+.report-admin-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #fef3c7;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+.report-admin-controls select, .report-admin-controls textarea {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.report-admin-response { background: #ede9fe; border-radius: 8px; padding: 12px; margin-top: 12px; }
+.report-admin-response strong { font-size: 12px; color: #5b21b6; }
+.report-admin-response p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+
 /* Configuraciones — secciones tipo card con filas de switches */
 .cfg-section {
   background: #fff;

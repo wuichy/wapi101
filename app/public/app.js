@@ -3838,7 +3838,25 @@ function sortBots(bots) {
   }
 }
 
-const BOT_TAG_PALETTE = ['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e','#10b981','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#ec4899','#94a3b8'];
+// Misma paleta que TPL_TAG_PALETTE (15 colores con contraste auto vía
+// tplTagPillStyle). Incluye negro con texto blanco y amarillo brillante.
+const BOT_TAG_PALETTE = [
+  '#94a3b8', // gris
+  '#3b82f6', // azul
+  '#10b981', // verde
+  '#f59e0b', // ámbar
+  '#ef4444', // rojo
+  '#8b5cf6', // violeta
+  '#ec4899', // rosa
+  '#14b8a6', // teal
+  '#f97316', // naranja
+  '#0f172a', // negro (texto blanco automático)
+  '#facc15', // amarillo brillante
+  '#84cc16', // lima
+  '#06b6d4', // cian
+  '#d946ef', // fucsia
+  '#92400e', // café
+];
 
 async function loadBotTags() {
   try {
@@ -3903,9 +3921,38 @@ function renderBotTagFilters() {
     </button>`;
 }
 
+// Resuelve un stage_id a { pipelineName, stageName, color } usando el global PIPELINES
+function _resolveStage(stageId) {
+  const sid = Number(stageId);
+  if (!sid || !Array.isArray(PIPELINES)) return null;
+  for (const p of PIPELINES) {
+    if (!Array.isArray(p.stages)) continue;
+    const stage = p.stages.find(s => Number(s.id) === sid);
+    if (stage) return { pipelineName: p.name, stageName: stage.name, color: stage.color || '#94a3b8' };
+  }
+  return null;
+}
+
+// Construye el texto del trigger de un bot, enriqueciendo pipeline_stage con
+// nombres legibles del pipeline + etapa (en lugar de mostrar el stage_id raw).
+function botTriggerHtml(bot) {
+  const label = SB_TRIGGER_LABELS[bot.trigger_type] || bot.trigger_type;
+  if (bot.trigger_type === 'pipeline_stage' && bot.trigger_value) {
+    const info = _resolveStage(bot.trigger_value);
+    if (info) {
+      return `${escHtml(label)}: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name">${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}1a;color:${escHtml(info.color)};border-color:${escHtml(info.color)}66"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
+    }
+    return `${escHtml(label)}: stage #${escHtml(bot.trigger_value)} (no encontrada)`;
+  }
+  if (bot.trigger_type === 'keyword' && bot.trigger_value) {
+    return `${escHtml(label)}: "${escHtml(bot.trigger_value)}"`;
+  }
+  return escHtml(label);
+}
+
 function botRowTagsHtml(bot) {
   if (!Array.isArray(bot.tags) || !bot.tags.length) return '';
-  return `<span class="bot-row-tags">${bot.tags.map(t => `<span class="bot-tag-pill" style="--tag-color:${escHtml(t.color)};background:${escHtml(t.color)}1a;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</span>`).join('')}</span>`;
+  return `<span class="bot-row-tags">${bot.tags.map(t => `<span class="bot-tag-pill" style="--tag-color:${escHtml(t.color)};${tplTagPillStyle(t.color)}"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</span>`).join('')}</span>`;
 }
 
 function renderBotList() {
@@ -3947,7 +3994,7 @@ function renderBotList() {
             <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}</div>
             ${b.created_at ? `<div class="bot-row-date">Creado ${escHtml(formatBotDate(b.created_at))}</div>` : ''}
           </div>
-          <div class="bot-row-trigger">${SB_TRIGGER_LABELS[b.trigger_type] || b.trigger_type}${b.trigger_value ? `: "${escHtml(b.trigger_value)}"` : ''}</div>
+          <div class="bot-row-trigger">${botTriggerHtml(b)}</div>
           <div class="bot-row-steps">${b.steps.length} paso${b.steps.length !== 1 ? 's' : ''}</div>
           <div>
             <label class="sb-toggle" onclick="event.stopPropagation()">
@@ -4723,19 +4770,45 @@ function setupBot() {
   document.getElementById('botTagsManagerList')?.addEventListener('click', async (e) => {
     const editBtn = e.target.closest('[data-edit-tag]');
     if (editBtn) {
-      const id = Number(editBtn.dataset.editTag);
-      const t = _botTags.find(x => x.id === id);
-      if (!t) return;
-      const newName = prompt('Nuevo nombre:', t.name);
-      if (newName === null) return;
+      _botTagEditingId = Number(editBtn.dataset.editTag);
+      const cur = _botTags.find(t => t.id === _botTagEditingId);
+      if (cur) cur._draftColor = cur.color;
+      renderBotTagsManagerList();
+      setTimeout(() => document.querySelector('.tpl-tag-row--editing .bot-tag-edit-name')?.focus(), 50);
+      return;
+    }
+    // Color en modo edición → solo cambia draft, no guarda
+    const editColorBtn = e.target.closest('[data-bot-tag-edit-color]');
+    if (editColorBtn) {
+      const cur = _botTags.find(t => t.id === _botTagEditingId);
+      if (cur) cur._draftColor = editColorBtn.dataset.botTagEditColor;
+      renderBotTagsManagerList();
+      setTimeout(() => document.querySelector('.tpl-tag-row--editing .bot-tag-edit-name')?.focus(), 50);
+      return;
+    }
+    // Guardar edición (nombre + color)
+    const saveBtn = e.target.closest('[data-save-bot-tag]');
+    if (saveBtn) {
+      const id = Number(saveBtn.dataset.saveBotTag);
+      const cur = _botTags.find(t => t.id === id);
+      const newName = document.querySelector('.tpl-tag-row--editing .bot-tag-edit-name')?.value.trim();
+      if (!newName) { toast('El nombre no puede quedar vacío', 'error'); return; }
       try {
-        await api('PUT', `/api/bot-tags/${id}`, { name: newName.trim(), color: t.color });
+        await api('PUT', `/api/bot-tags/${id}`, { name: newName, color: cur._draftColor || cur.color });
         await loadBotTags();
+        _botTagEditingId = null;
         renderBotTagsManagerList();
         renderBotTagFilters();
         renderBotList();
         renderBotBuilderTags();
       } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+    // Cancelar
+    const cancelBtn = e.target.closest('[data-cancel-bot-tag]');
+    if (cancelBtn) {
+      _botTagEditingId = null;
+      renderBotTagsManagerList();
       return;
     }
     const colorBtn = e.target.closest('[data-tag-color-pick]');
@@ -4839,6 +4912,7 @@ function renderBotTagPalette() {
   }, { once: false });
 }
 
+let _botTagEditingId = null;
 function renderBotTagsManagerList() {
   const root = document.getElementById('botTagsManagerList');
   if (!root) return;
@@ -4846,25 +4920,41 @@ function renderBotTagsManagerList() {
     root.innerHTML = '<div class="bot-tag-manager-empty">Aún no hay etiquetas. Crea la primera arriba.</div>';
     return;
   }
-  root.innerHTML = _botTags.map(t => `
-    <div class="bot-tag-manager-row">
-      <div class="bot-tag-pill" style="background:${escHtml(t.color)}1a;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66">
-        <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>
-        ${escHtml(t.name)}
+  root.innerHTML = _botTags.map(t => {
+    if (_botTagEditingId === t.id) {
+      return `
+        <div class="bot-tag-manager-row tpl-tag-row--editing" data-id="${t.id}">
+          <input type="text" class="int-input bot-tag-edit-name tpl-tag-edit-name" value="${escHtml(t.name)}" maxlength="32" />
+          <div class="bot-tag-row-colors">
+            ${BOT_TAG_PALETTE.map(c => `<button type="button" class="bot-tag-swatch-sm ${c === (t._draftColor || t.color) ? 'is-selected' : ''}" data-bot-tag-edit-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>`).join('')}
+          </div>
+          <div class="bot-tag-row-actions">
+            <button type="button" class="btn btn--sm btn--primary" data-save-bot-tag="${t.id}">Guardar</button>
+            <button type="button" class="btn btn--sm btn--secondary" data-cancel-bot-tag="${t.id}">Cancelar</button>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="bot-tag-manager-row" data-id="${t.id}">
+        <div class="bot-tag-pill" style="${tplTagPillStyle(t.color)}">
+          <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>
+          ${escHtml(t.name)}
+        </div>
+        <div class="bot-tag-row-colors">
+          ${BOT_TAG_PALETTE.map(c => `<button type="button" class="bot-tag-swatch-sm ${c === t.color ? 'is-selected' : ''}" data-tag-color-pick="${t.id}" data-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>`).join('')}
+        </div>
+        <div class="bot-tag-row-actions">
+          <button type="button" class="icon-btn icon-btn--ghost" data-edit-tag="${t.id}" aria-label="Editar nombre y color">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button type="button" class="icon-btn icon-btn--ghost" data-delete-tag="${t.id}" aria-label="Eliminar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="bot-tag-row-colors">
-        ${BOT_TAG_PALETTE.map(c => `<button type="button" class="bot-tag-swatch-sm ${c === t.color ? 'is-selected' : ''}" data-tag-color-pick="${t.id}" data-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>`).join('')}
-      </div>
-      <div class="bot-tag-row-actions">
-        <button type="button" class="icon-btn icon-btn--ghost" data-edit-tag="${t.id}" aria-label="Renombrar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button type="button" class="icon-btn icon-btn--ghost" data-delete-tag="${t.id}" aria-label="Eliminar">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-        </button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 // ════════════════════════════════

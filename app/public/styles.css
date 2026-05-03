@@ -5702,6 +5702,33 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .sb-tpl-insert-btn:active { transform: translateY(0); }
 
+/* Card de bot — display de pipeline + etapa cuando trigger es pipeline_stage */
+.bot-row-pipeline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.bot-row-pipeline-name {
+  color: #475569;
+  font-weight: 500;
+}
+.bot-row-pipeline-arrow { color: #94a3b8; margin: 0 2px; }
+.bot-row-stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  border: 1px solid;
+}
+.bot-row-stage-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
 /* Modo edición inline en tag manager (templates) */
 .tpl-tag-row--editing {
   background: #f8fafc;

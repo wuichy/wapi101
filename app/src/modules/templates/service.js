@@ -246,8 +246,14 @@ async function submitToMeta(db, id) {
     update(db, id, { waId: result.body.id, waStatus: 'pending' });
     return { success: true, waId: result.body.id, status: result.body.status };
   } else {
-    const errMsg = result.body?.error?.message || JSON.stringify(result.body);
-    throw new Error(`Meta API error: ${errMsg}`);
+    // Construir mensaje detallado para que el usuario sepa qué arreglar.
+    const err = result.body?.error || {};
+    const parts = [];
+    if (err.message) parts.push(err.message);
+    if (err.error_user_msg) parts.push(`(${err.error_user_msg})`);
+    if (err.error_data?.details) parts.push(`— ${err.error_data.details}`);
+    if (!parts.length) parts.push(JSON.stringify(result.body));
+    throw new Error(`Meta API error: ${parts.join(' ')}`);
   }
 }
 

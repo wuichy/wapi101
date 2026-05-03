@@ -6983,14 +6983,15 @@ function applyTplLockState(tmpl) {
   }
   if (locked) {
     const labels = {
-      pending: { icon: '🕐', text: 'Esta plantilla está EN REVISIÓN por Meta. No puedes editarla mientras esperan respuesta.' },
-      approved:{ icon: '✅', text: 'Esta plantilla está APROBADA por Meta. Editar el contenido la invalidaría.' },
-      rejected:{ icon: '❌', text: 'Esta plantilla fue RECHAZADA por Meta. Para reintentar, duplica con otro nombre (Meta bloquea el nombre rechazado 30 días).' },
+      pending: { icon: '🕐', text: 'EN REVISIÓN por Meta — no puedes editar el contenido (lo que Meta valida).' },
+      approved:{ icon: '✅', text: 'APROBADA por Meta — editar el contenido la invalidaría con Meta.' },
+      rejected:{ icon: '❌', text: 'RECHAZADA por Meta — para reintentar duplica con otro nombre (Meta bloquea el nombre 30 días).' },
     };
-    const meta = labels[status] || { icon: '🔒', text: 'Solo lectura.' };
+    const meta = labels[status] || { icon: '🔒', text: 'Solo lectura del contenido.' };
     banner.innerHTML = `
       <div>${meta.icon} <strong>${meta.text}</strong></div>
-      <button type="button" class="btn btn--primary btn--sm" id="tplDuplicateBtn" style="margin-top:8px">📋 Duplicar como nueva</button>
+      <div style="margin-top:6px;font-size:12px;font-weight:400">📝 Sí puedes editar: <strong>"Nombre para mostrar"</strong> y <strong>etiquetas</strong> (organizacionales tuyas, Meta no las ve).</div>
+      <button type="button" class="btn btn--primary btn--sm" id="tplDuplicateBtn" style="margin-top:8px">📋 Duplicar como nueva (para cambiar contenido)</button>
     `;
     banner.hidden = false;
     document.getElementById('tplDuplicateBtn')?.addEventListener('click', () => duplicateCurrentTemplate(tmpl));
@@ -6998,16 +6999,17 @@ function applyTplLockState(tmpl) {
     banner.hidden = true;
   }
 
-  // Disable / enable inputs editables del modal (excepto botones close/cancel)
-  const editableSelectors = [
-    '#tplName', '#tplDisplayName', '#tplCategory', '#tplLanguage',
+  // Locked fields = los que Meta valida. NO se bloquean los campos puramente
+  // organizacionales (display_name + tags) — Meta nunca los ve.
+  const lockedSelectors = [
+    '#tplName', '#tplCategory', '#tplLanguage',
     '#tplHeader', '#tplBody', '#tplFooter',
     '#tplHeaderFile',
     'input[name="tplType"]', 'input[name="tplHeaderType"]',
     '.tpl-var-btn', '.tpl-ph-label', '.tpl-ph-example', '.tpl-ph-field',
     '.tpl-btn-row select, .tpl-btn-row input, .tpl-btn-remove', '#tplAddButtonBtn',
   ];
-  card.querySelectorAll(editableSelectors.join(', ')).forEach(el => {
+  card.querySelectorAll(lockedSelectors.join(', ')).forEach(el => {
     el.disabled = locked;
     if (locked) el.classList.add('is-locked');
     else el.classList.remove('is-locked');
@@ -7015,8 +7017,8 @@ function applyTplLockState(tmpl) {
 
   const saveBtn = document.getElementById('tplModalSave');
   if (saveBtn) {
-    saveBtn.disabled = locked;
-    saveBtn.textContent = locked ? 'Solo lectura' : 'Guardar plantilla';
+    saveBtn.disabled = false;  // siempre habilitado — al menos display_name + tags se pueden editar
+    saveBtn.textContent = locked ? 'Guardar nombre y etiquetas' : 'Guardar plantilla';
   }
 }
 
@@ -7195,8 +7197,38 @@ function closeTplModal() {
   _tplEditId = null;
 }
 
+// Guardado parcial cuando la plantilla está locked: solo display_name y tags.
+// Meta nunca ve estos campos, así que no afectan el estado de aprobación.
+async function saveTplLockedFields(existing) {
+  const errEl = document.getElementById('tplError');
+  const displayName = document.getElementById('tplDisplayName')?.value.trim() || '';
+  if (errEl) errEl.hidden = true;
+  try {
+    // Solo mandamos displayName — el endpoint PUT acepta updates parciales.
+    const updated = await api('PUT', `/api/templates/${existing.id}`, { displayName });
+    // Actualizar tags por separado
+    const withTags = await api('PUT', `/api/templates/${existing.id}/tags`, { tagIds: _tplDraftTagIds });
+    updated.tags = withTags.tags || [];
+    _tplItems = _tplItems.map(t => t.id === updated.id ? updated : t);
+    renderTemplates();
+    closeTplModal();
+    toast('Cambios guardados (nombre y etiquetas)', 'success');
+  } catch (e) {
+    if (errEl) { errEl.textContent = e.message; errEl.hidden = false; }
+  }
+}
+
 async function saveTpl() {
   const errEl = document.getElementById('tplError');
+  // Si la plantilla está locked (pending/approved/rejected), solo permitimos
+  // editar campos organizacionales (display_name + tags). Atajo aquí.
+  if (_tplEditId) {
+    const existing = _tplItems.find(t => t.id === _tplEditId);
+    if (existing && existing.type === 'wa_api' && existing.waStatus !== 'draft') {
+      return saveTplLockedFields(existing);
+    }
+  }
+
   const type = document.querySelector('input[name="tplType"]:checked')?.value || 'free_form';
   let name = document.getElementById('tplName')?.value.trim() || '';
   const displayName = document.getElementById('tplDisplayName')?.value.trim() || '';

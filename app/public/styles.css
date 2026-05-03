@@ -5637,6 +5637,11 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   padding: 2px 8px;
   border-radius: 999px;
 }
+.tpl-card-date {
+  color: #64748b;
+  font-size: 12px;
+  cursor: help;
+}
 /* Selector de tags dentro del modal de plantilla */
 .tpl-tags-pickers {
   display: flex;

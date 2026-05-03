@@ -6800,12 +6800,16 @@ function renderTemplates() {
     const statusLabel = { draft: 'Borrador', pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
     const rejectionInfo = (isWa && t.waStatus === 'rejected' && t.waRejectedReason)
       ? `<div class="tpl-rejected-reason">Motivo: ${escHtml(_friendlyRejectedReason(t.waRejectedReason))}</div>` : '';
+    const createdLabel = t.createdAt
+      ? `<span class="tpl-card-date" title="${new Date(t.createdAt * 1000).toLocaleString('es-MX')}">📅 ${escHtml(relTime(t.createdAt))}</span>`
+      : '';
     card.innerHTML = `
       <div class="tpl-card-icon ${isWa ? 'wa' : 'free'}">${isWa ? '📱' : '💬'}</div>
       <div class="tpl-card-body">
         <div class="tpl-card-name">${escHtml(t.displayName || t.name)} ${tplRowTagsHtml(t)}</div>
         <div class="tpl-card-meta">${isWa ? escHtml(t.category) + ' · ' + escHtml(t.language) + ' · ' : ''}
           <span class="tpl-status ${t.waStatus}">${statusLabel[t.waStatus] || t.waStatus}</span>
+          ${createdLabel ? ' · ' + createdLabel : ''}
         </div>
         ${rejectionInfo}
         <div class="tpl-card-body-text">${escHtml(t.body)}</div>

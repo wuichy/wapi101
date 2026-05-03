@@ -5714,6 +5714,115 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   line-height: 1.45;
 }
 
+/* Switch de layout v1/v2 en la barra de filtros de bots */
+.bot-layout-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-left: auto;
+}
+.bot-layout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: #fff;
+  border: none;
+  border-right: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.bot-layout-btn:last-child { border-right: none; }
+.bot-layout-btn:hover { background: #f8fafc; }
+.bot-layout-btn.is-active {
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+/* ─── Layout v2 — cards verticales con aire ─── */
+.bot-cards-v2 .bot-list-head { display: none; }
+.bot-cards-v2 .bot-list-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+.bot-cards-v2 .bot-list-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name        actions"
+    "trigger     trigger"
+    "footer      footer";
+  gap: 8px 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.bot-cards-v2 .bot-list-row:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.07);
+  background: #fff;
+}
+/* Cada hijo del .bot-list-row se asigna a un area según orden */
+.bot-cards-v2 .bot-list-row > :nth-child(1) { grid-area: name; min-width: 0; }       /* name-wrap */
+.bot-cards-v2 .bot-list-row > :nth-child(2) { grid-area: trigger; }                  /* trigger */
+.bot-cards-v2 .bot-list-row > :nth-child(3),
+.bot-cards-v2 .bot-list-row > :nth-child(4) { grid-area: footer; }                   /* steps + toggle */
+.bot-cards-v2 .bot-list-row > :nth-child(5) { grid-area: actions; align-self: start; } /* delete */
+
+/* Footer (steps + toggle) en una línea, separados con · */
+.bot-cards-v2 .bot-row-steps {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  margin-right: auto;
+}
+.bot-cards-v2 .bot-list-row > :nth-child(4) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.bot-cards-v2 .bot-list-row > :nth-child(4)::before {
+  content: 'Activo';
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Hijos 3 y 4 (steps + toggle) los ponemos en flex dentro del area footer */
+.bot-cards-v2 .bot-list-row {
+  /* Truco: usamos un pseudo-grid interno para alinear footer items */
+}
+.bot-cards-v2 .bot-row-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+.bot-cards-v2 .bot-row-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.bot-cards-v2 .bot-row-trigger {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border-left: 3px solid #cbd5e1;
+  line-height: 1.5;
+}
+
 /* Card de bot — display de pipeline + etapa cuando trigger es pipeline_stage */
 .bot-row-pipeline-pill {
   display: inline-flex;

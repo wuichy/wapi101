@@ -2,7 +2,15 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const svc = require('./service');
-const { sendMessage, sendWhatsAppTemplate, sendWhatsAppMedia, sendWhatsAppLiteMedia } = require('./sender');
+const {
+  sendMessage,
+  sendWhatsAppTemplate,
+  sendWhatsAppMedia,
+  sendWhatsAppLiteMedia,
+  sendMessengerMedia,
+  sendInstagramMedia,
+  sendTelegramMedia,
+} = require('./sender');
 
 // Reglas por provider — formatos y tamaños máximos que aceptan.
 const MEDIA_RULES = {
@@ -10,13 +18,31 @@ const MEDIA_RULES = {
     image:    { maxBytes: 5  * 1024 * 1024, mimes: ['image/jpeg', 'image/png'] },
     document: { maxBytes: 100 * 1024 * 1024, mimes: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain'] },
     video:    { maxBytes: 16 * 1024 * 1024, mimes: ['video/mp4', 'video/3gpp'] },
-    audio:    { maxBytes: 16 * 1024 * 1024, mimes: ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg'] },
+    audio:    { maxBytes: 16 * 1024 * 1024, mimes: ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg', 'audio/webm'] },
   },
   'whatsapp-lite': {
     image:    { maxBytes: 16 * 1024 * 1024, mimes: ['image/jpeg', 'image/png', 'image/webp'] },
     document: { maxBytes: 100 * 1024 * 1024, mimes: null },
     video:    { maxBytes: 16 * 1024 * 1024, mimes: ['video/mp4'] },
-    audio:    { maxBytes: 16 * 1024 * 1024, mimes: ['audio/ogg', 'audio/mp4', 'audio/mpeg'] },
+    audio:    { maxBytes: 16 * 1024 * 1024, mimes: ['audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/webm'] },
+  },
+  messenger: {
+    image:    { maxBytes: 8 * 1024 * 1024, mimes: ['image/jpeg', 'image/png', 'image/gif'] },
+    video:    { maxBytes: 25 * 1024 * 1024, mimes: ['video/mp4'] },
+    audio:    { maxBytes: 25 * 1024 * 1024, mimes: ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg', 'audio/webm'] },
+    document: { maxBytes: 25 * 1024 * 1024, mimes: null },
+  },
+  instagram: {
+    image:    { maxBytes: 8 * 1024 * 1024, mimes: ['image/jpeg', 'image/png'] },
+    video:    { maxBytes: 25 * 1024 * 1024, mimes: ['video/mp4'] },
+    audio:    { maxBytes: 25 * 1024 * 1024, mimes: ['audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm'] },
+    // Instagram NO permite document
+  },
+  telegram: {
+    image:    { maxBytes: 10 * 1024 * 1024, mimes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] },
+    video:    { maxBytes: 50 * 1024 * 1024, mimes: ['video/mp4'] },
+    audio:    { maxBytes: 50 * 1024 * 1024, mimes: ['audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm'] },
+    document: { maxBytes: 50 * 1024 * 1024, mimes: null },
   },
 };
 
@@ -152,12 +178,30 @@ module.exports = function createConversationsRouter(db) {
       fs.writeFileSync(path.join(chatMediaDir, localName), buffer);
       const localUrl = `/uploads/chat-media/${localName}`;
 
-      // Enviar al destinatario por el provider correspondiente
+      // Enviar al destinatario por el provider correspondiente.
+      // Messenger e Instagram requieren URL pública — usamos la URL local
+      // expuesta por cloudflared via APP_BASE_URL.
       let externalMsgId = null;
+      const publicUrl = APP_BASE_URL ? `${APP_BASE_URL}${localUrl}` : null;
       if (convo.provider === 'whatsapp') {
         externalMsgId = await sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, caption, mediaType });
       } else if (convo.provider === 'whatsapp-lite') {
         externalMsgId = await sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, caption, mediaType });
+      } else if (convo.provider === 'messenger') {
+        if (!publicUrl) return res.status(500).json({ error: 'APP_BASE_URL no configurado — Messenger requiere URL pública' });
+        externalMsgId = await sendMessengerMedia(db, convo, { publicUrl, mediaType });
+        if (caption) {
+          // Messenger no soporta caption en el attachment; mandar texto aparte
+          try { await require('./sender').sendMessenger(db, convo, caption); } catch (_) {}
+        }
+      } else if (convo.provider === 'instagram') {
+        if (!publicUrl) return res.status(500).json({ error: 'APP_BASE_URL no configurado — Instagram requiere URL pública' });
+        externalMsgId = await sendInstagramMedia(db, convo, { publicUrl, mediaType });
+        if (caption) {
+          try { await require('./sender').sendInstagram(db, convo, caption); } catch (_) {}
+        }
+      } else if (convo.provider === 'telegram') {
+        externalMsgId = await sendTelegramMedia(db, convo, { buffer, mimetype, filename, caption, mediaType });
       } else {
         return res.status(400).json({ error: `Envío de archivos para ${convo.provider} aún no implementado` });
       }

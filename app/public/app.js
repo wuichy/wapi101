@@ -7355,6 +7355,15 @@ async function startVoiceRecording() {
   });
 }
 
+// Tipos de adjunto soportados por provider (filtra el menú dinámicamente).
+const PROVIDER_MEDIA_SUPPORT = {
+  whatsapp:        new Set(['image', 'video', 'audio', 'document', 'record-audio']),
+  'whatsapp-lite': new Set(['image', 'video', 'audio', 'document', 'record-audio']),
+  messenger:       new Set(['image', 'video', 'audio', 'document', 'record-audio']),
+  instagram:       new Set(['image', 'video', 'audio', 'record-audio']), // sin document
+  telegram:        new Set(['image', 'video', 'audio', 'document', 'record-audio']),
+};
+
 function setupAttachMenu() {
   const btn  = document.getElementById('rhAttachBtn');
   const menu = document.getElementById('rhAttachMenu');
@@ -7364,6 +7373,12 @@ function setupAttachMenu() {
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
+    // Filtrar opciones según provider de la conversación activa
+    const convo = CONVERSATIONS.find(c => c.id === ACTIVE_CONVO_ID);
+    const supported = PROVIDER_MEDIA_SUPPORT[convo?.provider] || PROVIDER_MEDIA_SUPPORT.whatsapp;
+    menu.querySelectorAll('[data-attach]').forEach(opt => {
+      opt.hidden = !supported.has(opt.dataset.attach);
+    });
     menu.hidden = !menu.hidden;
   });
   document.addEventListener('click', (e) => {

@@ -219,6 +219,29 @@ async function sendMessenger(db, convo, text) {
   return data.message_id || null;
 }
 
+// Messenger acepta media como URL pública (vía attachment.payload.url).
+// type: 'image' | 'video' | 'audio' | 'file'
+async function sendMessengerMedia(db, convo, { publicUrl, mediaType }) {
+  const creds = getIntegrationCreds(db, convo.integrationId);
+  const token = creds?.pageAccessToken;
+  if (!token) throw new Error('No hay Page Access Token de Messenger configurado');
+  if (!publicUrl) throw new Error('Messenger requiere URL pública del archivo');
+
+  const fbType = mediaType === 'document' ? 'file' : mediaType;
+  const version = process.env.META_GRAPH_VERSION || 'v22.0';
+  const res = await fetch(`https://graph.facebook.com/${version}/me/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      recipient: { id: convo.externalId },
+      message: { attachment: { type: fbType, payload: { url: publicUrl, is_reusable: false } } },
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  return data.message_id || null;
+}
+
 async function sendInstagram(db, convo, text) {
   const creds = getIntegrationCreds(db, convo.integrationId);
   const token = creds?.accessToken;
@@ -229,6 +252,28 @@ async function sendInstagram(db, convo, text) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ recipient: { id: convo.externalId }, message: { text } }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  return data.message_id || null;
+}
+
+// Instagram solo soporta image / video / audio (NO file/document).
+async function sendInstagramMedia(db, convo, { publicUrl, mediaType }) {
+  if (mediaType === 'document') throw new Error('Instagram no permite enviar documentos. Solo imágenes, videos y audios.');
+  const creds = getIntegrationCreds(db, convo.integrationId);
+  const token = creds?.accessToken;
+  if (!token) throw new Error('No hay Access Token de Instagram configurado');
+  if (!publicUrl) throw new Error('Instagram requiere URL pública del archivo');
+
+  const version = process.env.META_GRAPH_VERSION || 'v22.0';
+  const res = await fetch(`https://graph.facebook.com/${version}/me/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      recipient: { id: convo.externalId },
+      message: { attachment: { type: mediaType, payload: { url: publicUrl } } },
+    }),
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
@@ -250,6 +295,35 @@ async function sendTelegram(db, convo, text) {
   return String(data.result?.message_id || '') || null;
 }
 
+// Telegram envía media como multipart al endpoint correspondiente
+// (sendPhoto/sendVideo/sendAudio/sendDocument). Soporta hasta 50MB.
+async function sendTelegramMedia(db, convo, { buffer, mimetype, filename, caption, mediaType }) {
+  const creds = getIntegrationCreds(db, convo.integrationId);
+  const token = creds?.botToken;
+  if (!token) throw new Error('No hay Bot Token de Telegram configurado');
+  if (!buffer || !buffer.length) throw new Error('Archivo vacío');
+
+  const endpoints = { image: 'sendPhoto', video: 'sendVideo', audio: 'sendAudio', document: 'sendDocument' };
+  const fields   = { image: 'photo',     video: 'video',     audio: 'audio',     document: 'document' };
+  const endpoint = endpoints[mediaType];
+  const field = fields[mediaType];
+  if (!endpoint) throw new Error(`Tipo de media ${mediaType} no soportado en Telegram`);
+
+  const fd = new FormData();
+  fd.append('chat_id', String(convo.externalId));
+  if (caption) fd.append('caption', caption);
+  const blob = new Blob([buffer], { type: mimetype });
+  fd.append(field, blob, filename || 'file');
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
+    method: 'POST',
+    body: fd,
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.description || `HTTP ${res.status}`);
+  return String(data.result?.message_id || '') || null;
+}
+
 function getIntegrationCreds(db, integrationId) {
   if (!integrationId) return null;
   const row = db.prepare('SELECT credentials_enc FROM integrations WHERE id = ?').get(integrationId);
@@ -257,4 +331,4 @@ function getIntegrationCreds(db, integrationId) {
   return decryptJson(row.credentials_enc) || null;
 }
 
-module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendInstagram, sendTelegram, getIntegrationCreds };
+module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendMessengerMedia, sendInstagram, sendInstagramMedia, sendTelegram, sendTelegramMedia, getIntegrationCreds };

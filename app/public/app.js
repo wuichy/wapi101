@@ -4817,7 +4817,7 @@ function setupBot() {
     }
   });
 
-  // ─── Builder: + Etiqueta + remove pill ───
+  // ─── Builder: + Etiqueta + remove pill + quick-create input ───
   document.getElementById('botBuilderTags')?.addEventListener('click', (e) => {
     const remove = e.target.closest('[data-remove-tag]');
     if (remove) {
@@ -4827,6 +4827,47 @@ function setupBot() {
       return;
     }
     if (e.target.closest('#botBuilderAddTagBtn')) openBotBuilderTagPicker();
+    if (e.target.closest('#botBuilderTagInputClose')) closeBotBuilderTagInput();
+    const assign = e.target.closest('[data-assign-tag]');
+    if (assign) {
+      const id = Number(assign.dataset.assignTag);
+      if (!sbTagIds.includes(id)) sbTagIds.push(id);
+      renderBotBuilderTags();
+      // Mantener el input abierto y enfocado para asignar varias seguidas
+      setTimeout(() => document.getElementById('botBuilderTagInput')?.focus(), 0);
+    }
+  });
+
+  // Comma/Enter en el input → crear o asignar; Esc → cerrar
+  document.getElementById('botBuilderTags')?.addEventListener('keydown', async (e) => {
+    if (e.target.id !== 'botBuilderTagInput') return;
+    if (e.key === ',' || e.key === 'Enter') {
+      e.preventDefault();
+      const value = e.target.value.trim();
+      if (!value) return;
+      e.target.value = '';
+      await quickCreateBotTag(value);
+      // Re-foco al input tras el re-render
+      setTimeout(() => document.getElementById('botBuilderTagInput')?.focus(), 0);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeBotBuilderTagInput();
+    }
+  });
+  // Pegar "tag1, tag2, tag3" → crea/asigna todas
+  document.getElementById('botBuilderTags')?.addEventListener('input', async (e) => {
+    if (e.target.id !== 'botBuilderTagInput') return;
+    if (!e.target.value.includes(',')) return;
+    const parts = e.target.value.split(',').map(p => p.trim()).filter(Boolean);
+    const lastPart = e.target.value.endsWith(',') ? '' : parts[parts.length - 1];
+    const toCreate = e.target.value.endsWith(',') ? parts : parts.slice(0, -1);
+    e.target.value = lastPart;
+    for (const name of toCreate) {
+      await quickCreateBotTag(name);
+    }
+    setTimeout(() => document.getElementById('botBuilderTagInput')?.focus(), 0);
   });
 
   // Botón "Usar plantilla básica" dentro del step "Enviar mensaje".
@@ -4979,6 +5020,11 @@ function setupBot() {
   });
 }
 
+// Cuando el usuario abre el "modo input" en el bot builder, alternamos entre el
+// botón "+ Etiqueta" y un input inline donde puede teclear nombre + "," para
+// crear-y-asignar etiquetas en cadena (sin abrir el manager).
+let _botBuilderTagInputOpen = false;
+
 function renderBotBuilderTags() {
   const root = document.getElementById('botBuilderTags');
   if (!root) return;
@@ -4990,31 +5036,65 @@ function renderBotBuilderTags() {
       <button type="button" class="bot-tag-remove" data-remove-tag="${t.id}" aria-label="Quitar">×</button>
     </span>
   `).join('');
-  root.innerHTML = `
-    ${pills}
-    <button type="button" class="bot-tag-add-btn" id="botBuilderAddTagBtn">+ Etiqueta</button>`;
+
+  if (_botBuilderTagInputOpen) {
+    const available = _botTags.filter(t => !sbTagIds.includes(t.id));
+    const suggestions = available.slice(0, 12).map(t => `
+      <button type="button" class="bot-tag-suggest" data-assign-tag="${t.id}" style="${tplTagPillStyle(t.color)}">
+        <span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}
+      </button>
+    `).join('');
+    root.innerHTML = `
+      ${pills}
+      <span class="bot-tag-input-wrap">
+        <input type="text" id="botBuilderTagInput" class="bot-tag-input" placeholder="Escribe y teclea ',' (Esc para cerrar)" maxlength="32" />
+        <button type="button" class="bot-tag-input-close" id="botBuilderTagInputClose" aria-label="Cerrar">×</button>
+      </span>
+      ${available.length ? `<div class="bot-tag-suggest-row">${suggestions}</div>` : ''}
+    `;
+    setTimeout(() => document.getElementById('botBuilderTagInput')?.focus(), 0);
+  } else {
+    root.innerHTML = `
+      ${pills}
+      <button type="button" class="bot-tag-add-btn" id="botBuilderAddTagBtn">+ Etiqueta</button>`;
+  }
+}
+
+// Crea una etiqueta nueva (color random de la paleta) o asigna la existente
+// si ya existe el nombre. Re-render sin cerrar el input para permitir cadena.
+async function quickCreateBotTag(rawName) {
+  const name = String(rawName || '').trim();
+  if (!name) return;
+  // ¿Ya existe?
+  const existing = _botTags.find(t => t.name.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    if (!sbTagIds.includes(existing.id)) {
+      sbTagIds.push(existing.id);
+      renderBotBuilderTags();
+    }
+    return;
+  }
+  // Crear nueva con color random
+  const color = BOT_TAG_PALETTE[Math.floor(Math.random() * BOT_TAG_PALETTE.length)];
+  try {
+    const res = await api('POST', '/api/bot-tags', { name, color });
+    const newTag = res.item || res;
+    await loadBotTags();
+    if (newTag?.id && !sbTagIds.includes(newTag.id)) sbTagIds.push(newTag.id);
+    renderBotBuilderTags();
+    renderBotTagFilters();
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 function openBotBuilderTagPicker() {
-  const available = _botTags.filter(t => !sbTagIds.includes(t.id));
-  if (!_botTags.length) {
-    openBotTagsManager();
-    return;
-  }
-  if (!available.length) {
-    toast('Ya asignaste todas las etiquetas a este bot', 'info');
-    return;
-  }
-  openOptionPicker({
-    title: 'Agregar etiqueta',
-    options: available.map(t => ({ value: t.id, label: t.name, color: t.color })),
-    currentValue: null,
-    onSelect: (val) => {
-      const id = Number(val);
-      if (!sbTagIds.includes(id)) sbTagIds.push(id);
-      renderBotBuilderTags();
-    }
-  });
+  // Abrir modo input inline en lugar del picker modal
+  _botBuilderTagInputOpen = true;
+  renderBotBuilderTags();
+}
+
+function closeBotBuilderTagInput() {
+  _botBuilderTagInputOpen = false;
+  renderBotBuilderTags();
 }
 
 function openBotTagsManager() {

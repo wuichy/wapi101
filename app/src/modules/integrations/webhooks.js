@@ -190,11 +190,24 @@ module.exports = function createWebhooksRouter(db) {
 
   function ensureExpedient(contactId, routing) {
     if (!routing?.pipelineId || !routing?.stageId) return;
-    // Solo crear si el contacto NO tiene ya un expediente en ese pipeline
-    const existing = db.prepare(
-      'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? LIMIT 1'
-    ).get(contactId, routing.pipelineId);
-    if (existing) return;
+    // Solo crear si el contacto NO tiene NINGÚN expediente ABIERTO
+    // (en etapa kind='in_progress'). Esto evita duplicados al cambiar
+    // el routing de la integración entre pipelines distintos.
+    // Caso permitido: si TODOS los expedientes anteriores del contacto
+    // están cerrados (won/lost), se crea uno nuevo — es un contacto
+    // recurrente con un deal/caso nuevo.
+    const existing = db.prepare(`
+      SELECT e.id, e.pipeline_id
+        FROM expedients e
+        JOIN stages s ON s.id = e.stage_id
+       WHERE e.contact_id = ?
+         AND COALESCE(s.kind, 'in_progress') = 'in_progress'
+       LIMIT 1
+    `).get(contactId);
+    if (existing) {
+      console.log(`[webhook] contacto ${contactId} ya tiene expediente abierto (id=${existing.id} en pipeline ${existing.pipeline_id}). No se crea duplicado.`);
+      return;
+    }
 
     try {
       expedientSvc.create(db, {

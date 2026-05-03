@@ -2950,6 +2950,55 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.rh-conversation-title.is-clickable {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  transition: background .12s, color .12s;
+}
+.rh-conversation-title.is-clickable:hover {
+  background: rgba(37, 99, 235, .08);
+  color: var(--accent, #2563eb);
+}
+
+/* Pipeline · Etapa pill clickable en el header del chat */
+.rh-pipeline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  padding: 3px 6px 3px 10px;
+  font-size: 11px;
+  color: var(--rh-text);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, box-shadow .12s;
+  font-family: inherit;
+}
+.rh-pipeline-pill:hover {
+  background: #fff;
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 1px 3px rgba(15,23,42,.08);
+}
+.rh-pipeline-pill-name { font-weight: 500; color: var(--rh-text); }
+.rh-pipeline-pill-arrow { color: var(--rh-muted); font-size: 10px; margin: 0 1px; }
+.rh-pipeline-pill-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+.rh-pipeline-pill-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
 .rh-conversation-meta {
   display: flex;
   flex-wrap: wrap;

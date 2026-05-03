@@ -304,9 +304,30 @@ async function openConversation(convoId) {
   // Actualizar header
   if (convo) {
     const titleEl = document.getElementById("rhChatTitle");
-    if (titleEl) titleEl.textContent = convo.name;
+    if (titleEl) {
+      titleEl.textContent = convo.name;
+      titleEl.classList.add('is-clickable');
+      titleEl.title = 'Ver ficha del contacto';
+      titleEl.onclick = () => openContactCardFromChat(convo.contactId);
+    }
     const metaEl = document.querySelector(".rh-conversation-meta");
     if (metaEl) {
+      // Buscar el expediente abierto del contacto (preferir in_progress, sino el más reciente)
+      const expedients = PL_EXP_CACHE.filter(e => e.contactId === convo.contactId);
+      const inProgress = expedients.find(e => e.stageKind === 'in_progress' || !e.stageKind);
+      const exp = inProgress || expedients[0] || null;
+
+      const pipelinePill = exp ? `
+        <button type="button" class="rh-pipeline-pill" data-open-exp="${exp.id}" title="Ver expediente">
+          <span class="rh-pipeline-pill-name">${escapeHtml(exp.pipelineName || 'Pipeline')}</span>
+          <span class="rh-pipeline-pill-arrow">→</span>
+          <span class="rh-pipeline-pill-stage" style="background:${exp.stageColor || '#94a3b8'}1a;color:${exp.stageColor || '#475569'};border-color:${exp.stageColor || '#cbd5e1'}66">
+            <span class="rh-pipeline-pill-dot" style="background:${exp.stageColor || '#94a3b8'}"></span>
+            ${escapeHtml(exp.stageName || 'Etapa')}
+          </span>
+        </button>
+      ` : '';
+
       metaEl.innerHTML = `
         <span>${escapeHtml(convo.phone)}</span>
         <span class="rh-conversation-origin">
@@ -315,7 +336,14 @@ async function openConversation(convoId) {
             ${escapeHtml(PROVIDER_LABEL[convo.provider] || convo.provider)}
           </span>
         </span>
+        ${pipelinePill}
       `;
+      // Click en pipeline pill → abre el expediente
+      metaEl.querySelector('[data-open-exp]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = Number(e.currentTarget.dataset.openExp);
+        openExpDetail(id, 'chats');
+      });
     }
     openChatContact({ id: convo.contactId, botPaused: convo.botPaused, convoId });
   }
@@ -327,6 +355,23 @@ async function openConversation(convoId) {
   // Habilitar form de respuesta
   const form = document.querySelector('.rh-reply-form');
   if (form) form.dataset.convoId = convoId;
+}
+
+// Abre la ficha del contacto desde el header del chat. Busca primero en
+// CUSTOMERS (cache) y si no lo halla, lo trae por API.
+async function openContactCardFromChat(contactId) {
+  if (!contactId) return;
+  let customer = CUSTOMERS.find(c => c.id === contactId);
+  if (!customer) {
+    try {
+      const data = await api('GET', `/api/customers/${contactId}`);
+      customer = data.item || data;
+    } catch (err) {
+      toast(err.message || 'No se pudo abrir el contacto', 'error');
+      return;
+    }
+  }
+  openCustomerModal(customer);
 }
 
 // ── Bot toggle in chat header ──

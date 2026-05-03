@@ -3213,6 +3213,50 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+
+/* Banner: ventana de 24h cerrada — bloquea envío de texto libre */
+.rh-window-closed-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 4px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  color: #78350f;
+}
+.rh-wcb-icon { font-size: 20px; flex-shrink: 0; }
+.rh-wcb-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rh-wcb-text strong { font-size: 13px; color: #78350f; }
+.rh-wcb-text span { font-size: 11px; color: #92400e; line-height: 1.4; }
+.rh-wcb-text em { font-style: normal; font-weight: 600; }
+.rh-wcb-btn {
+  background: #b45309;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .12s;
+}
+.rh-wcb-btn:hover { background: #92400e; }
+
+/* Form bloqueado cuando la ventana cerró */
+.rh-reply-form.is-window-closed .rh-reply-compose {
+  background: rgba(120, 120, 128, .04);
+  opacity: .6;
+}
+.rh-reply-form.is-window-closed textarea {
+  cursor: not-allowed;
+}
+.rh-reply-form.is-window-closed .rh-send-button {
+  opacity: .4;
+  cursor: not-allowed;
+}
 .rh-reply-input-row {
   display: flex;
   align-items: flex-end;

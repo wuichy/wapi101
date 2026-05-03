@@ -364,9 +364,10 @@ async function openConversation(convoId) {
   api('PATCH', `/api/conversations/${convoId}/read`).then(() => decrementUnreadBadge(convoId)).catch(() => {});
   await loadMessages(convoId);
 
-  // Habilitar form de respuesta
+  // Habilitar form de respuesta + evaluar ventana 24h
   const form = document.querySelector('.rh-reply-form');
   if (form) form.dataset.convoId = convoId;
+  refreshReplyFormState();
 }
 
 // Abre la ficha del contacto desde el header del chat. Busca primero en
@@ -7117,6 +7118,62 @@ function setupChatFilters() {
 }
 
 // ─── Reply form ───
+// Detecta si la ventana de 24h de WhatsApp Business API está cerrada para esta
+// conversación. Solo aplica al provider 'whatsapp' (Cloud API). Otros providers
+// no tienen esta restricción.
+function isWaWindowClosed(convo) {
+  if (!convo || convo.provider !== 'whatsapp') return false;
+  if (!convo.lastIncomingAt) return true; // nunca nos escribió → solo plantillas
+  const elapsedMs = Date.now() - convo.lastIncomingAt * 1000;
+  return elapsedMs > 24 * 60 * 60 * 1000;
+}
+
+// Activa/desactiva el reply form según el estado de la ventana 24h.
+function updateReplyFormState(convo) {
+  const form = document.querySelector('.rh-reply-form');
+  if (!form) return;
+  const textarea = form.querySelector('textarea');
+  const sendBtn  = form.querySelector('.rh-send-button');
+  const closed = isWaWindowClosed(convo);
+  form.classList.toggle('is-window-closed', closed);
+  if (textarea) {
+    textarea.disabled = closed;
+    textarea.placeholder = closed
+      ? 'Ventana 24h cerrada — solo plantillas aprobadas'
+      : 'Escribe un mensaje…';
+  }
+  if (sendBtn) sendBtn.disabled = closed;
+
+  let banner = form.querySelector('.rh-window-closed-banner');
+  if (closed) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.className = 'rh-window-closed-banner';
+      banner.innerHTML = `
+        <span class="rh-wcb-icon">⏰</span>
+        <div class="rh-wcb-text">
+          <strong>Ventana de 24h cerrada</strong>
+          <span>Han pasado más de 24 horas desde el último mensaje del lead. Solo puedes enviar <em>plantillas aprobadas</em> por Meta.</span>
+        </div>
+        <button type="button" class="rh-wcb-btn" data-rh-wcb-tpl>📋 Enviar plantilla</button>
+      `;
+      form.prepend(banner);
+      banner.querySelector('[data-rh-wcb-tpl]')?.addEventListener('click', () => {
+        document.getElementById('rhTplTrigger')?.click();
+      });
+    }
+    banner.hidden = false;
+  } else if (banner) {
+    banner.remove();
+  }
+}
+
+// Re-evalúa el estado del reply form usando la conversación activa actual.
+function refreshReplyFormState() {
+  const convo = CONVERSATIONS.find(c => c.id === ACTIVE_CONVO_ID);
+  updateReplyFormState(convo);
+}
+
 function setupReplyForm() {
   const form = document.querySelector('.rh-reply-form');
   if (!form) return;
@@ -7140,6 +7197,12 @@ function setupReplyForm() {
     e.preventDefault();
     const convoId = Number(form.dataset.convoId);
     if (!convoId) { toast('Selecciona una conversación primero', 'warning'); return; }
+    // Bloquear si la ventana 24h está cerrada
+    const convo = CONVERSATIONS.find((c) => c.id === convoId);
+    if (isWaWindowClosed(convo)) {
+      toast('⏰ Ventana 24h cerrada — solo puedes enviar plantillas aprobadas', 'warning');
+      return;
+    }
     const body = textarea?.value.trim();
     if (!body) return;
 
@@ -7149,7 +7212,6 @@ function setupReplyForm() {
       renderMessages();
       if (textarea) { textarea.value = ''; textarea.style.height = 'auto'; }
       // Actualizar preview en la lista
-      const convo = CONVERSATIONS.find((c) => c.id === convoId);
       if (convo) { convo.lastMessage = body; convo.time = msg.time || ''; renderChatList(); }
     } catch (err) {
       toast(err.message, 'error');
@@ -7164,16 +7226,24 @@ function startChatPolling() {
     if (document.body.dataset.viewActive !== 'chats') return;
     const prevTotal = CONVERSATIONS.reduce((s, c) => s + c.unreadCount, 0);
     await loadConversations();
-    // Si estamos viendo una conversación, refrescar mensajes
+    // Si estamos viendo una conversación, refrescar mensajes y estado del reply form
     if (ACTIVE_CONVO_ID) {
       const prevCount = CHAT_MESSAGES.length;
       await loadMessages(ACTIVE_CONVO_ID);
       if (CHAT_MESSAGES.length > prevCount) {
         api('PATCH', `/api/conversations/${ACTIVE_CONVO_ID}/read`).catch(() => {});
       }
+      refreshReplyFormState();
     }
   }, 5000);
 }
+
+// Tick rápido (1s) para que la ventana 24h se cierre en tiempo real mientras el
+// usuario tiene el chat abierto, sin esperar el siguiente poll.
+setInterval(() => {
+  if (document.body.dataset.viewActive !== 'chats' || !ACTIVE_CONVO_ID) return;
+  refreshReplyFormState();
+}, 1000);
 
 // ═══════ Papelera ═══════
 

@@ -6880,6 +6880,62 @@ function openTplModal(tmpl = null) {
   modal.hidden = false;
 }
 
+// Duplica una plantilla: copia todos los campos como nuevo draft pero con
+// nombre obligatoriamente distinto (sufijo random tipo Kommo). Se cierra
+// el modal de la actual y se abre uno limpio en modo "nueva plantilla".
+function duplicateCurrentTemplate(srcTmpl) {
+  if (!srcTmpl) return;
+  closeTplModal();
+  // Sufijo de 4 chars para forzar nombre nuevo (Meta no acepta nombres reusados)
+  const suffix = Math.random().toString(36).slice(2, 6);
+  const newName = (srcTmpl.name || 'plantilla').replace(/_v\d+_[a-z0-9]+$|_[a-z0-9]{4,8}$/i, '') + `_v2_${suffix}`;
+  // Construir un draft a partir del original
+  const draft = {
+    ...srcTmpl,
+    id: undefined,
+    waId: null,
+    waStatus: 'draft',
+    waRejectedReason: null,
+    name: newName,
+    displayName: srcTmpl.displayName ? `${srcTmpl.displayName} (copia)` : null,
+  };
+  setTimeout(() => openTplModal(draft), 50);
+}
+
+// Sanea el nombre interno en vivo: minúsculas, _ por espacios, quita acentos
+// y caracteres no permitidos por Meta. Muestra hint si tuvo que limpiar.
+function sanitizeTplName(raw) {
+  return String(raw || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
+}
+
+function setupTplNameValidation() {
+  const input = document.getElementById('tplName');
+  const hint  = document.getElementById('tplNameHint');
+  if (!input || input._tplValidationBound) return;
+  input._tplValidationBound = true;
+  input.addEventListener('input', () => {
+    const before = input.value;
+    const after = sanitizeTplName(before);
+    if (before !== after) {
+      input.value = after;
+      const removed = [];
+      if (before !== before.toLowerCase()) removed.push('mayúsculas → minúsculas');
+      if (/\s/.test(before)) removed.push('espacios → _');
+      if (/[^a-z0-9_\s]/i.test(before)) removed.push('quitamos signos/acentos');
+      if (hint) {
+        hint.querySelector('span').textContent = 'Auto-corregido: ' + removed.join(' · ') + '. Meta solo acepta minúsculas, números y _.';
+        hint.hidden = false;
+        clearTimeout(input._hintTimer);
+        input._hintTimer = setTimeout(() => { hint.hidden = true; }, 4000);
+      }
+    }
+  });
+}
+
 function applyTplLockState(tmpl) {
   const card = document.querySelector('.tpl-modal-card');
   if (!card) return;
@@ -6898,13 +6954,17 @@ function applyTplLockState(tmpl) {
   }
   if (locked) {
     const labels = {
-      pending: { icon: '🕐', text: 'Esta plantilla está EN REVISIÓN por Meta. No puedes editarla mientras esperan respuesta. Si necesitas un cambio, duplícala con otro nombre.' },
-      approved:{ icon: '✅', text: 'Esta plantilla está APROBADA por Meta. Editar el contenido la invalidaría con Meta. Si necesitas un cambio, crea una nueva con otro nombre.' },
-      rejected:{ icon: '❌', text: 'Esta plantilla fue RECHAZADA por Meta. Para reintentar, crea una nueva con otro nombre (Meta bloquea el nombre rechazado 30 días). Aquí solo lectura.' },
+      pending: { icon: '🕐', text: 'Esta plantilla está EN REVISIÓN por Meta. No puedes editarla mientras esperan respuesta.' },
+      approved:{ icon: '✅', text: 'Esta plantilla está APROBADA por Meta. Editar el contenido la invalidaría.' },
+      rejected:{ icon: '❌', text: 'Esta plantilla fue RECHAZADA por Meta. Para reintentar, duplica con otro nombre (Meta bloquea el nombre rechazado 30 días).' },
     };
     const meta = labels[status] || { icon: '🔒', text: 'Solo lectura.' };
-    banner.innerHTML = `${meta.icon} <strong>${meta.text}</strong>`;
+    banner.innerHTML = `
+      <div>${meta.icon} <strong>${meta.text}</strong></div>
+      <button type="button" class="btn btn--primary btn--sm" id="tplDuplicateBtn" style="margin-top:8px">📋 Duplicar como nueva</button>
+    `;
     banner.hidden = false;
+    document.getElementById('tplDuplicateBtn')?.addEventListener('click', () => duplicateCurrentTemplate(tmpl));
   } else {
     banner.hidden = true;
   }
@@ -7103,10 +7163,18 @@ async function saveTpl() {
     if (errEl) { errEl.textContent = 'El cuerpo es obligatorio.'; errEl.hidden = false; }
     return;
   }
-  // WA API: name must be lowercase, no spaces
+  // WA API: nombre solo minúsculas, números y guión bajo (regla de Meta)
   if (type === 'wa_api') {
-    name = name.toLowerCase().replace(/\s+/g, '_');
+    name = sanitizeTplName(name);
     document.getElementById('tplName').value = name;
+    if (!name) {
+      if (errEl) { errEl.textContent = 'El nombre interno quedó vacío después de limpiar caracteres. Usa solo minúsculas, números y _'; errEl.hidden = false; }
+      return;
+    }
+    if (name.length > 512) {
+      if (errEl) { errEl.textContent = 'El nombre interno es muy largo (máx 512 chars).'; errEl.hidden = false; }
+      return;
+    }
   }
 
   // Validación de botones (lado cliente)
@@ -7358,6 +7426,9 @@ function setupTemplates() {
 
   // Save
   document.getElementById('tplModalSave')?.addEventListener('click', saveTpl);
+
+  // Validación en vivo del nombre interno (minúsculas, _, sin acentos/espacios)
+  setupTplNameValidation();
 
   // Modal "Enviar plantilla"
   document.getElementById('sendTplModalClose')?.addEventListener('click', closeSendTemplateModal);

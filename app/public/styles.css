@@ -5563,6 +5563,18 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   font-size: 13px;
   line-height: 1.45;
 }
+
+/* Hint del nombre interno cuando se auto-corrige */
+.tpl-name-hint {
+  margin: 4px 0 0;
+  padding: 6px 10px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
 .is-locked {
   cursor: not-allowed !important;
   opacity: 0.65;

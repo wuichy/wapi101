@@ -922,8 +922,9 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             </div>
             <!-- Nombre interno -->
             <div class="int-field">
-              <label for="tplName">Nombre interno <span class="tpl-hint-inline">(minúsculas, sin espacios — requerido por Meta)</span></label>
+              <label for="tplName">Nombre interno <span class="tpl-hint-inline">(minúsculas, números y guiones bajos — Meta lo requiere así)</span></label>
               <input type="text" class="int-input" id="tplName" placeholder="ej. bienvenida_cliente" />
+              <p class="tpl-name-hint" id="tplNameHint" hidden>⚠️ <span></span></p>
             </div>
             <!-- Categoría + Idioma (solo WA API) -->
             <div class="tpl-wa-fields">

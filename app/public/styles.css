@@ -2522,8 +2522,13 @@ body[data-view-active="exp-detail"] .topbar { display: none; }
 body[data-view-active="inicio"] .topbar { display: none; }
 body[data-view-active="chats"] .main { background: #f2f2f7; }
 
-.rh-clone {
-  /* Variables propias del clon — no contaminan el resto. */
+/* Variables del look de WhatsApp/iMessage. Se aplican tanto al "clon" del
+   chat principal como al panel de chat dentro del detalle de expediente,
+   para que las burbujas (.rh-bubble, .rh-message) tengan colores donde
+   se renderizan ambos. */
+.rh-clone,
+.exp-detail-right {
+  /* Variables propias — no contaminan el resto. */
   --rh-bg: #f2f2f7;
   --rh-panel: #ffffff;
   --rh-border: rgba(0, 0, 0, 0.09);

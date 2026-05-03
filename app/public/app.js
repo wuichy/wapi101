@@ -6721,9 +6721,9 @@ function _renderTplPickerList(query) {
 
   const q = query.toLowerCase().trim();
   const items = _tplItems.filter(t => {
-    // En modo bot-message solo mostramos básicas (free_form). Las wa_api
-    // tienen su propio step "Enviar plantilla" en el bot builder.
-    if (ctx.mode === 'bot-message' && t.type !== 'free_form') return false;
+    // Mostramos ambos tipos. En modo bot-message, click en wa_api solo
+    // copia el body como texto (no la envía como template). Para envío
+    // real como wa_api template existe el step "Enviar plantilla".
     if (q && !(t.displayName || t.name || '').toLowerCase().includes(q) &&
              !(t.body || '').toLowerCase().includes(q)) return false;
     return true;
@@ -6744,11 +6744,18 @@ function _renderTplPickerList(query) {
     return a.type === 'wa_api' ? -1 : 1;
   });
 
+  // Hint en modo bot-message para clarificar el comportamiento
+  const botModeHint = ctx.mode === 'bot-message'
+    ? '<div class="rh-tpl-mode-hint">💡 Click en cualquier plantilla → se copia el <strong>texto</strong> al mensaje. <strong>Importante:</strong> el bot la enviará como TEXTO (sujeto a la ventana 24h de WhatsApp aunque uses el body de una plantilla aprobada). Para garantizar envío como template aprobada (sirve fuera 24h), agrega un step <strong>"Enviar plantilla"</strong>.</div>'
+    : '';
+
   let lastType = null;
-  list.innerHTML = sorted.map(t => {
+  list.innerHTML = botModeHint + sorted.map(t => {
     const avail = _tplAvailability(t, ctx.provider, ctx.lastIncomingAt);
+    // En modo bot-message todas son seleccionables (no aplica el lock por ventana 24h)
+    const effectiveAvail = ctx.mode === 'bot-message' ? { ok: true } : avail;
     const header = t.type !== lastType
-      ? `<div class="rh-tpl-group-label">${t.type === 'wa_api' ? 'WhatsApp API (siempre)' : `Básicas ${wa24Label}`}</div>`
+      ? `<div class="rh-tpl-group-label">${t.type === 'wa_api' ? 'WhatsApp API' : 'Básicas'}${ctx.mode === 'bot-message' ? '' : (t.type === 'wa_api' ? ' (siempre)' : ' ' + wa24Label)}</div>`
       : '';
     lastType = t.type;
 
@@ -6756,14 +6763,14 @@ function _renderTplPickerList(query) {
       ? `<svg class="rh-tpl-item-icon" viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M11.994 0C5.372 0 0 5.373 0 12c0 2.118.554 4.103 1.522 5.83L0 24l6.354-1.489A11.946 11.946 0 0011.994 24C18.616 24 24 18.627 24 12S18.616 0 11.994 0z" opacity=".15"/></svg>`
       : `<svg class="rh-tpl-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`;
 
-    const lockIcon = avail.ok ? '' :
+    const lockIcon = effectiveAvail.ok ? '' :
       `<svg class="rh-tpl-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
 
-    return `${header}<button class="rh-tpl-item${avail.ok ? '' : ' is-locked'}" data-tpl-id="${t.id}" ${avail.ok ? '' : 'disabled'} title="${avail.ok ? '' : escapeHtml(avail.reason)}">
+    return `${header}<button class="rh-tpl-item${effectiveAvail.ok ? '' : ' is-locked'}" data-tpl-id="${t.id}" ${effectiveAvail.ok ? '' : 'disabled'} title="${effectiveAvail.ok ? '' : escapeHtml(effectiveAvail.reason)}">
       ${icon}
       <span class="rh-tpl-item-name">${escapeHtml(t.displayName || t.name)}</span>
       <span class="rh-tpl-item-preview">${escapeHtml((t.body || '').slice(0, 60))}${(t.body || '').length > 60 ? '…' : ''}</span>
-      ${lockIcon}${avail.ok ? '' : `<span class="rh-tpl-reason">${escapeHtml(avail.reason)}</span>`}
+      ${lockIcon}${effectiveAvail.ok ? '' : `<span class="rh-tpl-reason">${escapeHtml(effectiveAvail.reason)}</span>`}
     </button>`;
   }).join('');
 

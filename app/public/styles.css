@@ -5702,6 +5702,18 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .sb-tpl-insert-btn:active { transform: translateY(0); }
 
+/* Hint en el picker cuando se abre desde el bot builder */
+.rh-tpl-mode-hint {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+  padding: 10px 12px;
+  margin: 8px 0;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* Card de bot — display de pipeline + etapa cuando trigger es pipeline_stage */
 .bot-row-pipeline-pill {
   display: inline-flex;

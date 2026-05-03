@@ -152,8 +152,12 @@ module.exports = function createWebhooksRouter(db) {
         console.warn(`[webhook ${provider}] sin appSecret configurado, no se verificó firma`);
       }
 
-      // Idempotencia: usamos message_id o entry.id+changes.field
-      const eventId = payload?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.id
+      // Idempotencia: usamos message_id (incoming), status_id+state (delivery status)
+      // o entry.id+changes.field (otros eventos)
+      const _change = payload?.entry?.[0]?.changes?.[0];
+      const _statusEvt = _change?.value?.statuses?.[0];
+      const eventId = _change?.value?.messages?.[0]?.id
+                   || (_statusEvt ? `status-${_statusEvt.id}-${_statusEvt.status}` : null)
                    || payload?.entry?.[0]?.messaging?.[0]?.message?.mid
                    || `${provider}-${payload?.entry?.[0]?.id}-${payload?.entry?.[0]?.time}`;
 
@@ -168,6 +172,9 @@ module.exports = function createWebhooksRouter(db) {
         const change = payload?.entry?.[0]?.changes?.[0];
         if (change?.field === 'message_template_status_update') {
           processTemplateStatusUpdate(change.value);
+        } else if (change?.value?.statuses?.length) {
+          // Webhook de delivery status (sent / delivered / read / failed)
+          processWhatsAppStatuses(change.value);
         } else {
           processWhatsAppMessages(payload, integration);
         }
@@ -303,6 +310,66 @@ module.exports = function createWebhooksRouter(db) {
       }
     } catch (err) {
       console.error('[webhook whatsapp] error procesando mensajes:', err.message);
+    }
+  }
+
+  // Códigos de error de Meta más comunes en delivery → texto amigable.
+  function friendlyDeliveryError(code, fallbackTitle, fallbackDetails) {
+    const codeNum = Number(code);
+    const map = {
+      131026: 'Número sin WhatsApp activo o el lead te bloqueó',
+      131047: 'El lead no acepta mensajes de WhatsApp Business',
+      131051: 'Tipo de mensaje no soportado por el destinatario',
+      131052: 'El lead bloqueó tus mensajes',
+      131053: 'No se pudo enviar el archivo (formato no soportado por Meta)',
+      131056: 'Pareja de números bloqueada (rate limit)',
+      131057: 'Cuenta del lead pausada o suspendida',
+      132000: 'Plantilla expiró o ya no está aprobada',
+      132001: 'Categoría de plantilla incorrecta',
+      132005: 'Variable de plantilla con texto demasiado largo',
+      132007: 'Idioma de plantilla no soportado',
+      133000: 'El lead no recibe mensajes (cuenta suspendida)',
+      133010: 'Número del lead no es válido',
+      133015: 'Número no registrado en WhatsApp',
+      470:    'Ventana de 24h cerrada — solo plantillas aprobadas',
+    };
+    return map[codeNum] || fallbackTitle || fallbackDetails || `Error ${code || 'desconocido'}`;
+  }
+
+  // Procesa value.statuses[] del webhook de WhatsApp (delivery status).
+  // Cada entry trae { id, status: 'sent'|'delivered'|'read'|'failed', recipient_id, errors? }.
+  // Actualiza la columna status del mensaje saliente correspondiente.
+  function processWhatsAppStatuses(value) {
+    const statuses = value.statuses || [];
+    // Orden lógico: failed siempre gana; en otros casos no retroceder.
+    const order = { sent: 1, delivered: 2, read: 3, failed: 4 };
+    for (const s of statuses) {
+      try {
+        const id     = s.id;
+        const status = s.status;
+        if (!id || !status) continue;
+        let errorReason = null;
+        if (status === 'failed' && Array.isArray(s.errors) && s.errors.length) {
+          const err = s.errors[0];
+          errorReason = friendlyDeliveryError(err.code, err.title, err.error_data?.details || err.message);
+        }
+        const msg = db.prepare("SELECT id, status FROM messages WHERE external_id = ? AND provider = 'whatsapp'").get(id);
+        if (!msg) {
+          // Mensaje aún no existe — puede llegar el status antes que el insert (raro). Lo ignoramos.
+          continue;
+        }
+        const cur = order[msg.status] || 0;
+        const incoming = order[status] || 0;
+        if (incoming < cur) continue; // no retroceder (ej. ya leído, llega delivered viejo)
+        if (errorReason) {
+          db.prepare('UPDATE messages SET status = ?, error_reason = ? WHERE id = ?').run(status, errorReason, msg.id);
+        } else {
+          db.prepare('UPDATE messages SET status = ? WHERE id = ?').run(status, msg.id);
+        }
+        console.log(`[webhook status] msg wa_id=${id} → ${status}${errorReason ? ` (${errorReason})` : ''}`);
+      } catch (err) {
+        console.error('[webhook status] error procesando status:', err.message);
+      }
     }
   }
 

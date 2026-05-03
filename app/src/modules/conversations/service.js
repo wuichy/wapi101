@@ -173,6 +173,7 @@ function listMessages(db, conversationId, { page = 1, pageSize = 60 } = {}) {
       body:           m.body || '',
       mediaUrl:       m.media_url,
       status:         m.status,
+      errorReason:    m.error_reason || null,
       time:           fmtTime(m.created_at),
       createdAt:      m.created_at,
     })),

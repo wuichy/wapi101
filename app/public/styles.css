@@ -3106,9 +3106,38 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   font-size: 13px;
 }
 .rh-message.rh-incoming .rh-bubble-attachment-link { background: rgba(0, 0, 0, 0.06); }
-.rh-msg-status { display: inline-flex; line-height: 0; align-items: center; }
+.rh-msg-status { display: inline-flex; line-height: 0; align-items: center; cursor: help; }
 .rh-msg-status svg { height: 12px; width: auto; }
-.rh-msg-status.rh-read { color: #34b7f1; }
+.rh-msg-status.rh-sent      { color: rgba(255,255,255,.55); }
+.rh-msg-status.rh-delivered { color: rgba(255,255,255,.85); }
+.rh-msg-status.rh-read      { color: #34b7f1; }
+.rh-msg-status.rh-failed {
+  color: #fca5a5;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+/* Burbuja con borde rojo punteado cuando el mensaje no se entregó */
+.rh-bubble.is-failed {
+  border: 1.5px dashed #ef4444;
+  background: rgba(239, 68, 68, .08) !important;
+  color: var(--rh-text);
+}
+.rh-message.rh-outgoing .rh-bubble.is-failed {
+  background: rgba(239, 68, 68, .12) !important;
+  color: var(--rh-text);
+}
+.rh-msg-error {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #b91c1c;
+  font-weight: 500;
+  line-height: 1.3;
+  padding: 0 4px;
+  text-align: right;
+}
 
 /* ─── Actividad del expediente (en el chat) ─── */
 .rh-act-event {

@@ -407,10 +407,32 @@ function updateBotToggleUI() {
   btn.title = _chatBotPaused ? 'Reanudar bot para este contacto' : 'Parar bot para este contacto';
 }
 
+// Iconos para los 4 estados de un mensaje saliente (estilo WhatsApp).
+// sent      → ✓ gris claro
+// delivered → ✓✓ gris
+// read      → ✓✓ azul
+// failed    → ⚠ rojo + tooltip con la razón
+function msgStatusHtml(m) {
+  if (m.direction !== 'outgoing') return '';
+  const status = m.status || 'sent';
+  if (status === 'failed') {
+    const reason = m.errorReason || 'No se pudo entregar el mensaje';
+    return `<span class="rh-msg-status rh-failed" title="${escapeHtml(reason)}">⚠</span>`;
+  }
+  // ✓ y ✓✓ con SVG
+  const single = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 9 17 20 6"/></svg>`;
+  const double = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/><polyline points="23 11 16 18 13 15" style="opacity:.7"/></svg>`;
+  if (status === 'read')      return `<span class="rh-msg-status rh-read" title="Leído">${double}</span>`;
+  if (status === 'delivered') return `<span class="rh-msg-status rh-delivered" title="Entregado">${double}</span>`;
+  return `<span class="rh-msg-status rh-sent" title="Enviado">${single}</span>`;
+}
+
+// Cache para detectar transiciones a failed y avisar al usuario una sola vez.
+let _lastSeenFailedIds = new Set();
+
 function renderMessages() {
   const root = document.getElementById("rhMessages");
   if (!root) return;
-  const checkSvg = `<span class="rh-msg-status rh-read"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/><polyline points="23 11 16 18 13 15" style="opacity:.7"/></svg></span>`;
 
   if (!CHAT_MESSAGES.length) {
     root.innerHTML = '<p class="rh-messages-empty">No hay mensajes todavía.</p>';
@@ -421,16 +443,31 @@ function renderMessages() {
   const isWhatsapp = activeConvo?.provider === 'whatsapp';
   const lastIncomingIdx = CHAT_MESSAGES.reduce((acc, m, i) => m.direction === 'incoming' ? i : acc, -1);
 
+  // Detectar mensajes que cambiaron a failed para mostrar toast (solo nuevos)
+  for (const m of CHAT_MESSAGES) {
+    if (m.direction !== 'outgoing' || m.status !== 'failed') continue;
+    if (_lastSeenFailedIds.has(m.id)) continue;
+    _lastSeenFailedIds.add(m.id);
+    const reason = m.errorReason || 'No se pudo entregar';
+    const contactName = activeConvo?.name || 'el lead';
+    toast(`⚠ Mensaje a ${contactName} no se entregó: ${reason}`, 'error');
+  }
+
   root.innerHTML = CHAT_MESSAGES.map((m, idx) => {
     const dir = m.direction === 'incoming' ? 'incoming' : 'outgoing';
     const isLastIncoming = dir === 'incoming' && idx === lastIncomingIdx;
     const footExtra = isLastIncoming && isWhatsapp ? wa24Html('whatsapp', m.createdAt) : '';
+    const statusIco = msgStatusHtml(m);
     const footContent = dir === 'incoming'
       ? `Contacto · <span class="rh-message-meta">${fmtMsgTime(m.createdAt)}</span>${footExtra}`
-      : `<span class="rh-message-meta">${fmtMsgTime(m.createdAt)}${m.status === 'read' ? ' ' + checkSvg : ''}</span>`;
+      : `<span class="rh-message-meta">${fmtMsgTime(m.createdAt)}${statusIco ? ' ' + statusIco : ''}</span>`;
+    const bubbleClass = (dir === 'outgoing' && m.status === 'failed') ? 'rh-bubble is-failed' : 'rh-bubble';
+    const errLine = (dir === 'outgoing' && m.status === 'failed' && m.errorReason)
+      ? `<div class="rh-msg-error">⚠ ${escapeHtml(m.errorReason)}</div>` : '';
     return `
       <article class="rh-message rh-${dir}">
-        <div class="rh-bubble">${escapeHtml(m.body).replace(/\n/g, "<br/>")}</div>
+        <div class="${bubbleClass}">${escapeHtml(m.body).replace(/\n/g, "<br/>")}</div>
+        ${errLine}
         <div class="rh-message-foot${dir === 'outgoing' ? ' rh-foot-out' : ''}">${footContent}</div>
       </article>`;
   }).join("");

@@ -5415,3 +5415,48 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   font-weight: 700;
   color: #b91c1c;
 }
+
+/* ═══════ Placeholders del body (paridad con Kommo) ═══════ */
+.tpl-placeholders-box {
+  margin-top: 6px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+}
+.tpl-placeholders-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+.tpl-placeholders-head strong { font-size: 14px; color: #0f172a; }
+.tpl-placeholders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tpl-placeholder-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 1.2fr;
+  gap: 8px;
+  align-items: center;
+}
+.tpl-placeholder-num {
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.tpl-var-btn--num {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-weight: 600;
+}
+.tpl-var-label--free { margin-left: 8px; color: #94a3b8; font-size: 12px; }

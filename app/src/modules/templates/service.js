@@ -80,9 +80,15 @@ function buildComponents(template) {
     const varNums = [...template.body.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
     if (varNums.length) {
       const max = Math.max(...varNums);
-      // Genera ejemplos placeholder ("Ejemplo 1", "Ejemplo 2", ...) — Meta solo
-      // los necesita para que su revisor entienda el formato.
-      const examples = Array.from({ length: max }, (_, i) => `Ejemplo ${i + 1}`);
+      // Usa los ejemplos provistos por el usuario; rellena con genéricos si faltan.
+      let phs = template.bodyPlaceholders;
+      if (typeof phs === 'string') {
+        try { phs = JSON.parse(phs); } catch { phs = null; }
+      }
+      const examples = Array.from({ length: max }, (_, i) => {
+        const ph = Array.isArray(phs) ? phs[i] : null;
+        return (ph && typeof ph.example === 'string' && ph.example.trim()) ? ph.example.trim() : `Ejemplo ${i + 1}`;
+      });
       comp.example = { body_text: [examples] };
     }
     components.push(comp);
@@ -177,26 +183,27 @@ function getById(db, id) {
 
 function create(db, { type = 'free_form', name, displayName, category = 'UTILITY', language = 'es_MX',
                        header, body, footer,
-                       headerType, headerMediaUrl, headerMediaHandle, buttons }) {
+                       headerType, headerMediaUrl, headerMediaHandle, buttons, bodyPlaceholders }) {
   if (!name?.trim()) throw new Error('El nombre es obligatorio');
   if (!body?.trim()) throw new Error('El cuerpo es obligatorio');
   const ht = (headerType || 'TEXT').toUpperCase();
   const btnsJson = (Array.isArray(buttons) && buttons.length) ? JSON.stringify(buttons) : null;
+  const phsJson  = (Array.isArray(bodyPlaceholders) && bodyPlaceholders.length) ? JSON.stringify(bodyPlaceholders) : null;
   const r = db.prepare(`
     INSERT INTO message_templates
       (type, name, display_name, category, language, header, body, footer,
-       header_type, header_media_url, header_media_handle, buttons)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       header_type, header_media_url, header_media_handle, buttons, body_placeholders)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     type, name.trim(), displayName?.trim() || null, category, language,
     header?.trim() || null, body.trim(), footer?.trim() || null,
-    ht, headerMediaUrl || null, headerMediaHandle || null, btnsJson,
+    ht, headerMediaUrl || null, headerMediaHandle || null, btnsJson, phsJson,
   );
   return getById(db, r.lastInsertRowid);
 }
 
 function update(db, id, { name, displayName, category, language, header, body, footer,
-                          headerType, headerMediaUrl, headerMediaHandle, headerMediaId, buttons,
+                          headerType, headerMediaUrl, headerMediaHandle, headerMediaId, buttons, bodyPlaceholders,
                           waStatus, waId, waRejectedReason }) {
   const existing = db.prepare('SELECT * FROM message_templates WHERE id = ?').get(id);
   if (!existing) return null;
@@ -216,6 +223,10 @@ function update(db, id, { name, displayName, category, language, header, body, f
   if (buttons !== undefined) {
     fields.push('buttons = ?');
     params.push(Array.isArray(buttons) && buttons.length ? JSON.stringify(buttons) : null);
+  }
+  if (bodyPlaceholders !== undefined) {
+    fields.push('body_placeholders = ?');
+    params.push(Array.isArray(bodyPlaceholders) && bodyPlaceholders.length ? JSON.stringify(bodyPlaceholders) : null);
   }
   if (waStatus !== undefined)         { fields.push('wa_status = ?');           params.push(waStatus); }
   if (waId !== undefined)             { fields.push('wa_id = ?');               params.push(waId); }
@@ -304,6 +315,10 @@ function row(r) {
   if (r.buttons) {
     try { buttons = JSON.parse(r.buttons); } catch { buttons = null; }
   }
+  let bodyPlaceholders = null;
+  if (r.body_placeholders) {
+    try { bodyPlaceholders = JSON.parse(r.body_placeholders); } catch { bodyPlaceholders = null; }
+  }
   return {
     id:          r.id,
     type:        r.type,
@@ -319,6 +334,7 @@ function row(r) {
     headerMediaHandle: r.header_media_handle || null,
     headerMediaId:     r.header_media_id || null,
     buttons,
+    bodyPlaceholders,
     waStatus:         r.wa_status,
     waId:             r.wa_id || null,
     waRejectedReason: r.wa_rejected_reason || null,

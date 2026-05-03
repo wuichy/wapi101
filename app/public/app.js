@@ -6546,8 +6546,9 @@ function renderTemplates() {
 }
 
 // State del modal de plantillas
-let _tplDraftButtons = [];   // [{type, text, url?, phone_number?}]
-let _tplDraftMediaFile = null; // File pendiente de upload (para nuevas plantillas o cambio de media)
+let _tplDraftButtons = [];        // [{type, text, url?, phone_number?}]
+let _tplDraftMediaFile = null;    // File pendiente de upload
+let _tplDraftPlaceholders = [];   // [{label, example}] — uno por cada {{N}} del body
 
 function openTplModal(tmpl = null) {
   _tplEditId = tmpl?.id || null;
@@ -6577,6 +6578,8 @@ function openTplModal(tmpl = null) {
 
     // Buttons
     _tplDraftButtons = Array.isArray(tmpl.buttons) ? JSON.parse(JSON.stringify(tmpl.buttons)) : [];
+    // Placeholders del body
+    _tplDraftPlaceholders = Array.isArray(tmpl.bodyPlaceholders) ? JSON.parse(JSON.stringify(tmpl.bodyPlaceholders)) : [];
   } else {
     document.getElementById('tplName').value = '';
     document.getElementById('tplDisplayName').value = '';
@@ -6590,8 +6593,10 @@ function openTplModal(tmpl = null) {
     if (htText) htText.checked = true;
     setHeaderTypeUI('TEXT', false);
     _tplDraftButtons = [];
+    _tplDraftPlaceholders = [];
   }
   renderTplButtonsList();
+  renderTplPlaceholdersBox();
   // Reset file input
   const fileInput = document.getElementById('tplHeaderFile');
   if (fileInput) fileInput.value = '';
@@ -6654,6 +6659,64 @@ function addTplButton() {
   }
   _tplDraftButtons.push({ type: 'QUICK_REPLY', text: '' });
   renderTplButtonsList();
+}
+
+// Detecta {{1}}, {{2}}, ... en el body y sincroniza el array de placeholders.
+// Mantiene los labels/ejemplos que el usuario ya puso para placeholders existentes.
+function syncTplPlaceholdersFromBody() {
+  const body = document.getElementById('tplBody')?.value || '';
+  const nums = [...body.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
+  if (!nums.length) {
+    _tplDraftPlaceholders = [];
+    renderTplPlaceholdersBox();
+    return;
+  }
+  const max = Math.max(...nums);
+  // Asegura que haya un slot por cada índice 1..max
+  const next = [];
+  for (let i = 0; i < max; i++) {
+    next[i] = _tplDraftPlaceholders[i] || { label: '', example: '' };
+  }
+  _tplDraftPlaceholders = next;
+  renderTplPlaceholdersBox();
+}
+
+function renderTplPlaceholdersBox() {
+  const box = document.getElementById('tplPlaceholdersBox');
+  const list = document.getElementById('tplPlaceholdersList');
+  if (!box || !list) return;
+  // Solo se muestra si hay placeholders detectados Y la plantilla es wa_api
+  const isWa = document.getElementById('tplTypeWaApi')?.checked;
+  if (!isWa || !_tplDraftPlaceholders.length) {
+    box.hidden = true;
+    list.innerHTML = '';
+    return;
+  }
+  box.hidden = false;
+  list.innerHTML = _tplDraftPlaceholders.map((ph, i) => {
+    const label   = (ph.label   || '').replace(/"/g, '&quot;');
+    const example = (ph.example || '').replace(/"/g, '&quot;');
+    return `
+      <div class="tpl-placeholder-row" data-i="${i}">
+        <span class="tpl-placeholder-num">{{${i + 1}}}</span>
+        <input class="int-input tpl-ph-label"   data-i="${i}" data-field="label"   value="${label}"   placeholder="Nombre del placeholder (ej: Nombre)" maxlength="40" />
+        <input class="int-input tpl-ph-example" data-i="${i}" data-field="example" value="${example}" placeholder="Valor de ejemplo (ej: Luis)" maxlength="60" />
+      </div>
+    `;
+  }).join('');
+}
+
+function _collectTplPlaceholders() {
+  const rows = document.querySelectorAll('#tplPlaceholdersList .tpl-placeholder-row');
+  const out = [];
+  rows.forEach(row => {
+    const i = Number(row.dataset.i);
+    out[i] = {
+      label:   row.querySelector('.tpl-ph-label')?.value.trim()   || '',
+      example: row.querySelector('.tpl-ph-example')?.value.trim() || '',
+    };
+  });
+  return out;
 }
 
 function _collectTplButtons() {
@@ -6724,6 +6787,7 @@ async function saveTpl() {
     }
   }
 
+  const placeholders = _collectTplPlaceholders();
   const payload = {
     type, name, displayName, category, language,
     header: headerType === 'TEXT' ? (header || null) : null,
@@ -6731,6 +6795,7 @@ async function saveTpl() {
     footer: footer || null,
     headerType,
     buttons: buttons.length ? buttons : null,
+    bodyPlaceholders: placeholders.length ? placeholders : null,
   };
   if (errEl) errEl.hidden = true;
 
@@ -6961,11 +7026,36 @@ function setupTemplates() {
     if (!btn) return;
     const ta = document.getElementById('tplBody');
     if (!ta) return;
-    const v = btn.dataset.var;
+    let v = btn.dataset.var;
+    // Si es el botón de "+ Variable" → calcula el próximo {{N}} no usado
+    if (btn.hasAttribute('data-var-num')) {
+      const used = [...(ta.value.matchAll(/\{\{(\d+)\}\}/g))].map(m => Number(m[1]));
+      const next = used.length ? Math.max(...used) + 1 : 1;
+      v = `{{${next}}}`;
+    }
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
     ta.setRangeText(v, start, end, 'end');
     ta.focus();
+    syncTplPlaceholdersFromBody();
+  });
+
+  // Cuando el usuario edita el body manualmente, re-sincronizar placeholders.
+  document.getElementById('tplBody')?.addEventListener('input', syncTplPlaceholdersFromBody);
+
+  // Mostrar/ocultar caja de placeholders al cambiar tipo de plantilla
+  document.querySelectorAll('input[name="tplType"]').forEach(r => {
+    r.addEventListener('change', renderTplPlaceholdersBox);
+  });
+
+  // Capturar edición de label/example de placeholders.
+  document.getElementById('tplPlaceholdersList')?.addEventListener('input', (e) => {
+    const i = Number(e.target.dataset.i);
+    if (Number.isNaN(i) || !_tplDraftPlaceholders[i]) return;
+    const field = e.target.dataset.field;
+    if (field === 'label' || field === 'example') {
+      _tplDraftPlaceholders[i][field] = e.target.value;
+    }
   });
 
   // Card actions (delegated)

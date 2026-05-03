@@ -226,6 +226,19 @@
               </div>
 
               <div class="rh-chat-list" id="rhChatList"><!-- JS --></div>
+
+              <!-- Menú contextual (click derecho / long-press) en chat item -->
+              <div class="rh-chat-ctx-menu" id="rhChatCtxMenu" hidden>
+                <button class="rh-ctx-item" data-ctx-action="pin">📌 <span data-ctx-label-pin>Fijar</span></button>
+                <button class="rh-ctx-item" data-ctx-action="markUnread">👁 Marcar como no leído</button>
+                <button class="rh-ctx-item" data-ctx-action="bot">🤖 <span data-ctx-label-bot>Pausar bot</span></button>
+                <button class="rh-ctx-item" data-ctx-action="contact">👤 Ver ficha del contacto</button>
+                <button class="rh-ctx-item" data-ctx-action="expedient">📂 Abrir expediente</button>
+                <button class="rh-ctx-item" data-ctx-action="copyPhone">📋 Copiar teléfono</button>
+                <hr class="rh-ctx-sep">
+                <button class="rh-ctx-item" data-ctx-action="mute">🔇 <span data-ctx-label-mute>Silenciar 1h</span></button>
+                <button class="rh-ctx-item" data-ctx-action="archive">📁 <span data-ctx-label-archive>Archivar</span></button>
+              </div>
             </aside>
 
             <!-- Panel de conversación -->

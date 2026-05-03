@@ -41,11 +41,14 @@ function hydrateConvo(db, row) {
     unreadCount:    row.unread_count || 0,
     botPaused:      !!row.bot_paused,
     botPausedAt:    row.bot_paused_at || null,
+    pinned:         !!row.pinned,
+    archived:       !!row.archived,
+    mutedUntil:     row.muted_until || null,
     createdAt:      row.created_at,
   };
 }
 
-function list(db, { search, provider, unreadOnly, contactId, page = 1, pageSize = 50 } = {}) {
+function list(db, { search, provider, unreadOnly, contactId, includeArchived = false, page = 1, pageSize = 50 } = {}) {
   const allowedSizes = [20, 50, 100, 200];
   pageSize = allowedSizes.includes(Number(pageSize)) ? Number(pageSize) : 50;
   page = Math.max(1, Number(page) || 1);
@@ -56,6 +59,7 @@ function list(db, { search, provider, unreadOnly, contactId, page = 1, pageSize 
   if (provider) { conditions.push('c.provider = ?'); params.push(provider); }
   if (unreadOnly) { conditions.push('c.unread_count > 0'); }
   if (contactId) { conditions.push('c.contact_id = ?'); params.push(contactId); }
+  if (!includeArchived) conditions.push('COALESCE(c.archived, 0) = 0');
   if (search) {
     conditions.push(`(
       LOWER(co.first_name) LIKE ?
@@ -79,7 +83,7 @@ function list(db, { search, provider, unreadOnly, contactId, page = 1, pageSize 
     SELECT c.* FROM conversations c
     LEFT JOIN contacts co ON co.id = c.contact_id
     ${where}
-    ORDER BY c.last_message_at DESC
+    ORDER BY COALESCE(c.pinned, 0) DESC, c.last_message_at DESC
     LIMIT ? OFFSET ?
   `).all(...params, pageSize, (page - 1) * pageSize);
 
@@ -193,4 +197,18 @@ function setBotPaused(db, conversationId, paused) {
     .run(paused ? 1 : 0, paused ? Math.floor(Date.now()/1000) : null, conversationId);
 }
 
-module.exports = { list, getById, findOrCreate, addMessage, listMessages, markRead, setBotPaused, fmtTime };
+function setPinned(db, conversationId, pinned) {
+  db.prepare('UPDATE conversations SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, conversationId);
+}
+function setArchived(db, conversationId, archived) {
+  db.prepare('UPDATE conversations SET archived = ? WHERE id = ?').run(archived ? 1 : 0, conversationId);
+}
+function setMutedUntil(db, conversationId, untilTs) {
+  db.prepare('UPDATE conversations SET muted_until = ? WHERE id = ?').run(untilTs || null, conversationId);
+}
+function markUnread(db, conversationId) {
+  // Si ya es 0, lo ponemos en 1 para que se vea el badge azul
+  db.prepare('UPDATE conversations SET unread_count = MAX(unread_count, 1) WHERE id = ?').run(conversationId);
+}
+
+module.exports = { list, getById, findOrCreate, addMessage, listMessages, markRead, markUnread, setBotPaused, setPinned, setArchived, setMutedUntil, fmtTime };

@@ -103,6 +103,31 @@ module.exports = function createConversationsRouter(db) {
     res.json({ ok: true });
   });
 
+  // PATCH /api/conversations/:id/unread — re-aparece el badge azul
+  router.patch('/:id/unread', (req, res) => {
+    svc.markUnread(db, Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  // PATCH /api/conversations/:id/pin — body: { pinned: bool }
+  router.patch('/:id/pin', (req, res) => {
+    svc.setPinned(db, Number(req.params.id), !!req.body?.pinned);
+    res.json({ ok: true });
+  });
+
+  // PATCH /api/conversations/:id/archive — body: { archived: bool }
+  router.patch('/:id/archive', (req, res) => {
+    svc.setArchived(db, Number(req.params.id), !!req.body?.archived);
+    res.json({ ok: true });
+  });
+
+  // PATCH /api/conversations/:id/mute — body: { until: unixTs|null }
+  router.patch('/:id/mute', (req, res) => {
+    const until = req.body?.until ? Number(req.body.until) : null;
+    svc.setMutedUntil(db, Number(req.params.id), until);
+    res.json({ ok: true });
+  });
+
   // PATCH /api/conversations/:id/bot-paused
   router.patch('/:id/bot-paused', (req, res) => {
     const { paused } = req.body;

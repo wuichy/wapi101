@@ -255,11 +255,13 @@ function renderChatList() {
           ? `<span class="rh-chat-unread-count">${c.unreadCount > 99 ? '99+' : c.unreadCount}</span>`
           : `<span class="rh-chat-unread-dot"></span>`)
       : '';
+    const pinIcon = c.pinned ? `<span class="rh-chat-pin-icon" title="Fijado">📌</span>` : '';
+    const mutedIcon = (c.mutedUntil && c.mutedUntil * 1000 > Date.now()) ? `<span class="rh-chat-muted-icon" title="Silenciado">🔇</span>` : '';
     return `
-    <div role="button" tabindex="0" class="rh-chat-item ${c.id === ACTIVE_CONVO_ID ? "rh-active" : ""} ${unread ? 'is-unread' : ''}" data-id="${c.id}">
+    <div role="button" tabindex="0" class="rh-chat-item ${c.id === ACTIVE_CONVO_ID ? "rh-active" : ""} ${unread ? 'is-unread' : ''} ${c.pinned ? 'is-pinned' : ''}" data-id="${c.id}">
       ${personalAction}
       <div class="rh-chat-item-top">
-        <strong class="rh-chat-name">${escapeHtml(c.name || c.contactName || '—')}</strong>
+        <strong class="rh-chat-name">${pinIcon}${mutedIcon}${escapeHtml(c.name || c.contactName || '—')}</strong>
         <span class="rh-chat-meta-right">
           <span class="rh-chat-time">${escapeHtml(c.time || '')}</span>
           ${unreadBadge}
@@ -7272,6 +7274,155 @@ function refreshReplyFormState() {
   updateReplyFormState(convo);
 }
 
+// ════════ Menú contextual (click derecho) en chat list ════════
+let _ctxConvoId = null;
+
+function openChatContextMenu(x, y, convoId) {
+  const menu = document.getElementById('rhChatCtxMenu');
+  if (!menu) return;
+  _ctxConvoId = convoId;
+  const convo = CONVERSATIONS.find(c => c.id === convoId);
+  if (!convo) return;
+
+  // Actualizar labels dinámicos según estado
+  const labelPin = menu.querySelector('[data-ctx-label-pin]');
+  const labelBot = menu.querySelector('[data-ctx-label-bot]');
+  const labelMute = menu.querySelector('[data-ctx-label-mute]');
+  const labelArchive = menu.querySelector('[data-ctx-label-archive]');
+  if (labelPin)  labelPin.textContent  = convo.pinned ? 'Desfijar' : 'Fijar';
+  if (labelBot)  labelBot.textContent  = convo.botPaused ? 'Reanudar bot' : 'Pausar bot';
+  if (labelMute) {
+    const muted = convo.mutedUntil && convo.mutedUntil * 1000 > Date.now();
+    labelMute.textContent = muted ? 'Quitar silencio' : 'Silenciar 1h';
+  }
+  if (labelArchive) labelArchive.textContent = convo.archived ? 'Desarchivar' : 'Archivar';
+
+  // Posicionar y mostrar
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+  menu.hidden = false;
+
+  // Si se sale del viewport, ajustar
+  requestAnimationFrame(() => {
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = `${x - rect.width}px`;
+    if (rect.bottom > window.innerHeight) menu.style.top = `${y - rect.height}px`;
+  });
+}
+
+function closeChatContextMenu() {
+  const menu = document.getElementById('rhChatCtxMenu');
+  if (menu) menu.hidden = true;
+  _ctxConvoId = null;
+}
+
+async function handleChatContextAction(action) {
+  if (!_ctxConvoId) return;
+  const convoId = _ctxConvoId;
+  const convo = CONVERSATIONS.find(c => c.id === convoId);
+  if (!convo) return;
+  closeChatContextMenu();
+  try {
+    switch (action) {
+      case 'pin':
+        await api('PATCH', `/api/conversations/${convoId}/pin`, { pinned: !convo.pinned });
+        await loadConversations();
+        toast(convo.pinned ? 'Desfijado' : 'Fijado al inicio', 'success');
+        break;
+      case 'markUnread':
+        await api('PATCH', `/api/conversations/${convoId}/unread`);
+        await loadConversations();
+        toast('Marcado como no leído', 'success');
+        break;
+      case 'bot': {
+        const newPaused = !convo.botPaused;
+        await api('PATCH', `/api/conversations/${convoId}/bot-paused`, { paused: newPaused });
+        await loadConversations();
+        toast(newPaused ? 'Bot pausado' : 'Bot reanudado', 'success');
+        break;
+      }
+      case 'contact':
+        if (convo.contactId) openContactCardFromChat(convo.contactId);
+        break;
+      case 'expedient': {
+        const exp = (PL_EXP_CACHE || []).find(e => e.contactId === convo.contactId && (e.stageKind === 'in_progress' || !e.stageKind));
+        if (exp) openExpDetail(exp.id, 'chats');
+        else toast('Este contacto no tiene expediente abierto', 'info');
+        break;
+      }
+      case 'copyPhone':
+        try {
+          await navigator.clipboard.writeText(convo.phone || convo.contactPhone || '');
+          toast('Teléfono copiado', 'success');
+        } catch { toast('No se pudo copiar al portapapeles', 'error'); }
+        break;
+      case 'mute': {
+        const muted = convo.mutedUntil && convo.mutedUntil * 1000 > Date.now();
+        const until = muted ? null : Math.floor(Date.now() / 1000) + 3600;
+        await api('PATCH', `/api/conversations/${convoId}/mute`, { until });
+        await loadConversations();
+        toast(muted ? 'Notificaciones reactivadas' : 'Silenciado por 1 hora', 'success');
+        break;
+      }
+      case 'archive': {
+        const newArchived = !convo.archived;
+        await api('PATCH', `/api/conversations/${convoId}/archive`, { archived: newArchived });
+        await loadConversations();
+        toast(newArchived ? 'Conversación archivada' : 'Desarchivada', 'success');
+        break;
+      }
+    }
+  } catch (err) { toast(err.message || 'Error', 'error'); }
+}
+
+function setupChatContextMenu() {
+  const list = document.getElementById('rhChatList');
+  const menu = document.getElementById('rhChatCtxMenu');
+  if (!list || !menu) return;
+
+  // Click derecho desktop
+  list.addEventListener('contextmenu', (e) => {
+    const item = e.target.closest('.rh-chat-item');
+    if (!item) return;
+    e.preventDefault();
+    openChatContextMenu(e.clientX, e.clientY, Number(item.dataset.id));
+  });
+
+  // Long-press móvil (500ms)
+  let longPressTimer = null;
+  let startedAt = 0;
+  list.addEventListener('touchstart', (e) => {
+    const item = e.target.closest('.rh-chat-item');
+    if (!item) return;
+    startedAt = Date.now();
+    longPressTimer = setTimeout(() => {
+      const t = e.touches[0];
+      openChatContextMenu(t.clientX, t.clientY, Number(item.dataset.id));
+    }, 500);
+  }, { passive: true });
+  list.addEventListener('touchend', () => { clearTimeout(longPressTimer); });
+  list.addEventListener('touchmove', () => { clearTimeout(longPressTimer); });
+
+  // Click en una opción del menú
+  menu.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ctx-action]');
+    if (!btn) return;
+    e.stopPropagation();
+    handleChatContextAction(btn.dataset.ctxAction);
+  });
+
+  // Cerrar al hacer click fuera o presionar Esc
+  document.addEventListener('click', (e) => {
+    if (menu.hidden) return;
+    if (!menu.contains(e.target)) closeChatContextMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeChatContextMenu();
+  });
+  // Cerrar al hacer scroll
+  list.addEventListener('scroll', closeChatContextMenu, { passive: true });
+}
+
 // ════════ Personal tags (modo /chat) — etiquetas privadas por asesor ════════
 let _personalTags = [];           // todas mis etiquetas
 let _personalTagsForContact = []; // las asignadas al contacto activo
@@ -8060,6 +8211,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupReplyForm();
   setupAttachMenu();
   setupPersonalTagsUI();
+  setupChatContextMenu();
   if (window.PERSONAL_MODE) loadPersonalTags();
 
   // Bot toggle handler (usa conversación cuando está disponible)

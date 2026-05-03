@@ -6,7 +6,7 @@
 const convoSvc     = require('../conversations/service');
 const expedientSvc = require('../expedients/service');
 const activitySvc  = require('../expedients/activity');
-const { sendMessage } = require('../conversations/sender');
+const { sendMessage, sendWhatsAppTemplate } = require('../conversations/sender');
 
 const MS = { segundos: 1000, minutos: 60_000, horas: 3_600_000, 'días': 86_400_000 };
 
@@ -315,6 +315,31 @@ async function executeStep(db, step, ctx) {
         _log('info', `mensaje enviado OK, externalId=${externalId}`);
       } catch (err) {
         _log('error', `error enviando mensaje: ${err.message}`);
+      }
+      return false;
+    }
+
+    case 'template': {
+      // Envía una plantilla wa_api APROBADA usando sendWhatsAppTemplate.
+      // Los placeholders mapeados (contactField) se rellenan automáticamente
+      // desde el contacto. Los Manual usan los valores fijos guardados en c.manualValues.
+      const templateId = Number(c.templateId);
+      if (!templateId) { _log('warn', 'template: sin templateId'); return false; }
+      if (!ctx.convoId) { _log('warn', 'template: sin convoId'); return false; }
+      try {
+        const convo = convoSvc.getById(db, ctx.convoId);
+        if (!convo) return false;
+        const result = await sendWhatsAppTemplate(db, convo, templateId, c.manualValues || []);
+        convoSvc.addMessage(db, ctx.convoId, {
+          externalId: result.externalId,
+          direction: 'outgoing',
+          provider:  convo.provider,
+          body:      result.renderedBody,
+          status:    'sent',
+        });
+        _log('info', `template ${templateId} enviada OK, externalId=${result.externalId}`);
+      } catch (err) {
+        _log('error', `error enviando template: ${err.message}`);
       }
       return false;
     }

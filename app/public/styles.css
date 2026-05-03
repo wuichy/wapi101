@@ -5480,6 +5480,55 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   padding: 6px 10px;
   border-radius: 6px;
 }
+
+/* Bot step type "template" — editor */
+.sb-tpl-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f1f5f9;
+  border-left: 3px solid #6366f1;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #475569;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.sb-tpl-phs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sb-tpl-ph-row {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.sb-tpl-ph-num {
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.sb-tpl-ph-auto {
+  font-size: 12px;
+  color: #15803d;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.sb-tpl-manual {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+}
 .tpl-placeholder-num {
   text-align: center;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

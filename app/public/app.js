@@ -3852,6 +3852,7 @@ async function loadBotTags() {
 
 const SB_STEP_LABELS = {
   message:   'Enviar mensaje',
+  template:  'Enviar plantilla',
   timer:     'Temporizador',
   condition: 'Condición',
   stage:     'Cambiar etapa',
@@ -4072,6 +4073,13 @@ function stepSummary(step) {
       }
       return preview;
     }
+    case 'template': {
+      if (!c.templateId) return 'Sin plantilla seleccionada';
+      const tpl = (_tplItems || []).find(t => t.id == c.templateId);
+      if (!tpl) return `Plantilla #${c.templateId} (no encontrada)`;
+      const status = tpl.waStatus === 'approved' ? '✓' : `⚠ ${tpl.waStatus}`;
+      return `📋 ${tpl.displayName || tpl.name} · ${status}`;
+    }
     case 'timer': {
       if (c.days !== undefined || c.hours !== undefined || c.minutes !== undefined || c.seconds !== undefined) {
         const parts = [];
@@ -4095,6 +4103,7 @@ function stepSummary(step) {
 function stepIconSvg(type) {
   const icons = {
     message:   `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M3 4h14a1 1 0 011 1v9a1 1 0 01-1 1H5l-3 3V5a1 1 0 011-1z"/></svg>`,
+    template:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M7 12h6"/></svg>`,
     timer:     `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="11" r="7"/><path d="M10 7v4l2.5 2.5"/><path d="M8 2h4"/></svg>`,
     condition: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M10 3v14M3 10h14"/><circle cx="10" cy="10" r="3"/></svg>`,
     stage:     `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="5" width="16" height="12" rx="2"/><path d="M2 9h16"/><circle cx="6" cy="14" r="1" fill="currentColor" stroke="none"/></svg>`,
@@ -4122,6 +4131,57 @@ function buildStepBody(step) {
         <label style="margin-top:12px">Mensaje</label>
         <textarea data-field="text" data-sid="${sid}" rows="4" placeholder="Escribe el mensaje aquí…">${escHtml(c.text || '')}</textarea>
         <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Variables: {nombre} {apellido} {telefono} {email}</p>`;
+    case 'template': {
+      // Solo plantillas wa_api APROBADAS por Meta — las demás no se pueden enviar.
+      const waApproved = (_tplItems || []).filter(t => t.type === 'wa_api' && t.waStatus === 'approved');
+      const tplOpts = waApproved.map(t =>
+        `<option value="${t.id}" ${c.templateId == t.id ? 'selected' : ''}>${escHtml(t.displayName || t.name)}</option>`
+      ).join('');
+      const tpl = (_tplItems || []).find(t => t.id == c.templateId);
+      let phsHtml = '';
+      if (tpl) {
+        const max = [...(tpl.body || '').matchAll(/\{\{(\d+)\}\}/g)]
+          .map(m => Number(m[1]))
+          .reduce((a, b) => Math.max(a, b), 0);
+        if (max > 0) {
+          const phs = tpl.bodyPlaceholders || [];
+          const mv = c.manualValues || [];
+          const rows = [];
+          for (let i = 0; i < max; i++) {
+            const ph = phs[i] || {};
+            if (ph.contactField) {
+              rows.push(`
+                <div class="sb-tpl-ph-row">
+                  <span class="sb-tpl-ph-num">{{${i + 1}}}</span>
+                  <span class="sb-tpl-ph-auto">${escHtml(ph.label || '(sin nombre)')} → auto del contacto (${escHtml(ph.contactField)})</span>
+                </div>`);
+            } else {
+              rows.push(`
+                <div class="sb-tpl-ph-row">
+                  <span class="sb-tpl-ph-num">{{${i + 1}}}</span>
+                  <input class="sb-tpl-manual" data-sid="${sid}" data-i="${i}" value="${escHtml(mv[i] || '')}" placeholder="${escHtml(ph.label || ph.example || `Valor para {{${i + 1}}}`)}" />
+                </div>`);
+            }
+          }
+          phsHtml = `
+            <label style="margin-top:12px">Valores fijos (los Manual del template)</label>
+            <p style="font-size:11px;color:var(--text-muted);margin:0 0 6px">Los placeholders mapeados al contacto se rellenan solos al enviar.</p>
+            <div class="sb-tpl-phs">${rows.join('')}</div>`;
+        }
+      }
+      const noApproved = !waApproved.length
+        ? '<p style="font-size:12px;color:#dc2626;margin-top:6px">No tienes plantillas wa_api aprobadas todavía. Ve a Plantillas → crear → Enviar a Meta.</p>'
+        : '';
+      return `
+        <label>Plantilla aprobada por Meta</label>
+        <select data-field="templateId" data-sid="${sid}">
+          <option value="">— Selecciona —</option>
+          ${tplOpts}
+        </select>
+        ${noApproved}
+        ${tpl ? `<div class="sb-tpl-preview">${escHtml((tpl.body || '').slice(0, 200))}${(tpl.body || '').length > 200 ? '…' : ''}</div>` : ''}
+        ${phsHtml}`;
+    }
     case 'timer': {
       // Backward compat: convert old {amount, unit} to new multi-field format for display
       let _d = Number(c.days) || 0, _h = Number(c.hours) || 0, _m = Number(c.minutes) || 0, _s = Number(c.seconds) || 0;
@@ -4290,6 +4350,15 @@ function collectStepConfig(sid) {
   if (cfg.stageId) {
     const stageEl = body.querySelector('.sb-stage-sel');
     cfg.stageName = stageEl ? stageEl.options[stageEl.selectedIndex]?.text : '';
+  }
+  // Template steps — manualValues array indexed por placeholder
+  const mvInputs = body.querySelectorAll('.sb-tpl-manual');
+  if (mvInputs.length) {
+    cfg.manualValues = [];
+    mvInputs.forEach(inp => {
+      const i = Number(inp.dataset.i);
+      cfg.manualValues[i] = inp.value;
+    });
   }
   return cfg;
 }

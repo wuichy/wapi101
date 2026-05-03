@@ -4128,9 +4128,12 @@ function buildStepBody(step) {
         <p class="sb-channel-hint" style="font-size:11px;color:var(--text-muted);margin-top:3px;margin-bottom:0">
           "Automático" responde por el canal donde llegó el mensaje. Elige uno específico solo en bots outbound.
         </p>
-        <label style="margin-top:12px">Mensaje</label>
+        <div class="sb-msg-label-row">
+          <label>Mensaje</label>
+          <button type="button" class="sb-tpl-insert-btn" data-sid="${sid}" title="Inserta el cuerpo de una plantilla básica">📋 Usar plantilla básica</button>
+        </div>
         <textarea data-field="text" data-sid="${sid}" rows="4" placeholder="Escribe el mensaje aquí…">${escHtml(c.text || '')}</textarea>
-        <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Variables: {nombre} {apellido} {telefono} {email}</p>`;
+        <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Variables: {nombre} {apellido} {telefono} {email} · Para plantillas WhatsApp API aprobadas usa el step "Enviar plantilla".</p>`;
     case 'template': {
       // Solo plantillas wa_api APROBADAS por Meta — las demás no se pueden enviar.
       const waApproved = (_tplItems || []).filter(t => t.type === 'wa_api' && t.waStatus === 'approved');
@@ -4682,6 +4685,18 @@ function setupBot() {
       return;
     }
     if (e.target.closest('#botBuilderAddTagBtn')) openBotBuilderTagPicker();
+  });
+
+  // Botón "Usar plantilla básica" dentro del step "Enviar mensaje".
+  // Delegamos a nivel de botBuilder porque las step-cards se re-renderizan.
+  document.getElementById('botBuilder')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.sb-tpl-insert-btn');
+    if (!btn) return;
+    e.preventDefault();
+    const sid = btn.dataset.sid;
+    const textarea = document.querySelector(`textarea[data-sid="${sid}"][data-field="text"]`);
+    if (!textarea) return;
+    openTplPickerForBotMessage(btn, textarea);
   });
 
   // ─── Tag manager modal listeners ───
@@ -6564,7 +6579,14 @@ function _tplAvailability(tpl, provider, lastIncomingAt) {
 
 let _tplPickerCtx = null; // { textarea, provider, lastIncomingAt }
 
-async function openTplPicker(triggerEl, textarea, provider, lastIncomingAt) {
+// Wrapper para abrir el picker desde el bot builder (step "Enviar mensaje").
+// Solo muestra plantillas básicas (free_form) y al elegir una copia el body
+// al textarea, sin abrir el modal de "Enviar plantilla" que es para chat.
+function openTplPickerForBotMessage(triggerEl, textarea) {
+  return openTplPicker(triggerEl, textarea, 'whatsapp', null, 'bot-message');
+}
+
+async function openTplPicker(triggerEl, textarea, provider, lastIncomingAt, mode = 'chat') {
   const picker = document.getElementById('rhTplPicker');
   if (!picker) return;
 
@@ -6575,7 +6597,7 @@ async function openTplPicker(triggerEl, textarea, provider, lastIncomingAt) {
     return;
   }
 
-  _tplPickerCtx = { textarea, provider, lastIncomingAt };
+  _tplPickerCtx = { textarea, provider, lastIncomingAt, mode };
 
   // Load templates if not yet loaded
   if (!_tplItems.length) {
@@ -6609,6 +6631,9 @@ function _renderTplPickerList(query) {
 
   const q = query.toLowerCase().trim();
   const items = _tplItems.filter(t => {
+    // En modo bot-message solo mostramos básicas (free_form). Las wa_api
+    // tienen su propio step "Enviar plantilla" en el bot builder.
+    if (ctx.mode === 'bot-message' && t.type !== 'free_form') return false;
     if (q && !(t.displayName || t.name || '').toLowerCase().includes(q) &&
              !(t.body || '').toLowerCase().includes(q)) return false;
     return true;
@@ -6652,11 +6677,24 @@ function _renderTplPickerList(query) {
     </button>`;
   }).join('');
 
-  // Click — comportamiento depende del tipo de plantilla
+  // Click — comportamiento depende del tipo de plantilla y del modo
   list.querySelectorAll('.rh-tpl-item:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => {
       const tpl = _tplItems.find(t => t.id === Number(btn.dataset.tplId));
       if (!tpl || !_tplPickerCtx) return;
+
+      // En modo bot-message: siempre copiar body al textarea (no abrir modal)
+      if (_tplPickerCtx.mode === 'bot-message') {
+        const ta = _tplPickerCtx.textarea;
+        if (ta) {
+          ta.value = tpl.body || '';
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ta.focus();
+        }
+        document.getElementById('rhTplPicker').hidden = true;
+        _tplPickerCtx = null;
+        return;
+      }
 
       if (tpl.type === 'wa_api') {
         // wa_api → abrir modal "Enviar plantilla" (auto-llena del contacto, pide manuales)

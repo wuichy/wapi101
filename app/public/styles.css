@@ -5676,6 +5676,32 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .tpl-card-bot-pill:active { transform: translateY(0); }
 
+/* "Mensaje" del bot — header con label y botón "Usar plantilla básica" */
+.sb-msg-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+.sb-msg-label-row label { margin: 0; }
+.sb-tpl-insert-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s, transform 0.1s;
+}
+.sb-tpl-insert-btn:hover {
+  background: #dbeafe;
+  transform: translateY(-1px);
+}
+.sb-tpl-insert-btn:active { transform: translateY(0); }
+
 /* Modo edición inline en tag manager (templates) */
 .tpl-tag-row--editing {
   background: #f8fafc;

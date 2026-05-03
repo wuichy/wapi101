@@ -441,6 +441,35 @@
         </div>
       </div>
 
+      <!-- Modal: estadísticas de bot -->
+      <div class="modal-backdrop" id="botStatsModal" hidden>
+        <div class="modal-box" style="max-width:760px">
+          <header class="modal-header">
+            <h2 id="botStatsTitle">Estadísticas del bot</h2>
+            <button class="modal-close" data-close-bot-stats>×</button>
+          </header>
+          <div class="modal-body">
+            <div class="bot-stats-tabs">
+              <button class="bot-stats-tab is-active" data-stats-tab="resumen">📊 Resumen</button>
+              <button class="bot-stats-tab" data-stats-tab="historial">📜 Historial</button>
+            </div>
+            <div class="bot-stats-pane is-active" data-stats-pane="resumen">
+              <div class="bot-stats-grid" id="botStatsCards"></div>
+              <div class="bot-stats-chart">
+                <div class="bot-stats-chart-label">Ejecuciones (últimos 14 días)</div>
+                <div class="bot-stats-spark" id="botStatsSpark"></div>
+              </div>
+            </div>
+            <div class="bot-stats-pane" data-stats-pane="historial">
+              <div class="bot-stats-history" id="botStatsHistory"></div>
+            </div>
+          </div>
+          <footer class="modal-footer">
+            <button class="btn btn--ghost" data-close-bot-stats>Cerrar</button>
+          </footer>
+        </div>
+      </div>
+
       <!-- Modal: configurar alarma de etapa -->
       <div class="modal-backdrop" id="alarmModal" hidden>
         <div class="modal-box" style="max-width:520px">

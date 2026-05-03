@@ -216,6 +216,103 @@ module.exports = function createBotRouter(db) {
     } catch (err) { res.status(404).json({ error: err.message }); }
   });
 
+  // GET /api/bot/:id/stats — métricas + historial de ejecuciones
+  router.get('/:id/stats', (req, res) => {
+    try {
+      const botId = Number(req.params.id);
+      const bot = db.prepare('SELECT id, name, trigger_type, trigger_value FROM salsbots WHERE id = ?').get(botId);
+      if (!bot) return res.status(404).json({ error: 'Bot no encontrado' });
+
+      // Conteo total y por estado
+      const counts = db.prepare(`
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN status = 'running' OR status = 'paused' THEN 1 ELSE 0 END) AS active,
+          SUM(CASE WHEN status = 'done'    THEN 1 ELSE 0 END) AS completed,
+          SUM(CASE WHEN status = 'error'   THEN 1 ELSE 0 END) AS failed,
+          SUM(CASE WHEN status = 'killed'  THEN 1 ELSE 0 END) AS killed,
+          MIN(started_at) AS first_run,
+          MAX(started_at) AS last_run
+        FROM bot_runs WHERE bot_id = ?
+      `).get(botId);
+
+      // Tasa de conversión: # leads que cambiaron de stage_id DESPUÉS de que el
+      // bot corrió / # total de runs. Heurística: si el expedient tiene
+      // expedient_activity tipo 'stage_change' después de bot_run.started_at,
+      // contamos como "conversión".
+      const conversions = db.prepare(`
+        SELECT COUNT(DISTINCT br.id) AS converted
+        FROM bot_runs br
+        WHERE br.bot_id = ?
+          AND br.expedient_id IS NOT NULL
+          AND br.status IN ('done', 'running', 'paused')
+          AND EXISTS (
+            SELECT 1 FROM expedient_activity ea
+            WHERE ea.expedient_id = br.expedient_id
+              AND ea.type = 'stage_change'
+              AND ea.created_at > br.started_at
+          )
+      `).get(botId);
+
+      const conversionRate = counts.total > 0
+        ? (conversions.converted / counts.total) * 100
+        : 0;
+
+      // Runs por día (últimos 14 días) para sparkline
+      const dailyRows = db.prepare(`
+        SELECT
+          CAST(strftime('%s', date(started_at, 'unixepoch'), '+0 days') AS INTEGER) AS day,
+          COUNT(*) AS n
+        FROM bot_runs
+        WHERE bot_id = ? AND started_at >= unixepoch() - 14 * 86400
+        GROUP BY day
+        ORDER BY day ASC
+      `).all(botId);
+
+      // Últimos 50 runs con detalles del contacto
+      const history = db.prepare(`
+        SELECT br.id, br.status, br.current_step, br.total_steps, br.error_msg,
+               br.started_at, br.finished_at,
+               c.first_name, c.last_name, c.phone,
+               e.name AS expedient_name
+        FROM bot_runs br
+        LEFT JOIN contacts c   ON c.id = br.contact_id
+        LEFT JOIN expedients e ON e.id = br.expedient_id
+        WHERE br.bot_id = ?
+        ORDER BY br.started_at DESC
+        LIMIT 50
+      `).all(botId);
+
+      res.json({
+        bot: { id: bot.id, name: bot.name, trigger_type: bot.trigger_type },
+        metrics: {
+          totalRuns: counts.total || 0,
+          activeRuns: counts.active || 0,
+          completedRuns: counts.completed || 0,
+          failedRuns: counts.failed || 0,
+          killedRuns: counts.killed || 0,
+          conversionRate: Number(conversionRate.toFixed(1)),
+          convertedCount: conversions.converted || 0,
+          firstRunAt: counts.first_run,
+          lastRunAt: counts.last_run,
+        },
+        daily: dailyRows.map(d => ({ day: d.day, count: d.n })),
+        history: history.map(r => ({
+          id: r.id,
+          status: r.status,
+          currentStep: r.current_step,
+          totalSteps: r.total_steps,
+          errorMsg: r.error_msg,
+          startedAt: r.started_at,
+          finishedAt: r.finished_at,
+          contactName: [r.first_name, r.last_name].filter(Boolean).join(' ') || '—',
+          contactPhone: r.phone || null,
+          expedientName: r.expedient_name || null,
+        })),
+      });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
   router.patch('/:id', (req, res) => {
     try {
       res.json({ item: service.update(db, req.params.id, req.body) });

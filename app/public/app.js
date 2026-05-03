@@ -4205,6 +4205,9 @@ function renderBotList() {
             </label>
           </div>
           <div class="bot-row-actions">
+            <button class="icon-btn icon-btn--ghost sb-stats-btn" data-id="${b.id}" aria-label="Estadísticas" title="Ver estadísticas">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><line x1="3" y1="17" x2="3" y2="11"/><line x1="9" y1="17" x2="9" y2="5"/><line x1="15" y1="17" x2="15" y2="13"/></svg>
+            </button>
             <button class="icon-btn icon-btn--ghost sb-clone-btn" data-id="${b.id}" aria-label="Clonar bot" title="Clonar bot">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M3 13V5a2 2 0 0 1 2-2h8"/></svg>
             </button>
@@ -4699,15 +4702,24 @@ function setupBot() {
 
   // Open existing bot on row click
   document.getElementById('botList')?.addEventListener('click', (e) => {
-    // No abrir el builder si el usuario clickeó el botón de eliminar, clonar o el toggle
+    // No abrir el builder si el usuario clickeó alguno de los botones de acciones
     if (e.target.closest('.sb-del-btn')) return;
     if (e.target.closest('.sb-clone-btn')) return;
+    if (e.target.closest('.sb-stats-btn')) return;
     if (e.target.closest('.sb-toggle')) return;
     const row = e.target.closest('.bot-list-row');
     if (!row) return;
     const id = Number(row.dataset.botId);
     const bot = sbBots.find(b => b.id === id);
     if (bot) openBotBuilder(bot);
+  });
+
+  // Stats button click → abrir modal de estadísticas
+  document.getElementById('botList')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.sb-stats-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    openBotStatsModal(Number(btn.dataset.id));
   });
 
   // Clone bot (list)
@@ -6974,6 +6986,139 @@ function setupPipelines() {
   });
 }
 
+// ════════ Estadísticas de bot ════════
+async function openBotStatsModal(botId) {
+  const modal = document.getElementById('botStatsModal');
+  if (!modal) return;
+  document.getElementById('botStatsTitle').textContent = 'Cargando estadísticas…';
+  document.getElementById('botStatsCards').innerHTML = '';
+  document.getElementById('botStatsSpark').innerHTML = '';
+  document.getElementById('botStatsHistory').innerHTML = '';
+  modal.hidden = false;
+  try {
+    const data = await api('GET', `/api/bot/${botId}/stats`);
+    document.getElementById('botStatsTitle').textContent = `📊 ${data.bot.name}`;
+    renderBotStatsResumen(data);
+    renderBotStatsHistory(data.history);
+  } catch (err) {
+    document.getElementById('botStatsTitle').textContent = 'Error';
+    document.getElementById('botStatsCards').innerHTML = `<div class="bot-stats-error">${escHtml(err.message || 'Error cargando stats')}</div>`;
+  }
+}
+
+function renderBotStatsResumen(data) {
+  const m = data.metrics;
+  const fmtTs = (ts) => ts ? new Date(ts * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  const cards = [
+    { icon: '🎯', label: 'Tasa de conversión', value: `${m.conversionRate}%`, sub: `${m.convertedCount} de ${m.totalRuns} avanzaron de etapa`, accent: m.conversionRate >= 50 ? 'green' : (m.conversionRate >= 25 ? 'amber' : 'red') },
+    { icon: '🚀', label: 'Lanzamientos totales', value: m.totalRuns, sub: m.firstRunAt ? `Desde ${fmtTs(m.firstRunAt)}` : 'Aún sin ejecuciones' },
+    { icon: '🟢', label: 'Sesiones activas', value: m.activeRuns, sub: 'En ejecución o pausadas ahora' },
+    { icon: '✅', label: 'Completadas', value: m.completedRuns, sub: `${m.totalRuns ? Math.round((m.completedRuns/m.totalRuns)*100) : 0}% del total` },
+    { icon: '⚠', label: 'Fallidas', value: m.failedRuns, sub: m.failedRuns > 0 ? 'Revisa el historial' : 'Sin errores' },
+    { icon: '⛔', label: 'Detenidas', value: m.killedRuns, sub: 'Manualmente o por límite' },
+  ];
+  document.getElementById('botStatsCards').innerHTML = cards.map(c => `
+    <div class="bot-stats-card ${c.accent ? 'accent-' + c.accent : ''}">
+      <div class="bot-stats-card-ico">${c.icon}</div>
+      <div class="bot-stats-card-val">${escHtml(String(c.value))}</div>
+      <div class="bot-stats-card-label">${escHtml(c.label)}</div>
+      <div class="bot-stats-card-sub">${escHtml(c.sub)}</div>
+    </div>
+  `).join('');
+
+  // Sparkline simple — barras verticales por día (últimos 14)
+  const days = data.daily || [];
+  if (!days.length) {
+    document.getElementById('botStatsSpark').innerHTML = '<div class="bot-stats-no-data">Sin datos en los últimos 14 días</div>';
+    return;
+  }
+  const maxN = Math.max(...days.map(d => d.count), 1);
+  // Generar grid completa de 14 días para que se vean huecos
+  const today = Math.floor(Date.now() / 1000);
+  const dayMs = 86400;
+  const buckets = [];
+  for (let i = 13; i >= 0; i--) {
+    const dayStart = today - i * dayMs;
+    const date = new Date(dayStart * 1000);
+    const dayKey = Math.floor(date.setHours(0,0,0,0) / 1000);
+    const found = days.find(d => Math.abs(d.day - dayKey) < dayMs);
+    buckets.push({ ts: dayKey, count: found?.count || 0, label: new Date(dayKey * 1000).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) });
+  }
+  document.getElementById('botStatsSpark').innerHTML = buckets.map(b => `
+    <div class="bot-stats-spark-col" title="${b.label}: ${b.count} ejecucione${b.count === 1 ? '' : 's'}">
+      <div class="bot-stats-spark-bar" style="height:${Math.max(2, (b.count / maxN) * 100)}%"></div>
+      <div class="bot-stats-spark-day">${b.label.split(' ')[0]}</div>
+    </div>
+  `).join('');
+}
+
+function renderBotStatsHistory(history) {
+  const root = document.getElementById('botStatsHistory');
+  if (!history || !history.length) {
+    root.innerHTML = '<div class="bot-stats-no-data">Sin ejecuciones registradas todavía.</div>';
+    return;
+  }
+  const fmtRel = (ts) => ts ? relTime(ts) : '—';
+  const statusBadge = {
+    running: '<span class="bsh-status running">🟢 Corriendo</span>',
+    paused:  '<span class="bsh-status paused">⏸ Pausada</span>',
+    done:    '<span class="bsh-status done">✅ Completada</span>',
+    error:   '<span class="bsh-status error">⚠ Error</span>',
+    killed:  '<span class="bsh-status killed">⛔ Detenida</span>',
+  };
+  const rows = history.map(h => {
+    const duration = (h.finishedAt && h.startedAt) ? `${h.finishedAt - h.startedAt}s` : '—';
+    return `
+      <div class="bsh-row">
+        <div class="bsh-when">
+          <div class="bsh-when-rel">${fmtRel(h.startedAt)}</div>
+          <div class="bsh-when-abs">${new Date(h.startedAt * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+        </div>
+        <div class="bsh-who">
+          <div class="bsh-who-name">${escHtml(h.contactName)}</div>
+          ${h.contactPhone ? `<div class="bsh-who-phone">${escHtml(h.contactPhone)}</div>` : ''}
+          ${h.expedientName ? `<div class="bsh-who-exp">📂 ${escHtml(h.expedientName)}</div>` : ''}
+        </div>
+        <div class="bsh-progress">
+          <div class="bsh-progress-bar"><div class="bsh-progress-fill" style="width:${h.totalSteps ? (h.currentStep/h.totalSteps)*100 : 0}%"></div></div>
+          <div class="bsh-progress-text">Paso ${h.currentStep}/${h.totalSteps}</div>
+        </div>
+        <div class="bsh-status-cell">
+          ${statusBadge[h.status] || h.status}
+          <div class="bsh-duration">${duration}</div>
+          ${h.errorMsg ? `<div class="bsh-err">${escHtml(h.errorMsg)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+  root.innerHTML = `
+    <div class="bsh-head">
+      <div>Cuándo</div>
+      <div>Quién</div>
+      <div>Progreso</div>
+      <div>Estado</div>
+    </div>
+    ${rows}
+  `;
+}
+
+function setupBotStatsModal() {
+  document.querySelectorAll('[data-close-bot-stats]').forEach(el => {
+    el.addEventListener('click', () => document.getElementById('botStatsModal').hidden = true);
+  });
+  document.getElementById('botStatsModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'botStatsModal') document.getElementById('botStatsModal').hidden = true;
+  });
+  // Tabs
+  document.querySelectorAll('.bot-stats-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.statsTab;
+      document.querySelectorAll('.bot-stats-tab').forEach(b => b.classList.toggle('is-active', b === btn));
+      document.querySelectorAll('.bot-stats-pane').forEach(p => p.classList.toggle('is-active', p.dataset.statsPane === target));
+    });
+  });
+}
+
 // ════════ Sistema de alarmas por etapa ════════
 const ALARM_TYPE_LABELS = {
   time_in_stage:        '⏱ Tiempo en la etapa',
@@ -8464,6 +8609,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupExpedients();
   setupPipelines();
   setupAlarmModal();
+  setupBotStatsModal();
   setupAccount();
   setupChatSearch();
   setupChatFilters();

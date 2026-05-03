@@ -7065,6 +7065,16 @@ function syncTplPlaceholdersFromBody() {
   renderTplPlaceholdersBox();
 }
 
+// Defaults para cada campo del contacto: el label y el ejemplo se auto-llenan
+// para que Meta tenga datos realistas durante la review.
+const CONTACT_FIELD_DEFAULTS = {
+  first_name: { label: 'Nombre',          example: 'Luis' },
+  last_name:  { label: 'Apellido',        example: 'Pérez' },
+  full_name:  { label: 'Nombre completo', example: 'Luis Pérez' },
+  phone:      { label: 'Teléfono',        example: '+5213311234567' },
+  email:      { label: 'Email',           example: 'cliente@gmail.com' },
+};
+
 function renderTplPlaceholdersBox() {
   const box = document.getElementById('tplPlaceholdersBox');
   const list = document.getElementById('tplPlaceholdersList');
@@ -7078,25 +7088,39 @@ function renderTplPlaceholdersBox() {
   }
   box.hidden = false;
   list.innerHTML = _tplDraftPlaceholders.map((ph, i) => {
+    const cf  = ph.contactField || '';
+    const opt = (val, lbl) => `<option value="${val}"${cf===val?' selected':''}>${lbl}</option>`;
+    const dropdownHtml = `
+      <select class="int-input tpl-ph-field" data-i="${i}" data-field="contactField" title="¿De qué campo del contacto se llena al enviar?">
+        ${opt('', '— Manual (lo escribes al enviar) —')}
+        ${opt('first_name', 'Nombre del contacto')}
+        ${opt('last_name',  'Apellido del contacto')}
+        ${opt('full_name',  'Nombre completo del contacto')}
+        ${opt('phone',      'Teléfono del contacto')}
+        ${opt('email',      'Email del contacto')}
+      </select>`;
+
+    if (cf) {
+      // Mapeado → label + ejemplo se llenan solos, no se piden al usuario.
+      const def = CONTACT_FIELD_DEFAULTS[cf] || { label: cf, example: '—' };
+      return `
+        <div class="tpl-placeholder-row tpl-placeholder-row--mapped" data-i="${i}">
+          <span class="tpl-placeholder-num">{{${i + 1}}}</span>
+          ${dropdownHtml}
+          <span class="tpl-ph-auto-preview">→ ejemplo para Meta: <strong>${escapeHtml(def.example)}</strong></span>
+        </div>`;
+    }
+
+    // Manual → pide label + ejemplo
     const label   = (ph.label   || '').replace(/"/g, '&quot;');
     const example = (ph.example || '').replace(/"/g, '&quot;');
-    const cf      = ph.contactField || '';
-    const opt = (val, lbl) => `<option value="${val}"${cf===val?' selected':''}>${lbl}</option>`;
     return `
-      <div class="tpl-placeholder-row" data-i="${i}">
+      <div class="tpl-placeholder-row tpl-placeholder-row--manual" data-i="${i}">
         <span class="tpl-placeholder-num">{{${i + 1}}}</span>
-        <input class="int-input tpl-ph-label"   data-i="${i}" data-field="label"   value="${label}"   placeholder="Nombre del placeholder (ej: Nombre)" maxlength="40" />
-        <input class="int-input tpl-ph-example" data-i="${i}" data-field="example" value="${example}" placeholder="Valor de ejemplo (ej: Luis)" maxlength="60" />
-        <select class="int-input tpl-ph-field" data-i="${i}" data-field="contactField" title="¿De qué campo del contacto se llena al enviar?">
-          ${opt('', '— Manual —')}
-          ${opt('first_name', 'Nombre')}
-          ${opt('last_name', 'Apellido')}
-          ${opt('full_name', 'Nombre completo')}
-          ${opt('phone', 'Teléfono')}
-          ${opt('email', 'Email')}
-        </select>
-      </div>
-    `;
+        ${dropdownHtml}
+        <input class="int-input tpl-ph-label"   data-i="${i}" data-field="label"   value="${label}"   placeholder="Para qué es (ej: Cupón)" maxlength="40" />
+        <input class="int-input tpl-ph-example" data-i="${i}" data-field="example" value="${example}" placeholder="Ejemplo para Meta (ej: PROMO30)" maxlength="60" />
+      </div>`;
   }).join('');
 }
 
@@ -7661,12 +7685,23 @@ function setupTemplates() {
       _tplDraftPlaceholders[i][field] = e.target.value;
     }
   });
-  // Cambio de mapping (select)
+  // Cambio de mapping (select) — si elige un campo del contacto, auto-llena
+  // label y ejemplo. Si elige Manual, los limpia para que el usuario escriba.
   document.getElementById('tplPlaceholdersList')?.addEventListener('change', (e) => {
     const i = Number(e.target.dataset.i);
     if (Number.isNaN(i) || !_tplDraftPlaceholders[i]) return;
     if (e.target.dataset.field === 'contactField') {
-      _tplDraftPlaceholders[i].contactField = e.target.value;
+      const cf = e.target.value;
+      _tplDraftPlaceholders[i].contactField = cf;
+      if (cf && CONTACT_FIELD_DEFAULTS[cf]) {
+        _tplDraftPlaceholders[i].label   = CONTACT_FIELD_DEFAULTS[cf].label;
+        _tplDraftPlaceholders[i].example = CONTACT_FIELD_DEFAULTS[cf].example;
+      } else {
+        // Manual — limpia para que el usuario escriba
+        _tplDraftPlaceholders[i].label   = '';
+        _tplDraftPlaceholders[i].example = '';
+      }
+      renderTplPlaceholdersBox();
     }
   });
 

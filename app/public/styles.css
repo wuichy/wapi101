@@ -5439,11 +5439,26 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .tpl-placeholder-row {
   display: grid;
-  grid-template-columns: 60px 1fr 1fr 160px;
   gap: 8px;
   align-items: center;
 }
+/* Mapeado a campo del contacto: 3 cols (num · dropdown · preview) */
+.tpl-placeholder-row--mapped {
+  grid-template-columns: 60px 220px 1fr;
+}
+/* Manual: 4 cols (num · dropdown · label · example) */
+.tpl-placeholder-row--manual {
+  grid-template-columns: 60px 220px 1fr 1.2fr;
+}
 .tpl-ph-field { font-size: 13px; }
+.tpl-ph-auto-preview {
+  font-size: 13px;
+  color: #15803d;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
 
 /* Modal "Enviar plantilla" */
 .send-tpl-meta {

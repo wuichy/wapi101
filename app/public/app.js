@@ -5869,10 +5869,13 @@ function renderStagesList(stages) {
       <span class="pl-stage-color-dot" style="background:${s.color}"></span>
       <span class="pl-stage-name">${escHtml(s.name)}</span>
       <span class="pl-stage-kind">${KIND_LABELS[s.kind] || s.kind}</span>
-      <button class="pl-stage-bot-chip ${bot ? 'has-bot' : ''}" data-stage-bot-toggle="${s.id}" title="Bot asignado a esta etapa">
-        <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><rect x="3" y="7" width="14" height="10" rx="2"/><path d="M7 7V5a3 3 0 016 0v2"/><circle cx="7.5" cy="12" r="1.5"/><circle cx="12.5" cy="12" r="1.5"/></svg>
-        ${botLabel}
-      </button>
+      <span class="pl-stage-bot-chip-wrap">
+        <button class="pl-stage-bot-chip ${bot ? 'has-bot' : ''}" data-stage-bot-toggle="${s.id}" title="${bot ? 'Cambiar bot asignado' : 'Asignar un bot a esta etapa'}">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="12" height="12"><rect x="3" y="7" width="14" height="10" rx="2"/><path d="M7 7V5a3 3 0 016 0v2"/><circle cx="7.5" cy="12" r="1.5"/><circle cx="12.5" cy="12" r="1.5"/></svg>
+          ${botLabel}
+        </button>
+        ${bot ? `<button class="pl-stage-bot-clear" data-stage-bot-clear="${s.id}" title="Desasignar bot" aria-label="Desasignar bot">×</button>` : ''}
+      </span>
       <button class="pl-stage-edit-btn" data-stage-edit-toggle="${s.id}" title="Editar etapa">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M14.7 3.3a1 1 0 011.4 1.4l-9.8 9.8-2.8.7.7-2.8z"/></svg>
       </button>
@@ -6353,6 +6356,22 @@ function setupPipelines() {
         const updated = PIPELINES.find(p => p.id === PL_MANAGE_ID);
         if (updated) renderStagesList(updated.stages);
         toast('Etapa actualizada', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+
+    // Clear bot assignment (× junto al chip)
+    const clearBot = e.target.closest('[data-stage-bot-clear]');
+    if (clearBot) {
+      e.stopPropagation();
+      const id = clearBot.dataset.stageBotClear;
+      if (!confirm('¿Desasignar el bot de esta etapa?')) return;
+      try {
+        await api('PATCH', `/api/pipelines/stages/${id}`, { bot_id: null });
+        await loadPipelinesKanban();
+        const updated = PIPELINES.find(p => p.id === PL_MANAGE_ID);
+        if (updated) renderStagesList(updated.stages);
+        toast('Bot desvinculado', 'success');
       } catch (err) { toast(err.message, 'error'); }
       return;
     }

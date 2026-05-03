@@ -3843,6 +3843,18 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .pl-stage-bot-chip:hover { border-color: var(--primary); color: var(--primary); }
 .pl-stage-bot-chip.has-bot { border-color: var(--primary); color: var(--primary); background: rgba(37,99,235,.07); }
+.pl-stage-bot-chip-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.pl-stage-bot-clear {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  border: none; border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px; line-height: 1;
+  cursor: pointer; padding: 0;
+  transition: background 120ms, color 120ms;
+}
+.pl-stage-bot-clear:hover { background: #fee2e2; color: #dc2626; }
 .pl-stage-edit-row, .pl-stage-bot-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 10px 8px;

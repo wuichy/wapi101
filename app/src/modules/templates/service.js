@@ -58,16 +58,101 @@ function metaRequest(db, method, path, body = null) {
 // Build Meta API components array from template fields
 function buildComponents(template) {
   const components = [];
-  if (template.header) {
+
+  // HEADER — TEXT | IMAGE | VIDEO | DOCUMENT
+  const ht = (template.headerType || 'TEXT').toUpperCase();
+  if (ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT') {
+    if (!template.headerMediaHandle) {
+      throw new Error(`Header tipo ${ht} requiere subir el archivo primero (header_handle)`);
+    }
+    components.push({
+      type: 'HEADER',
+      format: ht,
+      example: { header_handle: [template.headerMediaHandle] },
+    });
+  } else if (template.header) {
     components.push({ type: 'HEADER', format: 'TEXT', text: template.header });
   }
+
+  // BODY (siempre)
   if (template.body) {
     components.push({ type: 'BODY', text: template.body });
   }
+
+  // FOOTER
   if (template.footer) {
     components.push({ type: 'FOOTER', text: template.footer });
   }
+
+  // BUTTONS — array de hasta 3 (3 QUICK_REPLY, o mix con máx 2 CTA según política Meta)
+  let btns = template.buttons;
+  if (typeof btns === 'string') {
+    try { btns = JSON.parse(btns); } catch { btns = null; }
+  }
+  if (Array.isArray(btns) && btns.length) {
+    const out = [];
+    for (const b of btns) {
+      if (!b || !b.text) continue;
+      if (b.type === 'QUICK_REPLY') {
+        out.push({ type: 'QUICK_REPLY', text: b.text });
+      } else if (b.type === 'URL') {
+        if (!b.url) continue;
+        out.push({ type: 'URL', text: b.text, url: b.url });
+      } else if (b.type === 'PHONE_NUMBER') {
+        if (!b.phone_number) continue;
+        out.push({ type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number });
+      }
+    }
+    if (out.length) components.push({ type: 'BUTTONS', buttons: out });
+  }
+
   return components;
+}
+
+// Sube un archivo a Meta usando la Resumable Upload API.
+// Para CREAR plantillas con header media (IMAGE/VIDEO/DOCUMENT),
+// Meta requiere un "header_handle" obtenido por este flujo.
+//
+// Pasos:
+//   1) POST /v22.0/<APP_ID>/uploads?file_length=N&file_type=mime → devuelve session id
+//   2) POST /v22.0/<session_id> con Authorization: OAuth <token> y body raw
+//      → devuelve { h: "<header_handle>" }
+async function uploadHeaderToMeta(db, buffer, mimetype) {
+  const { token } = getWAConfig(db);
+  if (!token) throw new Error('Sin access token de Meta');
+  const appId = process.env.META_APP_ID;
+  if (!appId) throw new Error('META_APP_ID no configurado en .env');
+
+  // Step 1 — start upload session
+  const sessionUrl = `https://graph.facebook.com/${META_API_VERSION}/${appId}/uploads`
+    + `?file_length=${buffer.length}`
+    + `&file_type=${encodeURIComponent(mimetype)}`;
+  const sessionRes = await fetch(sessionUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const sessionJson = await sessionRes.json().catch(() => ({}));
+  if (!sessionRes.ok || !sessionJson.id) {
+    const msg = sessionJson?.error?.message || JSON.stringify(sessionJson);
+    throw new Error(`Resumable upload init failed: ${msg}`);
+  }
+
+  // Step 2 — upload bytes (note: header is OAuth, NOT Bearer, per Meta spec)
+  const uploadUrl = `https://graph.facebook.com/${META_API_VERSION}/${sessionJson.id}`;
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `OAuth ${token}`,
+      file_offset: '0',
+    },
+    body: buffer,
+  });
+  const uploadJson = await uploadRes.json().catch(() => ({}));
+  if (!uploadRes.ok || !uploadJson.h) {
+    const msg = uploadJson?.error?.message || JSON.stringify(uploadJson);
+    throw new Error(`Resumable upload bytes failed: ${msg}`);
+  }
+  return uploadJson.h;
 }
 
 function list(db, { type } = {}) {
@@ -81,17 +166,29 @@ function getById(db, id) {
   return r ? row(r) : null;
 }
 
-function create(db, { type = 'free_form', name, displayName, category = 'UTILITY', language = 'es_MX', header, body, footer }) {
+function create(db, { type = 'free_form', name, displayName, category = 'UTILITY', language = 'es_MX',
+                       header, body, footer,
+                       headerType, headerMediaUrl, headerMediaHandle, buttons }) {
   if (!name?.trim()) throw new Error('El nombre es obligatorio');
   if (!body?.trim()) throw new Error('El cuerpo es obligatorio');
+  const ht = (headerType || 'TEXT').toUpperCase();
+  const btnsJson = (Array.isArray(buttons) && buttons.length) ? JSON.stringify(buttons) : null;
   const r = db.prepare(`
-    INSERT INTO message_templates (type, name, display_name, category, language, header, body, footer)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(type, name.trim(), displayName?.trim() || null, category, language, header?.trim() || null, body.trim(), footer?.trim() || null);
+    INSERT INTO message_templates
+      (type, name, display_name, category, language, header, body, footer,
+       header_type, header_media_url, header_media_handle, buttons)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    type, name.trim(), displayName?.trim() || null, category, language,
+    header?.trim() || null, body.trim(), footer?.trim() || null,
+    ht, headerMediaUrl || null, headerMediaHandle || null, btnsJson,
+  );
   return getById(db, r.lastInsertRowid);
 }
 
-function update(db, id, { name, displayName, category, language, header, body, footer, waStatus, waId, waRejectedReason }) {
+function update(db, id, { name, displayName, category, language, header, body, footer,
+                          headerType, headerMediaUrl, headerMediaHandle, headerMediaId, buttons,
+                          waStatus, waId, waRejectedReason }) {
   const existing = db.prepare('SELECT * FROM message_templates WHERE id = ?').get(id);
   if (!existing) return null;
   const fields = [];
@@ -103,6 +200,14 @@ function update(db, id, { name, displayName, category, language, header, body, f
   if (header !== undefined)      { fields.push('header = ?');       params.push(header?.trim() || null); }
   if (body !== undefined)        { fields.push('body = ?');         params.push(body?.trim() || null); }
   if (footer !== undefined)      { fields.push('footer = ?');       params.push(footer?.trim() || null); }
+  if (headerType !== undefined)        { fields.push('header_type = ?');         params.push(String(headerType).toUpperCase()); }
+  if (headerMediaUrl !== undefined)    { fields.push('header_media_url = ?');    params.push(headerMediaUrl || null); }
+  if (headerMediaHandle !== undefined) { fields.push('header_media_handle = ?'); params.push(headerMediaHandle || null); }
+  if (headerMediaId !== undefined)     { fields.push('header_media_id = ?');     params.push(headerMediaId || null); }
+  if (buttons !== undefined) {
+    fields.push('buttons = ?');
+    params.push(Array.isArray(buttons) && buttons.length ? JSON.stringify(buttons) : null);
+  }
   if (waStatus !== undefined)         { fields.push('wa_status = ?');           params.push(waStatus); }
   if (waId !== undefined)             { fields.push('wa_id = ?');               params.push(waId); }
   if (waRejectedReason !== undefined) { fields.push('wa_rejected_reason = ?');  params.push(waRejectedReason); }
@@ -180,6 +285,10 @@ async function syncAll(db) {
 }
 
 function row(r) {
+  let buttons = null;
+  if (r.buttons) {
+    try { buttons = JSON.parse(r.buttons); } catch { buttons = null; }
+  }
   return {
     id:          r.id,
     type:        r.type,
@@ -190,6 +299,11 @@ function row(r) {
     header:      r.header || null,
     body:        r.body,
     footer:      r.footer || null,
+    headerType:        r.header_type || 'TEXT',
+    headerMediaUrl:    r.header_media_url || null,
+    headerMediaHandle: r.header_media_handle || null,
+    headerMediaId:     r.header_media_id || null,
+    buttons,
     waStatus:         r.wa_status,
     waId:             r.wa_id || null,
     waRejectedReason: r.wa_rejected_reason || null,
@@ -198,4 +312,4 @@ function row(r) {
   };
 }
 
-module.exports = { list, getById, create, update, remove, submitToMeta, syncFromMeta, syncAll };
+module.exports = { list, getById, create, update, remove, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta };

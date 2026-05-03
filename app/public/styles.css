@@ -5367,3 +5367,51 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   font-size: 13px;
   word-break: break-all;
 }
+
+/* ═══════ Plantillas — Header type + Botones ═══════ */
+.tpl-header-type-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.tpl-header-type-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: #475569;
+}
+.tpl-header-media {
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+.tpl-header-file { font-size: 13px; }
+.tpl-buttons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.tpl-btn-row {
+  display: grid;
+  grid-template-columns: 150px 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+}
+.tpl-btn-row .tpl-btn-extra { grid-column: 2 / 4; }
+.tpl-btn-remove {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #b91c1c;
+}

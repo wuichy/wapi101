@@ -6545,8 +6545,13 @@ function renderTemplates() {
   }
 }
 
+// State del modal de plantillas
+let _tplDraftButtons = [];   // [{type, text, url?, phone_number?}]
+let _tplDraftMediaFile = null; // File pendiente de upload (para nuevas plantillas o cambio de media)
+
 function openTplModal(tmpl = null) {
   _tplEditId = tmpl?.id || null;
+  _tplDraftMediaFile = null;
   const modal = document.getElementById('tplModal');
   if (!modal) return;
   const card = modal.querySelector('.tpl-modal-card');
@@ -6563,6 +6568,15 @@ function openTplModal(tmpl = null) {
     document.getElementById('tplFooter').value       = tmpl.footer || '';
     const radio = document.querySelector(`input[name="tplType"][value="${tmpl.type}"]`);
     if (radio) radio.checked = true;
+
+    // Header type
+    const ht = (tmpl.headerType || 'TEXT').toUpperCase();
+    const htRadio = document.querySelector(`input[name="tplHeaderType"][value="${ht}"]`);
+    if (htRadio) htRadio.checked = true;
+    setHeaderTypeUI(ht, !!tmpl.headerMediaHandle);
+
+    // Buttons
+    _tplDraftButtons = Array.isArray(tmpl.buttons) ? JSON.parse(JSON.stringify(tmpl.buttons)) : [];
   } else {
     document.getElementById('tplName').value = '';
     document.getElementById('tplDisplayName').value = '';
@@ -6572,12 +6586,92 @@ function openTplModal(tmpl = null) {
     document.getElementById('tplCategory').value = 'UTILITY';
     document.getElementById('tplLanguage').value = 'es_MX';
     document.getElementById('tplTypeFreeForm').checked = true;
+    const htText = document.querySelector('input[name="tplHeaderType"][value="TEXT"]');
+    if (htText) htText.checked = true;
+    setHeaderTypeUI('TEXT', false);
+    _tplDraftButtons = [];
   }
+  renderTplButtonsList();
+  // Reset file input
+  const fileInput = document.getElementById('tplHeaderFile');
+  if (fileInput) fileInput.value = '';
 
   const errEl = document.getElementById('tplError');
   if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
   updateTplModalType(card);
   modal.hidden = false;
+}
+
+function setHeaderTypeUI(type, hasExistingMedia) {
+  const isMedia = type && type !== 'TEXT';
+  const txtInput = document.getElementById('tplHeader');
+  const mediaBox = document.getElementById('tplHeaderMediaBox');
+  const mediaStatus = document.getElementById('tplHeaderMediaStatus');
+  if (txtInput) txtInput.hidden = !!isMedia;
+  if (mediaBox) mediaBox.hidden = !isMedia;
+  if (isMedia && mediaStatus) {
+    mediaStatus.textContent = hasExistingMedia
+      ? 'Ya hay un archivo subido. Selecciona uno nuevo solo si quieres reemplazarlo.'
+      : 'Selecciona un archivo. Se sube a Meta como ejemplo de header.';
+  }
+}
+
+function renderTplButtonsList() {
+  const list = document.getElementById('tplButtonsList');
+  if (!list) return;
+  if (!_tplDraftButtons.length) {
+    list.innerHTML = '<p class="tpl-hint-inline">Sin botones. Click "+ Agregar botón" para añadir.</p>';
+    return;
+  }
+  list.innerHTML = _tplDraftButtons.map((b, i) => {
+    const t = b.type || 'QUICK_REPLY';
+    const textVal = (b.text || '').replace(/"/g, '&quot;');
+    const extraVal = ((b.url || b.phone_number) || '').replace(/"/g, '&quot;');
+    const extraField = t === 'URL'
+      ? `<input class="int-input tpl-btn-extra" data-i="${i}" data-field="url" value="${extraVal}" placeholder="https://..." />`
+      : t === 'PHONE_NUMBER'
+        ? `<input class="int-input tpl-btn-extra" data-i="${i}" data-field="phone_number" value="${extraVal}" placeholder="+5213311234567" />`
+        : '';
+    return `
+      <div class="tpl-btn-row" data-i="${i}">
+        <select class="int-input tpl-btn-type" data-i="${i}">
+          <option value="QUICK_REPLY"${t==='QUICK_REPLY'?' selected':''}>Respuesta rápida</option>
+          <option value="URL"${t==='URL'?' selected':''}>Abrir URL</option>
+          <option value="PHONE_NUMBER"${t==='PHONE_NUMBER'?' selected':''}>Llamar teléfono</option>
+        </select>
+        <input class="int-input tpl-btn-text" data-i="${i}" value="${textVal}" placeholder="Texto del botón (máx 25)" maxlength="25" />
+        ${extraField}
+        <button type="button" class="btn btn--ghost btn--sm tpl-btn-remove" data-i="${i}" title="Quitar botón">×</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function addTplButton() {
+  if (_tplDraftButtons.length >= 3) {
+    toast('Máximo 3 botones por plantilla', 'warning');
+    return;
+  }
+  _tplDraftButtons.push({ type: 'QUICK_REPLY', text: '' });
+  renderTplButtonsList();
+}
+
+function _collectTplButtons() {
+  // Recolecta el state desde los inputs por si hubo cambios sin re-render
+  const rows = document.querySelectorAll('#tplButtonsList .tpl-btn-row');
+  const out = [];
+  rows.forEach(row => {
+    const i = Number(row.dataset.i);
+    const type = row.querySelector('.tpl-btn-type')?.value || 'QUICK_REPLY';
+    const text = row.querySelector('.tpl-btn-text')?.value.trim() || '';
+    const extraEl = row.querySelector('.tpl-btn-extra');
+    const b = { type, text };
+    if (type === 'URL' && extraEl) b.url = extraEl.value.trim();
+    if (type === 'PHONE_NUMBER' && extraEl) b.phone_number = extraEl.value.trim();
+    if (text) out.push(b);
+    void i;
+  });
+  return out;
 }
 
 function updateTplModalType(card) {
@@ -6598,9 +6692,11 @@ async function saveTpl() {
   const displayName = document.getElementById('tplDisplayName')?.value.trim() || '';
   const category = document.getElementById('tplCategory')?.value || 'UTILITY';
   const language = document.getElementById('tplLanguage')?.value || 'es_MX';
+  const headerType = document.querySelector('input[name="tplHeaderType"]:checked')?.value || 'TEXT';
   const header = document.getElementById('tplHeader')?.value.trim() || '';
   const body = document.getElementById('tplBody')?.value.trim() || '';
   const footer = document.getElementById('tplFooter')?.value.trim() || '';
+  const buttons = _collectTplButtons();
 
   if (!name) {
     if (errEl) { errEl.textContent = 'El nombre interno es obligatorio.'; errEl.hidden = false; }
@@ -6616,23 +6712,70 @@ async function saveTpl() {
     document.getElementById('tplName').value = name;
   }
 
-  const payload = { type, name, displayName, category, language, header: header || null, body, footer: footer || null };
+  // Validación de botones (lado cliente)
+  for (const b of buttons) {
+    if (b.type === 'URL' && !/^https?:\/\//i.test(b.url || '')) {
+      if (errEl) { errEl.textContent = `Botón "${b.text}": URL debe empezar con http:// o https://`; errEl.hidden = false; }
+      return;
+    }
+    if (b.type === 'PHONE_NUMBER' && !/^\+?\d{10,15}$/.test((b.phone_number || '').replace(/\s/g, ''))) {
+      if (errEl) { errEl.textContent = `Botón "${b.text}": teléfono inválido (10-15 dígitos, formato internacional)`; errEl.hidden = false; }
+      return;
+    }
+  }
+
+  const payload = {
+    type, name, displayName, category, language,
+    header: headerType === 'TEXT' ? (header || null) : null,
+    body,
+    footer: footer || null,
+    headerType,
+    buttons: buttons.length ? buttons : null,
+  };
   if (errEl) errEl.hidden = true;
 
   try {
+    let saved;
     if (_tplEditId) {
-      const updated = await api('PUT', `/api/templates/${_tplEditId}`, payload);
-      _tplItems = _tplItems.map(t => t.id === updated.id ? updated : t);
+      saved = await api('PUT', `/api/templates/${_tplEditId}`, payload);
     } else {
-      const created = await api('POST', '/api/templates', payload);
-      _tplItems.push(created);
+      saved = await api('POST', '/api/templates', payload);
     }
+
+    // Si hay archivo de header pendiente y el tipo no es TEXT, subirlo ahora
+    if (_tplDraftMediaFile && headerType !== 'TEXT') {
+      toast('Subiendo archivo a Meta…', 'info');
+      const data = await _readFileAsBase64(_tplDraftMediaFile);
+      const upRes = await api('POST', `/api/templates/${saved.id}/header-media`, {
+        data,
+        mimetype: _tplDraftMediaFile.type,
+      });
+      saved.headerMediaHandle = upRes.handle;
+      saved.headerType = upRes.headerType;
+      _tplDraftMediaFile = null;
+    }
+
+    if (_tplEditId) {
+      _tplItems = _tplItems.map(t => t.id === saved.id ? saved : t);
+    } else {
+      _tplItems.push(saved);
+    }
+
     renderTemplates();
     closeTplModal();
     toast('Plantilla guardada', 'success');
   } catch (e) {
     if (errEl) { errEl.textContent = e.message; errEl.hidden = false; }
   }
+}
+
+function _readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function submitTplToMeta(id) {
@@ -6702,6 +6845,57 @@ function setupTemplates() {
       const card = document.querySelector('.tpl-modal-card');
       updateTplModalType(card);
     });
+  });
+
+  // Header type radios — toggle texto/media
+  document.querySelectorAll('input[name="tplHeaderType"]').forEach(r => {
+    r.addEventListener('change', () => {
+      setHeaderTypeUI(r.value, false);
+    });
+  });
+
+  // Captura de archivo
+  document.getElementById('tplHeaderFile')?.addEventListener('change', (e) => {
+    const f = e.target.files?.[0];
+    if (!f) { _tplDraftMediaFile = null; return; }
+    if (f.size > 5 * 1024 * 1024) {
+      toast('Archivo muy grande (máx 5MB)', 'error');
+      e.target.value = '';
+      return;
+    }
+    _tplDraftMediaFile = f;
+    const status = document.getElementById('tplHeaderMediaStatus');
+    if (status) status.textContent = `Listo: ${f.name} (${(f.size/1024).toFixed(0)} KB)`;
+  });
+
+  // Botones — agregar / cambiar tipo / quitar
+  document.getElementById('tplAddButtonBtn')?.addEventListener('click', addTplButton);
+  document.getElementById('tplButtonsList')?.addEventListener('change', (e) => {
+    const i = Number(e.target.dataset.i);
+    if (Number.isNaN(i)) return;
+    if (e.target.classList.contains('tpl-btn-type')) {
+      // Conservar text, resetear url/phone
+      const cur = _tplDraftButtons[i] || {};
+      _tplDraftButtons[i] = { type: e.target.value, text: cur.text || '' };
+      renderTplButtonsList();
+    }
+  });
+  document.getElementById('tplButtonsList')?.addEventListener('input', (e) => {
+    const i = Number(e.target.dataset.i);
+    if (Number.isNaN(i)) return;
+    if (!_tplDraftButtons[i]) return;
+    if (e.target.classList.contains('tpl-btn-text')) _tplDraftButtons[i].text = e.target.value;
+    if (e.target.classList.contains('tpl-btn-extra')) {
+      const field = e.target.dataset.field;
+      _tplDraftButtons[i][field] = e.target.value;
+    }
+  });
+  document.getElementById('tplButtonsList')?.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('tpl-btn-remove')) return;
+    const i = Number(e.target.dataset.i);
+    if (Number.isNaN(i)) return;
+    _tplDraftButtons.splice(i, 1);
+    renderTplButtonsList();
   });
 
   // Variable insertion buttons

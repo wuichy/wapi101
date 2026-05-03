@@ -948,8 +948,20 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             </div>
             <!-- Header -->
             <div class="int-field">
-              <label for="tplHeader">Encabezado <span class="tpl-hint-inline">(opcional, máx 60 chars)</span></label>
-              <input type="text" class="int-input" id="tplHeader" placeholder="Texto del encabezado" maxlength="60" />
+              <label>Encabezado <span class="tpl-hint-inline">(opcional)</span></label>
+              <div class="tpl-header-type-row">
+                <label class="tpl-header-type-opt"><input type="radio" name="tplHeaderType" value="TEXT" checked> Texto</label>
+                <label class="tpl-header-type-opt"><input type="radio" name="tplHeaderType" value="IMAGE"> Imagen</label>
+                <label class="tpl-header-type-opt"><input type="radio" name="tplHeaderType" value="VIDEO"> Video</label>
+                <label class="tpl-header-type-opt"><input type="radio" name="tplHeaderType" value="DOCUMENT"> Documento</label>
+              </div>
+              <!-- Sub-campo: Texto -->
+              <input type="text" class="int-input tpl-header-text" id="tplHeader" placeholder="Texto del encabezado (máx 60 chars)" maxlength="60" />
+              <!-- Sub-campo: Media (oculto por default) -->
+              <div class="tpl-header-media" id="tplHeaderMediaBox" hidden>
+                <input type="file" class="tpl-header-file" id="tplHeaderFile" accept="image/*,video/*,application/pdf" />
+                <p class="tpl-hint-inline" id="tplHeaderMediaStatus">Selecciona un archivo. Se sube a Meta como ejemplo de header.</p>
+              </div>
             </div>
             <!-- Body -->
             <div class="int-field">
@@ -968,6 +980,12 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <div class="int-field">
               <label for="tplFooter">Pie de página <span class="tpl-hint-inline">(opcional, máx 60 chars)</span></label>
               <input type="text" class="int-input" id="tplFooter" placeholder="Texto del pie" maxlength="60" />
+            </div>
+            <!-- Botones (solo wa_api) -->
+            <div class="int-field" id="tplButtonsField">
+              <label>Botones <span class="tpl-hint-inline">(opcional, máx 3 — todos QUICK_REPLY o hasta 2 CTA)</span></label>
+              <div class="tpl-buttons-list" id="tplButtonsList"><!-- JS render --></div>
+              <button type="button" class="btn btn--ghost btn--sm" id="tplAddButtonBtn">+ Agregar botón</button>
             </div>
             <p class="tpl-error-msg" id="tplError" hidden></p>
           </div>

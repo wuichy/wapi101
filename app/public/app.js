@@ -405,6 +405,10 @@ function openChatContact({ id, botPaused, convoId }) {
   _chatBotPaused = !!botPaused;
   _chatConvoId   = convoId || null;
   updateBotToggleUI();
+  // En modo personal, cargar mis etiquetas asignadas a este contacto
+  if (window.PERSONAL_MODE && id) {
+    loadPersonalTagsForContact(id).then(() => renderPersonalTagsPopover());
+  }
 }
 
 function updateBotToggleUI() {
@@ -7268,6 +7272,158 @@ function refreshReplyFormState() {
   updateReplyFormState(convo);
 }
 
+// ════════ Personal tags (modo /chat) — etiquetas privadas por asesor ════════
+let _personalTags = [];           // todas mis etiquetas
+let _personalTagsForContact = []; // las asignadas al contacto activo
+
+const PERSONAL_TAG_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#0f172a','#facc15','#84cc16','#06b6d4'];
+
+async function loadPersonalTags() {
+  if (!window.PERSONAL_MODE) return;
+  try {
+    const data = await api('GET', '/api/personal-chat/tags');
+    _personalTags = data.items || [];
+  } catch (err) { console.error('loadPersonalTags', err); _personalTags = []; }
+}
+
+async function loadPersonalTagsForContact(contactId) {
+  if (!window.PERSONAL_MODE || !contactId) { _personalTagsForContact = []; return; }
+  try {
+    const data = await api('GET', `/api/personal-chat/contacts/${contactId}/tags`);
+    _personalTagsForContact = data.items || [];
+  } catch (err) { console.error('loadPersonalTagsForContact', err); _personalTagsForContact = []; }
+}
+
+function renderPersonalTagsPopover() {
+  const assignedRoot = document.getElementById('rhPtpAssigned');
+  const suggestRoot  = document.getElementById('rhPtpSuggest');
+  const countEl = document.getElementById('rhPersonalTagsCount');
+  if (!assignedRoot || !suggestRoot) return;
+
+  // Pills asignadas
+  if (_personalTagsForContact.length === 0) {
+    assignedRoot.innerHTML = '<span class="rh-ptp-empty">Sin etiquetas asignadas</span>';
+  } else {
+    assignedRoot.innerHTML = _personalTagsForContact.map(t => `
+      <span class="rh-ptp-pill" style="background:${escapeHtml(t.color)};color:#fff">
+        ${escapeHtml(t.name)}
+        <button type="button" class="rh-ptp-pill-x" data-unassign-tag="${t.id}" aria-label="Quitar">×</button>
+      </span>`).join('');
+  }
+
+  // Sugerencias = todas mis etiquetas que no estén ya asignadas
+  const assignedIds = new Set(_personalTagsForContact.map(t => t.id));
+  const available = _personalTags.filter(t => !assignedIds.has(t.id));
+  if (available.length === 0) {
+    suggestRoot.innerHTML = _personalTags.length
+      ? '<span class="rh-ptp-empty">Ya asignaste todas las que tienes</span>'
+      : '<span class="rh-ptp-empty">Aún no creas ninguna — escríbela arriba</span>';
+  } else {
+    suggestRoot.innerHTML = `<div class="rh-ptp-suggest-label">Asignar existentes:</div>` +
+      available.map(t => `
+        <button type="button" class="rh-ptp-suggest-btn" data-assign-tag="${t.id}" style="background:${escapeHtml(t.color)};color:#fff">
+          ${escapeHtml(t.name)}
+        </button>`).join('');
+  }
+
+  // Badge con número en el botón
+  if (countEl) {
+    if (_personalTagsForContact.length > 0) {
+      countEl.textContent = _personalTagsForContact.length;
+      countEl.hidden = false;
+    } else {
+      countEl.hidden = true;
+    }
+  }
+}
+
+async function _personalAssignTag(contactId, tagId) {
+  try {
+    await api('POST', `/api/personal-chat/contacts/${contactId}/tags`, { tagId });
+    await loadPersonalTagsForContact(contactId);
+    renderPersonalTagsPopover();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function _personalUnassignTag(contactId, tagId) {
+  try {
+    await api('DELETE', `/api/personal-chat/contacts/${contactId}/tags/${tagId}`);
+    await loadPersonalTagsForContact(contactId);
+    renderPersonalTagsPopover();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function _personalCreateAndAssign(contactId, name) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return;
+  // Si ya existe (case insensitive), reusar
+  const existing = _personalTags.find(t => t.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) {
+    if (!_personalTagsForContact.find(t => t.id === existing.id)) {
+      await _personalAssignTag(contactId, existing.id);
+    }
+    return;
+  }
+  const color = PERSONAL_TAG_COLORS[Math.floor(Math.random() * PERSONAL_TAG_COLORS.length)];
+  try {
+    const created = await api('POST', '/api/personal-chat/tags', { name: trimmed, color });
+    await loadPersonalTags();
+    if (created?.id) await _personalAssignTag(contactId, created.id);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function setupPersonalTagsUI() {
+  if (!window.PERSONAL_MODE) return;
+  const wrap = document.getElementById('rhPersonalTagsWrap');
+  const btn  = document.getElementById('rhPersonalTagsBtn');
+  const pop  = document.getElementById('rhPersonalTagsPopover');
+  const input = document.getElementById('rhPtpInput');
+  if (!wrap || !btn || !pop) return;
+  wrap.hidden = false;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+    if (!pop.hidden) {
+      renderPersonalTagsPopover();
+      setTimeout(() => input?.focus(), 50);
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (pop.hidden) return;
+    if (!pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) pop.hidden = true;
+  });
+
+  // Click × en pill asignada → quitar
+  pop.addEventListener('click', async (e) => {
+    const remove = e.target.closest('[data-unassign-tag]');
+    if (remove) {
+      e.stopPropagation();
+      const tagId = Number(remove.dataset.unassignTag);
+      await _personalUnassignTag(_chatContactId, tagId);
+      return;
+    }
+    const assign = e.target.closest('[data-assign-tag]');
+    if (assign) {
+      e.stopPropagation();
+      const tagId = Number(assign.dataset.assignTag);
+      await _personalAssignTag(_chatContactId, tagId);
+      setTimeout(() => input?.focus(), 0);
+    }
+  });
+
+  // Coma o Enter → crear + asignar
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === ',' || e.key === 'Enter') {
+      e.preventDefault();
+      const value = input.value.trim();
+      if (!value) return;
+      input.value = '';
+      await _personalCreateAndAssign(_chatContactId, value);
+    }
+  });
+}
+
 // ════════ Adjuntos en chat (imagen, video, audio, doc + grabación) ════════
 let _rhPendingAttachment = null; // { file, dataUrl, type, mimetype, filename }
 let _rhRecorder = null;          // { mediaRecorder, chunks, stream, startTime, ui }
@@ -7903,6 +8059,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupChatFilters();
   setupReplyForm();
   setupAttachMenu();
+  setupPersonalTagsUI();
+  if (window.PERSONAL_MODE) loadPersonalTags();
 
   // Bot toggle handler (usa conversación cuando está disponible)
   document.getElementById('rhBotToggle')?.addEventListener('click', async () => {

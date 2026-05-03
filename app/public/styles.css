@@ -3241,6 +3241,98 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   -webkit-backdrop-filter: blur(16px);
 }
 
+/* Acciones del header del chat (modo personal: etiquetas) */
+.rh-conversation-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.rh-conversation-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.rh-personal-tags-wrap { position: relative; }
+.rh-personal-tags-btn { position: relative; }
+.rh-personal-tags-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--rh-brand, #3b82f6);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.rh-personal-tags-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--rh-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(15,23,42,.16);
+  padding: 14px;
+  width: 320px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rh-ptp-header { display: flex; flex-direction: column; gap: 2px; }
+.rh-ptp-header strong { font-size: 13px; color: var(--rh-text); }
+.rh-ptp-header span { font-size: 11px; color: var(--rh-muted); }
+.rh-ptp-assigned { display: flex; flex-wrap: wrap; gap: 4px; min-height: 28px; padding: 4px 0; border-top: 1px solid #f1f5f9; padding-top: 8px; }
+.rh-ptp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.rh-ptp-pill-x {
+  background: rgba(255,255,255,.22);
+  border: none;
+  color: #fff;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.rh-ptp-pill-x:hover { background: rgba(255,255,255,.4); }
+.rh-ptp-empty { font-size: 11px; color: var(--rh-muted); font-style: italic; padding: 4px; }
+.rh-ptp-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rh-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+}
+.rh-ptp-input:focus { border-color: var(--accent, #2563eb); box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+.rh-ptp-suggest { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
+.rh-ptp-suggest-label { width: 100%; font-size: 10px; color: var(--rh-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.rh-ptp-suggest-btn {
+  border: none;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform .08s, box-shadow .08s;
+}
+.rh-ptp-suggest-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(15,23,42,.15); }
+
 /* Botón Adjuntar — menú flotante con opciones (Imagen / Documento) */
 .rh-attach-wrap { position: relative; display: inline-block; }
 .rh-attach-menu {

@@ -244,6 +244,24 @@
                     <span class="rh-pipeline-stage">Ventas · Interesado</span>
                   </div>
                 </div>
+                <div class="rh-conversation-actions">
+                  <!-- Botón "🏷 Mis etiquetas" — solo visible en modo personal (/chat) -->
+                  <div class="rh-personal-tags-wrap" id="rhPersonalTagsWrap" hidden>
+                    <button type="button" class="rh-icon-button rh-personal-tags-btn" id="rhPersonalTagsBtn" title="Mis etiquetas para este contacto">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                      <span class="rh-personal-tags-count" id="rhPersonalTagsCount" hidden></span>
+                    </button>
+                    <div class="rh-personal-tags-popover" id="rhPersonalTagsPopover" hidden>
+                      <div class="rh-ptp-header">
+                        <strong>Mis etiquetas privadas</strong>
+                        <span>Solo tú las ves — no afectan al expediente.</span>
+                      </div>
+                      <div class="rh-ptp-assigned" id="rhPtpAssigned"></div>
+                      <input type="text" class="rh-ptp-input" id="rhPtpInput" placeholder="Crea o asigna (teclea ',')" maxlength="40" />
+                      <div class="rh-ptp-suggest" id="rhPtpSuggest"></div>
+                    </div>
+                  </div>
+                </div>
               </header>
 
               <section class="rh-messages" id="rhMessages"><!-- JS --></section>

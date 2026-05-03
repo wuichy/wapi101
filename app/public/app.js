@@ -4223,7 +4223,10 @@ function stepSummary(step) {
     }
     case 'condition': return c.field ? `Si ${c.field} = "${c.value || ''}"` : 'Sin condición';
     case 'stage':     return c.stageName ? `→ ${c.stageName}` : 'Sin etapa';
-    case 'tag':       return c.tag ? `#${c.tag}` : 'Sin etiqueta';
+    case 'tag': {
+      const list = String(c.tag || '').split(',').map(t => t.trim()).filter(Boolean);
+      return list.length ? list.map(t => `#${t}`).join(' ') : 'Sin etiqueta';
+    }
     case 'assign':    return c.assignee || 'Sin asignar';
     case 'stop_bot':  return 'El bot deja de responder a este contacto';
     default: return '';
@@ -4384,10 +4387,24 @@ function buildStepBody(step) {
           ${buildStageOptionsWithColor(c.pipelineId, c.stageId)}
         </select>`;
     }
-    case 'tag':
+    case 'tag': {
+      // c.tag se almacena como string separado por comas (ej. "interesado,vip,cotizado").
+      // El input visual con chips agrupa varias etiquetas; el hidden con data-field="tag"
+      // mantiene el string para que collectStepConfig lo recoja sin cambios.
+      const tagsArr = String(c.tag || '').split(',').map(t => t.trim()).filter(Boolean);
+      const chipsHtml = tagsArr.map((t, i) => `
+        <span class="sb-tag-chip">
+          ${escHtml(t)}
+          <button type="button" class="sb-tag-chip-x" data-remove-step-tag="${i}" data-sid="${sid}" aria-label="Quitar">×</button>
+        </span>`).join('');
       return `
-        <label>Etiqueta</label>
-        <input type="text" data-field="tag" data-sid="${sid}" value="${escHtml(c.tag||'')}" placeholder="p.ej. interesado" />`;
+        <label>Etiqueta(s) — teclea "," para añadir varias</label>
+        <div class="sb-tag-chip-wrap" data-tag-wrap-sid="${sid}">
+          ${chipsHtml}
+          <input type="text" class="sb-tag-chip-add" data-tag-add-sid="${sid}" placeholder="${tagsArr.length ? 'Añadir otra…' : 'Ej. interesado'}" />
+        </div>
+        <input type="hidden" data-field="tag" data-sid="${sid}" value="${escHtml(c.tag || '')}" />`;
+    }
     case 'assign':
       return `
         <label>Responsable</label>
@@ -4470,6 +4487,49 @@ function renderStepsFlow() {
 
 function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Helpers para chips del step "Agregar etiqueta" — manipulan c.tag (string CSV)
+function _getStepTagsArray(sid) {
+  const step = sbSteps.find(s => s._id === sid);
+  if (!step) return { step: null, tags: [] };
+  const cfg = step.config || (step.config = {});
+  const tags = String(cfg.tag || '').split(',').map(t => t.trim()).filter(Boolean);
+  return { step, cfg, tags };
+}
+function _setStepTagsArray(sid, tags) {
+  const step = sbSteps.find(s => s._id === sid);
+  if (!step) return;
+  step.config = step.config || {};
+  step.config.tag = tags.join(',');
+  // Re-render solo el body de este step para que los chips se actualicen
+  const body = document.querySelector(`[data-body-sid="${sid}"]`);
+  if (body) {
+    body.innerHTML = buildStepBody(step);
+    // Volver a enfocar el input chip-add para encadenar
+    setTimeout(() => document.querySelector(`.sb-tag-chip-add[data-tag-add-sid="${sid}"]`)?.focus(), 0);
+  }
+  // Actualizar summary
+  const card = document.querySelector(`.sb-step-card[data-sid="${sid}"]`);
+  const sumEl = card?.querySelector('.sb-step-summary');
+  if (sumEl) sumEl.textContent = stepSummary(step);
+}
+function _addStepTag(sid, name) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return;
+  const { tags } = _getStepTagsArray(sid);
+  if (tags.includes(trimmed)) return;
+  _setStepTagsArray(sid, [...tags, trimmed]);
+}
+function _removeStepTagAt(sid, idx) {
+  const { tags } = _getStepTagsArray(sid);
+  tags.splice(idx, 1);
+  _setStepTagsArray(sid, tags);
+}
+function _removeLastStepTag(sid) {
+  const { tags } = _getStepTagsArray(sid);
+  if (!tags.length) return;
+  _setStepTagsArray(sid, tags.slice(0, -1));
 }
 
 function collectStepConfig(sid) {
@@ -4767,6 +4827,41 @@ function setupBot() {
     const card = document.querySelector(`.sb-step-card[data-sid="${sid}"]`);
     const sumEl = card?.querySelector('.sb-step-summary');
     if (sumEl) sumEl.textContent = stepSummary(step);
+  });
+
+  // ─── Step "Agregar etiqueta": chips con coma para varias etiquetas ───
+  document.getElementById('sbStepsFlow')?.addEventListener('keydown', (e) => {
+    const input = e.target.closest('.sb-tag-chip-add');
+    if (!input) return;
+    const sid = input.dataset.tagAddSid;
+    if (e.key === ',' || e.key === 'Enter') {
+      e.preventDefault();
+      const value = input.value.trim();
+      if (!value) return;
+      _addStepTag(sid, value);
+      input.value = '';
+    } else if (e.key === 'Backspace' && !input.value) {
+      // Borrar la última pill cuando el input está vacío y se presiona backspace
+      _removeLastStepTag(sid);
+    }
+  });
+  // Pegar "tag1, tag2, tag3" en el input → crea todas
+  document.getElementById('sbStepsFlow')?.addEventListener('input', (e) => {
+    const input = e.target.closest('.sb-tag-chip-add');
+    if (!input || !input.value.includes(',')) return;
+    const sid = input.dataset.tagAddSid;
+    const parts = input.value.split(',').map(p => p.trim()).filter(Boolean);
+    const lastPart = input.value.endsWith(',') ? '' : parts[parts.length - 1];
+    const toAdd = input.value.endsWith(',') ? parts : parts.slice(0, -1);
+    input.value = lastPart;
+    for (const p of toAdd) _addStepTag(sid, p);
+  });
+  // Click × en chip → quitar esa etiqueta
+  document.getElementById('sbStepsFlow')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-remove-step-tag]');
+    if (!btn) return;
+    e.preventDefault();
+    _removeStepTagAt(btn.dataset.sid, Number(btn.dataset.removeStepTag));
   });
 
   // Delete bot desde el builder

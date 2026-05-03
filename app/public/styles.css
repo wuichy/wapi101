@@ -3633,6 +3633,64 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .sb-step-body .sb-row input,
 .sb-step-body .sb-row select { flex: 1; }
 
+/* Chips para el step "Agregar etiqueta" — soporta varias etiquetas con coma */
+.sb-tag-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--bg);
+  min-height: 38px;
+  box-sizing: border-box;
+}
+.sb-tag-chip-wrap:focus-within {
+  outline: 2px solid var(--primary);
+  border-color: transparent;
+}
+.sb-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.sb-tag-chip-x {
+  background: rgba(255,255,255,.18);
+  border: none;
+  color: #fff;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background .12s;
+}
+.sb-tag-chip-x:hover { background: rgba(255,255,255,.32); }
+.sb-step-body input.sb-tag-chip-add {
+  flex: 1 1 120px;
+  min-width: 120px;
+  width: auto;
+  border: none;
+  outline: none;
+  padding: 4px 0;
+  background: transparent;
+  font-size: 13px;
+}
+.sb-step-body input.sb-tag-chip-add:focus { outline: none; }
+
 .sb-timer-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .sb-timer-unit { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .sb-timer-unit input { width: 100%; text-align: center; }

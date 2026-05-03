@@ -426,17 +426,27 @@ async function executeStep(db, step, ctx) {
     }
 
     case 'tag': {
-      const tag = (c.tag || '').trim();
-      if (!tag || !ctx.contactId) return false;
+      // c.tag puede ser:
+      //   - string simple ("interesado") — legacy
+      //   - string separado por coma ("interesado,vip,cotizado") — nuevo formato chips
+      //   - array (["interesado","vip"]) — defensivo
+      const raw = c.tag;
+      const incoming = Array.isArray(raw)
+        ? raw.map(t => String(t).trim()).filter(Boolean)
+        : String(raw || '').split(',').map(t => t.trim()).filter(Boolean);
+      if (!incoming.length || !ctx.contactId) return false;
       try {
         const row = db.prepare('SELECT tags FROM contacts WHERE id = ?').get(ctx.contactId);
         if (row) {
           const tags = (() => { try { return JSON.parse(row.tags || '[]'); } catch { return []; } })();
-          if (!tags.includes(tag)) {
-            tags.push(tag);
+          const added = [];
+          for (const t of incoming) {
+            if (!tags.includes(t)) { tags.push(t); added.push(t); }
+          }
+          if (added.length) {
             db.prepare('UPDATE contacts SET tags = ? WHERE id = ?').run(JSON.stringify(tags), ctx.contactId);
           }
-          _log('info', `etiqueta "${tag}" en contacto ${ctx.contactId} (tags=${JSON.stringify(tags)})`);
+          _log('info', `etiquetas ${JSON.stringify(incoming)} en contacto ${ctx.contactId} (añadidas=${JSON.stringify(added)})`);
         }
       } catch (err) {
         _log('error', `error en step tag: ${err.message}`);

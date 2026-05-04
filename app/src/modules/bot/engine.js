@@ -362,6 +362,7 @@ async function executeStep(db, step, ctx) {
         _log('info', `mensaje enviado OK, externalId=${externalId}`);
       } catch (err) {
         _log('error', `error enviando mensaje: ${err.message}`);
+        throw new Error(`Envío de mensaje falló: ${err.message}`);
       }
       return false;
     }
@@ -387,6 +388,7 @@ async function executeStep(db, step, ctx) {
         _log('info', `template ${templateId} enviada OK, externalId=${result.externalId}`);
       } catch (err) {
         _log('error', `error enviando template: ${err.message}`);
+        throw new Error(`Envío de plantilla ${templateId} falló: ${err.message}`);
       }
       return false;
     }
@@ -471,6 +473,7 @@ async function executeStep(db, step, ctx) {
         });
       } catch (err) {
         _log('error', `error en step stage: ${err.message}`);
+        throw new Error(`Cambio de etapa falló: ${err.message}`);
       }
       return false;
     }
@@ -500,6 +503,7 @@ async function executeStep(db, step, ctx) {
         }
       } catch (err) {
         _log('error', `error en step tag: ${err.message}`);
+        throw new Error(`Asignar etiqueta falló: ${err.message}`);
       }
       return false;
     }

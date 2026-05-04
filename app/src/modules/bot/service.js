@@ -17,13 +17,156 @@ function setTags(db, botId, tagIds) {
   txn(ids);
 }
 
+// Detecta referencias rotas en un bot (steps + trigger). Devuelve array de
+// issues con la forma { stepId|null, kind, severity, message, hint? }.
+//   stepId   — si la issue es de un step, su _id; null si es del trigger
+//   kind     — missing_template, missing_pipeline, missing_stage, missing_bot, etc.
+//   severity — 'error' (no se ejecuta) o 'warn' (puede fallar parcial)
+//   message  — texto humano-legible
+function _validateBot(db, bot) {
+  const issues = [];
+  const steps = Array.isArray(bot.steps) ? bot.steps : [];
+
+  // 1. Trigger pipeline_stage — verificar que la etapa exista
+  if (bot.trigger_type === 'pipeline_stage' && bot.trigger_value) {
+    const stageId = Number(bot.trigger_value);
+    const stage = stageId ? db.prepare('SELECT id FROM stages WHERE id = ?').get(stageId) : null;
+    if (!stage) {
+      issues.push({
+        stepId: null,
+        kind: 'missing_trigger_stage',
+        severity: 'error',
+        message: `El disparador apunta a una etapa eliminada (id #${stageId}). El bot nunca se va a ejecutar.`,
+      });
+    }
+  }
+
+  // 2. Steps — validar referencias de cada uno.
+  // El frontend asigna _id como `s${i}` al cargar (independiente del que venga
+  // en JSON). Para que el frontend pueda mapear las issues a steps por _id,
+  // generamos los _id aquí con la misma convención.
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const stepId = step._id || `s${i}`;
+    const c = step.config || {};
+    switch (step.type) {
+      case 'template': {
+        const tid = Number(c.templateId);
+        if (!tid) {
+          issues.push({ stepId, kind: 'missing_template', severity: 'error',
+            message: 'No se eligió ninguna plantilla.' });
+          break;
+        }
+        const tpl = db.prepare('SELECT id, type, wa_status FROM message_templates WHERE id = ?').get(tid);
+        if (!tpl) {
+          issues.push({ stepId, kind: 'missing_template', severity: 'error',
+            message: `La plantilla #${tid} fue eliminada.`, hint: 'Edita este paso y elige otra plantilla, o bórralo.' });
+        } else if (tpl.type === 'wa_api' && tpl.wa_status !== 'approved') {
+          issues.push({ stepId, kind: 'template_not_approved', severity: 'error',
+            message: `La plantilla está en estado "${tpl.wa_status}". Meta solo deja enviar plantillas aprobadas.` });
+        }
+        break;
+      }
+      case 'stage': {
+        const stId = Number(c.stageId);
+        const plId = Number(c.pipelineId);
+        if (!stId) {
+          issues.push({ stepId, kind: 'missing_stage', severity: 'error',
+            message: 'No se eligió ninguna etapa de destino.' });
+          break;
+        }
+        const stage = db.prepare('SELECT id, pipeline_id FROM stages WHERE id = ?').get(stId);
+        if (!stage) {
+          issues.push({ stepId, kind: 'missing_stage', severity: 'error',
+            message: `La etapa #${stId} fue eliminada.`, hint: 'Edita este paso y elige otra.' });
+        } else if (plId && stage.pipeline_id !== plId) {
+          issues.push({ stepId, kind: 'stage_pipeline_mismatch', severity: 'warn',
+            message: `La etapa ya no pertenece al pipeline configurado.` });
+        }
+        if (plId) {
+          const pl = db.prepare('SELECT id FROM pipelines WHERE id = ?').get(plId);
+          if (!pl) {
+            issues.push({ stepId, kind: 'missing_pipeline', severity: 'error',
+              message: `El pipeline #${plId} fue eliminado.` });
+          }
+        }
+        break;
+      }
+      case 'condition': {
+        // condition con campo "pipeline" → c.value es un pipelineId
+        if (c.field === 'pipeline' && c.value) {
+          const pl = db.prepare('SELECT id FROM pipelines WHERE id = ?').get(Number(c.value));
+          if (!pl) {
+            issues.push({ stepId, kind: 'missing_pipeline', severity: 'error',
+              message: `La condición compara contra un pipeline eliminado (#${c.value}).` });
+          }
+        }
+        break;
+      }
+      case 'stop_and_start': {
+        const targetId = Number(c.targetBotId);
+        if (!targetId) {
+          issues.push({ stepId, kind: 'missing_target_bot', severity: 'error',
+            message: 'No se eligió bot destino.' });
+          break;
+        }
+        const target = db.prepare('SELECT id, enabled FROM salsbots WHERE id = ?').get(targetId);
+        if (!target) {
+          issues.push({ stepId, kind: 'missing_target_bot', severity: 'error',
+            message: `El bot destino #${targetId} fue eliminado.` });
+        } else if (!target.enabled) {
+          issues.push({ stepId, kind: 'target_bot_disabled', severity: 'warn',
+            message: 'El bot destino está desactivado — al ejecutarse no hará nada.' });
+        }
+        break;
+      }
+      case 'message': {
+        // Validar canal si está fijado a una integración específica
+        if (c.channelId && c.channelId !== 'auto') {
+          const integ = db.prepare('SELECT id, status FROM integrations WHERE id = ?').get(Number(c.channelId));
+          if (!integ) {
+            issues.push({ stepId, kind: 'missing_integration', severity: 'error',
+              message: `El canal de envío fue eliminado (integración #${c.channelId}).` });
+          }
+        }
+        if (!(c.text || '').trim()) {
+          issues.push({ stepId, kind: 'empty_message', severity: 'warn',
+            message: 'El mensaje está vacío — no se enviará nada.' });
+        }
+        break;
+      }
+      case 'tag': {
+        const raw = c.tag;
+        const incoming = Array.isArray(raw) ? raw : String(raw || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (!incoming.length) {
+          issues.push({ stepId, kind: 'empty_tag', severity: 'warn',
+            message: 'No hay etiquetas configuradas — este paso no hace nada.' });
+        }
+        break;
+      }
+      case 'timer': {
+        const total = (Number(c.days)||0)*86400 + (Number(c.hours)||0)*3600 + (Number(c.minutes)||0)*60 + (Number(c.seconds)||0);
+        if (!total) {
+          issues.push({ stepId, kind: 'empty_timer', severity: 'warn',
+            message: 'El temporizador está en 0 — no espera nada.' });
+        }
+        break;
+      }
+    }
+  }
+  return issues;
+}
+
 function hydrate(db, row) {
-  return {
+  const steps = JSON.parse(row.steps || '[]');
+  const obj = {
     ...row,
     enabled: !!row.enabled,
-    steps: JSON.parse(row.steps || '[]'),
+    steps,
     tags: tagsFor(db, row.id),
   };
+  obj.issues = _validateBot(db, obj);
+  return obj;
 }
 
 function list(db) {

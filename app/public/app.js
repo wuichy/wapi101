@@ -4320,6 +4320,7 @@ function setupExpedients() {
 // ════════════════════════════════
 let sbBots = [];
 let sbCurrentId = null;   // null = nuevo
+let sbCurrentIssues = [];  // issues del bot abierto (referencias rotas)
 let sbSteps = [];         // steps del bot en edición
 let sbStepCounter = 0;
 let sbTagIds = [];        // tag IDs asignados al bot en edición
@@ -4478,6 +4479,23 @@ function botTriggerHtml(bot) {
   return escHtml(label);
 }
 
+// Badge "⚠ N errores" si el bot tiene referencias rotas (plantilla/etapa/bot
+// destino eliminados, etc). Tooltip muestra los primeros mensajes para que se
+// vea sin tener que abrir el bot.
+function botIssuesBadgeHtml(bot) {
+  const issues = Array.isArray(bot.issues) ? bot.issues : [];
+  if (!issues.length) return '';
+  const errors = issues.filter(i => i.severity === 'error');
+  const warns  = issues.filter(i => i.severity === 'warn');
+  const cls = errors.length ? 'is-error' : 'is-warn';
+  const ico = errors.length ? '⚠' : '⚡';
+  const n = errors.length || warns.length;
+  const word = errors.length ? (errors.length === 1 ? 'error' : 'errores')
+                              : (warns.length === 1 ? 'aviso' : 'avisos');
+  const tooltip = issues.slice(0, 5).map(i => `• ${i.message}`).join('\n');
+  return `<span class="bot-row-issues ${cls}" title="${escHtml(tooltip)}">${ico} ${n} ${word}</span>`;
+}
+
 function botRowTagsHtml(bot) {
   if (!Array.isArray(bot.tags) || !bot.tags.length) return '';
   return `<span class="bot-row-tags">${bot.tags.map(t => `<span class="bot-tag-pill" style="--tag-color:${escHtml(t.color)};${tplTagPillStyle(t.color)}"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</span>`).join('')}</span>`;
@@ -4527,7 +4545,7 @@ function renderBotList() {
               <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.5"/><circle cx="7.5" cy="2.5" r="1.5"/><circle cx="2.5" cy="7" r="1.5"/><circle cx="7.5" cy="7" r="1.5"/><circle cx="2.5" cy="11.5" r="1.5"/><circle cx="7.5" cy="11.5" r="1.5"/></svg>
             </span>` : ''}
           <div class="bot-row-name-wrap">
-            <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}</div>
+            <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}${botIssuesBadgeHtml(b)}</div>
             ${b.created_at ? `<div class="bot-row-date">Creado ${escHtml(formatBotDate(b.created_at))}</div>` : ''}
           </div>
           <div class="bot-row-trigger">${botTriggerHtml(b)}</div>
@@ -4556,9 +4574,12 @@ function renderBotList() {
 
 function openBotBuilder(bot) {
   sbCurrentId = bot ? bot.id : null;
+  sbCurrentIssues = bot && Array.isArray(bot.issues) ? bot.issues : [];
   sbSteps = bot
     ? JSON.parse(JSON.stringify(bot.steps)).map((s, i) => {
         sbStepCounter = Math.max(sbStepCounter, i + 1);
+        // Asegurar que cada step tiene _id estable. Si el backend devuelve _id
+        // ya, lo respetamos; los issues del backend usan el _id de los steps.
         return { ...s, _id: s._id || `s${i}` };
       })
     : [];
@@ -4932,10 +4953,36 @@ function renderStepsFlow() {
   const addWrap = document.querySelector('.sb-add-step-wrap');
   if (addWrap) addWrap.hidden = lastIsTerminal;
 
-  flow.innerHTML = sbSteps.map((step, i) => {
+  // Banner de issues del trigger (no asociadas a ningún step)
+  const triggerIssues = sbCurrentIssues.filter(i => i.stepId === null);
+  const triggerBanner = triggerIssues.length
+    ? `<div class="sb-trigger-issue">
+        <span class="sb-issue-ico">⚠</span>
+        <div>${triggerIssues.map(i => `<div>${escHtml(i.message)}</div>`).join('')}</div>
+      </div>`
+    : '';
+
+  flow.innerHTML = triggerBanner + sbSteps.map((step, i) => {
     const prevIsStop = i > 0 && (sbSteps[i - 1].type === 'stop_bot' || sbSteps[i - 1].type === 'stop_and_start');
     const insertAfterTarget = i === 0 ? '__top__' : sbSteps[i - 1]._id;
     const showInsert = i === 0 || !prevIsStop;
+    // Issues específicas de este step (matchean por stepId === step._id)
+    const stepIssues = sbCurrentIssues.filter(it => it.stepId === step._id);
+    const errors = stepIssues.filter(it => it.severity === 'error');
+    const warns  = stepIssues.filter(it => it.severity === 'warn');
+    const issueClass = errors.length ? 'has-error' : (warns.length ? 'has-warn' : '');
+    const issuesPanel = stepIssues.length
+      ? `<div class="sb-step-issues ${errors.length ? 'is-error' : 'is-warn'}">
+          ${stepIssues.map(it => `
+            <div class="sb-step-issue-line">
+              <span class="sb-issue-ico">${it.severity === 'error' ? '⚠' : '⚡'}</span>
+              <div>
+                <div class="sb-issue-msg">${escHtml(it.message)}</div>
+                ${it.hint ? `<div class="sb-issue-hint">${escHtml(it.hint)}</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>`
+      : '';
     return `
     <div class="sb-step-wrap">
       <div class="sb-step-connector">
@@ -4943,17 +4990,18 @@ function renderStepsFlow() {
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
         </button>` : ''}
       </div>
-      <div class="sb-step-card" data-sid="${step._id}">
+      <div class="sb-step-card ${issueClass}" data-sid="${step._id}">
         <div class="sb-step-header" data-toggle-sid="${step._id}">
           <div class="sb-step-icon type-${step.type}">${stepIconSvg(step.type)}</div>
           <div class="sb-step-info">
-            <div class="sb-step-title">${SB_STEP_LABELS[step.type] || step.type}</div>
+            <div class="sb-step-title">${SB_STEP_LABELS[step.type] || step.type}${errors.length ? ' <span class="sb-step-error-pill">⚠ Error</span>' : (warns.length ? ' <span class="sb-step-warn-pill">⚡ Aviso</span>' : '')}</div>
             <div class="sb-step-summary">${stepSummary(step)}</div>
           </div>
           <button class="sb-step-del" data-del-sid="${step._id}" aria-label="Eliminar paso">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><line x1="4" y1="4" x2="16" y2="16"/><line x1="16" y1="4" x2="4" y2="16"/></svg>
           </button>
         </div>
+        ${issuesPanel}
         <div class="sb-step-body" data-body-sid="${step._id}">
           ${buildStepBody(step)}
         </div>

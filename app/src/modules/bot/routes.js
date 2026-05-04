@@ -7,11 +7,6 @@ module.exports = function createBotRouter(db) {
   const router = express.Router();
 
   // ── Diagnóstico ──────────────────────────────────────────────────────────────
-  // GET  /api/bots/logs              → últimas entradas del log del engine
-  // DELETE /api/bots/logs            → limpiar logs
-  // POST /api/bots/diagnose          → simular trigger + ver resultado detallado
-  // POST /api/bots/test-trigger      → disparar trigger real para un expediente
-
   router.get('/logs', (_req, res) => {
     res.json({ logs: engine.getLogs() });
   });
@@ -21,14 +16,12 @@ module.exports = function createBotRouter(db) {
     res.json({ ok: true });
   });
 
-  // Diagnóstico sin ejecutar: inspecciona DB y compara trigger_value con stageId
   router.post('/diagnose', (req, res) => {
     try {
       const { expedientId, stageId: rawStageId, contactId: rawContactId } = req.body || {};
       const result = { checks: [], warnings: [], errors: [] };
 
-      // 1. Bots activos
-      const bots = db.prepare('SELECT * FROM salsbots WHERE enabled = 1').all();
+      const bots = db.prepare('SELECT * FROM salsbots WHERE enabled = 1 AND tenant_id = ?').all(req.tenantId);
       result.activeBots = bots.map(b => ({
         id: b.id, name: b.name,
         triggerType: b.trigger_type, triggerValue: b.trigger_value,
@@ -39,13 +32,12 @@ module.exports = function createBotRouter(db) {
       const stageBots = bots.filter(b => b.trigger_type === 'pipeline_stage');
       result.checks.push(`Bots con trigger pipeline_stage: ${stageBots.length}`);
 
-      // 2. Expediente (si se pasa)
       if (expedientId) {
         const exp = db.prepare(`
           SELECT e.*, s.id AS s_id, s.name AS s_name FROM expedients e
           LEFT JOIN stages s ON s.id = e.stage_id
-          WHERE e.id = ?
-        `).get(Number(expedientId));
+          WHERE e.id = ? AND e.tenant_id = ?
+        `).get(Number(expedientId), req.tenantId);
 
         if (!exp) {
           result.errors.push(`Expediente ${expedientId} no encontrado`);
@@ -58,7 +50,6 @@ module.exports = function createBotRouter(db) {
           };
           result.checks.push(`Expediente encontrado: "${exp.name}", etapa actual=${exp.stage_id} ("${exp.s_name}")`);
 
-          // Comparar cada bot de stage
           const targetStageId = rawStageId != null ? Number(rawStageId) : exp.stage_id;
           result.targetStageId = targetStageId;
           result.checks.push(`Comparando contra stageId=${targetStageId}`);
@@ -71,10 +62,9 @@ module.exports = function createBotRouter(db) {
             return { id: b.id, name: b.name, triggerValue: b.trigger_value, asNumber: tv, targetStageId, match };
           });
 
-          // Conversación del contacto
           const convo = db.prepare(
-            'SELECT id, provider, integration_id FROM conversations WHERE contact_id = ? ORDER BY last_message_at DESC LIMIT 1'
-          ).get(exp.contact_id);
+            'SELECT id, provider, integration_id FROM conversations WHERE contact_id = ? AND tenant_id = ? ORDER BY last_message_at DESC LIMIT 1'
+          ).get(exp.contact_id, req.tenantId);
           result.conversation = convo || null;
           if (!convo) result.warnings.push(`No hay conversación para contacto ${exp.contact_id} — mensajes del bot no se enviarán`);
         }
@@ -95,7 +85,6 @@ module.exports = function createBotRouter(db) {
     }
   });
 
-  // Disparar trigger real (igual que cuando se arrastra en el kanban)
   router.post('/test-trigger', (req, res) => {
     try {
       const { expedientId } = req.body || {};
@@ -106,8 +95,8 @@ module.exports = function createBotRouter(db) {
       const exp = db.prepare(`
         SELECT e.*, s.id AS s_id FROM expedients e
         LEFT JOIN stages s ON s.id = e.stage_id
-        WHERE e.id = ?
-      `).get(Number(expedientId));
+        WHERE e.id = ? AND e.tenant_id = ?
+      `).get(Number(expedientId), req.tenantId);
 
       if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
 
@@ -118,7 +107,6 @@ module.exports = function createBotRouter(db) {
         stageId:     exp.stage_id,
       });
 
-      // Esperar 500ms para capturar logs síncronos (el timer async sigue corriendo)
       setTimeout(() => {
         res.json({
           triggered: true,
@@ -137,9 +125,10 @@ module.exports = function createBotRouter(db) {
   router.post('/runs/:runId/kill', (req, res) => {
     try {
       const runId = Number(req.params.runId);
-      const run = db.prepare('SELECT * FROM bot_runs WHERE id = ?').get(runId);
+      const run = db.prepare('SELECT * FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, req.tenantId);
+      if (!run) return res.status(404).json({ error: 'Run no encontrado' });
       engine.killRun(db, runId);
-      if (run?.expedient_id) {
+      if (run.expedient_id) {
         activity.log(db, {
           expedientId: run.expedient_id,
           contactId:   run.contact_id,
@@ -156,9 +145,10 @@ module.exports = function createBotRouter(db) {
   router.post('/runs/:runId/pause', (req, res) => {
     try {
       const runId = Number(req.params.runId);
-      const run = db.prepare('SELECT * FROM bot_runs WHERE id = ?').get(runId);
+      const run = db.prepare('SELECT * FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, req.tenantId);
+      if (!run) return res.status(404).json({ error: 'Run no encontrado' });
       engine.pauseRun(db, runId);
-      if (run?.expedient_id) {
+      if (run.expedient_id) {
         activity.log(db, {
           expedientId: run.expedient_id,
           contactId:   run.contact_id,
@@ -175,9 +165,10 @@ module.exports = function createBotRouter(db) {
   router.post('/runs/:runId/resume', (req, res) => {
     try {
       const runId = Number(req.params.runId);
-      const run = db.prepare('SELECT * FROM bot_runs WHERE id = ?').get(runId);
+      const run = db.prepare('SELECT * FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, req.tenantId);
+      if (!run) return res.status(404).json({ error: 'Run no encontrado' });
       engine.resumeRun(db, runId);
-      if (run?.expedient_id) {
+      if (run.expedient_id) {
         activity.log(db, {
           expedientId: run.expedient_id,
           contactId:   run.contact_id,
@@ -192,38 +183,35 @@ module.exports = function createBotRouter(db) {
   });
 
   // ── CRUD ─────────────────────────────────────────────────────────────────────
-  router.get('/', (_req, res) => res.json({ items: service.list(db) }));
+  router.get('/', (req, res) => res.json({ items: service.list(db, req.tenantId) }));
 
-  // Reorder manual: body { orderedIds: [3, 1, 2, ...] }
   router.post('/reorder', (req, res) => {
     try {
       const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : null;
       if (!orderedIds) return res.status(400).json({ error: 'orderedIds requerido (array)' });
-      service.reorder(db, orderedIds);
+      service.reorder(db, req.tenantId, orderedIds);
       res.json({ ok: true });
     } catch (err) { res.status(400).json({ error: err.message }); }
   });
 
   router.post('/', (req, res) => {
     try {
-      res.status(201).json({ item: service.create(db, req.body) });
+      res.status(201).json({ item: service.create(db, req.tenantId, req.body) });
     } catch (err) { res.status(400).json({ error: err.message }); }
   });
 
   router.get('/:id', (req, res) => {
     try {
-      res.json({ item: service.getById(db, req.params.id) });
+      res.json({ item: service.getById(db, req.tenantId, req.params.id) });
     } catch (err) { res.status(404).json({ error: err.message }); }
   });
 
-  // GET /api/bot/:id/stats — métricas + historial de ejecuciones
   router.get('/:id/stats', (req, res) => {
     try {
       const botId = Number(req.params.id);
-      const bot = db.prepare('SELECT id, name, trigger_type, trigger_value FROM salsbots WHERE id = ?').get(botId);
+      const bot = db.prepare('SELECT id, name, trigger_type, trigger_value FROM salsbots WHERE id = ? AND tenant_id = ?').get(botId, req.tenantId);
       if (!bot) return res.status(404).json({ error: 'Bot no encontrado' });
 
-      // Conteo total y por estado
       const counts = db.prepare(`
         SELECT
           COUNT(*) AS total,
@@ -233,43 +221,38 @@ module.exports = function createBotRouter(db) {
           SUM(CASE WHEN status = 'killed'  THEN 1 ELSE 0 END) AS killed,
           MIN(started_at) AS first_run,
           MAX(started_at) AS last_run
-        FROM bot_runs WHERE bot_id = ?
-      `).get(botId);
+        FROM bot_runs WHERE bot_id = ? AND tenant_id = ?
+      `).get(botId, req.tenantId);
 
-      // Tasa de conversión: # leads que cambiaron de stage_id DESPUÉS de que el
-      // bot corrió / # total de runs. Heurística: si el expedient tiene
-      // expedient_activity tipo 'stage_change' después de bot_run.started_at,
-      // contamos como "conversión".
       const conversions = db.prepare(`
         SELECT COUNT(DISTINCT br.id) AS converted
         FROM bot_runs br
-        WHERE br.bot_id = ?
+        WHERE br.bot_id = ? AND br.tenant_id = ?
           AND br.expedient_id IS NOT NULL
           AND br.status IN ('done', 'running', 'paused')
           AND EXISTS (
             SELECT 1 FROM expedient_activity ea
             WHERE ea.expedient_id = br.expedient_id
+              AND ea.tenant_id = br.tenant_id
               AND ea.type = 'stage_change'
               AND ea.created_at > br.started_at
           )
-      `).get(botId);
+      `).get(botId, req.tenantId);
 
       const conversionRate = counts.total > 0
         ? (conversions.converted / counts.total) * 100
         : 0;
 
-      // Runs por día (últimos 14 días) para sparkline
       const dailyRows = db.prepare(`
         SELECT
           CAST(strftime('%s', date(started_at, 'unixepoch'), '+0 days') AS INTEGER) AS day,
           COUNT(*) AS n
         FROM bot_runs
-        WHERE bot_id = ? AND started_at >= unixepoch() - 14 * 86400
+        WHERE bot_id = ? AND tenant_id = ? AND started_at >= unixepoch() - 14 * 86400
         GROUP BY day
         ORDER BY day ASC
-      `).all(botId);
+      `).all(botId, req.tenantId);
 
-      // Últimos 50 runs con detalles del contacto
       const history = db.prepare(`
         SELECT br.id, br.status, br.current_step, br.total_steps, br.error_msg,
                br.started_at, br.finished_at,
@@ -278,10 +261,10 @@ module.exports = function createBotRouter(db) {
         FROM bot_runs br
         LEFT JOIN contacts c   ON c.id = br.contact_id
         LEFT JOIN expedients e ON e.id = br.expedient_id
-        WHERE br.bot_id = ?
+        WHERE br.bot_id = ? AND br.tenant_id = ?
         ORDER BY br.started_at DESC
         LIMIT 50
-      `).all(botId);
+      `).all(botId, req.tenantId);
 
       res.json({
         bot: { id: bot.id, name: bot.name, trigger_type: bot.trigger_type },
@@ -315,13 +298,13 @@ module.exports = function createBotRouter(db) {
 
   router.patch('/:id', (req, res) => {
     try {
-      res.json({ item: service.update(db, req.params.id, req.body) });
+      res.json({ item: service.update(db, req.tenantId, req.params.id, req.body) });
     } catch (err) { res.status(400).json({ error: err.message }); }
   });
 
   router.delete('/:id', (req, res) => {
     try {
-      service.remove(db, req.params.id, { deletedBy: req.advisor || null });
+      service.remove(db, req.tenantId, req.params.id, { deletedBy: req.advisor || null });
       res.json({ ok: true });
     } catch (err) { res.status(400).json({ error: err.message }); }
   });

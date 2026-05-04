@@ -10,6 +10,15 @@ const { sendMessage, sendWhatsAppTemplate } = require('../conversations/sender')
 
 const MS = { segundos: 1000, minutos: 60_000, horas: 3_600_000, 'días': 86_400_000 };
 
+// ─── Resolución de tenant ───
+// El engine corre fuera del request HTTP (webhook, timer, expedient stage change),
+// así que no tiene req.tenantId. Lo deriva del contactId al inicio de cada
+// trigger; el resultado se propaga vía ctx.tenantId a todas las queries internas.
+function _tenantFromContact(db, contactId) {
+  if (!contactId) return null;
+  return db.prepare('SELECT tenant_id FROM contacts WHERE id = ?').get(contactId)?.tenant_id || null;
+}
+
 // ─── Run signal registry ───────────────────────────────────────────────────
 // Each active run registers { kill: false, pause: false } here.
 // Timer steps check every second; the step loop checks between each step.
@@ -68,14 +77,16 @@ function resumeRun(db, runId) {
  * Fires bots with trigger_type = 'keyword' or 'always'.
  */
 function triggerMessage(db, { convoId, contactId, messageBody, provider, integrationId }) {
-  const bots = enabledBots(db);
+  const tenantId = _tenantFromContact(db, contactId);
+  if (!tenantId) { _log('warn', `triggerMessage: contacto ${contactId} sin tenant — abortando`); return; }
+  const bots = enabledBots(db, tenantId);
   for (const bot of bots) {
     if (bot.trigger_type === 'always') {
-      runAsync(db, bot, { convoId, contactId, messageBody, provider, integrationId });
+      runAsync(db, bot, { convoId, contactId, messageBody, provider, integrationId, tenantId });
     } else if (bot.trigger_type === 'keyword') {
       const kw = (bot.trigger_value || '').toLowerCase().trim();
       if (kw && (messageBody || '').toLowerCase().includes(kw)) {
-        runAsync(db, bot, { convoId, contactId, messageBody, provider, integrationId });
+        runAsync(db, bot, { convoId, contactId, messageBody, provider, integrationId, tenantId });
       }
     }
   }
@@ -98,7 +109,10 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId,
     return;
   }
 
-  const bots = enabledBots(db);
+  const tenantId = _tenantFromContact(db, contactId);
+  if (!tenantId) { _log('warn', `triggerPipelineStage: contacto ${contactId} sin tenant — abortando`); return; }
+
+  const bots = enabledBots(db, tenantId);
   _log('info', `bots habilitados: ${bots.length} → ${bots.map(b => `${b.name}(trigger=${b.trigger_type},value=${b.trigger_value})`).join(', ')}`);
   for (const bot of bots) {
     if (bot.trigger_type !== 'pipeline_stage') continue;
@@ -106,15 +120,13 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId,
     const match = targetStageId === stageId;
     _log('info', `bot "${bot.name}" (id=${bot.id}): trigger_value="${bot.trigger_value}" → targetStage=${targetStageId}(${typeof targetStageId}) vs stageId=${stageId}(${typeof stageId}) → match=${match}`);
     if (targetStageId && match) {
-      // Find conversation for this contact (any provider)
       const convoRow = db.prepare(
-        'SELECT id, provider, integration_id FROM conversations WHERE contact_id = ? ORDER BY last_message_at DESC LIMIT 1'
-      ).get(contactId);
+        'SELECT id, provider, integration_id FROM conversations WHERE contact_id = ? AND tenant_id = ? ORDER BY last_message_at DESC LIMIT 1'
+      ).get(contactId, tenantId);
       _log('info', `conversación encontrada: ${convoRow ? `id=${convoRow.id} provider=${convoRow.provider}` : 'ninguna'}`);
 
-      // Resetear bot_paused para que stop_bot de una ejecución anterior no bloquee esta nueva
       if (convoRow) {
-        db.prepare('UPDATE conversations SET bot_paused = 0 WHERE id = ?').run(convoRow.id);
+        db.prepare('UPDATE conversations SET bot_paused = 0 WHERE id = ? AND tenant_id = ?').run(convoRow.id, tenantId);
         _log('info', `bot_paused reseteado en conversación ${convoRow.id}`);
       }
 
@@ -127,7 +139,8 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId,
         expedientId,
         pipelineId,
         stageId,
-        chainDepth,  // se propaga al ctx del run; lo usa el step 'stage' para incrementarlo
+        chainDepth,
+        tenantId,
       });
     }
   }
@@ -138,18 +151,20 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId,
  * Fires bots with trigger_type = 'new_contact'.
  */
 function triggerNewContact(db, { contactId }) {
-  const bots = enabledBots(db);
+  const tenantId = _tenantFromContact(db, contactId);
+  if (!tenantId) { _log('warn', `triggerNewContact: contacto ${contactId} sin tenant — abortando`); return; }
+  const bots = enabledBots(db, tenantId);
   for (const bot of bots) {
     if (bot.trigger_type === 'new_contact') {
-      runAsync(db, bot, { contactId, convoId: null, messageBody: '', provider: null, integrationId: null });
+      runAsync(db, bot, { contactId, convoId: null, messageBody: '', provider: null, integrationId: null, tenantId });
     }
   }
 }
 
 // ─── Internal helpers ───
 
-function enabledBots(db) {
-  const rows = db.prepare('SELECT * FROM salsbots WHERE enabled = 1').all();
+function enabledBots(db, tenantId) {
+  const rows = db.prepare('SELECT * FROM salsbots WHERE enabled = 1 AND tenant_id = ?').all(tenantId);
   return rows.map(r => ({ ...r, steps: JSON.parse(r.steps || '[]') }));
 }
 
@@ -158,8 +173,8 @@ function runAsync(db, bot, ctx) {
   if (ctx.contactId && bot.id) {
     try {
       const active = db.prepare(
-        "SELECT id FROM bot_runs WHERE bot_id=? AND contact_id=? AND status IN ('running','paused')"
-      ).all(bot.id, ctx.contactId);
+        "SELECT id FROM bot_runs WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status IN ('running','paused')"
+      ).all(bot.id, ctx.contactId, ctx.tenantId);
       for (const row of active) {
         _log('info', `matando ejecución duplicada run=${row.id} bot=${bot.id} contacto=${ctx.contactId}`);
         killRun(db, row.id);
@@ -176,8 +191,8 @@ function runAsync(db, bot, ctx) {
 async function execute(db, bot, ctx) {
   if (ctx.contactId) {
     const pause = db.prepare(
-      'SELECT paused FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ?'
-    ).get(ctx.contactId, bot.id);
+      'SELECT paused FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?'
+    ).get(ctx.contactId, bot.id, ctx.tenantId);
     if (pause?.paused) {
       _log('warn', `bot ${bot.id} pausado para contacto ${ctx.contactId}, omitiendo.`);
       return;
@@ -201,16 +216,18 @@ async function execute(db, bot, ctx) {
   let runId = null;
   try {
     const r = db.prepare(`
-      INSERT INTO bot_runs (bot_id, bot_name, contact_id, expedient_id, trigger_type, status, current_step, total_steps)
-      VALUES (?, ?, ?, ?, ?, 'running', 0, ?)
-    `).run(bot.id, bot.name, ctx.contactId || null, ctx.expedientId || null, bot.trigger_type, totalSteps);
+      INSERT INTO bot_runs (tenant_id, bot_id, bot_name, contact_id, expedient_id, trigger_type, status, current_step, total_steps)
+      VALUES (?, ?, ?, ?, ?, ?, 'running', 0, ?)
+    `).run(ctx.tenantId, bot.id, bot.name, ctx.contactId || null, ctx.expedientId || null, bot.trigger_type, totalSteps);
     runId = r.lastInsertRowid;
     _signals.set(runId, { kill: false, pause: false });
   } catch (e) {
     _log('warn', `no se pudo crear bot_run: ${e.message}`);
   }
 
-  const contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(ctx.contactId);
+  const contact = ctx.contactId
+    ? db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId)
+    : null;
   const fullCtx = { ...ctx, contact, runId };
 
   let finalStatus = 'done';
@@ -315,12 +332,12 @@ async function executeStep(db, step, ctx) {
       // If a specific channel is requested, find or create a conversation on that channel
       if (c.channelId && c.channelId !== 'auto' && ctx.contactId) {
         const intRow = db.prepare(
-          'SELECT id, provider FROM integrations WHERE id = ?'
-        ).get(Number(c.channelId));
+          'SELECT id, provider FROM integrations WHERE id = ? AND tenant_id = ?'
+        ).get(Number(c.channelId), ctx.tenantId);
         if (intRow) {
           const existing = db.prepare(
-            'SELECT id FROM conversations WHERE contact_id = ? AND integration_id = ? LIMIT 1'
-          ).get(ctx.contactId, intRow.id);
+            'SELECT id FROM conversations WHERE contact_id = ? AND integration_id = ? AND tenant_id = ? LIMIT 1'
+          ).get(ctx.contactId, intRow.id, ctx.tenantId);
           targetConvoId = existing?.id || null;
         }
       }
@@ -419,19 +436,19 @@ async function executeStep(db, step, ctx) {
           SELECT e.id
             FROM expedients e
             JOIN stages s ON s.id = e.stage_id
-           WHERE e.contact_id = ?
+           WHERE e.contact_id = ? AND e.tenant_id = ?
              AND COALESCE(s.kind, 'in_progress') = 'in_progress'
            ORDER BY e.created_at DESC
            LIMIT 1
-        `).get(ctx.contactId);
+        `).get(ctx.contactId, ctx.tenantId);
 
         let resolvedExpId = null;
         if (exp) {
-          expedientSvc.update(db, exp.id, { stageId, pipelineId });
+          expedientSvc.update(db, ctx.tenantId, exp.id, { stageId, pipelineId });
           resolvedExpId = exp.id;
           _log('info', `expediente ${exp.id} movido a etapa ${stageId} (pipeline ${pipelineId})`);
         } else {
-          const created = expedientSvc.create(db, {
+          const created = expedientSvc.create(db, ctx.tenantId, {
             contactId:  ctx.contactId,
             pipelineId,
             stageId,
@@ -469,7 +486,7 @@ async function executeStep(db, step, ctx) {
         : String(raw || '').split(',').map(t => t.trim()).filter(Boolean);
       if (!incoming.length || !ctx.contactId) return false;
       try {
-        const row = db.prepare('SELECT tags FROM contacts WHERE id = ?').get(ctx.contactId);
+        const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
         if (row) {
           const tags = (() => { try { return JSON.parse(row.tags || '[]'); } catch { return []; } })();
           const added = [];
@@ -477,7 +494,7 @@ async function executeStep(db, step, ctx) {
             if (!tags.includes(t)) { tags.push(t); added.push(t); }
           }
           if (added.length) {
-            db.prepare('UPDATE contacts SET tags = ? WHERE id = ?').run(JSON.stringify(tags), ctx.contactId);
+            db.prepare('UPDATE contacts SET tags = ? WHERE id = ? AND tenant_id = ?').run(JSON.stringify(tags), ctx.contactId, ctx.tenantId);
           }
           _log('info', `etiquetas ${JSON.stringify(incoming)} en contacto ${ctx.contactId} (añadidas=${JSON.stringify(added)})`);
         }
@@ -503,7 +520,7 @@ async function executeStep(db, step, ctx) {
         _log('error', 'stop_and_start sin targetBotId — terminando bot actual sin lanzar otro');
         return true;
       }
-      const targetBot = db.prepare('SELECT * FROM salsbots WHERE id = ?').get(targetBotId);
+      const targetBot = db.prepare('SELECT * FROM salsbots WHERE id = ? AND tenant_id = ?').get(targetBotId, ctx.tenantId);
       if (!targetBot) {
         _log('error', `stop_and_start: bot destino #${targetBotId} no existe`);
         return true;
@@ -530,6 +547,7 @@ async function executeStep(db, step, ctx) {
         pipelineId:    ctx.pipelineId,
         stageId:       ctx.stageId,
         chainDepth:    nextDepth,
+        tenantId:      ctx.tenantId,
       });
       return true;
     }
@@ -562,13 +580,13 @@ async function executeStep(db, step, ctx) {
       };
       db.prepare(`
         INSERT INTO bot_run_waits (
-          run_id, bot_id, contact_id, conversation_id, expedient_id,
+          tenant_id, run_id, bot_id, contact_id, conversation_id, expedient_id,
           wait_step_id, wait_step_index, ctx_json, expires_at, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'waiting')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'waiting')
       `).run(
+        ctx.tenantId,
         runId,
-        // bot_id se busca a través del run
-        db.prepare('SELECT bot_id FROM bot_runs WHERE id = ?').get(runId)?.bot_id || 0,
+        db.prepare('SELECT bot_id FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, ctx.tenantId)?.bot_id || 0,
         ctx.contactId || null,
         ctx.convoId || null,
         ctx.expedientId || null,
@@ -600,9 +618,10 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
   ).run(branch, waitId);
   if (upd.changes === 0) { _log('info', `resumeRun: wait ${waitId} ya fue resumido por otro proceso`); return; }
 
-  // Cargar bot
+  // Cargar bot (sin filtrar por tenant — el wait ya estableció su tenant)
   const botRow = db.prepare('SELECT * FROM salsbots WHERE id = ?').get(wait.bot_id);
   if (!botRow) { _log('error', `resumeRun: bot ${wait.bot_id} no existe`); return; }
+  const tenantId = wait.tenant_id || botRow.tenant_id;
   let allSteps = [];
   try { allSteps = JSON.parse(botRow.steps || '[]'); } catch {}
   // Asegurar _id estable como en run normal
@@ -622,7 +641,9 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
   // Reconstruir ctx
   let snap = {};
   try { snap = JSON.parse(wait.ctx_json || '{}'); } catch {}
-  const contact = wait.contact_id ? db.prepare('SELECT * FROM contacts WHERE id = ?').get(wait.contact_id) : null;
+  const contact = wait.contact_id
+    ? db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(wait.contact_id, tenantId)
+    : null;
   const ctx = {
     contactId:     wait.contact_id,
     convoId:       wait.conversation_id,
@@ -635,6 +656,7 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     pipelineId:    snap.pipelineId,
     stageId:       snap.stageId,
     messageBody:   extraCtx.messageBody || snap.messageBody || '',
+    tenantId,
     ...extraCtx,
   };
 
@@ -722,14 +744,14 @@ function evaluateCondition(db, c, ctx) {
       return (ctx.messageBody || '').toLowerCase().includes((c.value || '').toLowerCase());
     }
     if (c.field === 'tag') {
-      const row = db.prepare('SELECT tags FROM contacts WHERE id = ?').get(ctx.contactId);
+      const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
       const tags = (() => { try { return JSON.parse(row?.tags || '[]'); } catch { return []; } })();
       return tags.includes(c.value || '');
     }
     if (c.field === 'pipeline') {
       const exp = db.prepare(
-        'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? LIMIT 1'
-      ).get(ctx.contactId, Number(c.value));
+        'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
+      ).get(ctx.contactId, Number(c.value), ctx.tenantId);
       return !!exp;
     }
   } catch (err) {

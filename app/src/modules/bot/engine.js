@@ -534,13 +534,47 @@ function evaluateCondition(db, c, ctx) {
   return true;
 }
 
+// Sustituye variables del contacto en un texto libre. Soporta tanto la sintaxis
+// con llaves simples ({nombre}) como dobles ({{nombre}}, {{apellido}}, etc.)
+// y también la convención de plantillas WhatsApp ({{1}} = first_name como
+// fallback útil cuando el usuario copia el body de una plantilla aprobada).
+//
+// Si first_name está vacío, NO deja la variable cruda — la borra (mejor "Hola"
+// que "Hola {{1}}") salvo si no hay contacto, en cuyo caso conserva el original
+// para ayudar a debuggear en el log.
 function replaceVars(text, ctx) {
   const c = ctx.contact || {};
-  return text
-    .replace(/\{nombre\}/gi,    c.name    || '')
-    .replace(/\{apellido\}/gi,  c.last_name || '')
-    .replace(/\{telefono\}/gi,  c.phone   || '')
-    .replace(/\{email\}/gi,     c.email   || '');
+  const fullName = [c.first_name, c.last_name].filter(Boolean).join(' ');
+  // Mapa de nombres de variable → valor del contacto. Todos en lowercase.
+  const vars = {
+    'nombre':           c.first_name || '',
+    'first_name':       c.first_name || '',
+    'apellido':         c.last_name  || '',
+    'last_name':        c.last_name  || '',
+    'nombre_completo':  fullName,
+    'full_name':        fullName,
+    'telefono':         c.phone || '',
+    'phone':            c.phone || '',
+    'email':            c.email || '',
+    // Convención WhatsApp template — útil cuando el usuario copia un body
+    // de plantilla aprobada al step "Enviar mensaje" libre.
+    '1':                c.first_name || '',
+  };
+  const lookup = (key) => {
+    const k = key.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : null;
+  };
+  // Pasada 1 — doble llave {{var}} (sintaxis tipo plantilla WhatsApp)
+  let out = text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key) => {
+    const v = lookup(key);
+    return v !== null ? v : match;
+  });
+  // Pasada 2 — llave simple {var} (sintaxis legacy del bot)
+  out = out.replace(/\{\s*([a-zA-Z0-9_]+)\s*\}/g, (match, key) => {
+    const v = lookup(key);
+    return v !== null ? v : match;
+  });
+  return out;
 }
 
 module.exports = { triggerMessage, triggerPipelineStage, triggerNewContact, getLogs, clearLogs, killRun, pauseRun, resumeRun };

@@ -4846,8 +4846,35 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 
 /* Footer de columna con botón de alarma de estancado */
 .pl-col-footer {
-  padding: 8px 8px 12px;
+  padding: 6px 8px 12px;
   border-top: 1px dashed transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Hint sutil del bot que corre en esta etapa */
+.pl-col-bot-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: help;
+  align-self: stretch;
+  justify-content: center;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.pl-col-bot-hint:hover { color: #64748b; background: rgba(148, 163, 184, 0.15); }
+.pl-col-bot-hint svg { flex-shrink: 0; opacity: 0.7; }
+.pl-col-bot-hint-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 .pl-col-alarm-btn {
   width: 100%;

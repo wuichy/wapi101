@@ -5389,6 +5389,30 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   border-color: #dc2626;
   color: #fff;
 }
+
+/* Pill de filtro 'Avisos' — tinte ámbar (warning) */
+.bot-tag-filter.is-warn-pill {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 600;
+}
+.bot-tag-filter.is-warn-pill:hover {
+  border-color: #f59e0b;
+  background: #fef3c7;
+  color: #78350f;
+}
+.bot-tag-filter.is-warn-pill.is-active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #fff;
+}
+.bot-tag-filter.is-warn-pill .bot-tag-filter-count {
+  background: rgba(245, 158, 11, 0.15);
+}
+.bot-tag-filter.is-warn-pill.is-active .bot-tag-filter-count {
+  background: rgba(255, 255, 255, 0.25);
+}
 .bot-tag-filter-count {
   display: inline-flex;
   align-items: center;

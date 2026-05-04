@@ -4551,16 +4551,32 @@ function renderBotTagFilters() {
   const root = document.getElementById('botTagFilters');
   if (!root) return;
   const allActive = _botTagFilter === null ? 'is-active' : '';
-  // Conteo de bots con errores (severity 'error') — para la pill de filtro
+  // Conteos para los pills de filtro:
+  //   - Errores: severity='error' (algo roto, el bot fallará)
+  //   - Avisos:  severity='warn'  (sospechoso pero funcional)
+  // Solo cuentan bots únicos (un bot con varias issues cuenta una vez)
   const errorBotsCount = (sbBots || []).filter(b =>
     Array.isArray(b.issues) && b.issues.some(i => i.severity === 'error')
   ).length;
+  const warnBotsCount = (sbBots || []).filter(b =>
+    Array.isArray(b.issues) &&
+    b.issues.some(i => i.severity === 'warn') &&
+    !b.issues.some(i => i.severity === 'error') // no doble-contar si ya tiene error
+  ).length;
   const errorActive = _botTagFilter === '__errors__' ? 'is-active' : '';
+  const warnActive  = _botTagFilter === '__warns__'  ? 'is-active' : '';
   const errorPill = errorBotsCount > 0
-    ? `<button type="button" class="bot-tag-filter is-error-pill ${errorActive}" data-bot-tag-filter="__errors__" title="Bots con referencias rotas (plantilla, etapa, pipeline o bot eliminado)">
+    ? `<button type="button" class="bot-tag-filter is-error-pill ${errorActive}" data-bot-tag-filter="__errors__" title="Bots con referencias rotas que harán fallar la ejecución (plantilla, etapa, pipeline o bot destino eliminado)">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="12" height="12"><path d="M10 2a5 5 0 0 0-5 5v3l-2 3h14l-2-3V7a5 5 0 0 0-5-5z"/><path d="M8 16a2 2 0 0 0 4 0"/></svg>
         Errores
         <span class="bot-tag-filter-count">${errorBotsCount}</span>
+      </button>`
+    : '';
+  const warnPill = warnBotsCount > 0
+    ? `<button type="button" class="bot-tag-filter is-warn-pill ${warnActive}" data-bot-tag-filter="__warns__" title="Bots con configuración sospechosa pero que SÍ se ejecutan (mensaje vacío, timer en 0, etiquetas faltantes, bot destino desactivado, etc.)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="12" height="12"><polygon points="10 2 18 17 2 17 10 2" stroke-linejoin="round"/><line x1="10" y1="8" x2="10" y2="12"/><circle cx="10" cy="14.5" r="0.6" fill="currentColor"/></svg>
+        Avisos
+        <span class="bot-tag-filter-count">${warnBotsCount}</span>
       </button>`
     : '';
   const tagPills = _botTags.map(t => `
@@ -4572,6 +4588,7 @@ function renderBotTagFilters() {
   root.innerHTML = `
     <button type="button" class="bot-tag-filter ${allActive}" data-bot-tag-filter="">Todos</button>
     ${errorPill}
+    ${warnPill}
     ${tagPills}
     <select id="botSortSelect" class="bot-sort-select" title="Ordenar bots">
       <option value="manual"${_botSort === 'manual' ? ' selected' : ''}>Manual (arrastrar)</option>
@@ -4645,12 +4662,19 @@ function renderBotList() {
 
   renderBotTagFilters();
 
-  // 1. Filtro por etiqueta o por errores (sentinel '__errors__')
+  // 1. Filtro por etiqueta o por errores/avisos (sentinels)
   let filteredBots;
   if (_botTagFilter === null) filteredBots = sbBots;
   else if (_botTagFilter === '__errors__') {
     filteredBots = sbBots.filter(b =>
       Array.isArray(b.issues) && b.issues.some(i => i.severity === 'error')
+    );
+  } else if (_botTagFilter === '__warns__') {
+    // Solo avisos puros (sin errores) — los que tienen error van al filtro de error
+    filteredBots = sbBots.filter(b =>
+      Array.isArray(b.issues) &&
+      b.issues.some(i => i.severity === 'warn') &&
+      !b.issues.some(i => i.severity === 'error')
     );
   } else {
     filteredBots = sbBots.filter(b => Array.isArray(b.tags) && b.tags.some(t => t.id === _botTagFilter));
@@ -4674,6 +4698,7 @@ function renderBotList() {
     let reason;
     if (q) reason = `No hay bots que coincidan con "${escHtml(q)}".`;
     else if (_botTagFilter === '__errors__') reason = '🎉 Ningún bot tiene errores. Todo en orden.';
+    else if (_botTagFilter === '__warns__')  reason = '✨ Ningún bot tiene avisos.';
     else reason = 'Ningún bot tiene esta etiqueta.';
     list.innerHTML = `<div class="bot-list-empty-filter">${reason}</div>`;
     return;
@@ -5605,13 +5630,14 @@ function setupBot() {
     } catch (err) { toast(err.message, 'error'); }
   });
 
-  // ─── Tag filter (botón "Todos", "Errores" + cada tag) ───
+  // ─── Tag filter (botón "Todos", "Errores", "Avisos" + cada tag) ───
   document.getElementById('botTagFilters')?.addEventListener('click', (e) => {
     const filterBtn = e.target.closest('[data-bot-tag-filter]');
     if (filterBtn) {
       const v = filterBtn.dataset.botTagFilter;
       if (v === '')                _botTagFilter = null;
       else if (v === '__errors__') _botTagFilter = '__errors__';
+      else if (v === '__warns__')  _botTagFilter = '__warns__';
       else                          _botTagFilter = Number(v);
       renderBotList();
       return;

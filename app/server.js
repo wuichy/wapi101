@@ -78,18 +78,25 @@ app.get('/api/push/vapid-public-key', (_req, res) => {
 });
 
 // ─── Login endpoints (públicos, no requieren sesión) ───
-const { authMiddleware } = require('./src/middleware/auth');
+const { authMiddleware, loadTenant } = require('./src/middleware/auth');
 
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
   const advisor = advisorSvc.login(db, username.trim(), password);
   if (!advisor) return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+  // Validar tenant del advisor — si está suspendido/cancelado, no emitir token.
+  const tenant = loadTenant(db, advisor.tenant_id);
+  if (!tenant)                          return res.status(403).json({ error: 'Tenant inexistente', code: 'TENANT_NOT_FOUND' });
+  if (tenant.status === 'suspended')    return res.status(403).json({ error: 'Cuenta suspendida — contacta soporte', code: 'TENANT_SUSPENDED' });
+  if (tenant.status === 'cancelled')    return res.status(403).json({ error: 'Cuenta cancelada', code: 'TENANT_CANCELLED' });
   const token = advisorSvc.createSession(db, advisor.id);
   res.json({
     token,
     advisor: { id: advisor.id, name: advisor.name, username: advisor.username, role: advisor.role,
-               permissions: JSON.parse(advisor.permissions || '{}') },
+               permissions: JSON.parse(advisor.permissions || '{}'),
+               tenantId: advisor.tenant_id },
+    tenant: { slug: tenant.slug, displayName: tenant.display_name, plan: tenant.plan },
   });
 });
 

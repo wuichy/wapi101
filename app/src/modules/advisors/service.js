@@ -32,7 +32,7 @@ function createSession(db, advisorId) {
 function getSession(db, token) {
   if (!token) return null;
   const row = db.prepare(`
-    SELECT s.advisor_id, s.expires_at, a.id, a.name, a.username, a.email, a.role, a.permissions, a.active
+    SELECT s.advisor_id, s.expires_at, a.id, a.name, a.username, a.email, a.role, a.permissions, a.active, a.tenant_id
     FROM advisor_sessions s
     JOIN advisors a ON a.id = s.advisor_id
     WHERE s.token = ? AND s.expires_at > unixepoch()
@@ -45,6 +45,7 @@ function getSession(db, token) {
     email:       row.email,
     role:        row.role,
     permissions: JSON.parse(row.permissions || '{}'),
+    tenantId:    row.tenant_id,
   };
 }
 

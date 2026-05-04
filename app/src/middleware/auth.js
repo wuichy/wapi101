@@ -26,7 +26,7 @@ function authenticateMachineToken(db, token, ip) {
   const hash = sha256Hex(token);
   const row = db.prepare(`
     SELECT mt.id AS mt_id, mt.name AS mt_name, mt.revoked_at, mt.created_by,
-           a.id, a.name, a.username, a.email, a.role, a.permissions, a.active
+           a.id, a.name, a.username, a.email, a.role, a.permissions, a.active, a.tenant_id
       FROM machine_tokens mt
       LEFT JOIN advisors a ON a.id = mt.created_by
      WHERE mt.token_hash = ?
@@ -43,10 +43,30 @@ function authenticateMachineToken(db, token, ip) {
     email:       row.email,
     role:        row.role,
     permissions: JSON.parse(row.permissions || '{}'),
+    tenantId:    row.tenant_id,
     _viaMachineToken: true,
     _machineTokenId:   row.mt_id,
     _machineTokenName: row.mt_name,
   };
+}
+
+// Resuelve el row del tenant a partir del id. Cachea por proceso unos segundos
+// para no leer en cada request — los datos del tenant cambian poco.
+const _tenantCache = new Map(); // id -> { row, fetchedAt }
+const TENANT_CACHE_TTL_MS = 30_000;
+function loadTenant(db, tenantId) {
+  if (!tenantId) return null;
+  const now = Date.now();
+  const cached = _tenantCache.get(tenantId);
+  if (cached && (now - cached.fetchedAt) < TENANT_CACHE_TTL_MS) return cached.row;
+  const row = db.prepare('SELECT id, slug, display_name, status, plan FROM tenants WHERE id = ?').get(tenantId);
+  _tenantCache.set(tenantId, { row, fetchedAt: now });
+  return row;
+}
+// Permitir invalidar el cache desde el módulo de admin cuando se modifica un tenant.
+function invalidateTenantCache(tenantId) {
+  if (tenantId == null) _tenantCache.clear();
+  else _tenantCache.delete(tenantId);
 }
 
 function authMiddleware(db) {
@@ -55,19 +75,32 @@ function authMiddleware(db) {
     if (!token) {
       return res.status(401).json({ error: 'No autenticado', code: 'UNAUTHENTICATED' });
     }
+    let advisor;
     if (token.startsWith('mt_')) {
-      const advisor = authenticateMachineToken(db, token, clientIp(req));
+      advisor = authenticateMachineToken(db, token, clientIp(req));
       if (!advisor) return res.status(401).json({ error: 'Token de máquina inválido o revocado', code: 'UNAUTHENTICATED' });
-      req.advisor = advisor;
-      return next();
+    } else {
+      advisor = getSession(db, token);
+      if (!advisor) return res.status(401).json({ error: 'No autenticado', code: 'UNAUTHENTICATED' });
     }
-    const advisor = getSession(db, token);
-    if (!advisor) {
-      return res.status(401).json({ error: 'No autenticado', code: 'UNAUTHENTICATED' });
+    // Cargar tenant y verificar que esté activo. Si está suspendido o cancelado,
+    // se rechaza el request (excepto endpoints del super-admin, que se monten
+    // antes de este middleware).
+    const tenant = loadTenant(db, advisor.tenantId);
+    if (!tenant) {
+      return res.status(403).json({ error: 'Tenant inexistente', code: 'TENANT_NOT_FOUND' });
     }
-    req.advisor = advisor;
+    if (tenant.status === 'suspended') {
+      return res.status(403).json({ error: 'Cuenta suspendida — contacta soporte', code: 'TENANT_SUSPENDED' });
+    }
+    if (tenant.status === 'cancelled') {
+      return res.status(403).json({ error: 'Cuenta cancelada', code: 'TENANT_CANCELLED' });
+    }
+    req.advisor  = advisor;
+    req.tenantId = tenant.id;
+    req.tenant   = tenant;
     next();
   };
 }
 
-module.exports = { authMiddleware, extractToken };
+module.exports = { authMiddleware, extractToken, loadTenant, invalidateTenantCache };

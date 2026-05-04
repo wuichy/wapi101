@@ -113,15 +113,23 @@ app.use('/api', authMiddleware(db));
 // API básica (protegida)
 app.get('/api/me', (req, res) => res.json({ advisor: req.advisor }));
 
-// Perfil de cuenta
-app.get('/api/settings/profile', (_req, res) => {
-  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'profile'").get();
+// Perfil de cuenta — por tenant. La tabla app_settings tiene UNIQUE(key) global,
+// pero como solo Lucho (tenant 1) la usa, el upsert por key+tenant funciona.
+// Cuando se onboarde el 2do tenant se hará UNIQUE(tenant_id, key) en migración.
+app.get('/api/settings/profile', (req, res) => {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'profile' AND tenant_id = ?").get(req.tenantId);
   res.json({ profile: row ? JSON.parse(row.value) : {} });
 });
 app.patch('/api/settings/profile', (req, res) => {
-  db.prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES ('profile', ?, unixepoch())
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
-    .run(JSON.stringify(req.body));
+  // Upsert manual ya que el ON CONFLICT clause necesita la columna unique.
+  const existing = db.prepare("SELECT id FROM app_settings WHERE key = 'profile' AND tenant_id = ?").get(req.tenantId);
+  if (existing) {
+    db.prepare("UPDATE app_settings SET value = ?, updated_at = unixepoch() WHERE id = ?")
+      .run(JSON.stringify(req.body), existing.id);
+  } else {
+    db.prepare("INSERT INTO app_settings (tenant_id, key, value, updated_at) VALUES (?, 'profile', ?, unixepoch())")
+      .run(req.tenantId, JSON.stringify(req.body));
+  }
   res.json({ profile: req.body });
 });
 // /healthz — público, lo pinguea UptimeRobot. Devuelve 503 si algo está mal.
@@ -137,7 +145,8 @@ app.get('/healthz', (_req, res) => {
   } catch (err) {
     return res.status(503).json({ ok: false, reason: 'db_error', message: err.message });
   }
-  // Estado de integraciones whatsapp-lite (Baileys)
+  // Estado de integraciones whatsapp-lite (Baileys) — todas las del sistema,
+  // monitoreo cross-tenant para alertas operacionales (UptimeRobot).
   const issues = [];
   try {
     const waMgr = require('./src/modules/integrations/whatsapp-web/manager');

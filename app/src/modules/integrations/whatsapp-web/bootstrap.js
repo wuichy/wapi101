@@ -76,7 +76,7 @@ function init(db) {
         // Push notification al iPhone/Mac/etc. (collapse por convo via tag)
         const senderName = payload.pushName || convo.contact_first_name || `+${payload.externalId}`;
         const preview = (payload.body || '📎 Adjunto').slice(0, 140);
-        pushSvc.sendToAll(db, {
+        pushSvc.sendToAll(db, null, {
           title: senderName,
           body:  preview,
           tag:   `chat-${convo.id}`,    // colapsa pushes consecutivos del mismo chat
@@ -104,7 +104,7 @@ function init(db) {
         `).run(display, phone || null, integrationId);
         // Si veníamos de un estado de error/disconnected → push de "recuperado"
         if (wasError && wasError !== 'connected' && wasError !== 'connecting' && wasError !== 'pending') {
-          pushSvc.sendToAll(db, {
+          pushSvc.sendToAll(db, null, {
             title: 'WhatsApp reconectado',
             body:  phone ? `+${phone} volvió a estar en línea ✓` : 'Volvió a estar en línea ✓',
             tag:   `wa-${integrationId}`,
@@ -123,7 +123,7 @@ function init(db) {
         if (info.loggedOut) {
           db.prepare(`UPDATE integrations SET status = 'disconnected', last_error = ?, updated_at = unixepoch() WHERE id = ?`)
             .run('Sesión cerrada en el dispositivo', integrationId);
-          pushSvc.sendToAll(db, {
+          pushSvc.sendToAll(db, null, {
             title: '⚠️ WhatsApp desconectado',
             body:  `${row?.display_name || 'WhatsApp Lite'} cerró sesión. Reconecta escaneando QR de nuevo.`,
             tag:   `wa-${integrationId}-logout`,
@@ -134,7 +134,7 @@ function init(db) {
           db.prepare(`UPDATE integrations SET last_error = ?, updated_at = unixepoch() WHERE id = ?`)
             .run(info.message || 'Desconectado', integrationId);
           // Solo notificar si la desconexión es prolongada (cooldown 10 min evita spam de reintentos cortos)
-          pushSvc.sendToAll(db, {
+          pushSvc.sendToAll(db, null, {
             title: '⚠️ WhatsApp desconectado',
             body:  `${row?.display_name || 'WhatsApp Lite'} perdió conexión. Reintentando…`,
             tag:   `wa-${integrationId}-down`,

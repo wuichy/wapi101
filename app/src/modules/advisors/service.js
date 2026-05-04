@@ -53,6 +53,9 @@ function deleteSession(db, token) {
   db.prepare('DELETE FROM advisor_sessions WHERE token = ?').run(token);
 }
 
+// Login NO recibe tenantId — todavía es por username/email global. Cuando
+// onboardée el 2do tenant, /api/auth/login aceptará un tenantSlug opcional
+// (subdominio o input explícito) y filtrará por tenant aquí.
 function login(db, usernameOrEmail, password) {
   const advisor = db.prepare(
     'SELECT * FROM advisors WHERE (username = ? OR email = ?) AND active = 1'
@@ -62,24 +65,24 @@ function login(db, usernameOrEmail, password) {
   return advisor;
 }
 
-function list(db) {
-  return db.prepare('SELECT id, name, username, email, role, permissions, active, created_at FROM advisors ORDER BY id').all()
+function list(db, tenantId) {
+  return db.prepare('SELECT id, name, username, email, role, permissions, active, created_at FROM advisors WHERE tenant_id = ? ORDER BY id').all(tenantId)
     .map(r => ({ ...r, permissions: JSON.parse(r.permissions || '{}') }));
 }
 
-function create(db, { name, username, email, password, role = 'asesor', permissions = {} }) {
+function create(db, tenantId, { name, username, email, password, role = 'asesor', permissions = {} }) {
   const defaultPerms = { write: true, delete: false, view_reports: false, manage_advisors: false };
   const perms = JSON.stringify({ ...defaultPerms, ...permissions });
   const hash = hashPassword(password);
   const result = db.prepare(`
-    INSERT INTO advisors (name, username, email, password_hash, role, permissions)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(name, username, email || null, hash, role, perms);
+    INSERT INTO advisors (tenant_id, name, username, email, password_hash, role, permissions)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(tenantId, name, username, email || null, hash, role, perms);
   return db.prepare('SELECT id, name, username, email, role, permissions, active FROM advisors WHERE id = ?').get(result.lastInsertRowid);
 }
 
-function update(db, id, { name, username, email, password, role, permissions, active }) {
-  const row = db.prepare('SELECT * FROM advisors WHERE id = ?').get(id);
+function update(db, tenantId, id, { name, username, email, password, role, permissions, active }) {
+  const row = db.prepare('SELECT * FROM advisors WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) throw new Error('Asesor no encontrado');
 
   const perms = permissions !== undefined
@@ -91,7 +94,7 @@ function update(db, id, { name, username, email, password, role, permissions, ac
     UPDATE advisors SET
       name = ?, username = ?, email = ?,
       password_hash = ?, role = ?, permissions = ?, active = ?
-    WHERE id = ?
+    WHERE id = ? AND tenant_id = ?
   `).run(
     name       ?? row.name,
     username   ?? row.username,
@@ -100,19 +103,21 @@ function update(db, id, { name, username, email, password, role, permissions, ac
     role       ?? row.role,
     perms,
     active     !== undefined ? (active ? 1 : 0) : row.active,
-    id,
+    id, tenantId,
   );
   return db.prepare('SELECT id, name, username, email, role, permissions, active FROM advisors WHERE id = ?').get(id);
 }
 
-function remove(db, id) {
-  db.prepare('DELETE FROM advisors WHERE id = ?').run(id);
+function remove(db, tenantId, id) {
+  db.prepare('DELETE FROM advisors WHERE id = ? AND tenant_id = ?').run(id, tenantId);
 }
 
+// ensureFirstAdmin: si la DB está vacía (cero advisors en cualquier tenant),
+// crea el admin inicial en tenant 1 (Lucho). Solo se ejecuta al boot del server.
 function ensureFirstAdmin(db, { name, username, password }) {
   const count = db.prepare('SELECT COUNT(*) AS n FROM advisors').get().n;
   if (count === 0) {
-    create(db, { name, username, password, role: 'admin', permissions: { write: true, delete: true, manage_advisors: true } });
+    create(db, 1, { name, username, password, role: 'admin', permissions: { write: true, delete: true, manage_advisors: true } });
     console.log(`[advisors] Admin inicial creado: ${username}`);
   }
 }

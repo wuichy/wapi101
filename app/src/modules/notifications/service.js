@@ -28,30 +28,37 @@ function getPublicKey() {
   return process.env.VAPID_PUBLIC_KEY || null;
 }
 
-function addSubscription(db, sub, { userAgent = null, advisorId = null } = {}) {
+function addSubscription(db, tenantId, sub, { userAgent = null, advisorId = null } = {}) {
   if (!sub?.endpoint) throw new Error('Suscripción sin endpoint');
   const keysJson = JSON.stringify(sub.keys || {});
   const now = Math.floor(Date.now() / 1000);
 
-  // UPSERT por endpoint
   db.prepare(`
-    INSERT INTO push_subscriptions (endpoint, keys, user_agent, advisor_id, created_at, last_seen_at, fail_count)
-    VALUES (?, ?, ?, ?, ?, ?, 0)
+    INSERT INTO push_subscriptions (tenant_id, endpoint, keys, user_agent, advisor_id, created_at, last_seen_at, fail_count)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0)
     ON CONFLICT(endpoint) DO UPDATE SET
+      tenant_id = excluded.tenant_id,
       keys = excluded.keys,
       user_agent = excluded.user_agent,
       advisor_id = excluded.advisor_id,
       last_seen_at = excluded.last_seen_at,
       fail_count = 0
-  `).run(sub.endpoint, keysJson, userAgent, advisorId, now, now);
+  `).run(tenantId, sub.endpoint, keysJson, userAgent, advisorId, now, now);
 }
 
 function removeSubscription(db, endpoint) {
+  // El endpoint es único globalmente (URL específica del browser). No
+  // necesitamos filtrar por tenant — solo el dueño del endpoint llega aquí.
   return db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint).changes;
 }
 
-function listSubscriptions(db) {
-  return db.prepare('SELECT id, endpoint, keys, user_agent, advisor_id, fail_count FROM push_subscriptions').all();
+// Si tenantId es null, devuelve TODAS las suscripciones (uso histórico,
+// solo single-tenant). Para multi-tenant pasar tenantId explícito.
+function listSubscriptions(db, tenantId) {
+  if (tenantId == null) {
+    return db.prepare('SELECT id, endpoint, keys, user_agent, advisor_id, fail_count FROM push_subscriptions').all();
+  }
+  return db.prepare('SELECT id, endpoint, keys, user_agent, advisor_id, fail_count FROM push_subscriptions WHERE tenant_id = ?').all(tenantId);
 }
 
 // Cooldown global por (kind, key) para evitar inundación de pushes en eventos repetidos.
@@ -64,13 +71,16 @@ function isOnCooldown(kind, key, ms) {
   return false;
 }
 
-async function sendToAll(db, payload, { kind = 'manual', cooldownKey = null, cooldownMs = 0 } = {}) {
+// tenantId puede ser null para callers internos sin contexto auth (webhooks,
+// bootstrap). En ese caso envía a TODOS — válido en single-tenant. Para
+// multi-tenant los callers deben pasar tenantId explícito.
+async function sendToAll(db, tenantId, payload, { kind = 'manual', cooldownKey = null, cooldownMs = 0 } = {}) {
   if (!ensureConfigured()) return { sent: 0, failed: 0, skipped: true };
   if (cooldownMs && cooldownKey && isOnCooldown(kind, cooldownKey, cooldownMs)) {
     return { sent: 0, failed: 0, cooldownActive: true };
   }
 
-  const subs = listSubscriptions(db);
+  const subs = listSubscriptions(db, tenantId);
   if (!subs.length) return { sent: 0, failed: 0 };
 
   const body = JSON.stringify(payload);
@@ -99,12 +109,19 @@ async function sendToAll(db, payload, { kind = 'manual', cooldownKey = null, coo
     db.prepare(`DELETE FROM push_subscriptions WHERE endpoint IN (${placeholders})`).run(...dead);
   }
 
-  // Bitácora
+  // Bitácora — se asocia al tenant si está dado; sino queda con el DEFAULT 1.
   try {
-    db.prepare(`
-      INSERT INTO alert_log (kind, title, body, payload, sent_count, failed)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(kind, payload.title || null, (payload.body || '').slice(0, 200), JSON.stringify(payload).slice(0, 2000), sent, failed);
+    if (tenantId != null) {
+      db.prepare(`
+        INSERT INTO alert_log (tenant_id, kind, title, body, payload, sent_count, failed)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(tenantId, kind, payload.title || null, (payload.body || '').slice(0, 200), JSON.stringify(payload).slice(0, 2000), sent, failed);
+    } else {
+      db.prepare(`
+        INSERT INTO alert_log (kind, title, body, payload, sent_count, failed)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(kind, payload.title || null, (payload.body || '').slice(0, 200), JSON.stringify(payload).slice(0, 2000), sent, failed);
+    }
   } catch (_) {}
 
   return { sent, failed, removed: dead.length };

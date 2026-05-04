@@ -3,42 +3,40 @@ const express = require('express');
 module.exports = function createStatsRouter(db) {
   const router = express.Router();
 
-  router.get('/', (_req, res) => {
+  router.get('/', (req, res) => {
+    const t = req.tenantId;
     const todayExpr = `date(created_at, 'unixepoch', 'localtime') = date('now', 'localtime')`;
     const weekExpr  = `created_at >= strftime('%s', 'now', 'localtime', 'weekday 0', '-6 days')`;
 
     // Messages
-    const msgTotal    = db.prepare(`SELECT COUNT(*) AS n FROM messages`).get().n;
-    const msgSent     = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE direction = 'outgoing'`).get().n;
-    const msgReceived = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE direction = 'incoming'`).get().n;
-    const msgSentToday     = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE direction = 'outgoing' AND ${todayExpr}`).get().n;
-    const msgReceivedToday = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE direction = 'incoming' AND ${todayExpr}`).get().n;
-    const msgSentWeek      = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE direction = 'outgoing' AND ${weekExpr}`).get().n;
-    const msgReceivedWeek  = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE direction = 'incoming' AND ${weekExpr}`).get().n;
+    const msgTotal    = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE tenant_id = ?`).get(t).n;
+    const msgSent     = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE tenant_id = ? AND direction = 'outgoing'`).get(t).n;
+    const msgReceived = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE tenant_id = ? AND direction = 'incoming'`).get(t).n;
+    const msgSentToday     = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE tenant_id = ? AND direction = 'outgoing' AND ${todayExpr}`).get(t).n;
+    const msgReceivedToday = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE tenant_id = ? AND direction = 'incoming' AND ${todayExpr}`).get(t).n;
+    const msgSentWeek      = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE tenant_id = ? AND direction = 'outgoing' AND ${weekExpr}`).get(t).n;
+    const msgReceivedWeek  = db.prepare(`SELECT COUNT(*) AS n FROM messages WHERE tenant_id = ? AND direction = 'incoming' AND ${weekExpr}`).get(t).n;
 
-    // Daily breakdown for the last 7 days (for sparkline)
     const dailyRows = db.prepare(`
       SELECT
         date(created_at, 'unixepoch', 'localtime') AS day,
         SUM(CASE WHEN direction = 'outgoing' THEN 1 ELSE 0 END) AS sent,
         SUM(CASE WHEN direction = 'incoming' THEN 1 ELSE 0 END) AS received
       FROM messages
-      WHERE created_at >= strftime('%s', 'now', 'localtime', '-6 days', 'start of day')
+      WHERE tenant_id = ?
+        AND created_at >= strftime('%s', 'now', 'localtime', '-6 days', 'start of day')
       GROUP BY day
       ORDER BY day ASC
-    `).all();
+    `).all(t);
 
-    // Conversations
-    const convoTotal  = db.prepare(`SELECT COUNT(*) AS n FROM conversations`).get().n;
-    const convoUnread = db.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE unread_count > 0`).get().n;
-    const convoToday  = db.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE ${todayExpr.replace('created_at', 'last_message_at')}`).get().n;
+    const convoTotal  = db.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ?`).get(t).n;
+    const convoUnread = db.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ? AND unread_count > 0`).get(t).n;
+    const convoToday  = db.prepare(`SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ? AND ${todayExpr.replace('created_at', 'last_message_at')}`).get(t).n;
 
-    // Contacts
-    const contactTotal = db.prepare(`SELECT COUNT(*) AS n FROM contacts`).get().n;
-    const contactToday = db.prepare(`SELECT COUNT(*) AS n FROM contacts WHERE ${todayExpr}`).get().n;
+    const contactTotal = db.prepare(`SELECT COUNT(*) AS n FROM contacts WHERE tenant_id = ?`).get(t).n;
+    const contactToday = db.prepare(`SELECT COUNT(*) AS n FROM contacts WHERE tenant_id = ? AND ${todayExpr}`).get(t).n;
 
-    // Expedients
-    const expTotal = db.prepare(`SELECT COUNT(*) AS n FROM expedients`).get().n;
+    const expTotal = db.prepare(`SELECT COUNT(*) AS n FROM expedients WHERE tenant_id = ?`).get(t).n;
 
     res.json({
       messages: {

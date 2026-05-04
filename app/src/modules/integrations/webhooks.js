@@ -19,7 +19,7 @@ function pushIncomingMessage(db, convo, body, senderName) {
   try {
     const preview = (body || '📎 Adjunto').slice(0, 140);
     const name = senderName || `#${convo.id}`;
-    pushSvc.sendToAll(db, {
+    pushSvc.sendToAll(db, null, {
       title: name,
       body:  preview,
       tag:   `chat-${convo.id}`,

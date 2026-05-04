@@ -8,7 +8,6 @@ function sha256Hex(s) {
 module.exports = function machineTokensRoutes(db) {
   const router = express.Router();
 
-  // Solo admins reales (cookie de sesión). Tokens de máquina no pueden gestionar tokens.
   router.use((req, res, next) => {
     if (req.advisor?._viaMachineToken) {
       return res.status(403).json({ error: 'Los tokens de máquina no pueden gestionar tokens' });
@@ -19,12 +18,13 @@ module.exports = function machineTokensRoutes(db) {
     next();
   });
 
-  router.get('/', (_req, res) => {
+  router.get('/', (req, res) => {
     const items = db.prepare(`
       SELECT id, name, prefix, created_at, created_by, last_used_at, last_used_ip, revoked_at
         FROM machine_tokens
+       WHERE tenant_id = ?
        ORDER BY (revoked_at IS NULL) DESC, COALESCE(last_used_at, 0) DESC, id DESC
-    `).all();
+    `).all(req.tenantId);
     res.json({ items });
   });
 
@@ -38,24 +38,24 @@ module.exports = function machineTokensRoutes(db) {
     const prefix = plain.slice(0, 8);
 
     const r = db.prepare(`
-      INSERT INTO machine_tokens (name, token_hash, prefix, created_by)
-      VALUES (?, ?, ?, ?)
-    `).run(name, tokenHash, prefix, req.advisor?.id || null);
+      INSERT INTO machine_tokens (tenant_id, name, token_hash, prefix, created_by)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(req.tenantId, name, tokenHash, prefix, req.advisor?.id || null);
 
     res.json({ id: r.lastInsertRowid, name, prefix, token: plain });
   });
 
   router.delete('/:id', (req, res) => {
     const id = Number(req.params.id);
-    const row = db.prepare('SELECT id, revoked_at FROM machine_tokens WHERE id = ?').get(id);
+    const row = db.prepare('SELECT id, revoked_at FROM machine_tokens WHERE id = ? AND tenant_id = ?').get(id, req.tenantId);
     if (!row) return res.status(404).json({ error: 'Token no encontrado' });
     if (row.revoked_at) return res.json({ ok: true, alreadyRevoked: true });
-    db.prepare('UPDATE machine_tokens SET revoked_at = unixepoch() WHERE id = ?').run(id);
+    db.prepare('UPDATE machine_tokens SET revoked_at = unixepoch() WHERE id = ? AND tenant_id = ?').run(id, req.tenantId);
     res.json({ ok: true });
   });
 
-  router.post('/revoke-all', (_req, res) => {
-    const r = db.prepare('UPDATE machine_tokens SET revoked_at = unixepoch() WHERE revoked_at IS NULL').run();
+  router.post('/revoke-all', (req, res) => {
+    const r = db.prepare('UPDATE machine_tokens SET revoked_at = unixepoch() WHERE tenant_id = ? AND revoked_at IS NULL').run(req.tenantId);
     res.json({ ok: true, revoked: r.changes });
   });
 

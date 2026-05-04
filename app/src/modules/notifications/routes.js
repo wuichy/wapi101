@@ -9,12 +9,11 @@ module.exports = function createNotificationsRouter(db) {
     res.json({ publicKey: service.getPublicKey() });
   });
 
-  // Suscribir el navegador actual (auth obligatoria gracias al middleware global)
   router.post('/subscribe', (req, res, next) => {
     try {
       const sub = req.body?.subscription || req.body;
       if (!sub?.endpoint) return res.status(400).json({ error: 'Falta endpoint' });
-      service.addSubscription(db, sub, {
+      service.addSubscription(db, req.tenantId, sub, {
         userAgent: req.headers['user-agent'] || null,
         advisorId: req.advisor?.id || null,
       });
@@ -31,10 +30,9 @@ module.exports = function createNotificationsRouter(db) {
     } catch (err) { next(err); }
   });
 
-  // Test manual de push (botón en Ajustes / Cuenta)
-  router.post('/test', async (_req, res, next) => {
+  router.post('/test', async (req, res, next) => {
     try {
-      const result = await service.sendToAll(db, {
+      const result = await service.sendToAll(db, req.tenantId, {
         title: 'Reelance CRM',
         body:  'Test de notificación push ✓',
         tag:   'test',
@@ -44,12 +42,11 @@ module.exports = function createNotificationsRouter(db) {
     } catch (err) { next(err); }
   });
 
-  // Bitácora reciente (debug)
-  router.get('/log', (_req, res, next) => {
+  router.get('/log', (req, res, next) => {
     try {
       const items = db.prepare(
-        'SELECT id, kind, title, body, sent_count, failed, created_at FROM alert_log ORDER BY id DESC LIMIT 50'
-      ).all();
+        'SELECT id, kind, title, body, sent_count, failed, created_at FROM alert_log WHERE tenant_id = ? ORDER BY id DESC LIMIT 50'
+      ).all(req.tenantId);
       res.json({ items });
     } catch (err) { next(err); }
   });

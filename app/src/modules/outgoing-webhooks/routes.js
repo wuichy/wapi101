@@ -9,28 +9,28 @@ module.exports = function createOutgoingWebhooksRouter(db) {
     res.json({ events: AVAILABLE_EVENTS });
   });
 
-  router.get('/', (_req, res, next) => {
-    try { res.json({ items: service.list(db) }); }
+  router.get('/', (req, res, next) => {
+    try { res.json({ items: service.list(db, req.tenantId) }); }
     catch (e) { next(e); }
   });
 
   router.post('/', (req, res, next) => {
     try {
-      const item = service.create(db, req.body || {});
+      const item = service.create(db, req.tenantId, req.body || {});
       res.status(201).json({ item });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
   router.patch('/:id', (req, res, next) => {
     try {
-      const item = service.update(db, Number(req.params.id), req.body || {});
+      const item = service.update(db, req.tenantId, Number(req.params.id), req.body || {});
       res.json({ item });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
   router.delete('/:id', (req, res, next) => {
     try {
-      const ok = service.remove(db, Number(req.params.id));
+      const ok = service.remove(db, req.tenantId, Number(req.params.id));
       if (!ok) return res.status(404).json({ error: 'No encontrado' });
       res.status(204).end();
     } catch (e) { next(e); }

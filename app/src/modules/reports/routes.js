@@ -29,13 +29,13 @@ module.exports = function reportsRoutes(db) {
     };
   }
 
-  // GET /api/reports — listar (admin ve todos, asesor solo los suyos)
+  // GET /api/reports — listar (admin del tenant ve todos del tenant, asesor solo los suyos)
   router.get('/', (req, res) => {
     const advisor = req.advisor;
     const isAdmin = advisor?.role === 'admin';
     const status = req.query.status;
-    const conditions = [];
-    const params = [];
+    const conditions = ['tenant_id = ?'];
+    const params = [req.tenantId];
     if (!isAdmin) {
       conditions.push('advisor_id = ?');
       params.push(advisor?.id || 0);
@@ -44,16 +44,14 @@ module.exports = function reportsRoutes(db) {
       conditions.push('status = ?');
       params.push(status);
     }
-    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const where = 'WHERE ' + conditions.join(' AND ');
     const rows = db.prepare(`SELECT * FROM reports ${where} ORDER BY created_at DESC LIMIT 200`).all(...params);
     res.json({ items: rows.map(hydrate) });
   });
 
-  // GET /api/reports/:id
   router.get('/:id', (req, res) => {
-    const row = db.prepare('SELECT * FROM reports WHERE id = ?').get(Number(req.params.id));
+    const row = db.prepare('SELECT * FROM reports WHERE id = ? AND tenant_id = ?').get(Number(req.params.id), req.tenantId);
     if (!row) return res.status(404).json({ error: 'No encontrado' });
-    // Asesores solo pueden ver sus propios reportes
     if (req.advisor?.role !== 'admin' && row.advisor_id !== req.advisor?.id) {
       return res.status(403).json({ error: 'Sin acceso a este reporte' });
     }
@@ -95,9 +93,10 @@ module.exports = function reportsRoutes(db) {
     }
 
     const r = db.prepare(`
-      INSERT INTO reports (advisor_id, advisor_name, type, priority, title, body, attachments)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO reports (tenant_id, advisor_id, advisor_name, type, priority, title, body, attachments)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
+      req.tenantId,
       advisor?.id || null,
       advisor?.name || null,
       ['bug', 'design', 'suggestion', 'question'].includes(type) ? type : 'bug',
@@ -110,10 +109,11 @@ module.exports = function reportsRoutes(db) {
     res.status(201).json({ item: hydrate(row) });
   });
 
-  // PATCH /api/reports/:id — solo admin: cambiar status / responder
   router.patch('/:id', (req, res) => {
     if (req.advisor?.role !== 'admin') return res.status(403).json({ error: 'Solo admin' });
     const id = Number(req.params.id);
+    const existing = db.prepare('SELECT id FROM reports WHERE id = ? AND tenant_id = ?').get(id, req.tenantId);
+    if (!existing) return res.status(404).json({ error: 'No encontrado' });
     const { status, adminResponse } = req.body || {};
     const fields = [];
     const params = [];
@@ -127,8 +127,8 @@ module.exports = function reportsRoutes(db) {
       fields.push('admin_response = ?'); params.push(adminResponse || null);
     }
     if (!fields.length) return res.status(400).json({ error: 'Sin cambios' });
-    params.push(id);
-    db.prepare(`UPDATE reports SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+    params.push(id, req.tenantId);
+    db.prepare(`UPDATE reports SET ${fields.join(', ')} WHERE id = ? AND tenant_id = ?`).run(...params);
     const row = db.prepare('SELECT * FROM reports WHERE id = ?').get(id);
     res.json({ item: hydrate(row) });
   });

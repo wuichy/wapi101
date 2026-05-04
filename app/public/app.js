@@ -3,6 +3,206 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// ═══════ i18n — internacionalización ═══════
+// Diccionario de traducciones. Solo cubre los strings más visibles del UI:
+// nav, ajustes, configuración, botones principales y toasts comunes.
+// El resto del UI sigue en español hasta que se traduzca progresivamente.
+const I18N_TRANSLATIONS = {
+  'es-MX': {
+    // Nav sidebar
+    'nav.inicio': 'Inicio',
+    'nav.chats': 'Chats',
+    'nav.pipelines': 'Pipelines',
+    'nav.expedientes': 'Expedientes',
+    'nav.contactos': 'Contactos',
+    'nav.plantillas': 'Plantillas',
+    'nav.integraciones': 'Integraciones',
+    'nav.bot': 'Bot',
+    'nav.ajustes': 'Ajustes',
+    'nav.collapse': 'Colapsar menú',
+    'nav.expand': 'Expandir menú',
+    // Ajustes — tabs
+    'settings.tab.usuarios': 'Asesores',
+    'settings.tab.ia': 'IA',
+    'settings.tab.notificaciones': 'Notificaciones',
+    'settings.tab.papelera': 'Papelera',
+    'settings.tab.configuraciones': 'Configuraciones',
+    'settings.tab.reportes': 'Reportes',
+    'settings.tab.tokens': 'Tokens de máquina',
+    // Configuraciones
+    'config.title': 'Configuraciones',
+    'config.subtitle': 'Preferencias generales de la aplicación.',
+    'config.lang.title': 'Idioma',
+    'config.lang.desc': 'Idioma de la interfaz. Los cambios se aplican al instante. Algunas partes del UI pueden seguir en español hasta que estén traducidas.',
+    'config.alarms.section': 'Pipelines',
+    'config.alarms.title': 'Mostrar alarmas de leads estancados',
+    'config.alarms.desc': 'Activa el botón rojo de alarma al pie de cada columna del tablero. Apaga este switch para ocultar tanto el botón como los rojos sin borrar la configuración guardada en cada etapa.',
+    // Botones comunes
+    'btn.save': 'Guardar',
+    'btn.cancel': 'Cancelar',
+    'btn.delete': 'Eliminar',
+    'btn.edit': 'Editar',
+    'btn.create': 'Crear',
+    'btn.close': 'Cerrar',
+    'btn.send': 'Enviar',
+    'btn.confirm': 'Confirmar',
+    'btn.back': 'Atrás',
+    'btn.next': 'Siguiente',
+    'btn.add': 'Agregar',
+    'btn.search': 'Buscar',
+    'btn.import': 'Importar',
+    'btn.export': 'Exportar',
+    'btn.refresh': 'Actualizar',
+    'btn.new': 'Nuevo',
+    'btn.update': 'Actualizar cambios',
+    // Acciones del header de chat
+    'chat.placeholder': 'Escribe un mensaje…',
+    'chat.placeholder.closed': 'Ventana 24h cerrada — solo plantillas aprobadas',
+    'chat.window.closed.title': 'Ventana de 24h cerrada',
+    'chat.window.closed.desc': 'Han pasado más de 24 horas desde el último mensaje del lead. Solo puedes enviar plantillas aprobadas por Meta.',
+    'chat.window.closed.send': '📋 Enviar plantilla',
+    'chat.search.placeholder': 'Buscar usuario, teléfono, mensaje...',
+    'chat.attach.image': 'Imagen',
+    'chat.attach.video': 'Video',
+    'chat.attach.audio': 'Audio',
+    'chat.attach.recordAudio': 'Grabar audio',
+    'chat.attach.document': 'Documento',
+    // Login
+    'login.title': 'Iniciar sesión',
+    'login.username': 'Usuario',
+    'login.password': 'Contraseña',
+    'login.submit': 'Entrar',
+    // Toasts / mensajes comunes
+    'toast.saved': 'Guardado',
+    'toast.deleted': 'Eliminado',
+    'toast.created': 'Creado',
+    'toast.updated': 'Actualizado',
+    'toast.error': 'Error',
+    'toast.copied': 'Copiado al portapapeles',
+    'toast.window.closed': '⏰ Ventana 24h cerrada — solo puedes enviar plantillas aprobadas',
+  },
+  'en': {
+    // Nav sidebar
+    'nav.inicio': 'Home',
+    'nav.chats': 'Chats',
+    'nav.pipelines': 'Pipelines',
+    'nav.expedientes': 'Cases',
+    'nav.contactos': 'Contacts',
+    'nav.plantillas': 'Templates',
+    'nav.integraciones': 'Integrations',
+    'nav.bot': 'Bot',
+    'nav.ajustes': 'Settings',
+    'nav.collapse': 'Collapse menu',
+    'nav.expand': 'Expand menu',
+    // Settings — tabs
+    'settings.tab.usuarios': 'Agents',
+    'settings.tab.ia': 'AI',
+    'settings.tab.notificaciones': 'Notifications',
+    'settings.tab.papelera': 'Trash',
+    'settings.tab.configuraciones': 'Preferences',
+    'settings.tab.reportes': 'Reports',
+    'settings.tab.tokens': 'Machine tokens',
+    // Preferences
+    'config.title': 'Preferences',
+    'config.subtitle': 'General application preferences.',
+    'config.lang.title': 'Language',
+    'config.lang.desc': 'Interface language. Changes apply instantly. Some parts of the UI may still be in Spanish until they are translated.',
+    'config.alarms.section': 'Pipelines',
+    'config.alarms.title': 'Show stale lead alarms',
+    'config.alarms.desc': 'Activates the red alarm button at the bottom of each column on the board. Turn this off to hide both the button and the red highlights without deleting the configuration saved on each stage.',
+    // Common buttons
+    'btn.save': 'Save',
+    'btn.cancel': 'Cancel',
+    'btn.delete': 'Delete',
+    'btn.edit': 'Edit',
+    'btn.create': 'Create',
+    'btn.close': 'Close',
+    'btn.send': 'Send',
+    'btn.confirm': 'Confirm',
+    'btn.back': 'Back',
+    'btn.next': 'Next',
+    'btn.add': 'Add',
+    'btn.search': 'Search',
+    'btn.import': 'Import',
+    'btn.export': 'Export',
+    'btn.refresh': 'Refresh',
+    'btn.new': 'New',
+    'btn.update': 'Update',
+    // Chat header actions
+    'chat.placeholder': 'Write a message…',
+    'chat.placeholder.closed': '24h window closed — approved templates only',
+    'chat.window.closed.title': '24h window closed',
+    'chat.window.closed.desc': 'More than 24 hours have passed since the lead\'s last message. You can only send templates approved by Meta.',
+    'chat.window.closed.send': '📋 Send template',
+    'chat.search.placeholder': 'Search by name, phone, message...',
+    'chat.attach.image': 'Image',
+    'chat.attach.video': 'Video',
+    'chat.attach.audio': 'Audio',
+    'chat.attach.recordAudio': 'Record audio',
+    'chat.attach.document': 'Document',
+    // Login
+    'login.title': 'Sign in',
+    'login.username': 'Username',
+    'login.password': 'Password',
+    'login.submit': 'Log in',
+    // Toasts / common messages
+    'toast.saved': 'Saved',
+    'toast.deleted': 'Deleted',
+    'toast.created': 'Created',
+    'toast.updated': 'Updated',
+    'toast.error': 'Error',
+    'toast.copied': 'Copied to clipboard',
+    'toast.window.closed': '⏰ 24h window closed — you can only send approved templates',
+  },
+};
+
+let _locale = (() => {
+  try { return localStorage.getItem('locale') || 'es-MX'; } catch { return 'es-MX'; }
+})();
+
+// Devuelve el string traducido para la clave en el locale actual.
+// Cae a español si no hay traducción; si tampoco existe, devuelve la clave o el fallback.
+function t(key, fallback) {
+  return I18N_TRANSLATIONS[_locale]?.[key]
+      || I18N_TRANSLATIONS['es-MX']?.[key]
+      || fallback
+      || key;
+}
+
+function getLocale() { return _locale; }
+
+function setLocale(loc) {
+  if (!I18N_TRANSLATIONS[loc]) loc = 'es-MX';
+  _locale = loc;
+  try { localStorage.setItem('locale', loc); } catch {}
+  document.documentElement.lang = loc.split('-')[0];
+  applyTranslationsToDOM();
+}
+
+// Recorre el DOM y reemplaza textos en elementos con data-i18n / data-i18n-placeholder /
+// data-i18n-title / data-i18n-aria-label. Se llama al cambiar idioma y al boot.
+function applyTranslationsToDOM() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    const txt = t(key);
+    // Si el elemento solo tiene texto, reemplazar. Si tiene hijos (svg+span),
+    // buscar el primer text-node (span) y reemplazar ahí.
+    const span = el.querySelector('span:not([class*="icon"]):not([class*="dot"])');
+    if (span && span.children.length === 0) span.textContent = txt;
+    else if (el.children.length === 0) el.textContent = txt;
+    else el.setAttribute('aria-label', txt); // fallback
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-aria]').forEach(el => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  });
+}
+
 // ─── Auth helpers ───
 function getToken() { return localStorage.getItem('rh_token') || ''; }
 function getAdvisor() {
@@ -1952,6 +2152,20 @@ function setupSettingsTabs() {
       try { localStorage.setItem('plAlarmsEnabled', alarmsToggle.checked ? '1' : '0'); } catch {}
       // Re-renderizar el tablero si está visible para reflejar el cambio
       if (document.body.dataset.viewActive === 'pipelines') renderPipelinesBoard();
+    });
+  }
+
+  // Selector de idioma
+  const localeSelect = document.getElementById('cfgLocaleSelect');
+  if (localeSelect) {
+    localeSelect.value = getLocale();
+    localeSelect.addEventListener('change', () => {
+      setLocale(localeSelect.value);
+      // Re-render de listas dinámicas que tengan strings traducibles
+      try { if (typeof renderChatList === 'function' && CONVERSATIONS?.length) renderChatList(); } catch (_) {}
+      try { if (typeof renderBotList === 'function' && sbBots?.length) renderBotList(); } catch (_) {}
+      const langName = localeSelect.options[localeSelect.selectedIndex].text;
+      toast(`✓ ${langName}`, 'success');
     });
   }
 }
@@ -8746,6 +8960,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById('navBrandCacheBtn')?.addEventListener('click', clearCacheAndReload);
 
   // Bloquear autofill/sugerencias del navegador en inputs estáticos y dinámicos
+  // Aplicar idioma guardado en boot ANTES de cualquier render
+  document.documentElement.lang = _locale.split('-')[0];
+  applyTranslationsToDOM();
+
   applyAntiAutofill();
   try {
     const _afObserver = new MutationObserver(muts => {

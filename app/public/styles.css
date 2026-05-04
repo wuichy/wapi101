@@ -1038,6 +1038,24 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
 .cfg-switch input:checked + .cfg-switch-slider { background: var(--primary); }
 .cfg-switch input:checked + .cfg-switch-slider::before { transform: translateX(18px); }
 
+/* Select dentro de Configuraciones (selector de idioma, etc.) */
+.cfg-select {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 32px 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  flex-shrink: 0;
+  min-width: 200px;
+  transition: border-color .12s, box-shadow .12s;
+}
+.cfg-select:hover { border-color: var(--accent, #2563eb); }
+.cfg-select:focus { border-color: var(--accent, #2563eb); box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+
 .settings-card {
   background: #fff;
   border: 1px solid var(--border);

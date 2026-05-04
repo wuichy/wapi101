@@ -166,6 +166,26 @@ function findOrCreate(db, tenantId, { provider, externalId, integrationId, conta
   return db.prepare('SELECT * FROM conversations WHERE id = ?').get(result.lastInsertRowid);
 }
 
+// Mapper único de fila cruda de `messages` a shape camelCase para el frontend.
+// Se usa tanto en addMessage (para que el POST devuelva el mismo shape que el GET)
+// como en listMessages.
+function _mapMessageRow(m) {
+  if (!m) return null;
+  return {
+    id:             m.id,
+    conversationId: m.conversation_id,
+    externalId:     m.external_id,
+    direction:      m.direction,
+    provider:       m.provider,
+    body:           m.body || '',
+    mediaUrl:       m.media_url,
+    status:         m.status,
+    errorReason:    m.error_reason || null,
+    time:           fmtTime(m.created_at),
+    createdAt:      m.created_at,
+  };
+}
+
 function addMessage(db, tenantId, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt }) {
   const t = tenantId ?? _tenantFromConvo(db, conversationId);
   if (!t) throw new Error('Conversación no encontrada');
@@ -174,8 +194,8 @@ function addMessage(db, tenantId, conversationId, { externalId, direction, provi
   // podría existir en otro tenant si vinieran del mismo provider y hubiera
   // colisión, aunque en la práctica los IDs de Meta/Telegram son globales).
   if (externalId) {
-    const existing = db.prepare('SELECT id FROM messages WHERE provider = ? AND external_id = ? AND tenant_id = ?').get(provider, String(externalId), t);
-    if (existing) return existing;
+    const existing = db.prepare('SELECT * FROM messages WHERE provider = ? AND external_id = ? AND tenant_id = ?').get(provider, String(externalId), t);
+    if (existing) return _mapMessageRow(existing);
   }
 
   const ts = createdAt || Math.floor(Date.now() / 1000);
@@ -200,7 +220,8 @@ function addMessage(db, tenantId, conversationId, { externalId, direction, provi
     `).run((body || '').slice(0, 200), ts, conversationId, t);
   }
 
-  return db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
+  return _mapMessageRow(row);
 }
 
 function listMessages(db, tenantId, conversationId, { page = 1, pageSize = 60 } = {}) {
@@ -217,19 +238,7 @@ function listMessages(db, tenantId, conversationId, { page = 1, pageSize = 60 } 
   `).all(conversationId, t, pageSize, (page - 1) * pageSize);
 
   return {
-    items: rows.map((m) => ({
-      id:             m.id,
-      conversationId: m.conversation_id,
-      externalId:     m.external_id,
-      direction:      m.direction,
-      provider:       m.provider,
-      body:           m.body || '',
-      mediaUrl:       m.media_url,
-      status:         m.status,
-      errorReason:    m.error_reason || null,
-      time:           fmtTime(m.created_at),
-      createdAt:      m.created_at,
-    })),
+    items: rows.map(_mapMessageRow),
     total:      countRow.n,
     page,
     pageSize,

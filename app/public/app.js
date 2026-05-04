@@ -6517,6 +6517,51 @@ function _kdSetHighlight(col) {
   if (col) { col.classList.add('drag-over'); _kdHoveredCol = col; }
 }
 
+// Auto-scroll horizontal de un contenedor mientras arrastras cerca de sus
+// bordes. Si el cursor está dentro de `edgeZone` px del borde izq/der,
+// scroll proporcional a qué tan cerca esté del borde. Cancelable con
+// _stopAutoScroll() (que se llama en dragend/drop).
+let _autoScrollRaf = null;
+let _autoScrollState = null; // { container, dx }
+function _startAutoScroll(container, dx) {
+  if (_autoScrollState && _autoScrollState.container === container && _autoScrollState.dx === dx) return;
+  _autoScrollState = { container, dx };
+  if (_autoScrollRaf) return;
+  const tick = () => {
+    if (!_autoScrollState) { _autoScrollRaf = null; return; }
+    const { container: c, dx: d } = _autoScrollState;
+    c.scrollLeft += d;
+    _autoScrollRaf = requestAnimationFrame(tick);
+  };
+  _autoScrollRaf = requestAnimationFrame(tick);
+}
+function _stopAutoScroll() {
+  _autoScrollState = null;
+  if (_autoScrollRaf) { cancelAnimationFrame(_autoScrollRaf); _autoScrollRaf = null; }
+}
+// Decide si el cursor está cerca del borde y arranca/para el scroll.
+// edgeZone: px desde el borde donde activa. maxSpeed: px por frame (60fps).
+function _maybeAutoScroll(e, container, edgeZone = 80, maxSpeed = 18) {
+  if (!container) { _stopAutoScroll(); return; }
+  const rect = container.getBoundingClientRect();
+  const x = e.clientX;
+  if (x < rect.left + edgeZone) {
+    // Cuanto más cerca del borde, más rápido (proporcional)
+    const intensity = 1 - Math.max(0, x - rect.left) / edgeZone;
+    _startAutoScroll(container, -Math.ceil(maxSpeed * intensity));
+  } else if (x > rect.right - edgeZone) {
+    const intensity = 1 - Math.max(0, rect.right - x) / edgeZone;
+    _startAutoScroll(container, Math.ceil(maxSpeed * intensity));
+  } else {
+    _stopAutoScroll();
+  }
+}
+
+// Global: detener cualquier auto-scroll cuando termine cualquier drag.
+// Cubre todos los casos (drop exitoso, escape, drop fuera, etc.)
+document.addEventListener('drop',    _stopAutoScroll, true);
+document.addEventListener('dragend', _stopAutoScroll, true);
+
 function setupKanbanDragDrop() {
   const board = document.getElementById('plBoard');
   if (!board) return;
@@ -6529,6 +6574,8 @@ function setupKanbanDragDrop() {
       if (!e.target.closest('#plBoard')) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
+      // Auto-scroll horizontal cuando estás cerca del borde del board
+      _maybeAutoScroll(e, document.getElementById('plBoard'));
       if (_kdColDragId) {
         // Column reorder: highlight target column header only
         const targetCol = e.target.closest('.pl-column');
@@ -7112,6 +7159,10 @@ function setupPipelines() {
   let _tabHoverId = null;
 
   document.getElementById('plTabs')?.addEventListener('dragover', e => {
+    // Auto-scroll horizontal de las tabs cuando arrastras cerca de los bordes.
+    // Aplica tanto a reorder de pipelines como a drop de tarjetas en tabs.
+    _maybeAutoScroll(e, document.getElementById('plTabs'), 60, 14);
+
     const btn = e.target.closest('[data-pl-id]');
     if (!btn) return;
     e.preventDefault();

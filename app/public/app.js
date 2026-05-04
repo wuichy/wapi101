@@ -3886,15 +3886,21 @@ function setupExpDetail() {
   // Reply form
   const form = document.getElementById('expDetailReplyForm');
   const textarea = document.getElementById('expDetailReplyText');
+  let isSendingExpDetail = false;
   textarea?.addEventListener('input', () => {
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
   });
   textarea?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form?.requestSubmit(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (isSendingExpDetail) return;
+      form?.requestSubmit();
+    }
   });
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (isSendingExpDetail) return;
     const convoId = Number(form.dataset.convoId);
     if (!convoId) { toast('Selecciona una conversación', 'warning'); return; }
     // Bloquear si ventana 24h cerrada (WhatsApp Business API)
@@ -3905,14 +3911,20 @@ function setupExpDetail() {
     }
     const body = textarea?.value.trim();
     if (!body) return;
+    isSendingExpDetail = true;
+    if (textarea) { textarea.value = ''; textarea.style.height = 'auto'; }
     try {
       const msg = await api('POST', `/api/conversations/${convoId}/messages`, { body });
       EXP_DETAIL_MSGS.push(msg);
       renderExpDetailMessages();
-      if (textarea) { textarea.value = ''; textarea.style.height = 'auto'; }
       // Reflect in convo list
       if (convo) { convo.lastMessage = body; }
-    } catch (err) { toast(err.message, 'error'); }
+    } catch (err) {
+      toast(err.message, 'error');
+      if (textarea) { textarea.value = body; }
+    } finally {
+      isSendingExpDetail = false;
+    }
   });
 
   // Adjuntos en el chat del expediente — reusa el flujo del chat principal
@@ -9529,6 +9541,7 @@ function setupReplyForm() {
   const form = document.querySelector('.rh-reply-form');
   if (!form) return;
   const textarea = form.querySelector('textarea');
+  let isSending = false;
 
   // Auto-grow textarea
   textarea?.addEventListener('input', () => {
@@ -9540,12 +9553,14 @@ function setupReplyForm() {
   textarea?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (isSending) return;
       form.requestSubmit();
     }
   });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (isSending) return;
     const convoId = Number(form.dataset.convoId);
     if (!convoId) { toast('Selecciona una conversación primero', 'warning'); return; }
     // Bloquear si la ventana 24h está cerrada
@@ -9557,15 +9572,20 @@ function setupReplyForm() {
     const body = textarea?.value.trim();
     if (!body) return;
 
+    isSending = true;
+    if (textarea) { textarea.value = ''; textarea.style.height = 'auto'; }
+
     try {
       const msg = await api('POST', `/api/conversations/${convoId}/messages`, { body });
       CHAT_MESSAGES.push(msg);
       renderMessages();
-      if (textarea) { textarea.value = ''; textarea.style.height = 'auto'; }
       // Actualizar preview en la lista
       if (convo) { convo.lastMessage = body; convo.time = msg.time || ''; renderChatList(); }
     } catch (err) {
       toast(err.message, 'error');
+      if (textarea) { textarea.value = body; }
+    } finally {
+      isSending = false;
     }
   });
 }

@@ -132,8 +132,11 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = []) {
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
 
   // Cargar plantilla con sus campos parseados (buttons, bodyPlaceholders).
+  // tenantId=null deja que el caller (sender.js, llamado desde el bot engine
+  // o conversations) busque la plantilla globalmente; el filtro real ya pasó
+  // por la conversación / contacto del mismo tenant.
   const tplSvc = require('../templates/service');
-  const tpl = tplSvc.getById(db, Number(templateId));
+  const tpl = tplSvc.getById(db, null, Number(templateId));
   if (!tpl) throw new Error('Plantilla no encontrada');
   if (tpl.type !== 'wa_api') throw new Error('Solo plantillas WhatsApp API se envían como template');
   if (tpl.waStatus !== 'approved') throw new Error(`Plantilla no aprobada por Meta (status: ${tpl.waStatus})`);

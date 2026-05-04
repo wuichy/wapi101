@@ -5,8 +5,6 @@ const svc = require('./service');
 
 module.exports = function templatesRoutes(db) {
   const r = Router();
-  // Carpeta donde guardamos el archivo del header (público vía express.static
-  // si el server lo monta como /uploads). Usamos el mismo dir que UPLOADS_DIR.
   const uploadsDir = path.resolve(process.env.UPLOADS_DIR || './data/uploads');
   const tplMediaDir = path.join(uploadsDir, 'template-media');
   if (!fs.existsSync(tplMediaDir)) fs.mkdirSync(tplMediaDir, { recursive: true });
@@ -15,49 +13,46 @@ module.exports = function templatesRoutes(db) {
   r.get('/', (req, res) => {
     try {
       const { type } = req.query;
-      res.json(svc.list(db, { type }));
+      res.json(svc.list(db, req.tenantId, { type }));
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   r.get('/:id', (req, res) => {
-    const tmpl = svc.getById(db, Number(req.params.id));
+    const tmpl = svc.getById(db, req.tenantId, Number(req.params.id));
     if (!tmpl) return res.status(404).json({ error: 'No encontrada' });
     res.json(tmpl);
   });
 
-  // Reorder manual: body { orderedIds: [3,1,2,...] }
   r.post('/reorder', (req, res) => {
     try {
       const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : null;
       if (!orderedIds) return res.status(400).json({ error: 'orderedIds requerido (array)' });
-      svc.reorder(db, orderedIds);
+      svc.reorder(db, req.tenantId, orderedIds);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
   r.post('/', (req, res) => {
     try {
-      const tmpl = svc.create(db, req.body);
+      const tmpl = svc.create(db, req.tenantId, req.body);
       res.status(201).json(tmpl);
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
   r.put('/:id', (req, res) => {
     try {
-      const tmpl = svc.update(db, Number(req.params.id), req.body);
+      const tmpl = svc.update(db, req.tenantId, Number(req.params.id), req.body);
       if (!tmpl) return res.status(404).json({ error: 'No encontrada' });
       res.json(tmpl);
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
   r.delete('/:id', (req, res) => {
-    const ok = svc.remove(db, Number(req.params.id));
+    const ok = svc.remove(db, req.tenantId, Number(req.params.id));
     if (!ok) return res.status(404).json({ error: 'No encontrada' });
     res.json({ ok: true });
   });
 
-  // Submit WA API template to Meta for approval
-  // Reglas de Meta para headers de plantilla (defensa server-side).
   const TPL_MEDIA_RULES = {
     'image/jpeg':        { format: 'IMAGE',    maxBytes: 5  * 1024 * 1024 },
     'image/png':         { format: 'IMAGE',    maxBytes: 5  * 1024 * 1024 },
@@ -66,13 +61,10 @@ module.exports = function templatesRoutes(db) {
     'application/pdf':   { format: 'DOCUMENT', maxBytes: 100 * 1024 * 1024 },
   };
 
-  // Subir media para el HEADER de una plantilla (IMAGE/VIDEO/DOCUMENT).
-  // Recibe { data: "<base64 con o sin prefijo data:>", mimetype: "image/jpeg" }.
-  // Sube a Meta vía Resumable Upload y guarda el handle en la plantilla.
   r.post('/:id/header-media', async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const tmpl = svc.getById(db, id);
+      const tmpl = svc.getById(db, req.tenantId, id);
       if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada' });
 
       const { data, mimetype } = req.body || {};
@@ -96,8 +88,6 @@ module.exports = function templatesRoutes(db) {
         });
       }
 
-      // Guarda el archivo localmente para poder referenciarlo al ENVIAR la
-      // plantilla (Meta acepta `link` en el send con URL pública).
       const ext = mimetype === 'image/jpeg' ? 'jpg'
                 : mimetype === 'image/png'  ? 'png'
                 : mimetype === 'video/mp4'  ? 'mp4'
@@ -107,8 +97,8 @@ module.exports = function templatesRoutes(db) {
       fs.writeFileSync(path.join(tplMediaDir, filename), buffer);
       const publicUrl = `${APP_BASE_URL}/uploads/template-media/${filename}`;
 
-      const handle = await svc.uploadHeaderToMeta(db, buffer, mimetype);
-      svc.update(db, id, {
+      const handle = await svc.uploadHeaderToMeta(db, req.tenantId, buffer, mimetype);
+      svc.update(db, req.tenantId, id, {
         headerType: rule.format,
         headerMediaHandle: handle,
         headerMediaUrl: publicUrl,
@@ -122,34 +112,30 @@ module.exports = function templatesRoutes(db) {
 
   r.post('/:id/submit', async (req, res) => {
     try {
-      const result = await svc.submitToMeta(db, Number(req.params.id));
+      const result = await svc.submitToMeta(db, req.tenantId, Number(req.params.id));
       res.json(result);
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  // Sync approval status from Meta
   r.post('/:id/sync', async (req, res) => {
     try {
-      const result = await svc.syncFromMeta(db, Number(req.params.id));
+      const result = await svc.syncFromMeta(db, req.tenantId, Number(req.params.id));
       res.json(result);
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
 
-  // Asignar/reemplazar etiquetas de una plantilla.
-  // Body: { tagIds: [1, 2, 3] }  (array de ids; reemplaza todo)
   r.put('/:id/tags', (req, res) => {
     const id = Number(req.params.id);
-    const tmpl = svc.getById(db, id);
+    const tmpl = svc.getById(db, req.tenantId, id);
     if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada' });
     const tagIds = Array.isArray(req.body?.tagIds) ? req.body.tagIds : [];
-    svc.setTags(db, id, tagIds);
-    res.json(svc.getById(db, id));
+    svc.setTags(db, req.tenantId, id, tagIds);
+    res.json(svc.getById(db, req.tenantId, id));
   });
 
-  // Sync all pending templates
   r.post('/sync-all', async (req, res) => {
     try {
-      const results = await svc.syncAll(db);
+      const results = await svc.syncAll(db, req.tenantId);
       res.json(results);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });

@@ -4,18 +4,18 @@ const { friendlyMetaError } = require('../integrations/meta-errors');
 
 const META_API_VERSION = 'v22.0';
 
-// Lee credenciales de Meta desde la integración WhatsApp activa en DB,
-// con fallback a .env. La integración suele tener el token vigente que
-// pegó el usuario en el form; el .env queda como respaldo histórico.
-function getWAConfig(db) {
+// Lee credenciales de Meta desde la integración WhatsApp activa del tenant,
+// con fallback a .env. Cada tenant tiene su propia integración WhatsApp con
+// su propio access token / WABA ID.
+function getWAConfig(db, tenantId) {
   let token  = '';
   let wabaId = '';
   try {
     const row = db && db.prepare(
       `SELECT credentials_enc FROM integrations
-        WHERE provider = 'whatsapp' AND status = 'connected'
+        WHERE provider = 'whatsapp' AND status = 'connected' AND tenant_id = ?
         ORDER BY id ASC LIMIT 1`
-    ).get();
+    ).get(tenantId);
     if (row?.credentials_enc) {
       const creds = decryptJson(row.credentials_enc) || {};
       if (creds.accessToken) token  = creds.accessToken;
@@ -23,14 +23,16 @@ function getWAConfig(db) {
     }
   } catch (_) { /* ignore — caemos al fallback */ }
 
+  // Fallback solo se usa si no hay integración configurada — útil para Lucho
+  // (tenant 1) que tiene credenciales históricas en .env.
   if (!token)  token  = process.env.WHATSAPP_ACCESS_TOKEN || '';
   if (!wabaId) wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '';
   return { token, wabaId };
 }
 
-function metaRequest(db, method, path, body = null) {
+function metaRequest(db, tenantId, method, path, body = null) {
   return new Promise((resolve, reject) => {
-    const { token } = getWAConfig(db);
+    const { token } = getWAConfig(db, tenantId);
     const data = body ? JSON.stringify(body) : null;
     const options = {
       hostname: 'graph.facebook.com',
@@ -60,7 +62,6 @@ function metaRequest(db, method, path, body = null) {
 function buildComponents(template) {
   const components = [];
 
-  // HEADER — TEXT | IMAGE | VIDEO | DOCUMENT
   const ht = (template.headerType || 'TEXT').toUpperCase();
   if (ht === 'IMAGE' || ht === 'VIDEO' || ht === 'DOCUMENT') {
     if (!template.headerMediaHandle) {
@@ -75,13 +76,11 @@ function buildComponents(template) {
     components.push({ type: 'HEADER', format: 'TEXT', text: template.header });
   }
 
-  // BODY (siempre). Si tiene variables {{1}}, {{2}}, … Meta exige un example.
   if (template.body) {
     const comp = { type: 'BODY', text: template.body };
     const varNums = [...template.body.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
     if (varNums.length) {
       const max = Math.max(...varNums);
-      // Usa los ejemplos provistos por el usuario; rellena con genéricos si faltan.
       let phs = template.bodyPlaceholders;
       if (typeof phs === 'string') {
         try { phs = JSON.parse(phs); } catch { phs = null; }
@@ -95,12 +94,10 @@ function buildComponents(template) {
     components.push(comp);
   }
 
-  // FOOTER
   if (template.footer) {
     components.push({ type: 'FOOTER', text: template.footer });
   }
 
-  // BUTTONS — array de hasta 3 (3 QUICK_REPLY, o mix con máx 2 CTA según política Meta)
   let btns = template.buttons;
   if (typeof btns === 'string') {
     try { btns = JSON.parse(btns); } catch { btns = null; }
@@ -125,21 +122,12 @@ function buildComponents(template) {
   return components;
 }
 
-// Sube un archivo a Meta usando la Resumable Upload API.
-// Para CREAR plantillas con header media (IMAGE/VIDEO/DOCUMENT),
-// Meta requiere un "header_handle" obtenido por este flujo.
-//
-// Pasos:
-//   1) POST /v22.0/<APP_ID>/uploads?file_length=N&file_type=mime → devuelve session id
-//   2) POST /v22.0/<session_id> con Authorization: OAuth <token> y body raw
-//      → devuelve { h: "<header_handle>" }
-async function uploadHeaderToMeta(db, buffer, mimetype) {
-  const { token } = getWAConfig(db);
+async function uploadHeaderToMeta(db, tenantId, buffer, mimetype) {
+  const { token } = getWAConfig(db, tenantId);
   if (!token) throw new Error('Sin access token de Meta');
   const appId = process.env.META_APP_ID;
   if (!appId) throw new Error('META_APP_ID no configurado en .env');
 
-  // Step 1 — start upload session
   const sessionUrl = `https://graph.facebook.com/${META_API_VERSION}/${appId}/uploads`
     + `?file_length=${buffer.length}`
     + `&file_type=${encodeURIComponent(mimetype)}`;
@@ -152,7 +140,6 @@ async function uploadHeaderToMeta(db, buffer, mimetype) {
     throw new Error(`Subiendo archivo a Meta: ${friendlyMetaError(sessionJson?.error)}`);
   }
 
-  // Step 2 — upload bytes (note: header is OAuth, NOT Bearer, per Meta spec)
   const uploadUrl = `https://graph.facebook.com/${META_API_VERSION}/${sessionJson.id}`;
   const uploadRes = await fetch(uploadUrl, {
     method: 'POST',
@@ -169,12 +156,11 @@ async function uploadHeaderToMeta(db, buffer, mimetype) {
   return uploadJson.h;
 }
 
-// Escanea todos los bots y devuelve un map { templateId → [{ id, name }, ...] }
-// para mostrar en cada plantilla qué bots la están usando (step type 'template').
-function _buildBotsByTplMap(db) {
+// Escanea bots del tenant y devuelve un map { templateId → [{ id, name }, ...] }
+function _buildBotsByTplMap(db, tenantId) {
   const map = {};
   try {
-    const bots = db.prepare('SELECT id, name, steps FROM salsbots').all();
+    const bots = db.prepare('SELECT id, name, steps FROM salsbots WHERE tenant_id = ?').all(tenantId);
     for (const bot of bots) {
       let steps = [];
       try { steps = JSON.parse(bot.steps || '[]'); } catch { continue; }
@@ -192,28 +178,27 @@ function _buildBotsByTplMap(db) {
   return map;
 }
 
-function list(db, { type } = {}) {
-  const where = type ? 'WHERE type = ?' : '';
-  const params = type ? [type] : [];
-  // Orden por sort_order (manual) si está set; los nulos al final por created_at desc.
+function list(db, tenantId, { type } = {}) {
+  const where = type ? 'WHERE tenant_id = ? AND type = ?' : 'WHERE tenant_id = ?';
+  const params = type ? [tenantId, type] : [tenantId];
   const rows = db.prepare(`
     SELECT * FROM message_templates ${where}
     ORDER BY (sort_order IS NULL), sort_order ASC, created_at DESC
   `).all(...params);
-  // Cargar tags asignados (en una sola query) para no hacer N+1
   const tagsByTpl = {};
   try {
     const tagRows = db.prepare(`
       SELECT tta.template_id, tt.id, tt.name, tt.color
         FROM template_tag_assignments tta
         JOIN template_tags tt ON tt.id = tta.tag_id
-    `).all();
+       WHERE tta.tenant_id = ?
+    `).all(tenantId);
     tagRows.forEach(r => {
       if (!tagsByTpl[r.template_id]) tagsByTpl[r.template_id] = [];
       tagsByTpl[r.template_id].push({ id: r.id, name: r.name, color: r.color });
     });
   } catch (_) { /* migration aún no aplicada */ }
-  const botsByTpl = _buildBotsByTplMap(db);
+  const botsByTpl = _buildBotsByTplMap(db, tenantId);
   return rows.map(r => ({
     ...row(r),
     tags: tagsByTpl[r.id] || [],
@@ -221,33 +206,38 @@ function list(db, { type } = {}) {
   }));
 }
 
-function getById(db, id) {
-  const r = db.prepare('SELECT * FROM message_templates WHERE id = ?').get(id);
+function getById(db, tenantId, id) {
+  // Si tenantId es null, asume que el caller (ej. webhook) busca por id global.
+  // En ese caso devuelve la plantilla y deja que el caller la valide.
+  const r = tenantId == null
+    ? db.prepare('SELECT * FROM message_templates WHERE id = ?').get(id)
+    : db.prepare('SELECT * FROM message_templates WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!r) return null;
   const out = row(r);
+  const t = tenantId ?? r.tenant_id;
   try {
     out.tags = db.prepare(`
       SELECT tt.id, tt.name, tt.color
         FROM template_tag_assignments tta
         JOIN template_tags tt ON tt.id = tta.tag_id
-       WHERE tta.template_id = ?
+       WHERE tta.template_id = ? AND tta.tenant_id = ?
        ORDER BY tt.name COLLATE NOCASE
-    `).all(id);
+    `).all(id, t);
   } catch (_) { out.tags = []; }
-  out.usedByBots = _buildBotsByTplMap(db)[id] || [];
+  out.usedByBots = _buildBotsByTplMap(db, t)[id] || [];
   return out;
 }
 
-function setTags(db, templateId, tagIds) {
+function setTags(db, tenantId, templateId, tagIds) {
   const trx = db.transaction(() => {
-    db.prepare('DELETE FROM template_tag_assignments WHERE template_id = ?').run(templateId);
-    const ins = db.prepare('INSERT OR IGNORE INTO template_tag_assignments (template_id, tag_id) VALUES (?, ?)');
-    for (const t of (tagIds || [])) ins.run(templateId, Number(t));
+    db.prepare('DELETE FROM template_tag_assignments WHERE template_id = ? AND tenant_id = ?').run(templateId, tenantId);
+    const ins = db.prepare('INSERT OR IGNORE INTO template_tag_assignments (tenant_id, template_id, tag_id) VALUES (?, ?, ?)');
+    for (const t of (tagIds || [])) ins.run(tenantId, templateId, Number(t));
   });
   trx();
 }
 
-function create(db, { type = 'free_form', name, displayName, category = 'UTILITY', language = 'es_MX',
+function create(db, tenantId, { type = 'free_form', name, displayName, category = 'UTILITY', language = 'es_MX',
                        header, body, footer,
                        headerType, headerMediaUrl, headerMediaHandle, buttons, bodyPlaceholders }) {
   if (!name?.trim()) throw new Error('El nombre es obligatorio');
@@ -257,22 +247,28 @@ function create(db, { type = 'free_form', name, displayName, category = 'UTILITY
   const phsJson  = (Array.isArray(bodyPlaceholders) && bodyPlaceholders.length) ? JSON.stringify(bodyPlaceholders) : null;
   const r = db.prepare(`
     INSERT INTO message_templates
-      (type, name, display_name, category, language, header, body, footer,
+      (tenant_id, type, name, display_name, category, language, header, body, footer,
        header_type, header_media_url, header_media_handle, buttons, body_placeholders)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
+    tenantId,
     type, name.trim(), displayName?.trim() || null, category, language,
     header?.trim() || null, body.trim(), footer?.trim() || null,
     ht, headerMediaUrl || null, headerMediaHandle || null, btnsJson, phsJson,
   );
-  return getById(db, r.lastInsertRowid);
+  return getById(db, tenantId, r.lastInsertRowid);
 }
 
-function update(db, id, { name, displayName, category, language, header, body, footer,
+function update(db, tenantId, id, { name, displayName, category, language, header, body, footer,
                           headerType, headerMediaUrl, headerMediaHandle, headerMediaId, buttons, bodyPlaceholders,
                           waStatus, waId, waRejectedReason }) {
-  const existing = db.prepare('SELECT * FROM message_templates WHERE id = ?').get(id);
+  // tenantId puede venir null cuando webhook actualiza estado de Meta —
+  // en ese caso se busca solo por id (la plantilla ya tiene tenant fijo).
+  const existing = tenantId == null
+    ? db.prepare('SELECT * FROM message_templates WHERE id = ?').get(id)
+    : db.prepare('SELECT * FROM message_templates WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!existing) return null;
+  const t = tenantId ?? existing.tenant_id;
   const fields = [];
   const params = [];
   if (name !== undefined)        { fields.push('name = ?');         params.push(name?.trim() || existing.name); }
@@ -299,23 +295,22 @@ function update(db, id, { name, displayName, category, language, header, body, f
   if (waRejectedReason !== undefined) { fields.push('wa_rejected_reason = ?');  params.push(waRejectedReason); }
   if (fields.length) {
     fields.push('updated_at = unixepoch()');
-    params.push(id);
-    db.prepare(`UPDATE message_templates SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+    params.push(id, t);
+    db.prepare(`UPDATE message_templates SET ${fields.join(', ')} WHERE id = ? AND tenant_id = ?`).run(...params);
   }
-  return getById(db, id);
+  return getById(db, t, id);
 }
 
-function remove(db, id) {
-  return db.prepare('DELETE FROM message_templates WHERE id = ?').run(id).changes > 0;
+function remove(db, tenantId, id) {
+  return db.prepare('DELETE FROM message_templates WHERE id = ? AND tenant_id = ?').run(id, tenantId).changes > 0;
 }
 
-// Submit template to Meta for approval
-async function submitToMeta(db, id) {
-  const tmpl = getById(db, id);
+async function submitToMeta(db, tenantId, id) {
+  const tmpl = getById(db, tenantId, id);
   if (!tmpl) throw new Error('Plantilla no encontrada');
   if (tmpl.type !== 'wa_api') throw new Error('Solo las plantillas de WhatsApp API pueden enviarse a Meta');
 
-  const { wabaId } = getWAConfig(db);
+  const { wabaId } = getWAConfig(db, tenantId);
   if (!wabaId) throw new Error('WABA ID no encontrado (revisa la integración WhatsApp o WHATSAPP_BUSINESS_ACCOUNT_ID en .env)');
 
   const components = buildComponents(tmpl);
@@ -326,47 +321,55 @@ async function submitToMeta(db, id) {
     components,
   };
 
-  const result = await metaRequest(db, 'POST', `/${wabaId}/message_templates`, payload);
+  const result = await metaRequest(db, tenantId, 'POST', `/${wabaId}/message_templates`, payload);
 
   if (result.body?.id) {
-    update(db, id, { waId: result.body.id, waStatus: 'pending' });
+    update(db, tenantId, id, { waId: result.body.id, waStatus: 'pending' });
     return { success: true, waId: result.body.id, status: result.body.status };
   } else {
     throw new Error(friendlyMetaError(result.body?.error));
   }
 }
 
-// Sync approval status from Meta
-async function syncFromMeta(db, id) {
-  const tmpl = getById(db, id);
+async function syncFromMeta(db, tenantId, id) {
+  const tmpl = getById(db, tenantId, id);
   if (!tmpl) throw new Error('Plantilla no encontrada');
   if (!tmpl.waId) throw new Error('Esta plantilla aún no se ha enviado a Meta');
 
-  const result = await metaRequest(db, 'GET', `/${tmpl.waId}?fields=name,status,rejected_reason`);
+  const result = await metaRequest(db, tenantId, 'GET', `/${tmpl.waId}?fields=name,status,rejected_reason`);
   if (result.body?.status) {
     const statusMap = { APPROVED: 'approved', REJECTED: 'rejected', PENDING: 'pending', IN_APPEAL: 'pending', DELETED: 'draft' };
     const newStatus = statusMap[result.body.status] || 'pending';
     const rejectedReason = result.body.rejected_reason || null;
-    update(db, id, { waStatus: newStatus, waRejectedReason: rejectedReason });
+    update(db, tenantId, id, { waStatus: newStatus, waRejectedReason: rejectedReason });
     return { success: true, status: newStatus, metaStatus: result.body.status, rejectedReason };
   } else {
     throw new Error(friendlyMetaError(result.body?.error));
   }
 }
 
-// Sync all pending WA templates at once
-async function syncAll(db) {
-  const pending = db.prepare(`SELECT * FROM message_templates WHERE type = 'wa_api' AND wa_id IS NOT NULL`).all().map(row);
+async function syncAll(db, tenantId) {
+  const pending = db.prepare(
+    `SELECT * FROM message_templates WHERE type = 'wa_api' AND wa_id IS NOT NULL AND tenant_id = ?`
+  ).all(tenantId).map(row);
   const results = [];
   for (const tmpl of pending) {
     try {
-      const r = await syncFromMeta(db, tmpl.id);
+      const r = await syncFromMeta(db, tenantId, tmpl.id);
       results.push({ id: tmpl.id, ...r });
     } catch (e) {
       results.push({ id: tmpl.id, success: false, error: e.message });
     }
   }
   return results;
+}
+
+// Busca una plantilla por su wa_id (id de Meta) — usado por webhooks que
+// reciben actualizaciones de estado y no tienen tenantId. Devuelve la
+// plantilla con su tenant_id propio para que el caller pueda continuar.
+function findByWaId(db, waId) {
+  const r = db.prepare('SELECT * FROM message_templates WHERE wa_id = ?').get(waId);
+  return r ? { ...row(r), tenantId: r.tenant_id } : null;
 }
 
 function row(r) {
@@ -402,13 +405,12 @@ function row(r) {
   };
 }
 
-// Persiste un orden manual de plantillas. Recibe array de ids en el orden deseado.
-function reorder(db, orderedIds) {
-  const stmt = db.prepare('UPDATE message_templates SET sort_order = ? WHERE id = ?');
+function reorder(db, tenantId, orderedIds) {
+  const stmt = db.prepare('UPDATE message_templates SET sort_order = ? WHERE id = ? AND tenant_id = ?');
   const trx = db.transaction(() => {
-    orderedIds.forEach((id, idx) => stmt.run(idx, Number(id)));
+    orderedIds.forEach((id, idx) => stmt.run(idx, Number(id), tenantId));
   });
   trx();
 }
 
-module.exports = { list, getById, create, update, remove, reorder, setTags, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta };
+module.exports = { list, getById, create, update, remove, reorder, setTags, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta, findByWaId };

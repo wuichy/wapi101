@@ -4977,12 +4977,32 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   border-radius: 99px;
   padding: 2px 8px;
 }
+/* Botón eliminar etapa: cuadrito rojo claro con × roja, para que se vea
+   claramente como acción destructiva. Se intensifica en hover. */
 .pl-stage-del {
-  background: none; border: none; cursor: pointer;
-  color: var(--text-muted); font-size: 16px; padding: 2px 4px; line-height: 1;
-  border-radius: 4px; transition: color 120ms, background 120ms;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  cursor: pointer;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 700;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 120ms, color 120ms, border-color 120ms, transform 120ms;
 }
-.pl-stage-del:hover { color: var(--danger); background: rgba(239,68,68,.08); }
+.pl-stage-del:hover {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+  transform: scale(1.05);
+}
 .pl-stage-edit-btn {
   background: none; border: none; cursor: pointer;
   color: var(--text-muted); padding: 3px 5px; border-radius: 4px;

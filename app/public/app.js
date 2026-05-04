@@ -3254,9 +3254,10 @@ async function selectExpDetailConvo(convoId) {
 
   renderExpDetailMessages();
 
-  // Hook reply form
+  // Hook reply form + evaluar ventana 24h
   const form = document.getElementById('expDetailReplyForm');
   if (form) form.dataset.convoId = convoId;
+  refreshExpDetailReplyState();
 }
 
 function updateExpDetailBotToggle(_convo) { /* removed — replaced by chat search */ }
@@ -3422,6 +3423,12 @@ function setupExpDetail() {
     e.preventDefault();
     const convoId = Number(form.dataset.convoId);
     if (!convoId) { toast('Selecciona una conversación', 'warning'); return; }
+    // Bloquear si ventana 24h cerrada (WhatsApp Business API)
+    const convo = EXP_DETAIL_CONVOS.find((c) => c.id === convoId);
+    if (isWaWindowClosed(convo)) {
+      toast('⏰ Ventana 24h cerrada — solo puedes enviar plantillas aprobadas', 'warning');
+      return;
+    }
     const body = textarea?.value.trim();
     if (!body) return;
     try {
@@ -3430,10 +3437,108 @@ function setupExpDetail() {
       renderExpDetailMessages();
       if (textarea) { textarea.value = ''; textarea.style.height = 'auto'; }
       // Reflect in convo list
-      const convo = EXP_DETAIL_CONVOS.find((c) => c.id === convoId);
       if (convo) { convo.lastMessage = body; }
     } catch (err) { toast(err.message, 'error'); }
   });
+
+  // Adjuntos en el chat del expediente — reusa el flujo del chat principal
+  setupExpDetailAttachMenu();
+}
+
+// Configuración del menú adjuntar dentro del detalle del expediente.
+// Reusa _rhPendingAttachment + showAttachPreview pero con su propio convoId source.
+function setupExpDetailAttachMenu() {
+  const btn = document.getElementById('expDetailAttachBtn');
+  const menu = document.getElementById('expDetailAttachMenu');
+  if (!btn || !menu) return;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Bloquear si ventana 24h cerrada
+    const convoId = Number(document.getElementById('expDetailReplyForm')?.dataset.convoId);
+    const convo = EXP_DETAIL_CONVOS.find(c => c.id === convoId);
+    if (isWaWindowClosed(convo)) {
+      toast('⏰ Ventana 24h cerrada — no puedes enviar archivos, solo plantillas aprobadas', 'warning');
+      return;
+    }
+    // Filtrar opciones según provider
+    const supported = PROVIDER_MEDIA_SUPPORT[convo?.provider] || PROVIDER_MEDIA_SUPPORT.whatsapp;
+    menu.querySelectorAll('[data-attach]').forEach(opt => {
+      opt.hidden = !supported.has(opt.dataset.attach);
+    });
+    menu.hidden = !menu.hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (menu.hidden) return;
+    if (!menu.contains(e.target) && e.target !== btn) menu.hidden = true;
+  });
+  menu.querySelectorAll('[data-attach]').forEach(opt => {
+    opt.addEventListener('click', () => {
+      menu.hidden = true;
+      const type = opt.dataset.attach;
+      // Abrimos un picker dedicado por tipo
+      const tmp = document.createElement('input');
+      tmp.type = 'file';
+      tmp.style.display = 'none';
+      if (type === 'image')         tmp.accept = 'image/jpeg,image/png';
+      else if (type === 'video')    tmp.accept = 'video/mp4,video/3gpp,.mp4,.3gp';
+      else if (type === 'audio')    tmp.accept = 'audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,.mp3,.ogg,.aac,.m4a';
+      else if (type === 'document') tmp.accept = 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,.doc,.docx,.xls,.xlsx,.txt';
+      else if (type === 'record-audio') { startVoiceRecording(); _rhAttachOriginConvoId = Number(document.getElementById('expDetailReplyForm')?.dataset.convoId); return; }
+      tmp.addEventListener('change', () => {
+        // Marcar el origen como expediente para que sendAttachmentNow use ese convoId
+        _rhAttachOriginConvoId = Number(document.getElementById('expDetailReplyForm')?.dataset.convoId);
+        onAttachFileSelected(tmp.files?.[0], type);
+      });
+      tmp.click();
+    });
+  });
+}
+
+// Refresca el estado del reply form del detalle de expediente (banner 24h, disabled)
+function refreshExpDetailReplyState() {
+  const form = document.getElementById('expDetailReplyForm');
+  if (!form) return;
+  const convoId = Number(form.dataset.convoId);
+  const convo = EXP_DETAIL_CONVOS.find((c) => c.id === convoId);
+  updateReplyFormStateGeneric(form, convo);
+}
+
+// Versión genérica que recibe el form como parámetro (reutiliza la lógica de
+// updateReplyFormState pero apuntando a un form específico).
+function updateReplyFormStateGeneric(form, convo) {
+  if (!form) return;
+  const textarea = form.querySelector('textarea');
+  const sendBtn  = form.querySelector('.rh-send-button');
+  const closed = isWaWindowClosed(convo);
+  form.classList.toggle('is-window-closed', closed);
+  if (textarea) {
+    textarea.disabled = closed;
+    textarea.placeholder = closed
+      ? 'Ventana 24h cerrada — solo plantillas aprobadas'
+      : 'Escribe un mensaje…';
+  }
+  if (sendBtn) sendBtn.disabled = closed;
+  let banner = form.querySelector('.rh-window-closed-banner');
+  if (closed) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.className = 'rh-window-closed-banner';
+      banner.innerHTML = `
+        <span class="rh-wcb-icon">⏰</span>
+        <div class="rh-wcb-text">
+          <strong>Ventana de 24h cerrada</strong>
+          <span>Han pasado más de 24 horas desde el último mensaje del lead. Solo puedes enviar <em>plantillas aprobadas</em> por Meta.</span>
+        </div>
+        <button type="button" class="rh-wcb-btn" data-rh-wcb-tpl>📋 Enviar plantilla</button>`;
+      form.prepend(banner);
+      banner.querySelector('[data-rh-wcb-tpl]')?.addEventListener('click', () => {
+        document.getElementById('expDetailTplTrigger')?.click();
+      });
+    }
+    banner.hidden = false;
+  } else if (banner) {
+    banner.remove();
+  }
 }
 
 // ─── Modal de expediente ───
@@ -8016,6 +8121,9 @@ function setupPersonalTagsUI() {
 
 // ════════ Adjuntos en chat (imagen, video, audio, doc + grabación) ════════
 let _rhPendingAttachment = null; // { file, dataUrl, type, mimetype, filename }
+// Si está set, el próximo envío de attachment va a este convoId en vez del
+// chat principal (se usa cuando el adjunto se inicia desde el detalle del expediente)
+let _rhAttachOriginConvoId = null;
 let _rhRecorder = null;          // { mediaRecorder, chunks, stream, startTime, ui }
 
 // Inicia grabación de audio desde el micrófono. Muestra panel modal con onda
@@ -8243,11 +8351,18 @@ function closeAttachPreview() {
 async function sendAttachmentNow() {
   const att = _rhPendingAttachment;
   if (!att) return;
-  const form = document.querySelector('.rh-reply-form');
-  const convoId = Number(form?.dataset.convoId);
+  // Determinar destino: chat principal o detalle de expediente
+  const fromExpDetail = _rhAttachOriginConvoId !== null;
+  let convoId, convo;
+  if (fromExpDetail) {
+    convoId = _rhAttachOriginConvoId;
+    convo = EXP_DETAIL_CONVOS.find(c => c.id === convoId);
+  } else {
+    const form = document.querySelector('.rh-reply-form');
+    convoId = Number(form?.dataset.convoId);
+    convo = CONVERSATIONS.find(c => c.id === convoId);
+  }
   if (!convoId) { toast('Selecciona una conversación primero', 'warning'); return; }
-  // Bloquear si ventana 24h cerrada (solo plantillas permitidas)
-  const convo = CONVERSATIONS.find(c => c.id === convoId);
   if (isWaWindowClosed(convo)) {
     toast('⏰ Ventana 24h cerrada — no puedes enviar archivos, solo plantillas', 'warning');
     return;
@@ -8262,20 +8377,26 @@ async function sendAttachmentNow() {
       filename: att.filename,
       caption: caption || null,
     });
-    CHAT_MESSAGES.push(msg);
-    renderMessages();
+    if (fromExpDetail) {
+      EXP_DETAIL_MSGS.push(msg);
+      renderExpDetailMessages();
+    } else {
+      CHAT_MESSAGES.push(msg);
+      renderMessages();
+    }
     closeAttachPreview();
     toast('Archivo enviado', 'success');
     if (convo) {
       const previewByType = { image: '📷 Imagen', video: '🎬 Video', audio: '🎵 Audio', document: '📎 Documento' };
       convo.lastMessage = caption || previewByType[att.type] || '📎 Archivo';
       convo.time = msg.time || '';
-      renderChatList();
+      if (!fromExpDetail) renderChatList();
     }
   } catch (err) {
     toast(err.message || 'Error enviando archivo', 'error');
   } finally {
     if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Enviar'; }
+    _rhAttachOriginConvoId = null; // reset del flag de origen
   }
 }
 
@@ -8346,8 +8467,12 @@ function startChatPolling() {
 // Tick rápido (1s) para que la ventana 24h se cierre en tiempo real mientras el
 // usuario tiene el chat abierto, sin esperar el siguiente poll.
 setInterval(() => {
-  if (document.body.dataset.viewActive !== 'chats' || !ACTIVE_CONVO_ID) return;
-  refreshReplyFormState();
+  if (document.body.dataset.viewActive === 'chats' && ACTIVE_CONVO_ID) {
+    refreshReplyFormState();
+  }
+  if (document.body.dataset.viewActive === 'exp-detail' && EXP_DETAIL_CONVO_ID) {
+    refreshExpDetailReplyState();
+  }
 }, 1000);
 
 // ═══════ Papelera ═══════

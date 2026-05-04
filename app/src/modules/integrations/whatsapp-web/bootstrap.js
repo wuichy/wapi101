@@ -45,7 +45,7 @@ function init(db) {
           if (dup) return;
         }
 
-        const convo = convoSvc.findOrCreate(db, {
+        const convo = convoSvc.findOrCreate(db, null, {
           provider:      'whatsapp-lite',
           externalId:    payload.externalId,
           integrationId,
@@ -53,7 +53,7 @@ function init(db) {
           contactName:   payload.pushName,
         });
 
-        convoSvc.addMessage(db, convo.id, {
+        convoSvc.addMessage(db, null, convo.id, {
           externalId: payload.messageId,
           direction:  'incoming',
           provider:   'whatsapp-lite',

@@ -340,7 +340,7 @@ module.exports = function createWebhooksRouter(db) {
             const profile = value.contacts?.find((c) => c.wa_id === waId);
             const name    = profile?.profile?.name || null;
 
-            const convo = convoSvc.findOrCreate(db, {
+            const convo = convoSvc.findOrCreate(db, null, {
               provider:      'whatsapp',
               externalId:    waId,
               integrationId: integration?.id || null,
@@ -348,7 +348,7 @@ module.exports = function createWebhooksRouter(db) {
               contactName:   name,
             });
 
-            const insertedMsg = convoSvc.addMessage(db, convo.id, {
+            const insertedMsg = convoSvc.addMessage(db, null, convo.id, {
               externalId: msgId,
               direction:  'incoming',
               provider:   'whatsapp',
@@ -476,7 +476,7 @@ module.exports = function createWebhooksRouter(db) {
           const msgId    = event.message?.mid;
           const ts       = event.timestamp ? Math.floor(event.timestamp / 1000) : Math.floor(Date.now() / 1000);
 
-          const convo = convoSvc.findOrCreate(db, {
+          const convo = convoSvc.findOrCreate(db, null, {
             provider:      'messenger',
             externalId:    senderId,
             integrationId: integration?.id || null,
@@ -484,7 +484,7 @@ module.exports = function createWebhooksRouter(db) {
             contactName:   null,
           });
 
-          convoSvc.addMessage(db, convo.id, {
+          convoSvc.addMessage(db, null, convo.id, {
             externalId: msgId,
             direction:  'incoming',
             provider:   'messenger',
@@ -520,7 +520,7 @@ module.exports = function createWebhooksRouter(db) {
           const msgId    = event.message?.mid;
           const ts       = event.timestamp ? Math.floor(event.timestamp / 1000) : Math.floor(Date.now() / 1000);
 
-          const convo = convoSvc.findOrCreate(db, {
+          const convo = convoSvc.findOrCreate(db, null, {
             provider:      'instagram',
             externalId:    senderId,
             integrationId: integration?.id || null,
@@ -528,7 +528,7 @@ module.exports = function createWebhooksRouter(db) {
             contactName:   null,
           });
 
-          convoSvc.addMessage(db, convo.id, {
+          convoSvc.addMessage(db, null, convo.id, {
             externalId: msgId,
             direction:  'incoming',
             provider:   'instagram',
@@ -672,7 +672,7 @@ module.exports = function createWebhooksRouter(db) {
       const from     = msg.from || {};
       const name     = [from.first_name, from.last_name].filter(Boolean).join(' ') || from.username || null;
 
-      const convo = convoSvc.findOrCreate(db, {
+      const convo = convoSvc.findOrCreate(db, null, {
         provider:      'telegram',
         externalId:    chatId,
         integrationId: integration?.id || null,
@@ -680,7 +680,7 @@ module.exports = function createWebhooksRouter(db) {
         contactName:   name,
       });
 
-      convoSvc.addMessage(db, convo.id, {
+      convoSvc.addMessage(db, null, convo.id, {
         externalId: msgId,
         direction:  'incoming',
         provider:   'telegram',

@@ -66,7 +66,7 @@ module.exports = function createConversationsRouter(db) {
   // GET /api/conversations
   router.get('/', (req, res) => {
     const { q, provider, unread, page, pageSize, contactId } = req.query;
-    const result = svc.list(db, {
+    const result = svc.list(db, req.tenantId, {
       search:     q || '',
       provider:   provider || '',
       unreadOnly: unread === '1',
@@ -74,15 +74,14 @@ module.exports = function createConversationsRouter(db) {
       page:       Number(page) || 1,
       pageSize:   Number(pageSize) || 50,
     });
-    // Siempre incluir totales globales (sin filtro) para los badges
-    result.totalAll    = db.prepare('SELECT COUNT(*) AS n FROM conversations').get().n;
-    result.totalUnread = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE unread_count > 0').get().n;
+    result.totalAll    = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ?').get(req.tenantId).n;
+    result.totalUnread = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ? AND unread_count > 0').get(req.tenantId).n;
     res.json(result);
   });
 
   // GET /api/conversations/:id
   router.get('/:id', (req, res) => {
-    const convo = svc.getById(db, Number(req.params.id));
+    const convo = svc.getById(db, req.tenantId, Number(req.params.id));
     if (!convo) return res.status(404).json({ error: 'No encontrado' });
     res.json(convo);
   });
@@ -90,57 +89,48 @@ module.exports = function createConversationsRouter(db) {
   // GET /api/conversations/:id/messages
   router.get('/:id/messages', (req, res) => {
     const { page, pageSize } = req.query;
-    const result = svc.listMessages(db, Number(req.params.id), {
+    const result = svc.listMessages(db, req.tenantId, Number(req.params.id), {
       page:     Number(page) || 1,
       pageSize: Number(pageSize) || 60,
     });
     res.json(result);
   });
 
-  // PATCH /api/conversations/:id/read
   router.patch('/:id/read', (req, res) => {
-    svc.markRead(db, Number(req.params.id));
+    svc.markRead(db, req.tenantId, Number(req.params.id));
     res.json({ ok: true });
   });
 
-  // PATCH /api/conversations/:id/unread — re-aparece el badge azul
   router.patch('/:id/unread', (req, res) => {
-    svc.markUnread(db, Number(req.params.id));
+    svc.markUnread(db, req.tenantId, Number(req.params.id));
     res.json({ ok: true });
   });
 
-  // PATCH /api/conversations/:id/pin — body: { pinned: bool }
   router.patch('/:id/pin', (req, res) => {
-    svc.setPinned(db, Number(req.params.id), !!req.body?.pinned);
+    svc.setPinned(db, req.tenantId, Number(req.params.id), !!req.body?.pinned);
     res.json({ ok: true });
   });
 
-  // PATCH /api/conversations/:id/archive — body: { archived: bool }
   router.patch('/:id/archive', (req, res) => {
-    svc.setArchived(db, Number(req.params.id), !!req.body?.archived);
+    svc.setArchived(db, req.tenantId, Number(req.params.id), !!req.body?.archived);
     res.json({ ok: true });
   });
 
-  // PATCH /api/conversations/:id/mute — body: { until: unixTs|null }
   router.patch('/:id/mute', (req, res) => {
     const until = req.body?.until ? Number(req.body.until) : null;
-    svc.setMutedUntil(db, Number(req.params.id), until);
+    svc.setMutedUntil(db, req.tenantId, Number(req.params.id), until);
     res.json({ ok: true });
   });
 
-  // PATCH /api/conversations/:id/bot-paused
   router.patch('/:id/bot-paused', (req, res) => {
     const { paused } = req.body;
-    svc.setBotPaused(db, Number(req.params.id), !!paused);
+    svc.setBotPaused(db, req.tenantId, Number(req.params.id), !!paused);
     res.json({ ok: true, paused: !!paused });
   });
 
-  // POST /api/conversations/:id/send-template — enviar plantilla wa_api APROBADA
-  // Body: { templateId, manualValues?: [..valores para los placeholders Manual..] }
-  // El sender resuelve los mapeados (contactField) leyendo el contacto.
   router.post('/:id/send-template', async (req, res) => {
     const convoId = Number(req.params.id);
-    const convo = svc.getById(db, convoId);
+    const convo = svc.getById(db, req.tenantId, convoId);
     if (!convo) return res.status(404).json({ error: 'Conversación no encontrada' });
 
     const { templateId, manualValues = [] } = req.body || {};
@@ -151,8 +141,7 @@ module.exports = function createConversationsRouter(db) {
 
     try {
       const result = await sendWhatsAppTemplate(db, convo, templateId, manualValues);
-      // Guardar como mensaje saliente con el body renderizado
-      const msg = svc.addMessage(db, convoId, {
+      const msg = svc.addMessage(db, req.tenantId, convoId, {
         externalId: result.externalId,
         direction:  'outgoing',
         provider:   'whatsapp',
@@ -166,11 +155,9 @@ module.exports = function createConversationsRouter(db) {
     }
   });
 
-  // POST /api/conversations/:id/media — enviar archivo (imagen/PDF/video/audio).
-  // Body: { data: <base64>, mimetype, filename, caption? }
   router.post('/:id/media', async (req, res) => {
     const convoId = Number(req.params.id);
-    const convo = svc.getById(db, convoId);
+    const convo = svc.getById(db, req.tenantId, convoId);
     if (!convo) return res.status(404).json({ error: 'Conversación no encontrada' });
 
     try {
@@ -231,7 +218,7 @@ module.exports = function createConversationsRouter(db) {
         return res.status(400).json({ error: `Envío de archivos para ${convo.provider} aún no implementado` });
       }
 
-      const msg = svc.addMessage(db, convoId, {
+      const msg = svc.addMessage(db, req.tenantId, convoId, {
         externalId: externalMsgId,
         direction:  'outgoing',
         provider:   convo.provider,
@@ -246,10 +233,9 @@ module.exports = function createConversationsRouter(db) {
     }
   });
 
-  // POST /api/conversations/:id/messages — enviar mensaje saliente
   router.post('/:id/messages', async (req, res) => {
     const convoId = Number(req.params.id);
-    const convo = svc.getById(db, convoId);
+    const convo = svc.getById(db, req.tenantId, convoId);
     if (!convo) return res.status(404).json({ error: 'Conversación no encontrada' });
 
     const { body } = req.body;
@@ -258,7 +244,7 @@ module.exports = function createConversationsRouter(db) {
     try {
       const externalMsgId = await sendMessage(db, convo, body.trim());
 
-      const msg = svc.addMessage(db, convoId, {
+      const msg = svc.addMessage(db, req.tenantId, convoId, {
         externalId: externalMsgId,
         direction:  'outgoing',
         provider:   convo.provider,

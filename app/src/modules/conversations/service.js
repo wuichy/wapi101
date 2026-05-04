@@ -1,8 +1,12 @@
-// Conversaciones y mensajes. Funciones puras que reciben `db`.
+// Conversaciones y mensajes — multi-tenant.
+//
+// Convención: todas las funciones públicas reciben tenantId como 2do argumento.
+// Para callers internos sin contexto auth (webhooks, bot/engine, sender),
+// pueden pasar null y el servicio deriva el tenant del integration_id pasado
+// (en findOrCreate) o de la conversación referenciada (en addMessage, etc.).
 
 const customerService = require('../customers/service');
 
-// Formatea timestamp Unix → string legible
 function fmtTime(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
@@ -20,24 +24,31 @@ function fmtTime(ts) {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
 }
 
-function hydrateConvo(db, row) {
+// Helpers de derivación de tenant.
+function _tenantFromConvo(db, convoId) {
+  if (!convoId) return null;
+  return db.prepare('SELECT tenant_id FROM conversations WHERE id = ?').get(convoId)?.tenant_id || null;
+}
+function _tenantFromIntegration(db, integrationId) {
+  if (!integrationId) return null;
+  return db.prepare('SELECT tenant_id FROM integrations WHERE id = ?').get(integrationId)?.tenant_id || null;
+}
+
+function hydrateConvo(db, tenantId, row) {
   if (!row) return null;
-  const contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(row.contact_id);
+  const t = tenantId ?? row.tenant_id;
+  const contact = db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(row.contact_id, t);
   const firstName = contact?.first_name || '';
   const lastName  = contact?.last_name  || '';
   const name = [firstName, lastName].filter(Boolean).join(' ') || row.external_id || `#${row.id}`;
 
-  // Detectar si el último mensaje saliente está en estado 'failed' — eso
-  // significa que hay un problema activo con la entrega (lead bloqueó, número
-  // sin WhatsApp, suspendido, etc.). Si después hay otro outgoing exitoso
-  // (sent/delivered/read), el problema se considera resuelto.
   const lastOut = db.prepare(`
     SELECT status, error_reason, created_at
       FROM messages
-     WHERE conversation_id = ? AND direction = 'outgoing'
+     WHERE conversation_id = ? AND tenant_id = ? AND direction = 'outgoing'
      ORDER BY created_at DESC, id DESC
      LIMIT 1
-  `).get(row.id);
+  `).get(row.id, t);
   const deliveryFailure = (lastOut && lastOut.status === 'failed')
     ? { reason: lastOut.error_reason || 'Error desconocido', at: lastOut.created_at }
     : null;
@@ -60,18 +71,19 @@ function hydrateConvo(db, row) {
     pinned:         !!row.pinned,
     archived:       !!row.archived,
     mutedUntil:     row.muted_until || null,
-    deliveryFailure, // null si el último outgoing fue OK; objeto si falló
+    deliveryFailure,
     createdAt:      row.created_at,
+    tenantId:       row.tenant_id,
   };
 }
 
-function list(db, { search, provider, unreadOnly, contactId, includeArchived = false, page = 1, pageSize = 50 } = {}) {
+function list(db, tenantId, { search, provider, unreadOnly, contactId, includeArchived = false, page = 1, pageSize = 50 } = {}) {
   const allowedSizes = [20, 50, 100, 200];
   pageSize = allowedSizes.includes(Number(pageSize)) ? Number(pageSize) : 50;
   page = Math.max(1, Number(page) || 1);
 
-  const conditions = [];
-  const params = [];
+  const conditions = ['c.tenant_id = ?'];
+  const params = [tenantId];
 
   if (provider) { conditions.push('c.provider = ?'); params.push(provider); }
   if (unreadOnly) { conditions.push('c.unread_count > 0'); }
@@ -89,7 +101,7 @@ function list(db, { search, provider, unreadOnly, contactId, includeArchived = f
     params.push(q, q, q, q, q);
   }
 
-  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  const where = 'WHERE ' + conditions.join(' AND ');
   const countRow = db.prepare(`
     SELECT COUNT(*) AS n FROM conversations c
     LEFT JOIN contacts co ON co.id = c.contact_id
@@ -105,7 +117,7 @@ function list(db, { search, provider, unreadOnly, contactId, includeArchived = f
   `).all(...params, pageSize, (page - 1) * pageSize);
 
   return {
-    items: rows.map((r) => hydrateConvo(db, r)),
+    items: rows.map((r) => hydrateConvo(db, tenantId, r)),
     total: countRow.n,
     page,
     pageSize,
@@ -113,76 +125,96 @@ function list(db, { search, provider, unreadOnly, contactId, includeArchived = f
   };
 }
 
-function getById(db, id) {
-  const row = db.prepare('SELECT * FROM conversations WHERE id = ?').get(id);
-  return hydrateConvo(db, row);
+function getById(db, tenantId, id) {
+  const t = tenantId ?? _tenantFromConvo(db, id);
+  if (!t) return null;
+  const row = db.prepare('SELECT * FROM conversations WHERE id = ? AND tenant_id = ?').get(id, t);
+  return hydrateConvo(db, t, row);
 }
 
-// Busca o crea una conversación para (provider, externalId). Si crea, también busca/crea el contacto.
-function findOrCreate(db, { provider, externalId, integrationId, contactPhone, contactName }) {
-  let row = db.prepare('SELECT * FROM conversations WHERE provider = ? AND external_id = ?').get(provider, String(externalId));
+// Busca o crea una conversación. tenantId puede ser null si se pasa integrationId
+// (caso webhook), entonces se deriva del integration. Para creación de contacto
+// nuevo se usa el mismo tenantId.
+function findOrCreate(db, tenantId, { provider, externalId, integrationId, contactPhone, contactName }) {
+  const t = tenantId ?? _tenantFromIntegration(db, integrationId);
+  if (!t) throw new Error('No se pudo determinar tenant para la conversación');
+
+  let row = db.prepare('SELECT * FROM conversations WHERE provider = ? AND external_id = ? AND tenant_id = ?').get(provider, String(externalId), t);
   if (row) return row;
 
-  // Buscar o crear contacto
-  let contact = contactPhone
-    ? db.prepare('SELECT * FROM contacts WHERE phone = ?').get(customerService.normalizePhone(contactPhone))
-    : null;
-
-  if (!contact && contactPhone) {
+  // Buscar contacto existente del MISMO tenant por teléfono normalizado.
+  let contact = null;
+  if (contactPhone) {
     const normPhone = customerService.normalizePhone(contactPhone);
-    const parts = (contactName || '').trim().split(/\s+/);
-    const firstName = parts[0] || normPhone || 'Desconocido';
-    const lastName  = parts.slice(1).join(' ') || null;
-    const result = db.prepare(
-      'INSERT INTO contacts (first_name, last_name, phone) VALUES (?, ?, ?)'
-    ).run(firstName, lastName, normPhone);
-    contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(result.lastInsertRowid);
+    contact = db.prepare('SELECT * FROM contacts WHERE phone = ? AND tenant_id = ?').get(normPhone, t);
+    if (!contact) {
+      const parts = (contactName || '').trim().split(/\s+/);
+      const firstName = parts[0] || normPhone || 'Desconocido';
+      const lastName  = parts.slice(1).join(' ') || null;
+      const result = db.prepare(
+        'INSERT INTO contacts (tenant_id, first_name, last_name, phone) VALUES (?, ?, ?, ?)'
+      ).run(t, firstName, lastName, normPhone);
+      contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(result.lastInsertRowid);
+    }
   }
 
   const result = db.prepare(`
-    INSERT INTO conversations (contact_id, integration_id, provider, external_id)
-    VALUES (?, ?, ?, ?)
-  `).run(contact?.id || null, integrationId || null, provider, String(externalId));
+    INSERT INTO conversations (tenant_id, contact_id, integration_id, provider, external_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(t, contact?.id || null, integrationId || null, provider, String(externalId));
 
   return db.prepare('SELECT * FROM conversations WHERE id = ?').get(result.lastInsertRowid);
 }
 
-function addMessage(db, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt }) {
-  // Idempotencia por external_id
+function addMessage(db, tenantId, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt }) {
+  const t = tenantId ?? _tenantFromConvo(db, conversationId);
+  if (!t) throw new Error('Conversación no encontrada');
+
+  // Idempotencia por external_id (dentro del tenant — un mismo external_id
+  // podría existir en otro tenant si vinieran del mismo provider y hubiera
+  // colisión, aunque en la práctica los IDs de Meta/Telegram son globales).
   if (externalId) {
-    const existing = db.prepare('SELECT id FROM messages WHERE provider = ? AND external_id = ?').get(provider, String(externalId));
+    const existing = db.prepare('SELECT id FROM messages WHERE provider = ? AND external_id = ? AND tenant_id = ?').get(provider, String(externalId), t);
     if (existing) return existing;
   }
 
   const ts = createdAt || Math.floor(Date.now() / 1000);
   const result = db.prepare(`
-    INSERT INTO messages (conversation_id, external_id, direction, provider, body, media_url, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(conversationId, externalId || null, direction, provider, body || null, mediaUrl || null, status, ts);
+    INSERT INTO messages (tenant_id, conversation_id, external_id, direction, provider, body, media_url, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(t, conversationId, externalId || null, direction, provider, body || null, mediaUrl || null, status, ts);
 
-  // Actualizar last_message en conversación
+  // Actualizar last_message en conversación (con tenant para defensa adicional).
   const unreadDelta = direction === 'incoming' ? 1 : 0;
-  const incomingSet = direction === 'incoming' ? ', last_incoming_at = ?' : '';
-  const incomingArgs = direction === 'incoming' ? [(body || '').slice(0, 200), ts, unreadDelta, ts, conversationId] : [(body || '').slice(0, 200), ts, unreadDelta, conversationId];
-  db.prepare(`
-    UPDATE conversations
-    SET last_message = ?, last_message_at = ?, unread_count = unread_count + ?${incomingSet}
-    WHERE id = ?
-  `).run(...incomingArgs);
+  if (direction === 'incoming') {
+    db.prepare(`
+      UPDATE conversations
+      SET last_message = ?, last_message_at = ?, unread_count = unread_count + ?, last_incoming_at = ?
+      WHERE id = ? AND tenant_id = ?
+    `).run((body || '').slice(0, 200), ts, unreadDelta, ts, conversationId, t);
+  } else {
+    db.prepare(`
+      UPDATE conversations
+      SET last_message = ?, last_message_at = ?
+      WHERE id = ? AND tenant_id = ?
+    `).run((body || '').slice(0, 200), ts, conversationId, t);
+  }
 
   return db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
 }
 
-function listMessages(db, conversationId, { page = 1, pageSize = 60 } = {}) {
+function listMessages(db, tenantId, conversationId, { page = 1, pageSize = 60 } = {}) {
+  const t = tenantId ?? _tenantFromConvo(db, conversationId);
+  if (!t) return { items: [], total: 0, page: 1, pageSize, totalPages: 1 };
   pageSize = Math.min(200, Math.max(1, Number(pageSize) || 60));
   page = Math.max(1, Number(page) || 1);
 
-  const countRow = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ?').get(conversationId);
+  const countRow = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ? AND tenant_id = ?').get(conversationId, t);
   const rows = db.prepare(`
-    SELECT * FROM messages WHERE conversation_id = ?
+    SELECT * FROM messages WHERE conversation_id = ? AND tenant_id = ?
     ORDER BY created_at ASC, id ASC
     LIMIT ? OFFSET ?
-  `).all(conversationId, pageSize, (page - 1) * pageSize);
+  `).all(conversationId, t, pageSize, (page - 1) * pageSize);
 
   return {
     items: rows.map((m) => ({
@@ -205,27 +237,38 @@ function listMessages(db, conversationId, { page = 1, pageSize = 60 } = {}) {
   };
 }
 
-function markRead(db, conversationId) {
-  db.prepare('UPDATE conversations SET unread_count = 0 WHERE id = ?').run(conversationId);
+function markRead(db, tenantId, conversationId) {
+  const t = tenantId ?? _tenantFromConvo(db, conversationId);
+  if (!t) return;
+  db.prepare('UPDATE conversations SET unread_count = 0 WHERE id = ? AND tenant_id = ?').run(conversationId, t);
 }
 
-function setBotPaused(db, conversationId, paused) {
-  db.prepare('UPDATE conversations SET bot_paused = ?, bot_paused_at = ? WHERE id = ?')
-    .run(paused ? 1 : 0, paused ? Math.floor(Date.now()/1000) : null, conversationId);
+function setBotPaused(db, tenantId, conversationId, paused) {
+  const t = tenantId ?? _tenantFromConvo(db, conversationId);
+  if (!t) return;
+  db.prepare('UPDATE conversations SET bot_paused = ?, bot_paused_at = ? WHERE id = ? AND tenant_id = ?')
+    .run(paused ? 1 : 0, paused ? Math.floor(Date.now()/1000) : null, conversationId, t);
 }
 
-function setPinned(db, conversationId, pinned) {
-  db.prepare('UPDATE conversations SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, conversationId);
+function setPinned(db, tenantId, conversationId, pinned) {
+  const t = tenantId ?? _tenantFromConvo(db, conversationId);
+  if (!t) return;
+  db.prepare('UPDATE conversations SET pinned = ? WHERE id = ? AND tenant_id = ?').run(pinned ? 1 : 0, conversationId, t);
 }
-function setArchived(db, conversationId, archived) {
-  db.prepare('UPDATE conversations SET archived = ? WHERE id = ?').run(archived ? 1 : 0, conversationId);
+function setArchived(db, tenantId, conversationId, archived) {
+  const t = tenantId ?? _tenantFromConvo(db, conversationId);
+  if (!t) return;
+  db.prepare('UPDATE conversations SET archived = ? WHERE id = ? AND tenant_id = ?').run(archived ? 1 : 0, conversationId, t);
 }
-function setMutedUntil(db, conversationId, untilTs) {
-  db.prepare('UPDATE conversations SET muted_until = ? WHERE id = ?').run(untilTs || null, conversationId);
+function setMutedUntil(db, tenantId, conversationId, untilTs) {
+  const t = tenantId ?? _tenantFromConvo(db, conversationId);
+  if (!t) return;
+  db.prepare('UPDATE conversations SET muted_until = ? WHERE id = ? AND tenant_id = ?').run(untilTs || null, conversationId, t);
 }
-function markUnread(db, conversationId) {
-  // Si ya es 0, lo ponemos en 1 para que se vea el badge azul
-  db.prepare('UPDATE conversations SET unread_count = MAX(unread_count, 1) WHERE id = ?').run(conversationId);
+function markUnread(db, tenantId, conversationId) {
+  const t = tenantId ?? _tenantFromConvo(db, conversationId);
+  if (!t) return;
+  db.prepare('UPDATE conversations SET unread_count = MAX(unread_count, 1) WHERE id = ? AND tenant_id = ?').run(conversationId, t);
 }
 
 module.exports = { list, getById, findOrCreate, addMessage, listMessages, markRead, markUnread, setBotPaused, setPinned, setArchived, setMutedUntil, fmtTime };

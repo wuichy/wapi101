@@ -331,11 +331,11 @@ async function executeStep(db, step, ctx) {
       }
 
       try {
-        const convo = convoSvc.getById(db, targetConvoId);
+        const convo = convoSvc.getById(db, null, targetConvoId);
         if (!convo) return false;
         _log('info', `enviando mensaje a conversación ${targetConvoId} (${convo.provider}): "${text.slice(0, 80)}"`);
         const externalId = await sendMessage(db, convo, text);
-        convoSvc.addMessage(db, targetConvoId, {
+        convoSvc.addMessage(db, null, targetConvoId, {
           externalId,
           direction: 'outgoing',
           provider:  convo.provider,
@@ -357,10 +357,10 @@ async function executeStep(db, step, ctx) {
       if (!templateId) { _log('warn', 'template: sin templateId'); return false; }
       if (!ctx.convoId) { _log('warn', 'template: sin convoId'); return false; }
       try {
-        const convo = convoSvc.getById(db, ctx.convoId);
+        const convo = convoSvc.getById(db, null, ctx.convoId);
         if (!convo) return false;
         const result = await sendWhatsAppTemplate(db, convo, templateId, c.manualValues || []);
-        convoSvc.addMessage(db, ctx.convoId, {
+        convoSvc.addMessage(db, null, ctx.convoId, {
           externalId: result.externalId,
           direction: 'outgoing',
           provider:  convo.provider,
@@ -489,7 +489,7 @@ async function executeStep(db, step, ctx) {
 
     case 'stop_bot': {
       if (ctx.convoId) {
-        convoSvc.setBotPaused(db, ctx.convoId, true);
+        convoSvc.setBotPaused(db, null, ctx.convoId, true);
         _log('info', `bot pausado para conversación ${ctx.convoId}`);
       }
       return true;

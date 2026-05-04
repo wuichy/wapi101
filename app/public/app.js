@@ -7356,7 +7356,16 @@ async function openBotStatsModal(botId) {
     renderBotStatsHistory(data.history);
   } catch (err) {
     document.getElementById('botStatsTitle').textContent = 'Error';
-    document.getElementById('botStatsCards').innerHTML = `<div class="bot-stats-error">${escHtml(err.message || 'Error cargando stats')}</div>`;
+    const msg = String(err.message || '');
+    let friendly;
+    if (msg.includes('404')) {
+      friendly = '⚠ El endpoint de estadísticas no existe en el server. Probablemente el server local sigue corriendo código viejo — reinícialo y vuelve a intentar.';
+    } else if (msg.includes('500')) {
+      friendly = `⚠ Error interno del server al calcular las stats. Revisa los logs del server. Detalle: ${escHtml(msg)}`;
+    } else {
+      friendly = escHtml(msg) || 'Error desconocido cargando stats';
+    }
+    document.getElementById('botStatsCards').innerHTML = `<div class="bot-stats-error">${friendly}</div>`;
   }
 }
 

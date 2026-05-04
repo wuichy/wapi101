@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reelance — Super Admin</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0; padding: 0;
+      background: #0f1923; color: #e2e8f0;
+      min-height: 100vh;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; background: #1a2535;
+      border-bottom: 2px solid #ef4444;
+    }
+    header h1 {
+      margin: 0; font-size: 18px; font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+    }
+    header h1::before {
+      content: '⚡'; color: #ef4444;
+    }
+    header .me { font-size: 13px; color: #94a3b8; display: flex; align-items: center; gap: 12px; }
+    header button {
+      background: transparent; border: 1px solid #475569; color: #cbd5e1;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    }
+    header button:hover { background: #334155; }
+
+    /* Login screen */
+    .login-wrap {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px;
+    }
+    .login-box {
+      background: #1a2535; padding: 32px; border-radius: 12px;
+      width: 100%; max-width: 360px;
+      border: 1px solid #334155;
+    }
+    .login-box h2 {
+      margin: 0 0 6px; font-size: 22px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .login-box h2::before { content: '⚡'; color: #ef4444; }
+    .login-box p { color: #94a3b8; font-size: 13px; margin: 0 0 24px; }
+    .login-box label {
+      display: block; font-size: 12px; color: #94a3b8;
+      margin-bottom: 4px; margin-top: 12px;
+    }
+    .login-box input {
+      width: 100%; padding: 10px 12px;
+      background: #0f1923; border: 1px solid #334155;
+      border-radius: 6px; color: #e2e8f0; font-size: 14px;
+    }
+    .login-box input:focus { outline: 2px solid #ef4444; border-color: transparent; }
+    .login-box button {
+      width: 100%; margin-top: 20px;
+      padding: 11px; background: #ef4444; color: #fff; border: none;
+      border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+    }
+    .login-box button:hover { background: #dc2626; }
+    .login-box .err {
+      color: #fca5a5; font-size: 13px; margin-top: 12px;
+      background: rgba(239,68,68,.1); padding: 8px 10px; border-radius: 6px;
+      display: none;
+    }
+
+    /* Tenant table */
+    .toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 24px 0 16px;
+    }
+    .toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
+    .btn-primary {
+      background: #ef4444; color: #fff; border: none;
+      padding: 9px 16px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; font-weight: 500;
+    }
+    .btn-primary:hover { background: #dc2626; }
+    .btn-ghost {
+      background: transparent; border: 1px solid #475569; color: #cbd5e1;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    }
+    .btn-ghost:hover { background: #334155; }
+    .btn-danger {
+      background: #7f1d1d; color: #fecaca; border: 1px solid #991b1b;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    }
+    .btn-danger:hover { background: #991b1b; }
+
+    .tenant-grid {
+      display: grid; gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    }
+    .tenant-card {
+      background: #1a2535; border: 1px solid #334155;
+      border-radius: 10px; padding: 18px;
+    }
+    .tenant-card h3 {
+      margin: 0 0 4px; font-size: 16px; font-weight: 600;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .tenant-slug { font-size: 12px; color: #94a3b8; font-family: ui-monospace, monospace; }
+    .status-badge {
+      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    .status-active    { background: rgba(34,197,94,.15);   color: #86efac; }
+    .status-trial     { background: rgba(59,130,246,.15);  color: #93c5fd; }
+    .status-suspended { background: rgba(245,158,11,.15);  color: #fcd34d; }
+    .status-cancelled { background: rgba(239,68,68,.15);   color: #fca5a5; }
+
+    .stats {
+      margin: 14px 0 12px; padding: 12px;
+      background: #0f1923; border-radius: 6px;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+      font-size: 12px;
+    }
+    .stat-label { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-value { color: #e2e8f0; font-size: 16px; font-weight: 600; }
+
+    .actions {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+
+    /* Modal */
+    .modal-bg {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; padding: 20px;
+    }
+    .modal {
+      background: #1a2535; border: 1px solid #334155;
+      border-radius: 12px; padding: 24px;
+      width: 100%; max-width: 480px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal h3 { margin: 0 0 16px; font-size: 18px; }
+    .modal label {
+      display: block; font-size: 12px; color: #94a3b8;
+      margin-bottom: 4px; margin-top: 12px;
+    }
+    .modal input, .modal select {
+      width: 100%; padding: 8px 10px; font-size: 13px;
+      background: #0f1923; border: 1px solid #334155;
+      border-radius: 6px; color: #e2e8f0;
+    }
+    .modal input:focus, .modal select:focus { outline: 2px solid #ef4444; border-color: transparent; }
+    .modal-actions {
+      display: flex; justify-content: flex-end; gap: 8px;
+      margin-top: 20px; padding-top: 16px; border-top: 1px solid #334155;
+    }
+    .modal-err {
+      color: #fca5a5; font-size: 13px; margin-top: 12px;
+      background: rgba(239,68,68,.1); padding: 8px 10px; border-radius: 6px;
+    }
+
+    .creds-box {
+      background: rgba(34,197,94,.08); border: 1px dashed #22c55e;
+      padding: 14px; border-radius: 8px; margin-top: 12px;
+      font-family: ui-monospace, monospace; font-size: 13px;
+    }
+    .creds-box strong { color: #86efac; display: block; margin-bottom: 8px; font-size: 12px; }
+    .creds-box .copy-btn {
+      float: right; background: #22c55e; color: #0f1923;
+      border: none; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; cursor: pointer; font-family: inherit;
+    }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: #64748b; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN VIEW -->
+<div id="loginView" class="login-wrap" hidden>
+  <div class="login-box">
+    <h2>Super Admin</h2>
+    <p>Solo Lucho. Aquí se administran los tenants del CRM.</p>
+    <form id="loginForm">
+      <label>Usuario</label>
+      <input id="loginUser" type="text" autocomplete="username" autofocus required>
+      <label>Contraseña</label>
+      <input id="loginPass" type="password" autocomplete="current-password" required>
+      <button type="submit">Entrar</button>
+      <div id="loginErr" class="err"></div>
+    </form>
+  </div>
+</div>
+
+<!-- DASHBOARD VIEW -->
+<div id="dashboard" hidden>
+  <header>
+    <h1>Reelance · Super Admin</h1>
+    <div class="me">
+      <span id="meName"></span>
+      <button id="logoutBtn">Salir</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="toolbar">
+      <h2>Tenants</h2>
+      <button class="btn-primary" id="newTenantBtn">+ Crear tenant</button>
+    </div>
+    <div id="tenantList" class="tenant-grid"></div>
+  </div>
+</div>
+
+<!-- CREATE TENANT MODAL -->
+<div id="createModal" class="modal-bg" hidden>
+  <div class="modal">
+    <h3>Crear nuevo tenant</h3>
+    <form id="createForm">
+      <label>Slug (subdominio futuro)</label>
+      <input id="cSlug" type="text" placeholder="ej. acme" pattern="[a-z0-9][a-z0-9-]{1,40}" required>
+
+      <label>Nombre del tenant (mostrar)</label>
+      <input id="cDisplayName" type="text" placeholder="ej. Acme Inc." required>
+
+      <label>Plan</label>
+      <select id="cPlan">
+        <option value="free">Free / Trial</option>
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+      </select>
+
+      <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0 0">
+      <p style="font-size:11px;color:#64748b;margin:8px 0 4px">Admin inicial del tenant:</p>
+
+      <label>Nombre del admin</label>
+      <input id="cAdminName" type="text" placeholder="ej. Pepe Pérez">
+
+      <label>Username del admin</label>
+      <input id="cAdminUser" type="text" placeholder="ej. pepe" required>
+
+      <label>Email (opcional)</label>
+      <input id="cAdminEmail" type="email" placeholder="pepe@acme.com">
+
+      <label>Password (déjalo vacío para auto-generar)</label>
+      <input id="cAdminPass" type="text" placeholder="(auto)">
+
+      <div id="createErr" class="modal-err" style="display:none"></div>
+      <div id="createCreds" class="creds-box" style="display:none"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" id="createCancel">Cancelar</button>
+        <button type="submit" class="btn-primary">Crear</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const TOKEN_KEY = 'reelance_super_token';
+
+// ── API helper ──
+async function api(method, path, body) {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`/super${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+// ── Init ──
+async function init() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return showLogin();
+  try {
+    const me = await api('GET', '/me');
+    showDashboard(me.superAdmin);
+  } catch {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+  }
+}
+
+function showLogin() {
+  $('loginView').hidden = false;
+  $('dashboard').hidden = true;
+}
+
+function showDashboard(sa) {
+  $('loginView').hidden = true;
+  $('dashboard').hidden = false;
+  $('meName').textContent = sa.name || sa.username;
+  loadTenants();
+}
+
+// ── Login form ──
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = $('loginUser').value.trim();
+  const password = $('loginPass').value;
+  const errEl = $('loginErr');
+  errEl.style.display = 'none';
+  try {
+    const r = await api('POST', '/login', { username, password });
+    localStorage.setItem(TOKEN_KEY, r.token);
+    showDashboard(r.superAdmin);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+  }
+});
+
+$('logoutBtn').addEventListener('click', async () => {
+  try { await api('POST', '/logout'); } catch {}
+  localStorage.removeItem(TOKEN_KEY);
+  showLogin();
+});
+
+// ── Tenant list ──
+async function loadTenants() {
+  try {
+    const { items } = await api('GET', '/tenants');
+    renderTenants(items);
+  } catch (err) {
+    $('tenantList').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+  }
+}
+
+function fmtCount(n) {
+  if (n == null) return '0';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+function fmtDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function renderTenants(items) {
+  const list = $('tenantList');
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state">No hay tenants. Crea el primero.</div>';
+    return;
+  }
+  list.innerHTML = items.map(t => `
+    <div class="tenant-card" data-id="${t.id}">
+      <h3>
+        <span>${escapeHtml(t.displayName)}</span>
+        <span class="status-badge status-${t.status}">${t.status}</span>
+      </h3>
+      <div class="tenant-slug">${escapeHtml(t.slug)} · ${escapeHtml(t.plan)}</div>
+      <div class="stats">
+        <div><div class="stat-label">Contactos</div><div class="stat-value">${fmtCount(t.stats.contacts)}</div></div>
+        <div><div class="stat-label">Convos</div><div class="stat-value">${fmtCount(t.stats.conversations)}</div></div>
+        <div><div class="stat-label">Mensajes</div><div class="stat-value">${fmtCount(t.stats.messages)}</div></div>
+        <div><div class="stat-label">Bots</div><div class="stat-value">${fmtCount(t.stats.bots)}</div></div>
+        <div><div class="stat-label">Asesores</div><div class="stat-value">${fmtCount(t.stats.advisors)}</div></div>
+        <div><div class="stat-label">Integraciones</div><div class="stat-value">${fmtCount(t.stats.integrations)}</div></div>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:10px">Último msg: ${fmtDate(t.stats.lastMessageAt)} · Creado: ${fmtDate(t.createdAt)}</div>
+      <div class="actions">
+        <button class="btn-ghost" data-action="impersonate" data-id="${t.id}">↪ Entrar como</button>
+        ${t.status === 'active' || t.status === 'trial'
+          ? `<button class="btn-ghost" data-action="suspend" data-id="${t.id}">⏸ Suspender</button>`
+          : t.status === 'suspended'
+          ? `<button class="btn-ghost" data-action="activate" data-id="${t.id}">▶ Reactivar</button>`
+          : ''}
+        ${t.status !== 'cancelled'
+          ? `<button class="btn-danger" data-action="cancel" data-id="${t.id}">✕ Cancelar</button>`
+          : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Action handlers (delegated)
+$('tenantList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const id = Number(btn.dataset.id);
+  const action = btn.dataset.action;
+
+  if (action === 'impersonate') {
+    if (!confirm('Vas a entrar como ese tenant. Cerrarás sesión actual de super-admin durante 1 hora. ¿Continuar?')) return;
+    try {
+      const r = await api('POST', `/tenants/${id}/impersonate`);
+      // Guardar el token de advisor en el storage que usa la app principal,
+      // luego redirigir a la SPA. La app verá el token y entrará como ese advisor.
+      localStorage.setItem('reelance_token', r.token);
+      window.location.href = '/';
+    } catch (err) { alert(err.message); }
+    return;
+  }
+
+  if (action === 'suspend') {
+    if (!confirm('¿Suspender este tenant? El cliente no podrá entrar hasta reactivarlo.')) return;
+    try {
+      await api('PATCH', `/tenants/${id}`, { status: 'suspended' });
+      loadTenants();
+    } catch (err) { alert(err.message); }
+    return;
+  }
+
+  if (action === 'activate') {
+    try {
+      await api('PATCH', `/tenants/${id}`, { status: 'active' });
+      loadTenants();
+    } catch (err) { alert(err.message); }
+    return;
+  }
+
+  if (action === 'cancel') {
+    if (!confirm('¿Cancelar este tenant? Sus datos NO se borran, pero el cliente no podrá entrar más.')) return;
+    try {
+      await api('DELETE', `/tenants/${id}`);
+      loadTenants();
+    } catch (err) { alert(err.message); }
+    return;
+  }
+});
+
+// ── Create tenant modal ──
+$('newTenantBtn').addEventListener('click', () => {
+  $('createForm').reset();
+  $('createErr').style.display = 'none';
+  $('createCreds').style.display = 'none';
+  $('createModal').hidden = false;
+});
+
+$('createCancel').addEventListener('click', () => {
+  $('createModal').hidden = true;
+});
+
+$('createForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = $('createErr');
+  const credsEl = $('createCreds');
+  errEl.style.display = 'none';
+  credsEl.style.display = 'none';
+
+  const body = {
+    slug:           $('cSlug').value.trim(),
+    displayName:    $('cDisplayName').value.trim(),
+    plan:           $('cPlan').value,
+    adminName:      $('cAdminName').value.trim(),
+    adminUsername:  $('cAdminUser').value.trim(),
+    adminEmail:     $('cAdminEmail').value.trim() || null,
+    adminPassword:  $('cAdminPass').value || null,
+  };
+
+  try {
+    const r = await api('POST', '/tenants', body);
+    credsEl.innerHTML = `
+      <strong>✓ Tenant creado — credenciales del admin (cópialas, no se vuelven a mostrar):</strong>
+      Usuario: <code>${escapeHtml(r.adminCredentials.username)}</code><br>
+      Password: <code>${escapeHtml(r.adminCredentials.password)}</code>
+      <button class="copy-btn" type="button" onclick="navigator.clipboard.writeText('Usuario: ${escapeHtml(r.adminCredentials.username)}\\nPassword: ${escapeHtml(r.adminCredentials.password)}')">Copiar</button>
+    `;
+    credsEl.style.display = 'block';
+    loadTenants();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+  }
+});
+
+// Click fuera del modal cierra
+$('createModal').addEventListener('click', (e) => {
+  if (e.target.id === 'createModal') $('createModal').hidden = true;
+});
+
+init();
+</script>
+</body>
+</html>

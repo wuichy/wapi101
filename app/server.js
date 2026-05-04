@@ -51,6 +51,10 @@ advisorSvc.ensureFirstAdmin(db, {
   password: process.env.ADMIN_PASSWORD || 'admin1234',
 });
 
+// ─── Super-admin: garantizar admin inicial si está configurado en .env ───
+const superSvc = require('./src/modules/super/service');
+superSvc.ensureFirstSuperAdmin(db);
+
 // ─── App ───
 const app = express();
 
@@ -66,6 +70,17 @@ function mountSafe(mountPath, factory) {
 
 // ─── Webhooks PRIMERO: necesitan body crudo (HMAC). Cada handler usa express.raw() internamente.
 mountSafe('/webhooks', require('./src/modules/integrations/webhooks'));
+
+// Sirve la página HTML del super-admin ANTES de montar el router (sino el
+// authMiddleware del router intercepta la GET /super y devuelve 401).
+app.get('/super', (_req, res) => {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'super.html'));
+});
+
+// ─── Super-admin API: monta ANTES del authMiddleware (/api). Tiene su propio
+// flujo de auth con tokens sa_*. NO usa req.tenantId ni filtros multi-tenant.
+mountSafe('/super', require('./src/modules/super/routes'));
 
 // JSON parser global para el resto.
 // 150mb para soportar adjuntos de chat (PDFs hasta 100MB → ~133MB en base64).
@@ -215,6 +230,7 @@ app.get('/chat', (_req, res) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
 
 // Sirve archivos subidos (media de plantillas, etc.) bajo /uploads.
 // Cache normal — los archivos no cambian (cada upload genera nombre único).

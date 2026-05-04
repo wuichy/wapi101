@@ -10,21 +10,24 @@ const expedientSvc = require('../../expedients/service');
 const botEngine = require('../../bot/engine');
 const pushSvc = require('../../notifications/service');
 
-function getRouting(db, integrationId) {
-  if (!integrationId) return null;
-  const row = db.prepare('SELECT config FROM integrations WHERE id = ?').get(integrationId);
-  if (!row?.config) return null;
-  try { return JSON.parse(row.config)?.routing || null; } catch { return null; }
+function getIntegrationContext(db, integrationId) {
+  if (!integrationId) return { tenantId: null, routing: null };
+  const row = db.prepare('SELECT tenant_id, config FROM integrations WHERE id = ?').get(integrationId);
+  if (!row) return { tenantId: null, routing: null };
+  let routing = null;
+  try { routing = row.config ? (JSON.parse(row.config)?.routing || null) : null; } catch {}
+  return { tenantId: row.tenant_id, routing };
 }
 
-function ensureExpedient(db, contactId, routing) {
+function ensureExpedient(db, tenantId, contactId, routing) {
   if (!routing?.pipelineId || !routing?.stageId) return;
+  if (!tenantId || !contactId) return;
   const existing = db.prepare(
-    'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? LIMIT 1'
-  ).get(contactId, routing.pipelineId);
+    'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
+  ).get(contactId, routing.pipelineId, tenantId);
   if (existing) return;
   try {
-    expedientSvc.create(db, {
+    expedientSvc.create(db, tenantId, {
       contactId, pipelineId: routing.pipelineId, stageId: routing.stageId,
       name: null, value: 0, tags: [], fieldValues: {},
     });
@@ -37,15 +40,21 @@ function init(db) {
   manager.setHandlers({
     onMessage: (integrationId, payload) => {
       try {
-        // Dedup: si ya tenemos ese message_id no procesar otra vez
+        const { tenantId, routing } = getIntegrationContext(db, integrationId);
+        if (!tenantId) {
+          console.warn(`[wa-web ${integrationId}] integración sin tenant — ignorando mensaje`);
+          return;
+        }
+
+        // Dedup: si ya tenemos ese message_id en ESTE tenant no procesar otra vez
         if (payload.messageId) {
           const dup = db.prepare(
-            'SELECT id FROM messages WHERE provider = ? AND external_id = ?'
-          ).get('whatsapp-lite', payload.messageId);
+            'SELECT id FROM messages WHERE provider = ? AND external_id = ? AND tenant_id = ?'
+          ).get('whatsapp-lite', payload.messageId, tenantId);
           if (dup) return;
         }
 
-        const convo = convoSvc.findOrCreate(db, null, {
+        const convo = convoSvc.findOrCreate(db, tenantId, {
           provider:      'whatsapp-lite',
           externalId:    payload.externalId,
           integrationId,
@@ -53,7 +62,7 @@ function init(db) {
           contactName:   payload.pushName,
         });
 
-        convoSvc.addMessage(db, null, convo.id, {
+        convoSvc.addMessage(db, tenantId, convo.id, {
           externalId: payload.messageId,
           direction:  'incoming',
           provider:   'whatsapp-lite',
@@ -62,8 +71,7 @@ function init(db) {
           createdAt:  payload.timestamp,
         });
 
-        const routing = getRouting(db, integrationId);
-        ensureExpedient(db, convo.contact_id, routing);
+        ensureExpedient(db, tenantId, convo.contact_id, routing);
 
         botEngine.triggerMessage(db, {
           convoId:       convo.id,
@@ -73,19 +81,18 @@ function init(db) {
           integrationId,
         });
 
-        // Push notification al iPhone/Mac/etc. (collapse por convo via tag)
         const senderName = payload.pushName || convo.contact_first_name || `+${payload.externalId}`;
         const preview = (payload.body || '📎 Adjunto').slice(0, 140);
-        pushSvc.sendToAll(db, null, {
+        pushSvc.sendToAll(db, tenantId, {
           title: senderName,
           body:  preview,
-          tag:   `chat-${convo.id}`,    // colapsa pushes consecutivos del mismo chat
+          tag:   `chat-${convo.id}`,
           url:   `/?view=chats&convo=${convo.id}`,
           chatId: convo.id,
         }, { kind: 'message' })
           .catch(err => console.warn('[push] msg:', err.message));
 
-        console.log(`[wa-web ${integrationId}] msg ${payload.messageId} → convo #${convo.id}`);
+        console.log(`[wa-web ${integrationId}] msg ${payload.messageId} → convo #${convo.id} (tenant ${tenantId})`);
       } catch (err) {
         console.error(`[wa-web ${integrationId}] error procesando mensaje:`, err.message);
       }
@@ -93,6 +100,7 @@ function init(db) {
 
     onConnected: (integrationId, session) => {
       try {
+        const { tenantId } = getIntegrationContext(db, integrationId);
         const phone = session.phoneNumber || '';
         const display = phone ? `WhatsApp +${phone}` : 'WhatsApp Lite';
         const wasError = db.prepare("SELECT status FROM integrations WHERE id = ?").get(integrationId)?.status;
@@ -102,9 +110,8 @@ function init(db) {
               connected_at = unixepoch(), updated_at = unixepoch(), last_error = NULL
           WHERE id = ?
         `).run(display, phone || null, integrationId);
-        // Si veníamos de un estado de error/disconnected → push de "recuperado"
         if (wasError && wasError !== 'connected' && wasError !== 'connecting' && wasError !== 'pending') {
-          pushSvc.sendToAll(db, null, {
+          pushSvc.sendToAll(db, tenantId, {
             title: 'WhatsApp reconectado',
             body:  phone ? `+${phone} volvió a estar en línea ✓` : 'Volvió a estar en línea ✓',
             tag:   `wa-${integrationId}`,
@@ -119,11 +126,12 @@ function init(db) {
 
     onDisconnected: (integrationId, info) => {
       try {
+        const { tenantId } = getIntegrationContext(db, integrationId);
         const row = db.prepare("SELECT display_name, external_id FROM integrations WHERE id = ?").get(integrationId);
         if (info.loggedOut) {
           db.prepare(`UPDATE integrations SET status = 'disconnected', last_error = ?, updated_at = unixepoch() WHERE id = ?`)
             .run('Sesión cerrada en el dispositivo', integrationId);
-          pushSvc.sendToAll(db, null, {
+          pushSvc.sendToAll(db, tenantId, {
             title: '⚠️ WhatsApp desconectado',
             body:  `${row?.display_name || 'WhatsApp Lite'} cerró sesión. Reconecta escaneando QR de nuevo.`,
             tag:   `wa-${integrationId}-logout`,
@@ -133,8 +141,7 @@ function init(db) {
         } else {
           db.prepare(`UPDATE integrations SET last_error = ?, updated_at = unixepoch() WHERE id = ?`)
             .run(info.message || 'Desconectado', integrationId);
-          // Solo notificar si la desconexión es prolongada (cooldown 10 min evita spam de reintentos cortos)
-          pushSvc.sendToAll(db, null, {
+          pushSvc.sendToAll(db, tenantId, {
             title: '⚠️ WhatsApp desconectado',
             body:  `${row?.display_name || 'WhatsApp Lite'} perdió conexión. Reintentando…`,
             tag:   `wa-${integrationId}-down`,

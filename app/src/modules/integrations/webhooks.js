@@ -4,6 +4,13 @@
 //   2. Responder 200 en menos de 2 segundos (procesar async)
 //   3. Idempotencia: tabla webhook_events con UNIQUE(provider, external_id)
 //   4. Errores nunca tumban el proceso — solo se loggean
+//
+// Multi-tenant:
+//   El webhook llega sin contexto auth (Meta/Telegram/Baileys lo invocan).
+//   Resolvemos tenant_id a partir de la INTEGRACIÓN que matchea el payload
+//   (por external_id en el payload o por verify_token / shop_domain / etc.).
+//   Ese tenant_id se propaga a todas las operaciones downstream (contacts,
+//   conversations, messages, expedients, bots, push).
 
 const express = require('express');
 const crypto = require('crypto');
@@ -14,12 +21,15 @@ const expedientSvc = require('../expedients/service');
 const botEngine = require('../bot/engine');
 const pushSvc = require('../notifications/service');
 
-// Helper: push notification para mensaje entrante (colapsa por convo)
-function pushIncomingMessage(db, convo, body, senderName) {
+// Helper: push notification para mensaje entrante (colapsa por convo).
+// Si no tenemos tenantId (integración no encontrada), envía broadcast global —
+// fallback histórico de single-tenant. Cuando todos los webhooks resuelvan
+// tenant correctamente, el push solo va a las suscripciones del tenant.
+function pushIncomingMessage(db, tenantId, convo, body, senderName) {
   try {
     const preview = (body || '📎 Adjunto').slice(0, 140);
     const name = senderName || `#${convo.id}`;
-    pushSvc.sendToAll(db, null, {
+    pushSvc.sendToAll(db, tenantId, {
       title: name,
       body:  preview,
       tag:   `chat-${convo.id}`,
@@ -35,7 +45,7 @@ module.exports = function createWebhooksRouter(db) {
   // ─── Helpers ───
   function findIntegration(provider, externalId) {
     if (!externalId) return null;
-    // whatsapp and whatsapp-lite are the same channel
+    // whatsapp y whatsapp-lite son el mismo canal
     const providerList = provider === 'whatsapp' ? ['whatsapp', 'whatsapp-lite'] : [provider];
     const placeholders = providerList.map(() => '?').join(',');
     const row = db.prepare(
@@ -46,7 +56,6 @@ module.exports = function createWebhooksRouter(db) {
   }
 
   function findIntegrationByProvider(provider) {
-    // Para whatsapp también busca whatsapp-lite (mismo canal, diferente modo de conexión)
     const providers = provider === 'whatsapp'
       ? ['whatsapp', 'whatsapp-lite']
       : [provider];
@@ -58,7 +67,9 @@ module.exports = function createWebhooksRouter(db) {
     return { ...row, credentials: row.credentials_enc ? (decryptJson(row.credentials_enc) || {}) : {} };
   }
 
-  // Idempotencia: si ya existe (provider, eventId), devuelve true → ya procesado
+  // Idempotencia: si ya existe (provider, eventId), devuelve true → ya procesado.
+  // En multi-tenant la dedup se mantiene global por provider+eventId — los IDs
+  // de Meta/Telegram son únicos globalmente, no hay colisión cross-tenant.
   function alreadyProcessed(provider, eventId) {
     if (!eventId) return false;
     try {
@@ -67,7 +78,6 @@ module.exports = function createWebhooksRouter(db) {
       `).run(provider, String(eventId));
       return false;
     } catch (err) {
-      // Violación UNIQUE → ya existe
       return /UNIQUE/i.test(err.message);
     }
   }
@@ -95,8 +105,6 @@ module.exports = function createWebhooksRouter(db) {
   }
 
   // ─── Meta (WhatsApp / Messenger / Instagram) ───
-  // Verificación GET: hub.challenge si hub.verify_token coincide
-  // Verificación POST: X-Hub-Signature-256 = hmac_sha256(app_secret, raw_body)
   function metaGetHandler(provider) {
     return (req, res) => {
       const mode = req.query['hub.mode'];
@@ -104,13 +112,11 @@ module.exports = function createWebhooksRouter(db) {
       const challenge = req.query['hub.challenge'];
       if (mode !== 'subscribe' || !token) return res.sendStatus(400);
 
-      // Fallback: token global de entorno
       const envToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
       if (envToken && safeEqual(envToken, token)) {
         return res.status(200).send(String(challenge || ''));
       }
 
-      // Buscar cualquier integración del provider que tenga ese verify token
       const rows = db.prepare('SELECT credentials_enc FROM integrations WHERE provider = ?').all(provider);
       for (const row of rows) {
         const creds = row.credentials_enc ? decryptJson(row.credentials_enc) : null;
@@ -124,7 +130,7 @@ module.exports = function createWebhooksRouter(db) {
 
   function metaPostHandler(provider) {
     return (req, res) => {
-      const raw = req.body; // Buffer (express.raw)
+      const raw = req.body;
       const signature = String(req.get('x-hub-signature-256') || '').replace(/^sha256=/, '');
       const payload = (() => { try { return JSON.parse(raw.toString('utf8')); } catch { return null; } })();
 
@@ -134,13 +140,12 @@ module.exports = function createWebhooksRouter(db) {
       if (provider === 'whatsapp' || provider === 'whatsapp-lite') {
         externalId = payload?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
       } else if (provider === 'messenger') {
-        externalId = payload?.entry?.[0]?.id; // page_id
+        externalId = payload?.entry?.[0]?.id;
       } else if (provider === 'instagram') {
-        externalId = payload?.entry?.[0]?.id; // ig_user_id (cuando usas IG Login)
+        externalId = payload?.entry?.[0]?.id;
       }
       integration = externalId ? (findIntegration(provider, externalId) || findIntegrationByProvider(provider)) : findIntegrationByProvider(provider);
 
-      // Verificar firma con app_secret (integración primero, .env como fallback global Meta)
       const appSecret = integration?.credentials?.appSecret || process.env.META_APP_SECRET;
       if (appSecret) {
         const expected = hmacHex(appSecret, raw);
@@ -152,8 +157,6 @@ module.exports = function createWebhooksRouter(db) {
         console.warn(`[webhook ${provider}] sin appSecret configurado, no se verificó firma`);
       }
 
-      // Idempotencia: usamos message_id (incoming), status_id+state (delivery status)
-      // o entry.id+changes.field (otros eventos)
       const _change = payload?.entry?.[0]?.changes?.[0];
       const _statusEvt = _change?.value?.statuses?.[0];
       const eventId = _change?.value?.messages?.[0]?.id
@@ -161,20 +164,19 @@ module.exports = function createWebhooksRouter(db) {
                    || payload?.entry?.[0]?.messaging?.[0]?.message?.mid
                    || `${provider}-${payload?.entry?.[0]?.id}-${payload?.entry?.[0]?.time}`;
 
-      res.sendStatus(200); // CRÍTICO: responder rápido
+      res.sendStatus(200);
 
       if (alreadyProcessed(provider, eventId)) return;
       logEvent(provider, eventId, payload);
 
-      // Procesar mensajes entrantes de WhatsApp en conversaciones
       if (provider === 'whatsapp' || provider === 'whatsapp-lite') {
-        // Cambio de estado de plantilla
         const change = payload?.entry?.[0]?.changes?.[0];
         if (change?.field === 'message_template_status_update') {
+          // Template updates vienen para una WABA específica; el wa_id de
+          // la plantilla mapea a UNA fila en message_templates con su tenant.
           processTemplateStatusUpdate(change.value);
         } else if (change?.value?.statuses?.length) {
-          // Webhook de delivery status (sent / delivered / read / failed)
-          processWhatsAppStatuses(change.value);
+          processWhatsAppStatuses(change.value, integration);
         } else {
           processWhatsAppMessages(payload, integration);
         }
@@ -184,7 +186,7 @@ module.exports = function createWebhooksRouter(db) {
         processInstagramMessages(payload, integration);
       }
 
-      console.log(`[webhook ${provider}] evento ${eventId} procesado`);
+      console.log(`[webhook ${provider}] evento ${eventId} procesado (tenant=${integration?.tenant_id ?? '?'})`);
     };
   }
 
@@ -195,29 +197,25 @@ module.exports = function createWebhooksRouter(db) {
     try { return JSON.parse(row.config)?.routing || null; } catch { return null; }
   }
 
-  function ensureExpedient(contactId, routing) {
+  function ensureExpedient(tenantId, contactId, routing) {
     if (!routing?.pipelineId || !routing?.stageId) return;
-    // Solo crear si el contacto NO tiene NINGÚN expediente ABIERTO
-    // (en etapa kind='in_progress'). Esto evita duplicados al cambiar
-    // el routing de la integración entre pipelines distintos.
-    // Caso permitido: si TODOS los expedientes anteriores del contacto
-    // están cerrados (won/lost), se crea uno nuevo — es un contacto
-    // recurrente con un deal/caso nuevo.
+    if (!tenantId || !contactId) return;
+    // Solo crear si el contacto NO tiene NINGÚN expediente ABIERTO en ESTE tenant
     const existing = db.prepare(`
       SELECT e.id, e.pipeline_id
         FROM expedients e
         JOIN stages s ON s.id = e.stage_id
-       WHERE e.contact_id = ?
+       WHERE e.contact_id = ? AND e.tenant_id = ?
          AND COALESCE(s.kind, 'in_progress') = 'in_progress'
        LIMIT 1
-    `).get(contactId);
+    `).get(contactId, tenantId);
     if (existing) {
-      console.log(`[webhook] contacto ${contactId} ya tiene expediente abierto (id=${existing.id} en pipeline ${existing.pipeline_id}). No se crea duplicado.`);
+      console.log(`[webhook] contacto ${contactId} (tenant ${tenantId}) ya tiene expediente abierto (id=${existing.id} en pipeline ${existing.pipeline_id}). No se crea duplicado.`);
       return;
     }
 
     try {
-      expedientSvc.create(db, {
+      expedientSvc.create(db, tenantId, {
         contactId,
         pipelineId: routing.pipelineId,
         stageId:    routing.stageId,
@@ -226,7 +224,7 @@ module.exports = function createWebhooksRouter(db) {
         tags:       [],
         fieldValues: {},
       });
-      console.log(`[webhook] expediente creado para contacto ${contactId} en pipeline ${routing.pipelineId}`);
+      console.log(`[webhook] expediente creado para contacto ${contactId} (tenant ${tenantId}) en pipeline ${routing.pipelineId}`);
     } catch (err) {
       console.warn('[webhook] no se pudo crear expediente:', err.message);
     }
@@ -234,8 +232,9 @@ module.exports = function createWebhooksRouter(db) {
 
   function processTemplateStatusUpdate(value) {
     // value.message_template_id  → wa_id en message_templates
-    // value.event                → APPROVED | REJECTED | PENDING_DELETION | FLAGGED
-    // value.reason               → razón de rechazo (solo en REJECTED)
+    // El wa_id es único globalmente (lo asigna Meta), así que mapea a UNA
+    // fila exacta. Hacemos lookup por wa_id para encontrar la plantilla y
+    // su tenant; el UPDATE va por id (PK).
     try {
       const waId    = String(value?.message_template_id || '');
       const event   = String(value?.event || '').toUpperCase();
@@ -245,24 +244,22 @@ module.exports = function createWebhooksRouter(db) {
       const statusMap = { APPROVED: 'approved', REJECTED: 'rejected', FLAGGED: 'rejected', PENDING_DELETION: 'rejected' };
       const newStatus = statusMap[event] || 'pending';
 
-      const row = db.prepare('SELECT id FROM message_templates WHERE wa_id = ?').get(waId);
+      const row = db.prepare('SELECT id, tenant_id FROM message_templates WHERE wa_id = ?').get(waId);
       if (!row) {
         console.warn(`[webhook template] no se encontró plantilla con wa_id=${waId}`);
         return;
       }
 
       db.prepare(
-        'UPDATE message_templates SET wa_status = ?, wa_rejected_reason = ?, updated_at = unixepoch() WHERE id = ?'
-      ).run(newStatus, reason, row.id);
+        'UPDATE message_templates SET wa_status = ?, wa_rejected_reason = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?'
+      ).run(newStatus, reason, row.id, row.tenant_id);
 
-      console.log(`[webhook template] plantilla ${waId} → ${event} (${newStatus})${reason ? ` razón: ${reason}` : ''}`);
+      console.log(`[webhook template] plantilla ${waId} (tenant ${row.tenant_id}) → ${event} (${newStatus})${reason ? ` razón: ${reason}` : ''}`);
     } catch (err) {
       console.error('[webhook template] error procesando status update:', err.message);
     }
   }
 
-  // Detecta el tipo de media en un mensaje entrante de WhatsApp y devuelve
-  // { mediaId, mimetype, ext, caption, type } o null si no es media.
   function _extractWhatsAppMedia(msg) {
     const types = ['image', 'video', 'audio', 'document', 'sticker', 'voice'];
     for (const t of types) {
@@ -283,9 +280,6 @@ module.exports = function createWebhooksRouter(db) {
     return null;
   }
 
-  // Descarga el archivo desde Meta (URL temporal de 5min, requiere token).
-  // Lo guarda en data/uploads/chat-media/ y actualiza la columna media_url
-  // del mensaje recién insertado.
   async function _downloadAndStoreWhatsAppMedia(integration, msgRow, media) {
     try {
       const path = require('path');
@@ -294,19 +288,16 @@ module.exports = function createWebhooksRouter(db) {
       if (!accessToken) { console.warn('[webhook media] sin access token, no se puede descargar'); return; }
       const version = process.env.META_GRAPH_VERSION || 'v22.0';
 
-      // Step 1 — obtener URL temporal
       const metaRes = await fetch(`https://graph.facebook.com/${version}/${media.mediaId}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const metaJson = await metaRes.json().catch(() => ({}));
       if (!metaJson.url) { console.warn(`[webhook media] no se obtuvo URL para media ${media.mediaId}`); return; }
 
-      // Step 2 — descargar bytes (mismo token)
       const dlRes = await fetch(metaJson.url, { headers: { Authorization: `Bearer ${accessToken}` } });
       if (!dlRes.ok) { console.warn(`[webhook media] descarga falló: HTTP ${dlRes.status}`); return; }
       const buffer = Buffer.from(await dlRes.arrayBuffer());
 
-      // Step 3 — guardar local con extensión correcta
       const uploadsDir = path.resolve(process.env.UPLOADS_DIR || './data/uploads');
       const chatMediaDir = path.join(uploadsDir, 'chat-media');
       if (!fs.existsSync(chatMediaDir)) fs.mkdirSync(chatMediaDir, { recursive: true });
@@ -315,7 +306,8 @@ module.exports = function createWebhooksRouter(db) {
       fs.writeFileSync(path.join(chatMediaDir, localName), buffer);
       const localUrl = `/uploads/chat-media/${localName}`;
 
-      // Step 4 — actualizar el mensaje con la URL local
+      // El UPDATE usa solo PK porque no tenemos tenant a la mano; messages.id
+      // es único globalmente.
       db.prepare('UPDATE messages SET media_url = ? WHERE id = ?').run(localUrl, msgRow.id);
       console.log(`[webhook media] msg #${msgRow.id} → ${localUrl} (${(buffer.length/1024).toFixed(1)}KB)`);
     } catch (err) {
@@ -325,6 +317,11 @@ module.exports = function createWebhooksRouter(db) {
 
   function processWhatsAppMessages(payload, integration) {
     try {
+      const tenantId = integration?.tenant_id;
+      if (!tenantId) {
+        console.warn('[webhook whatsapp] sin tenant — integración no identificada, ignorando mensaje');
+        return;
+      }
       const routing = getIntegrationRouting(integration?.id);
       const entries = payload?.entry || [];
       for (const entry of entries) {
@@ -333,14 +330,13 @@ module.exports = function createWebhooksRouter(db) {
           for (const msg of (value.messages || [])) {
             const waId    = msg.from;
             const media   = _extractWhatsAppMedia(msg);
-            // body = caption (si existe) o '' si solo media. Para texto puro usa msg.text
             const body    = msg.text?.body || media?.caption || msg.caption || '';
             const msgId   = msg.id;
             const ts      = msg.timestamp ? Number(msg.timestamp) : Math.floor(Date.now() / 1000);
             const profile = value.contacts?.find((c) => c.wa_id === waId);
             const name    = profile?.profile?.name || null;
 
-            const convo = convoSvc.findOrCreate(db, null, {
+            const convo = convoSvc.findOrCreate(db, tenantId, {
               provider:      'whatsapp',
               externalId:    waId,
               integrationId: integration?.id || null,
@@ -348,7 +344,7 @@ module.exports = function createWebhooksRouter(db) {
               contactName:   name,
             });
 
-            const insertedMsg = convoSvc.addMessage(db, null, convo.id, {
+            const insertedMsg = convoSvc.addMessage(db, tenantId, convo.id, {
               externalId: msgId,
               direction:  'incoming',
               provider:   'whatsapp',
@@ -357,14 +353,11 @@ module.exports = function createWebhooksRouter(db) {
               createdAt:  ts,
             });
 
-            // Si el mensaje trae media, descargar de Meta async y guardar local.
-            // No bloqueamos el webhook (Meta tiene timeout corto).
             if (media && insertedMsg) {
               _downloadAndStoreWhatsAppMedia(integration, insertedMsg, media);
             }
 
-            // Crear expediente si la integración tiene routing configurado
-            ensureExpedient(convo.contact_id, routing);
+            ensureExpedient(tenantId, convo.contact_id, routing);
 
             botEngine.triggerMessage(db, {
               convoId:       convo.id,
@@ -373,8 +366,6 @@ module.exports = function createWebhooksRouter(db) {
               provider:      'whatsapp',
               integrationId: integration?.id || null,
             });
-            // Resumir wait_response del bot si el lead estaba en pausa
-            // esperando una respuesta (rama on_text_reply / on_button_click)
             try {
               const branch = msg.button ? 'on_button_click' : 'on_text_reply';
               botEngine.resumeWaitsForContact(db, convo.contact_id, branch, { messageBody: body });
@@ -382,7 +373,7 @@ module.exports = function createWebhooksRouter(db) {
 
             const previewByType = { image: '📷 Imagen', video: '🎬 Video', audio: '🎵 Audio', document: '📎 Documento' };
             const pushBody = body || (media ? (previewByType[media.type] || '📎 Archivo') : '');
-            pushIncomingMessage(db, convo, pushBody, name || `+${waId}`);
+            pushIncomingMessage(db, tenantId, convo, pushBody, name || `+${waId}`);
           }
         }
       }
@@ -391,7 +382,6 @@ module.exports = function createWebhooksRouter(db) {
     }
   }
 
-  // Códigos de error de Meta más comunes en delivery → texto amigable.
   function friendlyDeliveryError(code, fallbackTitle, fallbackDetails) {
     const codeNum = Number(code);
     const map = {
@@ -414,12 +404,14 @@ module.exports = function createWebhooksRouter(db) {
     return map[codeNum] || fallbackTitle || fallbackDetails || `Error ${code || 'desconocido'}`;
   }
 
-  // Procesa value.statuses[] del webhook de WhatsApp (delivery status).
-  // Cada entry trae { id, status: 'sent'|'delivered'|'read'|'failed', recipient_id, errors? }.
-  // Actualiza la columna status del mensaje saliente correspondiente.
-  function processWhatsAppStatuses(value) {
+  function processWhatsAppStatuses(value, integration) {
+    const tenantId = integration?.tenant_id;
+    if (!tenantId) {
+      console.warn('[webhook status] sin tenant — integración no identificada');
+      // Seguimos procesando porque los IDs de mensajes son globales, pero el
+      // resumeWaits ya no funciona porque no podemos validar contacto vs tenant
+    }
     const statuses = value.statuses || [];
-    // Orden lógico: failed siempre gana; en otros casos no retroceder.
     const order = { sent: 1, delivered: 2, read: 3, failed: 4 };
     for (const s of statuses) {
       try {
@@ -431,14 +423,15 @@ module.exports = function createWebhooksRouter(db) {
           const err = s.errors[0];
           errorReason = friendlyDeliveryError(err.code, err.title, err.error_data?.details || err.message);
         }
-        const msg = db.prepare("SELECT id, status FROM messages WHERE external_id = ? AND provider = 'whatsapp'").get(id);
-        if (!msg) {
-          // Mensaje aún no existe — puede llegar el status antes que el insert (raro). Lo ignoramos.
-          continue;
-        }
+        // El external_id de WhatsApp es global; combinado con tenant_id de la
+        // integración que nos llega, encontramos el mensaje exacto.
+        const msg = tenantId
+          ? db.prepare("SELECT id, status FROM messages WHERE external_id = ? AND provider = 'whatsapp' AND tenant_id = ?").get(id, tenantId)
+          : db.prepare("SELECT id, status FROM messages WHERE external_id = ? AND provider = 'whatsapp'").get(id);
+        if (!msg) continue;
         const cur = order[msg.status] || 0;
         const incoming = order[status] || 0;
-        if (incoming < cur) continue; // no retroceder (ej. ya leído, llega delivered viejo)
+        if (incoming < cur) continue;
         if (errorReason) {
           db.prepare('UPDATE messages SET status = ?, error_reason = ? WHERE id = ?').run(status, errorReason, msg.id);
         } else {
@@ -446,8 +439,6 @@ module.exports = function createWebhooksRouter(db) {
         }
         console.log(`[webhook status] msg wa_id=${id} → ${status}${errorReason ? ` (${errorReason})` : ''}`);
 
-        // Si el mensaje falló, resumir cualquier wait_response del bot que
-        // estuviera esperando con la rama on_delivery_fail.
         if (status === 'failed') {
           try {
             const ctxRow = db.prepare(`
@@ -468,6 +459,8 @@ module.exports = function createWebhooksRouter(db) {
 
   function processMessengerMessages(payload, integration) {
     try {
+      const tenantId = integration?.tenant_id;
+      if (!tenantId) { console.warn('[webhook messenger] sin tenant'); return; }
       for (const entry of (payload?.entry || [])) {
         for (const event of (entry.messaging || [])) {
           if (!event.message) continue;
@@ -476,7 +469,7 @@ module.exports = function createWebhooksRouter(db) {
           const msgId    = event.message?.mid;
           const ts       = event.timestamp ? Math.floor(event.timestamp / 1000) : Math.floor(Date.now() / 1000);
 
-          const convo = convoSvc.findOrCreate(db, null, {
+          const convo = convoSvc.findOrCreate(db, tenantId, {
             provider:      'messenger',
             externalId:    senderId,
             integrationId: integration?.id || null,
@@ -484,7 +477,7 @@ module.exports = function createWebhooksRouter(db) {
             contactName:   null,
           });
 
-          convoSvc.addMessage(db, null, convo.id, {
+          convoSvc.addMessage(db, tenantId, convo.id, {
             externalId: msgId,
             direction:  'incoming',
             provider:   'messenger',
@@ -502,7 +495,7 @@ module.exports = function createWebhooksRouter(db) {
           });
           try { botEngine.resumeWaitsForContact(db, convo.contact_id, 'on_text_reply', { messageBody: body }); } catch (_) {}
 
-          pushIncomingMessage(db, convo, body, `Messenger #${senderId}`);
+          pushIncomingMessage(db, tenantId, convo, body, `Messenger #${senderId}`);
         }
       }
     } catch (err) {
@@ -512,6 +505,8 @@ module.exports = function createWebhooksRouter(db) {
 
   function processInstagramMessages(payload, integration) {
     try {
+      const tenantId = integration?.tenant_id;
+      if (!tenantId) { console.warn('[webhook instagram] sin tenant'); return; }
       for (const entry of (payload?.entry || [])) {
         for (const event of (entry.messaging || [])) {
           if (!event.message) continue;
@@ -520,7 +515,7 @@ module.exports = function createWebhooksRouter(db) {
           const msgId    = event.message?.mid;
           const ts       = event.timestamp ? Math.floor(event.timestamp / 1000) : Math.floor(Date.now() / 1000);
 
-          const convo = convoSvc.findOrCreate(db, null, {
+          const convo = convoSvc.findOrCreate(db, tenantId, {
             provider:      'instagram',
             externalId:    senderId,
             integrationId: integration?.id || null,
@@ -528,7 +523,7 @@ module.exports = function createWebhooksRouter(db) {
             contactName:   null,
           });
 
-          convoSvc.addMessage(db, null, convo.id, {
+          convoSvc.addMessage(db, tenantId, convo.id, {
             externalId: msgId,
             direction:  'incoming',
             provider:   'instagram',
@@ -546,7 +541,7 @@ module.exports = function createWebhooksRouter(db) {
           });
           try { botEngine.resumeWaitsForContact(db, convo.contact_id, 'on_text_reply', { messageBody: body }); } catch (_) {}
 
-          pushIncomingMessage(db, convo, body, `Instagram #${senderId}`);
+          pushIncomingMessage(db, tenantId, convo, body, `Instagram #${senderId}`);
         }
       }
     } catch (err) {
@@ -555,7 +550,6 @@ module.exports = function createWebhooksRouter(db) {
   }
 
   // ─── Shopify ───
-  // X-Shopify-Hmac-Sha256 = hmac_sha256_b64(webhook_secret, raw_body)
   function shopifyHandler(req, res) {
     const raw = req.body;
     const signature = String(req.get('x-shopify-hmac-sha256') || '');
@@ -575,11 +569,9 @@ module.exports = function createWebhooksRouter(db) {
     let payload = null;
     try { payload = JSON.parse(raw.toString('utf8')); } catch (_) {}
     logEvent('shopify', eventId, payload);
-    console.log(`[webhook shopify] evento ${eventId} (${req.get('x-shopify-topic')}) recibido`);
+    console.log(`[webhook shopify] evento ${eventId} (${req.get('x-shopify-topic')}) recibido (tenant=${integration?.tenant_id ?? '?'})`);
   }
 
-  // ─── WooCommerce ───
-  // X-WC-Webhook-Signature = base64(hmac_sha256(secret, raw_body))
   function wooHandler(req, res) {
     const raw = req.body;
     const signature = String(req.get('x-wc-webhook-signature') || '');
@@ -599,18 +591,15 @@ module.exports = function createWebhooksRouter(db) {
     let payload = null;
     try { payload = JSON.parse(raw.toString('utf8')); } catch (_) {}
     logEvent('woocommerce', eventId, payload);
-    console.log(`[webhook woocommerce] evento ${eventId} (${req.get('x-wc-webhook-topic')}) recibido`);
+    console.log(`[webhook woocommerce] evento ${eventId} (${req.get('x-wc-webhook-topic')}) recibido (tenant=${integration?.tenant_id ?? '?'})`);
   }
 
-  // ─── Square ───
-  // X-Square-Hmacsha256-Signature = base64url(hmac_sha256(signature_key, notification_url + raw_body))
   function squareHandler(req, res) {
     const raw = req.body;
     const signature = String(req.get('x-square-hmacsha256-signature') || '');
     const integration = findIntegrationByProvider('square');
 
     if (integration?.credentials?.webhookSignatureKey) {
-      // Square firma URL + body
       const fullUrl = `${process.env.APP_BASE_URL || ''}/webhooks/square`;
       const expected = crypto
         .createHmac('sha256', integration.credentials.webhookSignatureKey)
@@ -630,7 +619,7 @@ module.exports = function createWebhooksRouter(db) {
     res.sendStatus(200);
     if (alreadyProcessed('square', eventId)) return;
     logEvent('square', eventId, payload);
-    console.log(`[webhook square] evento ${eventId} (${payload?.type}) recibido`);
+    console.log(`[webhook square] evento ${eventId} (${payload?.type}) recibido (tenant=${integration?.tenant_id ?? '?'})`);
   }
 
   // ─── Telegram ───
@@ -661,6 +650,8 @@ module.exports = function createWebhooksRouter(db) {
 
   function processTelegramMessages(payload, integration) {
     try {
+      const tenantId = integration?.tenant_id;
+      if (!tenantId) { console.warn('[webhook telegram] sin tenant'); return; }
       const routing = getIntegrationRouting(integration?.id);
       const msg  = payload.message;
       if (!msg) return;
@@ -672,7 +663,7 @@ module.exports = function createWebhooksRouter(db) {
       const from     = msg.from || {};
       const name     = [from.first_name, from.last_name].filter(Boolean).join(' ') || from.username || null;
 
-      const convo = convoSvc.findOrCreate(db, null, {
+      const convo = convoSvc.findOrCreate(db, tenantId, {
         provider:      'telegram',
         externalId:    chatId,
         integrationId: integration?.id || null,
@@ -680,7 +671,7 @@ module.exports = function createWebhooksRouter(db) {
         contactName:   name,
       });
 
-      convoSvc.addMessage(db, null, convo.id, {
+      convoSvc.addMessage(db, tenantId, convo.id, {
         externalId: msgId,
         direction:  'incoming',
         provider:   'telegram',
@@ -689,7 +680,7 @@ module.exports = function createWebhooksRouter(db) {
         createdAt:  ts,
       });
 
-      ensureExpedient(convo.contact_id, routing);
+      ensureExpedient(tenantId, convo.contact_id, routing);
 
       botEngine.triggerMessage(db, {
         convoId:       convo.id,
@@ -700,14 +691,13 @@ module.exports = function createWebhooksRouter(db) {
       });
       try { botEngine.resumeWaitsForContact(db, convo.contact_id, 'on_text_reply', { messageBody: body }); } catch (_) {}
 
-      pushIncomingMessage(db, convo, body, name || `Telegram ${chatId}`);
+      pushIncomingMessage(db, tenantId, convo, body, name || `Telegram ${chatId}`);
     } catch (err) {
       console.error('[webhook telegram] error procesando mensaje:', err.message);
     }
   }
 
   // ─── TikTok ───
-  // TikTok firma con SHA256 del client_secret + timestamp + body
   function tiktokHandler(req, res) {
     const raw = req.body;
     let payload = null;
@@ -720,7 +710,6 @@ module.exports = function createWebhooksRouter(db) {
   }
 
   // ─── Rutas ───
-  // body crudo solo aquí; el resto del server usa express.json() global
   const raw = express.raw({ type: '*/*', limit: '5mb' });
 
   router.get('/whatsapp',      metaGetHandler('whatsapp'));
@@ -738,7 +727,6 @@ module.exports = function createWebhooksRouter(db) {
   router.post('/telegram',     raw, telegramHandler);
   router.post('/tiktok',       raw, tiktokHandler);
 
-  // Endpoint de inspección (auth gateado en el futuro): últimos 50 eventos
   router.get('/_debug', (_req, res) => {
     const items = db.prepare(
       'SELECT id, provider, external_id, received_at, processed_at FROM webhook_events ORDER BY id DESC LIMIT 50'

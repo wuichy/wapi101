@@ -216,6 +216,10 @@ async function execute(db, bot, ctx) {
   let finalStatus = 'done';
   let errorMsg = null;
 
+  // Ejecutar la lista de steps secuencialmente. Si algún step devuelve
+  // 'suspend' (wait_response), el run queda en estado 'paused' y la fila en
+  // bot_run_waits se encarga del seguimiento. resumeRun() lo continúa después.
+  let suspended = false;
   for (let i = 0; i < (bot.steps || []).length; i++) {
     // Check kill signal before each step
     const sig = runId ? _signals.get(runId) : null;
@@ -244,15 +248,29 @@ async function execute(db, bot, ctx) {
     }
 
     try {
-      const shouldStop = await executeStep(db, step, fullCtx);
-      _log('info', `paso ${i + 1} completado, shouldStop=${shouldStop}`);
-      if (shouldStop) break;
+      // Pasamos el índice y runId al ctx para que el step wait_response pueda
+      // persistir su posición en bot_run_waits.
+      fullCtx._stepIndex = i;
+      fullCtx._runId = runId;
+      const result = await executeStep(db, step, fullCtx);
+      _log('info', `paso ${i + 1} completado, result=${result}`);
+      if (result === 'suspend') { suspended = true; break; }
+      if (result === true || result === 'stop') break;
     } catch (stepErr) {
       _log('error', `paso ${i + 1} ("${step.type}") lanzó error: ${stepErr.message}`);
       finalStatus = 'error';
       errorMsg = `Paso ${i + 1} (${step.type}): ${stepErr.message}`;
       break;
     }
+  }
+
+  // Si quedó suspendido, marcar como paused y salir sin finalizar
+  if (suspended) {
+    if (runId) {
+      try { db.prepare(`UPDATE bot_runs SET status = 'paused' WHERE id = ?`).run(runId); } catch (_) {}
+    }
+    _log('info', `bot ${bot.id} "${bot.name}" suspendido esperando respuesta (run ${runId}).`);
+    return;
   }
 
   // Marcar ejecución como terminada (solo si no fue marcada ya por killRun)
@@ -522,9 +540,180 @@ async function executeStep(db, step, ctx) {
       return !passes; // return true (stop) if condition fails
     }
 
+    case 'wait_response': {
+      // Suspende el run hasta que llegue una señal: respuesta del lead,
+      // timeout, o falla de entrega. Persiste el estado en bot_run_waits.
+      const timeoutMin = Number(c.timeoutMinutes || 1440); // default 24h
+      const expiresAt = Math.floor(Date.now() / 1000) + (timeoutMin * 60);
+      const runId = ctx._runId;
+      const stepIndex = ctx._stepIndex;
+      if (!runId) {
+        _log('warn', 'wait_response sin runId — no se puede suspender, saltando');
+        return false;
+      }
+      // Guardar contexto serializable (sin runId/stepIndex que ya tenemos como columnas)
+      const ctxSnapshot = {
+        chainDepth:    ctx.chainDepth || 0,
+        provider:      ctx.provider || null,
+        integrationId: ctx.integrationId || null,
+        pipelineId:    ctx.pipelineId || null,
+        stageId:       ctx.stageId || null,
+        messageBody:   ctx.messageBody || '',
+      };
+      db.prepare(`
+        INSERT INTO bot_run_waits (
+          run_id, bot_id, contact_id, conversation_id, expedient_id,
+          wait_step_id, wait_step_index, ctx_json, expires_at, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'waiting')
+      `).run(
+        runId,
+        // bot_id se busca a través del run
+        db.prepare('SELECT bot_id FROM bot_runs WHERE id = ?').get(runId)?.bot_id || 0,
+        ctx.contactId || null,
+        ctx.convoId || null,
+        ctx.expedientId || null,
+        step._id || `s${stepIndex}`,
+        stepIndex,
+        JSON.stringify(ctxSnapshot),
+        expiresAt
+      );
+      _log('info', `wait_response: run ${runId} suspendido hasta ${new Date(expiresAt*1000).toISOString()} (timeout ${timeoutMin}min)`);
+      return 'suspend';
+    }
+
     default:
       return false;
   }
+}
+
+// Resume un run suspendido en un step wait_response, ejecutando los pasos
+// de la rama indicada. branch: 'on_text_reply' | 'on_button_click' | 'on_timeout' | 'on_delivery_fail'
+// Se llama "resumeWait" para distinguir del resumeRun() existente que reanuda
+// runs pausados manualmente (con killRun/pauseRun/resumeRun).
+async function resumeWait(db, waitId, branch, extraCtx = {}) {
+  const wait = db.prepare('SELECT * FROM bot_run_waits WHERE id = ? AND status = ?').get(waitId, 'waiting');
+  if (!wait) { _log('warn', `resumeRun: wait ${waitId} no encontrado o ya resumido`); return; }
+
+  // Marcar como resumido (atómico — evita doble-resume)
+  const upd = db.prepare(
+    `UPDATE bot_run_waits SET status = 'resumed', resumed_branch = ?, resumed_at = unixepoch() WHERE id = ? AND status = 'waiting'`
+  ).run(branch, waitId);
+  if (upd.changes === 0) { _log('info', `resumeRun: wait ${waitId} ya fue resumido por otro proceso`); return; }
+
+  // Cargar bot
+  const botRow = db.prepare('SELECT * FROM salsbots WHERE id = ?').get(wait.bot_id);
+  if (!botRow) { _log('error', `resumeRun: bot ${wait.bot_id} no existe`); return; }
+  let allSteps = [];
+  try { allSteps = JSON.parse(botRow.steps || '[]'); } catch {}
+  // Asegurar _id estable como en run normal
+  allSteps = allSteps.map((s, i) => ({ ...s, _id: s._id || `s${i}` }));
+
+  const waitStep = allSteps[wait.wait_step_index];
+  if (!waitStep || waitStep.type !== 'wait_response') {
+    _log('error', `resumeRun: step en índice ${wait.wait_step_index} no es wait_response`);
+    return;
+  }
+
+  const branches = waitStep.config?.branches || {};
+  const branchSteps = Array.isArray(branches[branch]) ? branches[branch] : [];
+  // Asegurar _ids únicos
+  const branchStepsHydrated = branchSteps.map((s, i) => ({ ...s, _id: s._id || `${wait.wait_step_id}-${branch}-${i}` }));
+
+  // Reconstruir ctx
+  let snap = {};
+  try { snap = JSON.parse(wait.ctx_json || '{}'); } catch {}
+  const contact = wait.contact_id ? db.prepare('SELECT * FROM contacts WHERE id = ?').get(wait.contact_id) : null;
+  const ctx = {
+    contactId:     wait.contact_id,
+    convoId:       wait.conversation_id,
+    expedientId:   wait.expedient_id,
+    contact,
+    runId:         wait.run_id,
+    chainDepth:    snap.chainDepth || 0,
+    provider:      snap.provider,
+    integrationId: snap.integrationId,
+    pipelineId:    snap.pipelineId,
+    stageId:       snap.stageId,
+    messageBody:   extraCtx.messageBody || snap.messageBody || '',
+    ...extraCtx,
+  };
+
+  _log('info', `resumeRun: ejecutando ${branchStepsHydrated.length} pasos de rama "${branch}" del run ${wait.run_id}`);
+
+  // Ejecutar los pasos de la rama. Si hay otro wait_response dentro, vuelve a suspender.
+  let suspended = false;
+  let errored = false;
+  for (let i = 0; i < branchStepsHydrated.length; i++) {
+    const step = branchStepsHydrated[i];
+    ctx._stepIndex = wait.wait_step_index; // mantenemos el índice del wait original
+    ctx._runId = wait.run_id;
+    try {
+      const result = await executeStep(db, step, ctx);
+      if (result === 'suspend') { suspended = true; break; }
+      if (result === true || result === 'stop') break;
+    } catch (err) {
+      _log('error', `resumeRun: paso ${i + 1} ("${step.type}") error: ${err.message}`);
+      errored = true;
+      break;
+    }
+  }
+
+  // Finalizar el run (las ramas siempre terminan el bot, salvo que tengan otro wait_response)
+  if (!suspended && wait.run_id) {
+    const status = errored ? 'error' : 'done';
+    try {
+      db.prepare(`
+        UPDATE bot_runs SET status = ?, finished_at = unixepoch()
+        WHERE id = ? AND status NOT IN ('killed')
+      `).run(status, wait.run_id);
+    } catch (_) {}
+    if (ctx.expedientId) {
+      activitySvc.log(db, {
+        expedientId: ctx.expedientId,
+        contactId:   ctx.contactId,
+        type:        status === 'done' ? 'bot_done' : 'bot_error',
+        description: status === 'done' ? `Bot resumió rama "${branch}" y completó` : `Bot rama "${branch}" falló`,
+      });
+    }
+    _log('info', `run ${wait.run_id} finalizado (${status}) tras rama ${branch}`);
+  }
+}
+
+// Busca cualquier wait suspendido para un contacto y lo resume en la rama dada.
+// Útil para hooks de webhook (mensaje entrante, falla de entrega).
+async function resumeWaitsForContact(db, contactId, branch, extraCtx = {}) {
+  if (!contactId) return;
+  const waits = db.prepare(`
+    SELECT id FROM bot_run_waits
+     WHERE contact_id = ? AND status = 'waiting'
+     ORDER BY created_at DESC
+  `).all(contactId);
+  for (const w of waits) {
+    try { await resumeWait(db, w.id, branch, extraCtx); }
+    catch (err) { _log('error', `resumeWaitsForContact: ${err.message}`); }
+  }
+}
+
+// Poller que cada 60s busca waits expirados y los resume en rama on_timeout.
+let _waitTimeoutTimer = null;
+function startWaitTimeoutPoller(db) {
+  if (_waitTimeoutTimer) return;
+  _waitTimeoutTimer = setInterval(async () => {
+    try {
+      const expired = db.prepare(`
+        SELECT id FROM bot_run_waits
+         WHERE status = 'waiting' AND expires_at <= unixepoch()
+         LIMIT 50
+      `).all();
+      for (const w of expired) {
+        await resumeWait(db, w.id, 'on_timeout');
+      }
+    } catch (err) {
+      console.error('[bot] waitTimeoutPoller error:', err.message);
+    }
+  }, 60_000);
+  _waitTimeoutTimer.unref?.();
+  console.log('[bot] startWaitTimeoutPoller iniciado (cada 60s)');
 }
 
 function evaluateCondition(db, c, ctx) {
@@ -592,4 +781,9 @@ function replaceVars(text, ctx) {
   return out;
 }
 
-module.exports = { triggerMessage, triggerPipelineStage, triggerNewContact, getLogs, clearLogs, killRun, pauseRun, resumeRun };
+module.exports = {
+  triggerMessage, triggerPipelineStage, triggerNewContact,
+  getLogs, clearLogs, killRun, pauseRun, resumeRun,
+  // Sistema de wait_response (Opción A — branching):
+  resumeWait, resumeWaitsForContact, startWaitTimeoutPoller,
+};

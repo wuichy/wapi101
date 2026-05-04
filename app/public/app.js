@@ -4704,6 +4704,14 @@ const SB_STEP_LABELS = {
   assign:         'Asignar responsable',
   stop_bot:       'Parar bot',
   stop_and_start: 'Parar este bot e iniciar otro',
+  wait_response:  'Esperar respuesta del lead',
+};
+
+const SB_BRANCH_LABELS = {
+  on_button_click:  'Hace clic en un botón',
+  on_text_reply:    'Responde con texto',
+  on_timeout:       'No responde (timeout)',
+  on_delivery_fail: 'No le llegó el mensaje',
 };
 const SB_TRIGGER_LABELS = {
   keyword:        'Palabra clave',
@@ -5073,6 +5081,18 @@ function stepSummary(step) {
       const target = (sbBots || []).find(b => b.id === Number(c.targetBotId));
       return target ? `Termina y arranca: ${target.name}` : 'Sin bot destino';
     }
+    case 'wait_response': {
+      const t = Number(c.timeoutMinutes || 1440);
+      let dur;
+      if (t >= 1440 && t % 1440 === 0) dur = `${t / 1440}d`;
+      else if (t >= 60 && t % 60 === 0) dur = `${t / 60}h`;
+      else dur = `${t}min`;
+      const branches = c.branches || {};
+      const filled = Object.keys(SB_BRANCH_LABELS).filter(k =>
+        Array.isArray(branches[k]) && branches[k].some(s => (s.config?.text || '').trim() || s.config?.templateId)
+      ).length;
+      return `Espera ${dur} · ${filled}/4 ramas configuradas`;
+    }
     default: return '';
   }
 }
@@ -5088,6 +5108,7 @@ function stepIconSvg(type) {
     assign:    `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="7" r="3.5"/><path d="M3 17a7 7 0 0114 0"/></svg>`,
     stop_bot:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>`,
     stop_and_start: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="3" y="3" width="6" height="6" rx="1"/><polygon points="11 14 17 11 17 17"/><path d="M9 17h2"/></svg>`,
+    wait_response:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="10" r="7"/><polyline points="10 5 10 10 13 12"/><path d="M3 10a7 7 0 0 1 1-3.5"/></svg>`,
   };
   return icons[type] || '';
 }
@@ -5290,6 +5311,47 @@ function buildStepBody(step) {
           Este bot terminará y se ejecutará el bot seleccionado para el mismo contacto, en su mismo expediente.
         </p>`;
     }
+    case 'wait_response': {
+      // MVP: cada rama tiene 1 paso de tipo "message". Las ramas se guardan en
+      // c.branches[branchKey] = [{ type:'message', config:{ text } }]. La UI
+      // muestra 4 acordeones, uno por rama. Engine ya soporta arrays — se podrá
+      // ampliar a multi-step cuando haga falta.
+      const branches = c.branches || {};
+      const tMin = Number(c.timeoutMinutes || 1440);
+      const branchHtml = Object.entries(SB_BRANCH_LABELS).map(([key, label]) => {
+        const arr = Array.isArray(branches[key]) ? branches[key] : [];
+        const first = arr[0] || { type: 'message', config: {} };
+        const text = first.config?.text || '';
+        return `
+          <details class="sb-wait-branch" data-branch="${key}" data-parent-sid="${sid}">
+            <summary>
+              <span class="sb-wait-branch-icon"></span>
+              <span class="sb-wait-branch-label">${label}</span>
+              <span class="sb-wait-branch-state ${text.trim() ? 'is-set' : ''}">${text.trim() ? '✓ Configurada' : 'Vacía'}</span>
+            </summary>
+            <div class="sb-wait-branch-body">
+              <label>Mensaje a enviar cuando esto ocurra</label>
+              <textarea class="sb-wait-branch-text" data-branch="${key}" data-sid="${sid}" rows="3" placeholder="Escribe el mensaje que se enviará por esta rama…">${escHtml(text)}</textarea>
+              <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0">Variables: {nombre} {apellido} {telefono} {email}. Si dejas la rama vacía, el bot solo termina sin responder.</p>
+            </div>
+          </details>`;
+      }).join('');
+      return `
+        <label>Tiempo de espera antes de timeout</label>
+        <div class="sb-timer-grid">
+          <div class="sb-timer-unit">
+            <input type="number" data-field="timeoutMinutes" data-sid="${sid}" min="1" value="${tMin}" />
+            <span>minutos</span>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">
+          Si el lead no responde antes de este tiempo, se ejecuta la rama "No responde (timeout)". Default: 1440 (24h).
+        </p>
+        <label style="margin-bottom:6px">Ramas — qué hacer según la respuesta</label>
+        <div class="sb-wait-branches">
+          ${branchHtml}
+        </div>`;
+    }
     default: return '';
   }
 }
@@ -5452,6 +5514,20 @@ function collectStepConfig(sid) {
     mvInputs.forEach(inp => {
       const i = Number(inp.dataset.i);
       cfg.manualValues[i] = inp.value;
+    });
+  }
+  // wait_response — recolectar textareas de cada rama y armar el shape
+  // que el engine consume: branches[key] = [{type:'message', config:{text}}]
+  const branchTextareas = body.querySelectorAll('.sb-wait-branch-text');
+  if (branchTextareas.length) {
+    cfg.timeoutMinutes = Number(cfg.timeoutMinutes) || 1440;
+    cfg.branches = {};
+    branchTextareas.forEach(ta => {
+      const key = ta.dataset.branch;
+      const text = (ta.value || '').trim();
+      cfg.branches[key] = text
+        ? [{ type: 'message', config: { text, channelId: 'auto' } }]
+        : [];
     });
   }
   return cfg;
@@ -5748,6 +5824,18 @@ function setupBot() {
     const card = document.querySelector(`.sb-step-card[data-sid="${sid}"]`);
     const sumEl = card?.querySelector('.sb-step-summary');
     if (sumEl) sumEl.textContent = stepSummary(step);
+    // wait_response — refrescar la pildora de estado por rama (Vacía / ✓ Configurada)
+    const branchTa = e.target.closest('.sb-wait-branch-text');
+    if (branchTa) {
+      const branchKey = branchTa.dataset.branch;
+      const wrap = card?.querySelector(`.sb-wait-branch[data-branch="${branchKey}"]`);
+      const pill = wrap?.querySelector('.sb-wait-branch-state');
+      if (pill) {
+        const isSet = (branchTa.value || '').trim().length > 0;
+        pill.classList.toggle('is-set', isSet);
+        pill.textContent = isSet ? '✓ Configurada' : 'Vacía';
+      }
+    }
   });
 
   // ─── Step "Agregar etiqueta": chips con coma para varias etiquetas ───

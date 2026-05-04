@@ -224,6 +224,10 @@ app.listen(config.port, config.host, () => {
   console.log(`Reelance App → http://${config.host}:${config.port}  (env: ${config.env})`);
   console.log(`DB          → ${config.dbPath}`);
   console.log(`AI provider → ${config.ai.provider}`);
+  // Iniciar poller que cada 60s resume waits expirados (rama on_timeout)
+  try { require('./src/modules/bot/engine').startWaitTimeoutPoller(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar wait timeout poller:', err.message);
+  }
 });
 
 module.exports = { app, config, db };

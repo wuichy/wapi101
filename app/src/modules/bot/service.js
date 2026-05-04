@@ -165,6 +165,28 @@ function _validateBot(db, bot) {
         }
         break;
       }
+      case 'wait_response': {
+        // Cada rama tiene un array de sub-steps; en MVP solo soportamos uno
+        // tipo "message" por rama. Validamos timeout y que al menos haya
+        // alguna rama con texto (si todas están vacías, el bot solo termina).
+        const tMin = Number(c.timeoutMinutes || 1440);
+        if (tMin < 1) {
+          issues.push({ stepId, kind: 'invalid_wait_timeout', severity: 'error',
+            message: 'El timeout debe ser al menos 1 minuto.' });
+        }
+        const branches = c.branches || {};
+        const allKeys = ['on_button_click', 'on_text_reply', 'on_timeout', 'on_delivery_fail'];
+        const filledKeys = allKeys.filter(k => {
+          const arr = Array.isArray(branches[k]) ? branches[k] : [];
+          return arr.some(s => (s.config?.text || '').trim());
+        });
+        if (!filledKeys.length) {
+          issues.push({ stepId, kind: 'wait_no_branches', severity: 'warn',
+            message: 'Todas las ramas están vacías — el bot solo va a esperar y terminar.',
+            hint: 'Configura al menos una rama (ej. "Responde con texto") para que el bot responda al lead.' });
+        }
+        break;
+      }
     }
   }
   return issues;

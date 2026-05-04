@@ -373,6 +373,12 @@ module.exports = function createWebhooksRouter(db) {
               provider:      'whatsapp',
               integrationId: integration?.id || null,
             });
+            // Resumir wait_response del bot si el lead estaba en pausa
+            // esperando una respuesta (rama on_text_reply / on_button_click)
+            try {
+              const branch = msg.button ? 'on_button_click' : 'on_text_reply';
+              botEngine.resumeWaitsForContact(db, convo.contact_id, branch, { messageBody: body });
+            } catch (_) {}
 
             const previewByType = { image: '📷 Imagen', video: '🎬 Video', audio: '🎵 Audio', document: '📎 Documento' };
             const pushBody = body || (media ? (previewByType[media.type] || '📎 Archivo') : '');
@@ -439,6 +445,21 @@ module.exports = function createWebhooksRouter(db) {
           db.prepare('UPDATE messages SET status = ? WHERE id = ?').run(status, msg.id);
         }
         console.log(`[webhook status] msg wa_id=${id} → ${status}${errorReason ? ` (${errorReason})` : ''}`);
+
+        // Si el mensaje falló, resumir cualquier wait_response del bot que
+        // estuviera esperando con la rama on_delivery_fail.
+        if (status === 'failed') {
+          try {
+            const ctxRow = db.prepare(`
+              SELECT c.contact_id FROM messages m
+                JOIN conversations c ON c.id = m.conversation_id
+               WHERE m.id = ?
+            `).get(msg.id);
+            if (ctxRow?.contact_id) {
+              botEngine.resumeWaitsForContact(db, ctxRow.contact_id, 'on_delivery_fail', { errorReason });
+            }
+          } catch (_) {}
+        }
       } catch (err) {
         console.error('[webhook status] error procesando status:', err.message);
       }
@@ -479,6 +500,7 @@ module.exports = function createWebhooksRouter(db) {
             provider:      'messenger',
             integrationId: integration?.id || null,
           });
+          try { botEngine.resumeWaitsForContact(db, convo.contact_id, 'on_text_reply', { messageBody: body }); } catch (_) {}
 
           pushIncomingMessage(db, convo, body, `Messenger #${senderId}`);
         }
@@ -522,6 +544,7 @@ module.exports = function createWebhooksRouter(db) {
             provider:      'instagram',
             integrationId: integration?.id || null,
           });
+          try { botEngine.resumeWaitsForContact(db, convo.contact_id, 'on_text_reply', { messageBody: body }); } catch (_) {}
 
           pushIncomingMessage(db, convo, body, `Instagram #${senderId}`);
         }
@@ -675,6 +698,7 @@ module.exports = function createWebhooksRouter(db) {
         provider:      'telegram',
         integrationId: integration?.id || null,
       });
+      try { botEngine.resumeWaitsForContact(db, convo.contact_id, 'on_text_reply', { messageBody: body }); } catch (_) {}
 
       pushIncomingMessage(db, convo, body, name || `Telegram ${chatId}`);
     } catch (err) {

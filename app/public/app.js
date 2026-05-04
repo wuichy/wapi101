@@ -6424,15 +6424,25 @@ function renderPipelinesBoard() {
         </div>
         <div class="pl-col-footer">
           ${(() => {
-            // Texto sutil que indica qué bot corre al entrar a esta etapa.
+            // Chip clickable que indica qué bot corre al entrar a esta etapa.
             // Solo se muestra si la etapa tiene un bot_id configurado.
+            // Click → navega al bot builder con ese bot abierto.
             if (!stage.bot_id) return '';
             const bot = (sbBots || []).find(b => b.id === stage.bot_id);
             if (!bot) return '';
-            return `<div class="pl-col-bot-hint" title="Cuando un expediente entra a esta etapa, se ejecuta este bot automáticamente">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="11" height="11"><rect x="3" y="7" width="14" height="10" rx="2"/><path d="M7 7V5a3 3 0 016 0v2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="7.5" cy="12" r="1.2"/><circle cx="12.5" cy="12" r="1.2"/></svg>
+            return `<button type="button" class="pl-col-bot-hint" data-go-to-bot="${bot.id}" title="Click para abrir el bot &quot;${escHtml(bot.name)}&quot;. Se ejecuta automáticamente cuando un expediente entra a esta etapa.">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+                <rect x="4" y="9" width="16" height="11" rx="2"/>
+                <path d="M12 4v3"/>
+                <circle cx="12" cy="3.5" r="1" fill="currentColor"/>
+                <circle cx="9" cy="14" r="1" fill="currentColor" stroke="none"/>
+                <circle cx="15" cy="14" r="1" fill="currentColor" stroke="none"/>
+                <path d="M9 18h6"/>
+                <line x1="2" y1="14" x2="4" y2="14"/>
+                <line x1="20" y1="14" x2="22" y2="14"/>
+              </svg>
               <span class="pl-col-bot-hint-name">${escHtml(bot.name)}</span>
-            </div>`;
+            </button>`;
           })()}
           ${showAlarms ? `
             <button class="pl-col-alarm-btn ${alarmActive ? 'is-active' : ''}" data-stage-alarm="${stage.id}" title="${alarmActive ? alarmReason(stage) + ' — click para cambiar' : 'Configurar alarma de leads estancados'}">
@@ -7579,12 +7589,26 @@ function setupPipelines() {
   });
 
   // Click card → open expedient detail (from pipelines)
-  document.getElementById('plBoard')?.addEventListener('click', e => {
+  document.getElementById('plBoard')?.addEventListener('click', async (e) => {
     // Botón de alarma — configura el umbral de estancado de la etapa
     const alarmBtn = e.target.closest('[data-stage-alarm]');
     if (alarmBtn) {
       e.stopPropagation();
       handleStageAlarmClick(Number(alarmBtn.dataset.stageAlarm));
+      return;
+    }
+    // Hint del bot — navega al bot builder con el bot abierto
+    const botHint = e.target.closest('[data-go-to-bot]');
+    if (botHint) {
+      e.stopPropagation();
+      const botId = Number(botHint.dataset.goToBot);
+      let bot = (sbBots || []).find(b => b.id === botId);
+      if (!bot) {
+        await loadSalsbots();
+        bot = sbBots.find(b => b.id === botId);
+      }
+      if (bot) { showView('bot'); openBotBuilder(bot); }
+      else toast('No se encontró el bot', 'error');
       return;
     }
     if (e.target.closest('.pl-card[draggable]') && e.defaultPrevented) return;

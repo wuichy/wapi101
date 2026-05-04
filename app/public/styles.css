@@ -2757,7 +2757,8 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
   letter-spacing: 0.04em;
 }
 .edit-exp-row input,
-.edit-exp-row select {
+.edit-exp-row select,
+.edit-exp-row textarea {
   padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -2771,9 +2772,28 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
   outline: none;
   transition: border-color .15s;
   min-width: 0;
+  resize: vertical;
 }
 .edit-exp-row input:focus,
-.edit-exp-row select:focus { border-color: var(--accent); }
+.edit-exp-row select:focus,
+.edit-exp-row textarea:focus { border-color: var(--accent); }
+.edit-exp-row input[type="checkbox"] {
+  width: 18px; height: 18px;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.edit-exp-optional {
+  display: inline-block;
+  font-size: 9px;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 99px;
+  margin-left: 4px;
+  text-transform: lowercase;
+  letter-spacing: 0;
+  font-weight: 500;
+}
 .edit-exp-select-wrap {
   position: relative;
   display: flex;

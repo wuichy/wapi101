@@ -30,6 +30,31 @@ function hydrate(db, row) {
     ORDER BY e.created_at DESC
   `).all(row.id);
 
+  // Cargar fieldValues de todos los expedients en una sola query (evita N+1)
+  // para que el modal de Contacto pueda renderizar y editar los campos custom.
+  const expIds = expedients.map(e => e.id);
+  const fieldValuesByExp = {};
+  if (expIds.length) {
+    const placeholders = expIds.map(() => '?').join(',');
+    const fvRows = db.prepare(`
+      SELECT cfv.record_id AS exp_id, cfv.field_id, cfv.value,
+             cfd.label, cfd.field_type, cfd.options
+        FROM custom_field_values cfv
+        JOIN custom_field_defs cfd ON cfd.id = cfv.field_id
+       WHERE cfv.entity = 'expedient' AND cfv.record_id IN (${placeholders})
+    `).all(...expIds);
+    for (const r of fvRows) {
+      if (!fieldValuesByExp[r.exp_id]) fieldValuesByExp[r.exp_id] = [];
+      fieldValuesByExp[r.exp_id].push({
+        fieldId:   r.field_id,
+        label:     r.label,
+        fieldType: r.field_type,
+        options:   r.options ? JSON.parse(r.options) : [],
+        value:     r.value,
+      });
+    }
+  }
+
   return {
     id: row.id,
     firstName: row.first_name,
@@ -49,7 +74,8 @@ function hydrate(db, row) {
       stageId: e.stage_id,
       stageName: e.stage_name,
       stageColor: e.stage_color,
-      stageKind: e.stage_kind
+      stageKind: e.stage_kind,
+      fieldValues: fieldValuesByExp[e.id] || [],
     }))
   };
 }

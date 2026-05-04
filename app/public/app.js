@@ -980,7 +980,7 @@ function renderTagChips() {
   });
 }
 
-function openCustomerModal(customer = null) {
+async function openCustomerModal(customer = null) {
   editingCustomerId = customer?.id || null;
   document.getElementById("customerModalTitle").textContent = customer ? "Editar contacto" : "Nuevo contacto";
   const form = document.getElementById("customerForm");
@@ -991,6 +991,12 @@ function openCustomerModal(customer = null) {
   CURRENT_TAGS = customer ? [...customer.tags] : [];
   renderTagChips();
   document.getElementById("tagInputField").value = "";
+
+  // Asegurar que las definiciones de campos custom estén cargadas
+  // (para mostrar sus inputs en cada fila de expediente)
+  if (!EXP_FIELD_DEFS.length) {
+    try { await loadExpFieldDefs(); } catch (_) {}
+  }
 
   // Expedientes: snapshot para diff al guardar + estado mutable
   ORIGINAL_EXPEDIENTS = customer?.expedients ? customer.expedients.map((e) => ({ ...e })) : [];
@@ -1021,6 +1027,9 @@ function renderEditExpedients() {
   count.textContent = EDIT_EXPEDIENTS.length ? `(${EDIT_EXPEDIENTS.length})` : "";
   emptyNote.hidden = EDIT_EXPEDIENTS.length > 0;
 
+  // Filtrar campos custom que aplican a expedientes
+  const customFieldDefs = (EXP_FIELD_DEFS || []).filter(d => d.entity === 'expedient' || !d.entity);
+
   root.innerHTML = EDIT_EXPEDIENTS.map((exp, idx) => {
     const pipelineId = exp.pipelineId || PIPELINES[0]?.id;
     const pipeline = PIPELINES.find((p) => p.id === pipelineId) || PIPELINES[0];
@@ -1029,6 +1038,45 @@ function renderEditExpedients() {
     const currentStage = stages.find((s) => s.id === stageId);
     const pipelineColor = pipeline?.color || '#94a3b8';
     const stageColor = currentStage?.color || '#94a3b8';
+
+    // Construir un mapa de los valores actuales por field_id
+    const fieldValueMap = {};
+    (exp.fieldValues || []).forEach(fv => { fieldValueMap[fv.fieldId] = fv.value; });
+
+    // Renderizar inputs de campos personalizados (después del Valor MXN)
+    const customFieldsHtml = customFieldDefs.map(fd => {
+      const v = fieldValueMap[fd.id] != null ? fieldValueMap[fd.id] : '';
+      const inputId = `efr-${idx}-${fd.id}`;
+      let inputHtml;
+      switch (fd.field_type) {
+        case 'number':
+          inputHtml = `<input type="number" id="${inputId}" data-cf-id="${fd.id}" value="${escapeHtml(v)}" />`;
+          break;
+        case 'date': case 'birthday':
+          inputHtml = `<input type="date" id="${inputId}" data-cf-id="${fd.id}" value="${escapeHtml(v)}" />`;
+          break;
+        case 'datetime':
+          inputHtml = `<input type="datetime-local" id="${inputId}" data-cf-id="${fd.id}" value="${escapeHtml(v)}" />`;
+          break;
+        case 'url':
+          inputHtml = `<input type="url" id="${inputId}" data-cf-id="${fd.id}" value="${escapeHtml(v)}" placeholder="https://" />`;
+          break;
+        case 'select':
+          inputHtml = `<select id="${inputId}" data-cf-id="${fd.id}"><option value="">—</option>${
+            (fd.options || []).map(o => `<option value="${escapeHtml(o)}" ${o === v ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')
+          }</select>`;
+          break;
+        case 'checkbox':
+          inputHtml = `<input type="checkbox" id="${inputId}" data-cf-id="${fd.id}" ${v === 'true' || v === true ? 'checked' : ''} />`;
+          break;
+        case 'textarea':
+          inputHtml = `<textarea id="${inputId}" data-cf-id="${fd.id}" rows="2">${escapeHtml(v)}</textarea>`;
+          break;
+        default: // text
+          inputHtml = `<input type="text" id="${inputId}" data-cf-id="${fd.id}" value="${escapeHtml(v)}" />`;
+      }
+      return `<label><span>${escapeHtml(fd.label)}</span>${inputHtml}</label>`;
+    }).join('');
 
     return `
       <div class="edit-exp-row ${exp._isNew ? "is-new" : ""}" data-idx="${idx}">
@@ -1055,9 +1103,10 @@ function renderEditExpedients() {
           </div>
         </label>
         <label>
-          <span>Valor (MXN)</span>
+          <span>Valor (MXN) <span class="edit-exp-optional">opcional</span></span>
           <input type="number" data-field="value" value="${exp.value || 0}" step="0.01" />
         </label>
+        ${customFieldsHtml}
         <div class="edit-exp-actions">
           ${!exp._isNew && exp.id ? `
             <button type="button" class="edit-exp-open" data-action="open-exp" data-exp-id="${exp.id}" title="Abrir detalle completo (etiquetas, campos, actividad, chat)">
@@ -1075,6 +1124,22 @@ function renderEditExpedients() {
   // Listeners por fila
   root.querySelectorAll(".edit-exp-row").forEach((row) => {
     const idx = Number(row.dataset.idx);
+    // Listener para campos personalizados (data-cf-id) — guarda en fieldValuesMap
+    if (!EDIT_EXPEDIENTS[idx].fieldValuesMap) {
+      EDIT_EXPEDIENTS[idx].fieldValuesMap = {};
+      (EDIT_EXPEDIENTS[idx].fieldValues || []).forEach(fv => {
+        EDIT_EXPEDIENTS[idx].fieldValuesMap[fv.fieldId] = fv.value;
+      });
+    }
+    row.querySelectorAll("[data-cf-id]").forEach((el) => {
+      const onChange = () => {
+        const fid = Number(el.dataset.cfId);
+        const v = el.type === 'checkbox' ? String(el.checked) : el.value;
+        EDIT_EXPEDIENTS[idx].fieldValuesMap[fid] = v;
+      };
+      el.addEventListener('change', onChange);
+      el.addEventListener('input', onChange);
+    });
     row.querySelectorAll("[data-field]").forEach((el) => {
       el.addEventListener("change", () => {
         const field = el.dataset.field;
@@ -1239,10 +1304,21 @@ function setupCustomers() {
         contactId = data.item.id;
       }
 
-      // 2. Diff de expedientes
+      // 2. Diff de expedientes (incluye fieldValues custom)
       const currentIds = new Set(EDIT_EXPEDIENTS.filter((e) => e.id).map((e) => e.id));
       const toDelete = ORIGINAL_EXPEDIENTS.filter((e) => !currentIds.has(e.id)).map((e) => e.id);
       const toCreate = EDIT_EXPEDIENTS.filter((e) => !e.id);
+      // Detecta si los fieldValues cambiaron comparando el map editado vs el original
+      const fieldValuesDiffers = (e, orig) => {
+        const editedMap = e.fieldValuesMap || {};
+        const origMap = {};
+        (orig.fieldValues || []).forEach(fv => { origMap[fv.fieldId] = fv.value; });
+        const allKeys = new Set([...Object.keys(editedMap), ...Object.keys(origMap)]);
+        for (const k of allKeys) {
+          if (String(editedMap[k] || '') !== String(origMap[k] || '')) return true;
+        }
+        return false;
+      };
       const toUpdate = EDIT_EXPEDIENTS.filter((e) => {
         if (!e.id) return false;
         const orig = ORIGINAL_EXPEDIENTS.find((o) => o.id === e.id);
@@ -1250,7 +1326,8 @@ function setupCustomers() {
         return orig.name !== e.name
             || orig.pipelineId !== e.pipelineId
             || orig.stageId !== e.stageId
-            || Number(orig.value) !== Number(e.value);
+            || Number(orig.value) !== Number(e.value)
+            || fieldValuesDiffers(e, orig);
       });
 
       // 3. Aplicar cambios en paralelo
@@ -1261,13 +1338,15 @@ function setupCustomers() {
           pipelineId: e.pipelineId,
           stageId: e.stageId,
           name: e.name,
-          value: e.value
+          value: e.value,
+          fieldValues: e.fieldValuesMap || {},
         })),
         ...toUpdate.map((e) => api("PATCH", `/api/expedients/${e.id}`, {
           pipelineId: e.pipelineId,
           stageId: e.stageId,
           name: e.name,
-          value: e.value
+          value: e.value,
+          fieldValues: e.fieldValuesMap || {},
         }))
       ]);
 

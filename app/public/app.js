@@ -5681,14 +5681,23 @@ function setupBot() {
     e.stopPropagation();
     _sbInsertAfter = null; // al final
     const picker = document.getElementById('sbStepPicker');
+    if (!picker) return;
+    // Si quedó re-parentado al body (de un insert-between previo), devolverlo
+    // al wrap para que el CSS auto-centrado bajo "Agregar paso" funcione.
+    if (picker.dataset.originalParent) {
+      const wrap = document.querySelector('.sb-add-step-wrap');
+      if (wrap && picker.parentElement !== wrap) wrap.appendChild(picker);
+      delete picker.dataset.originalParent;
+      picker.style.cssText = '';
+    }
     picker.hidden = !picker.hidden;
   });
 
   // Insert between button (delegado en el flow).
-  // Posiciona el picker centrado sobre el botón "+", con clamping a los bordes
-  // del viewport para que nunca quede off-screen. El CSS base del picker tiene
-  // transform: translateX(-50%) (para auto-centrarse bajo el "Agregar paso" del
-  // final). Acá reseteamos ese transform y calculamos left absoluto en píxeles.
+  // Estrategia: re-parentar el picker al document.body para evitar que herede
+  // visibilidad/clipping del wrap padre (.sb-add-step-wrap se oculta cuando el
+  // último paso es stop_bot/stop_and_start, lo que arrastraba al picker).
+  // Lo restauramos al cerrar (al elegir un tipo o al click fuera).
   document.getElementById('sbStepsFlow')?.addEventListener('click', (e) => {
     const insertBtn = e.target.closest('.sb-insert-between');
     if (!insertBtn) return;
@@ -5697,10 +5706,16 @@ function setupBot() {
     const picker = document.getElementById('sbStepPicker');
     if (!picker) return;
 
-    // Mostrar primero (con transform reseteado) para que getBoundingClientRect
-    // del picker dé el ancho real renderizado.
+    // Mover al body si todavía está en su parent original
+    if (picker.parentElement !== document.body) {
+      picker.dataset.originalParent = '1';
+      document.body.appendChild(picker);
+    }
+
+    // Posicionar (clamping al viewport, abajo o arriba del botón según espacio)
     picker.style.position = 'fixed';
     picker.style.transform = 'none';
+    picker.style.zIndex = '9999';
     picker.style.left = '0px';
     picker.style.top = '0px';
     picker.style.removeProperty('width');
@@ -5711,12 +5726,10 @@ function setupBot() {
     const pickerH = picker.offsetHeight || 200;
     const margin = 8;
 
-    // Centrar horizontal sobre el botón, clamping al viewport
     const btnCenterX = btnRect.left + btnRect.width / 2;
     let left = btnCenterX - pickerW / 2;
     left = Math.max(margin, Math.min(left, window.innerWidth - pickerW - margin));
 
-    // Vertical: debajo del botón si cabe; arriba si no
     let top = btnRect.bottom + 6;
     if (top + pickerH > window.innerHeight - margin) {
       top = Math.max(margin, btnRect.top - pickerH - 6);
@@ -5726,12 +5739,32 @@ function setupBot() {
     picker.style.top  = `${top}px`;
   });
 
-  // Pick step type
-  document.getElementById('sbStepPicker')?.addEventListener('click', (e) => {
+  // Helper: devuelve el picker a su parent original (.sb-add-step-wrap) y limpia
+  // cualquier estilo inline. Se llama después de elegir un tipo o cerrar.
+  function _restoreSbStepPicker() {
+    const picker = document.getElementById('sbStepPicker');
+    if (!picker) return;
+    picker.hidden = true;
+    picker.style.cssText = '';
+    if (picker.dataset.originalParent) {
+      const wrap = document.querySelector('.sb-add-step-wrap');
+      if (wrap && picker.parentElement !== wrap) wrap.appendChild(picker);
+      delete picker.dataset.originalParent;
+    }
+  }
+  // Exponemos para uso de otros handlers (close, pick type)
+  window._restoreSbStepPicker = _restoreSbStepPicker;
+
+  // Pick step type — el listener está en el picker mismo, así que lo registramos
+  // sobre document.body con delegation porque el picker puede ser re-parentado
+  // al body cuando se abre desde insert-between.
+  document.body.addEventListener('click', (e) => {
+    const picker = document.getElementById('sbStepPicker');
+    if (!picker || picker.hidden) return;
+    if (!picker.contains(e.target)) return;
     const btn = e.target.closest('.sb-step-type-btn');
     if (!btn) return;
-    document.getElementById('sbStepPicker').hidden = true;
-    document.getElementById('sbStepPicker').style.cssText = '';
+    _restoreSbStepPicker();
     const type = btn.dataset.type;
     sbStepCounter++;
     const newStep = { _id: `s${sbStepCounter}`, type, config: {} };
@@ -5758,14 +5791,17 @@ function setupBot() {
     newCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 
-  // Close picker on outside click
+  // Close picker on outside click. Acepta clicks dentro del picker (cuando
+  // está re-parentado al body, .sb-add-step-wrap.contains() ya no lo cubre)
+  // y dentro de .sb-insert-between (para no cerrarlo al re-clickear el botón).
   document.addEventListener('click', (e) => {
     const picker = document.getElementById('sbStepPicker');
-    if (picker && !picker.hidden && !e.target.closest('.sb-add-step-wrap') && !e.target.closest('.sb-insert-between')) {
-      picker.hidden = true;
-      picker.style.cssText = '';
-      _sbInsertAfter = null;
-    }
+    if (!picker || picker.hidden) return;
+    if (picker.contains(e.target)) return;
+    if (e.target.closest('.sb-add-step-wrap')) return;
+    if (e.target.closest('.sb-insert-between')) return;
+    _restoreSbStepPicker();
+    _sbInsertAfter = null;
   });
 
   // Toggle step body open/close

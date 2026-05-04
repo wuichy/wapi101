@@ -33,7 +33,7 @@ module.exports = function createNotificationsRouter(db) {
   router.post('/test', async (req, res, next) => {
     try {
       const result = await service.sendToAll(db, req.tenantId, {
-        title: 'Reelance CRM',
+        title: 'Wapi101 CRM',
         body:  'Test de notificación push ✓',
         tag:   'test',
         url:   '/',

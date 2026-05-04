@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Reelance CRM</title>
+  <title>Wapi101 CRM</title>
 
   <!-- PWA / iOS / Mac standalone -->
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#2563eb" />
-  <meta name="application-name" content="Reelance" />
+  <meta name="application-name" content="Wapi101" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Reelance" />
+  <meta name="apple-mobile-web-app-title" content="Wapi101" />
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
   <link rel="apple-touch-icon" href="/icons/icon-180.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
@@ -25,8 +26,8 @@
   <div class="app">
     <!-- ═════════ SIDEBAR ═════════ -->
     <aside class="sidebar">
-      <a href="#" class="brand" aria-label="Reelance">
-        <span class="brand-mark">R</span>
+      <a href="#" class="brand" aria-label="Wapi101">
+        <span class="brand-mark">W</span>
       </a>
 
       <button class="brand-cache-btn" id="navBrandCacheBtn" title="Limpiar caché y recargar (útil para ver cambios después de un deploy)" aria-label="Limpiar caché">
@@ -186,20 +187,20 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </button>
           <button class="org-btn">
-            Reelance
+            Wapi101
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
         </div>
       </header>
 
-      <!-- ─── VISTA: CHATS — clon de Reelance Hub (estilo Mac/iOS, iMessage) ─── -->
+      <!-- ─── VISTA: CHATS (estilo Mac/iOS, iMessage) ─── -->
       <section class="view view-chats" data-view="chats">
         <div class="rh-clone">
           <div class="rh-shell">
-            <!-- Sidebar interna estilo Reelance Hub -->
+            <!-- Sidebar interna -->
             <aside class="rh-sidebar">
               <div class="rh-brand-card">
-                <p class="rh-eyebrow">Reelance</p>
+                <p class="rh-eyebrow">Wapi101</p>
                 <h2>Inbox</h2>
               </div>
 
@@ -1263,7 +1264,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
       <section class="view view-integrations" data-view="integraciones" hidden>
         <div class="integrations-intro">
           <h2>Integraciones</h2>
-          <p>Conecta tus canales de mensajería para recibir y responder desde Reelance. Las credenciales se guardan cifradas (AES-256-GCM) y nunca se exponen al navegador después de guardarlas.</p>
+          <p>Conecta tus canales de mensajería para recibir y responder desde Wapi101. Las credenciales se guardan cifradas (AES-256-GCM) y nunca se exponen al navegador después de guardarlas.</p>
         </div>
         <div class="integrations-grid" id="integrationsGrid"><!-- JS render --></div>
       </section>
@@ -1378,7 +1379,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <div class="int-field">
                 <label>Secret HMAC (opcional)</label>
                 <input type="password" name="secret" id="whSecret" autocomplete="off" placeholder="String secreto para verificar la firma" />
-                <div class="int-field-help">Si lo configuras, cada llamada incluirá el header X-Reelance-Signature con la firma HMAC-SHA256.</div>
+                <div class="int-field-help">Si lo configuras, cada llamada incluirá el header X-Wapi101-Signature con la firma HMAC-SHA256.</div>
               </div>
             </div>
             <div id="whError" class="int-error" hidden></div>
@@ -1790,7 +1791,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <div class="settings-card">
                 <h3>Información de la empresa</h3>
                 <p class="settings-note">La IA usará este texto como contexto para responder a contactos. Incluye: a qué se dedica tu empresa, productos/servicios, precios, políticas de envío, horarios, tono de respuesta deseado, etc.</p>
-                <textarea class="form-textarea" rows="10" placeholder="Ejemplo:&#10;&#10;Somos Reelance, vendemos cosméticos naturales en México.&#10;Producto estrella: Serum Facial ($1,200 MXN).&#10;Envíos a toda la república por DHL (2-3 días).&#10;Aceptamos tarjeta, transferencia y OXXO.&#10;Horario: L-V 9am-6pm.&#10;Tono: amable, cercano, usar 'tú' (no 'usted')."></textarea>
+                <textarea class="form-textarea" rows="10" placeholder="Ejemplo:&#10;&#10;Somos Wapi101, vendemos cosméticos naturales en México.&#10;Producto estrella: Serum Facial ($1,200 MXN).&#10;Envíos a toda la república por DHL (2-3 días).&#10;Aceptamos tarjeta, transferencia y OXXO.&#10;Horario: L-V 9am-6pm.&#10;Tono: amable, cercano, usar 'tú' (no 'usted')."></textarea>
               </div>
 
               <div class="settings-card">
@@ -2102,7 +2103,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <div class="account-avatar-initials" id="accountAvatarInitials" hidden>RL</div>
             </div>
             <div>
-              <div class="account-avatar-name" id="accountDisplayName">Reelance</div>
+              <div class="account-avatar-name" id="accountDisplayName">Wapi101</div>
               <div class="account-avatar-role">Administrador</div>
             </div>
           </div>

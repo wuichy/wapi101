@@ -1,6 +1,6 @@
 // Capa personal del chat: cada asesor tiene su propia vista del CRM
-// con conversaciones ocultas y etiquetas en contactos. NO afecta la vista
-// del equipo en /lucho101.com.
+// con conversaciones ocultas y etiquetas en contactos. NO afecta la
+// vista compartida del equipo.
 
 const express = require('express');
 

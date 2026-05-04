@@ -17,7 +17,7 @@ const config = {
   port: Number(process.env.PORT) || 3001,
   host: process.env.HOST || '127.0.0.1',
   appBaseUrl: process.env.APP_BASE_URL || 'http://localhost:3001',
-  dbPath: path.resolve(__dirname, process.env.DB_PATH || './data/reelance.sqlite'),
+  dbPath: path.resolve(__dirname, process.env.DB_PATH || './data/wapi101.sqlite'),
   uploadsDir: path.resolve(__dirname, process.env.UPLOADS_DIR || './data/uploads'),
   ai: {
     provider: process.env.AI_PROVIDER || 'anthropic',
@@ -253,7 +253,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 app.listen(config.port, config.host, () => {
-  console.log(`Reelance App → http://${config.host}:${config.port}  (env: ${config.env})`);
+  console.log(`Wapi101 App → http://${config.host}:${config.port}  (env: ${config.env})`);
   console.log(`DB          → ${config.dbPath}`);
   console.log(`AI provider → ${config.ai.provider}`);
   // Iniciar poller que cada 60s resume waits expirados (rama on_timeout)

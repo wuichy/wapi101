@@ -1,9 +1,9 @@
-// Migra SOLO pipelines + etapas desde Kommo → Reelance CRM.
+// Migra SOLO pipelines + etapas desde Kommo → Wapi101 CRM.
 // No toca leads, contactos, asesores ni nada más.
 //
 // Mapeo:
-//   Kommo pipeline → reelance pipelines (name, sort_order desde sort)
-//   Kommo status   → reelance stages
+//   Kommo pipeline → wapi101 pipelines (name, sort_order desde sort)
+//   Kommo status   → wapi101 stages
 //     - status.id = 142 → kind='won'   (reservado por Kommo en TODO pipeline)
 //     - status.id = 143 → kind='lost'  (reservado por Kommo)
 //     - resto          → kind='in_progress'
@@ -19,13 +19,14 @@ const Database = require('better-sqlite3');
 
 const APPLY = process.argv.includes('--apply');
 const DB_PATH = process.env.DB_PATH
-  || path.resolve(__dirname, '../data/reelance.sqlite');
-// Path al app-state.json del Hub viejo (tiene los OAuth tokens de Kommo).
-// Busca en orden: env var → ../../data/ (relativo al proyecto) → ubicación legacy
+  || path.resolve(__dirname, '../data/wapi101.sqlite');
+// Path al app-state.json (tiene los OAuth tokens de Kommo).
+// Requiere KOMMO_STATE_PATH en env o un app-state.json en ../../data/.
 const KOMMO_STATE = process.env.KOMMO_STATE_PATH
-  || (fs.existsSync(path.resolve(__dirname, '../../data/app-state.json'))
-      ? path.resolve(__dirname, '../../data/app-state.json')
-      : '/Users/luismelchor/dev/ReelanceHub/data/app-state.json');
+  || path.resolve(__dirname, '../../data/app-state.json');
+if (!fs.existsSync(KOMMO_STATE)) {
+  throw new Error(`No se encontró app-state.json en ${KOMMO_STATE}. Define KOMMO_STATE_PATH en env.`);
+}
 
 (async () => {
   // 1. Leer token de Kommo del proyecto viejo

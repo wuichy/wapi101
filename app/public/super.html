@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reelance — Super Admin</title>
+  <title>Wapi101 — Super Admin</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -196,7 +196,7 @@
 <!-- DASHBOARD VIEW -->
 <div id="dashboard" hidden>
   <header>
-    <h1>Reelance · Super Admin</h1>
+    <h1>Wapi101 · Super Admin</h1>
     <div class="me">
       <span id="meName"></span>
       <button id="logoutBtn">Salir</button>
@@ -258,7 +258,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const TOKEN_KEY = 'reelance_super_token';
+const TOKEN_KEY = 'wapi101_super_token';
 
 // ── API helper ──
 async function api(method, path, body) {
@@ -398,7 +398,7 @@ $('tenantList').addEventListener('click', async (e) => {
       const r = await api('POST', `/tenants/${id}/impersonate`);
       // Guardar el token de advisor en el storage que usa la app principal,
       // luego redirigir a la SPA. La app verá el token y entrará como ese advisor.
-      localStorage.setItem('reelance_token', r.token);
+      localStorage.setItem('wapi101_token', r.token);
       window.location.href = '/';
     } catch (err) { alert(err.message); }
     return;

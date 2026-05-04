@@ -1,5 +1,5 @@
 {
-  "name": "reelance-app",
+  "name": "wapi101-app",
   "version": "0.0.1",
   "description": "App multi-canal con pipelines, leads, contactos e integraciones (WhatsApp/Messenger/Instagram/TikTok)",
   "main": "server.js",

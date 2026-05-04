@@ -1,5 +1,5 @@
 // Cifrado simétrico AES-256-GCM para credenciales sensibles (tokens, secrets).
-// Lección de Reelance Hub: nunca guardar tokens en plain text.
+// Nunca guardar tokens en plain text.
 //
 // Formato del ciphertext: base64(iv || authTag || encrypted)
 //   - iv: 12 bytes (96 bits, recomendado para GCM)

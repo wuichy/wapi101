@@ -1,5 +1,5 @@
-// Service Worker para Reelance CRM
-const CACHE_NAME = 'reelance-crm-v1';
+// Service Worker para Wapi101 CRM
+const CACHE_NAME = 'wapi101-crm-v1';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -18,14 +18,14 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data ? event.data.json() : {};
   } catch (_) {
-    payload = { title: 'Reelance CRM', body: event.data ? event.data.text() : 'Notificación' };
+    payload = { title: 'Wapi101 CRM', body: event.data ? event.data.text() : 'Notificación' };
   }
-  const title = payload.title || 'Reelance CRM';
+  const title = payload.title || 'Wapi101 CRM';
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icons/icon-192.png',
     badge: payload.badge || '/icons/icon-192.png',
-    tag: payload.tag || 'reelance-crm',
+    tag: payload.tag || 'wapi101-crm',
     renotify: true,
     data: { url: payload.url || '/', chatId: payload.chatId || null },
   };

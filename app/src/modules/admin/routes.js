@@ -3,7 +3,7 @@ const path = require('path');
 const { execFile, spawn } = require('child_process');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
-const LAUNCH_AGENT_LABEL = 'com.reelance.app';
+const LAUNCH_AGENT_LABEL = 'com.wapi101.app';
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve) => {

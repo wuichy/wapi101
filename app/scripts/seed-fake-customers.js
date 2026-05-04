@@ -23,7 +23,7 @@ const LAST_NAMES = [
   'Contreras', 'Espinoza', 'Domínguez', 'Núñez', 'Padilla', 'Rojas', 'Soto', 'Vega', 'Cabrera'
 ];
 
-const DOMAINS = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'reelance.mx'];
+const DOMAINS = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'wapi101.com'];
 const TAGS_POOL = ['nuevo', 'interesado', 'VIP', 'frecuente', 'mayorista', 'Bogotá', 'CDMX', 'Guadalajara', 'serum facial', 'crema corporal'];
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }

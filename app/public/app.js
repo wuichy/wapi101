@@ -2921,7 +2921,7 @@ function renderOutgoingWebhooksCard() {
         <span class="int-icon int-icon--webhook">${whIcon}</span>
         <div class="int-name">Webhooks salientes</div>
       </div>
-      <p class="int-desc">Notifica URLs externas (Zapier, Make, tu propio servidor) cuando ocurren eventos en Reelance.</p>
+      <p class="int-desc">Notifica URLs externas (Zapier, Make, tu propio servidor) cuando ocurren eventos en Wapi101.</p>
       ${listHtml ? `<div class="int-accounts" id="whList">${listHtml}</div>` : ''}
       <div class="int-card-actions">
         <button class="btn btn--ghost" data-action="add-wh">+ Agregar webhook</button>
@@ -6631,7 +6631,7 @@ async function loadProfile() {
 
 function applyProfileToUI() {
   const p = _profile;
-  const name = [p.firstName, p.lastName].filter(Boolean).join(' ') || 'Reelance';
+  const name = [p.firstName, p.lastName].filter(Boolean).join(' ') || 'Wapi101';
   const role = p.role || 'Admin';
 
   // Sidebar
@@ -6653,7 +6653,7 @@ function openAccountView() {
   document.getElementById('accPhone').value      = p.phone      || '';
   document.getElementById('accEmail').value      = p.email      || '';
 
-  const name = [p.firstName, p.lastName].filter(Boolean).join(' ') || 'Reelance';
+  const name = [p.firstName, p.lastName].filter(Boolean).join(' ') || 'Wapi101';
   document.getElementById('accountDisplayName').textContent = name;
   const img = document.getElementById('accountAvatarImg');
   const initials = document.getElementById('accountAvatarInitials');
@@ -6695,7 +6695,7 @@ function setupAccount() {
       _profile = data.profile;
       applyProfileToUI();
       // Update modal display name live
-      const name = [patch.firstName, patch.lastName].filter(Boolean).join(' ') || 'Reelance';
+      const name = [patch.firstName, patch.lastName].filter(Boolean).join(' ') || 'Wapi101';
       document.getElementById('accountDisplayName').textContent = name;
       toast('Perfil guardado', 'success');
     } catch (err) { toast(err.message, 'error'); }
@@ -10926,7 +10926,7 @@ async function saveTpl() {
       return;
     }
     if (!/^https?:\/\//i.test(urlValue)) {
-      if (errEl) { errEl.textContent = `Botón #${i+1}: la URL debe empezar con http:// o https://. Ejemplo: https://reelance.com.mx/promo`; errEl.hidden = false; }
+      if (errEl) { errEl.textContent = `Botón #${i+1}: la URL debe empezar con http:// o https://. Ejemplo: https://wapi101.com/promo`; errEl.hidden = false; }
       _highlightTplBtnUrlError(i);
       return;
     }

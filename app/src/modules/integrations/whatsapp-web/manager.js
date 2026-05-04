@@ -64,7 +64,7 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
     auth: state,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
-    browser: ['Reelance CRM', 'Chrome', '1.0.0'],
+    browser: ['Wapi101 CRM', 'Chrome', '1.0.0'],
     markOnlineOnConnect: false,
     syncFullHistory: false,
   });

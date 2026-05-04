@@ -142,10 +142,48 @@ body.nav-expanded .brand-cache-btn {
   font-size: 13px;
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
+  position: relative; /* anchor del badge */
 }
 .nav-item span { display: none; }
 .nav-item:hover { background: rgba(255,255,255,0.04); color: #fff; }
 .nav-item.is-active { background: var(--bg-sidebar-active); color: #fff; }
+
+/* Badge rojo de no leídos en la nav lateral — visible siempre, incluso colapsado */
+.nav-badge {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  margin-left: auto;
+  box-shadow: 0 0 0 2px var(--bg-sidebar, #0f172a);
+  animation: navBadgePulse 2s ease-in-out infinite;
+}
+.nav-badge[hidden] { display: none !important; }
+/* Cuando la nav está colapsada (modo icono), el badge se posiciona absoluto en
+   la esquina superior-derecha del icono — clásico estilo iOS notificación */
+body.nav-collapsed .nav-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  margin: 0;
+  min-width: 16px;
+  height: 16px;
+  font-size: 9px;
+  padding: 0 4px;
+}
+@keyframes navBadgePulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--bg-sidebar, #0f172a); }
+  50%      { box-shadow: 0 0 0 2px var(--bg-sidebar, #0f172a), 0 0 0 6px rgba(220, 38, 38, 0.25); }
+}
 
 /* ── Nav advisor bar ── */
 .nav-advisor-bar {

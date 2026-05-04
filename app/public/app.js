@@ -407,8 +407,25 @@ async function loadConversations() {
     if (elAll)    elAll.textContent    = data.totalAll    ?? '';
     if (elUnread) elUnread.textContent = data.totalUnread || '';
     if (elUnread) elUnread.style.display = data.totalUnread ? '' : 'none';
+    // Badge en la nav lateral con el total de no leídos
+    updateChatsNavBadge(data.totalUnread || 0);
   } catch (err) {
     console.error('loadConversations', err);
+  }
+}
+
+// Actualiza el círculo rojo en la nav lateral del item "Chats" con el
+// número de mensajes sin leer. Se oculta si es 0.
+function updateChatsNavBadge(count) {
+  const badge = document.getElementById('navChatsBadge');
+  if (!badge) return;
+  const n = Number(count) || 0;
+  if (n <= 0) {
+    badge.hidden = true;
+    badge.textContent = '';
+  } else {
+    badge.hidden = false;
+    badge.textContent = n > 99 ? '99+' : String(n);
   }
 }
 
@@ -417,11 +434,15 @@ function decrementUnreadBadge(convoId) {
   if (!convo || !convo.unreadCount) return;
   convo.unreadCount = 0;
   const el = document.getElementById('pillCountUnread');
-  if (!el) return;
-  const cur = parseInt(el.textContent) || 0;
-  const next = Math.max(0, cur - 1);
-  el.textContent = next || '';
-  el.style.display = next ? '' : 'none';
+  if (el) {
+    const cur = parseInt(el.textContent) || 0;
+    const next = Math.max(0, cur - 1);
+    el.textContent = next || '';
+    el.style.display = next ? '' : 'none';
+  }
+  // Recalcular el badge de la nav lateral con el total actualizado
+  const totalUnread = CONVERSATIONS.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  updateChatsNavBadge(totalUnread);
 }
 
 async function loadMessages(convoId) {
@@ -2327,6 +2348,10 @@ function showView(viewName) {
   const cleanTopbar = (viewName === 'integraciones' || viewName === 'bot' || viewName === 'contactos' || viewName === 'expedientes' || viewName === 'plantillas');
   if (title) title.hidden = cleanTopbar;
   if (topbarActions) topbarActions.hidden = cleanTopbar || viewName === 'pipelines' || viewName === 'inicio';
+  // En Ajustes y Mi cuenta el topbar entero (search, campana, ayuda, dropdown)
+  // no aporta nada — la vista trae sus propios controles. Lo ocultamos completo.
+  const topbarEl = document.querySelector('.topbar');
+  if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta');
   const customersExtras = document.getElementById('topbarCustomersExtras');
   if (customersExtras) customersExtras.hidden = (viewName !== 'contactos');
   const expExtras = document.getElementById('topbarExpExtras');

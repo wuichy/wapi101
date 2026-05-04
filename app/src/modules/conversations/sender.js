@@ -113,7 +113,10 @@ async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, captio
 
 // Resuelve el valor de un placeholder leyendo del contacto según contactField.
 // Si el campo no aplica o no hay dato, usa manualValues[index] como fallback.
-function _resolvePlaceholder(ph, contact, manualValues, idx) {
+// Cuando autoFallback=true (caso típico: bot disparando template Manual), si no
+// hay valor manual usa first_name del contacto en vez de devolver vacío. Esto
+// evita que un bot reviente porque el placeholder Manual no tiene valor pre-cargado.
+function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = false) {
   if (ph?.contactField) {
     if (ph.contactField === 'first_name')  return contact?.first_name || '';
     if (ph.contactField === 'last_name')   return contact?.last_name || '';
@@ -121,14 +124,16 @@ function _resolvePlaceholder(ph, contact, manualValues, idx) {
     if (ph.contactField === 'phone')       return contact?.phone || '';
     if (ph.contactField === 'email')       return contact?.email || '';
   }
-  // Manual o fallback
-  return manualValues?.[idx] ?? '';
+  const manual = manualValues?.[idx];
+  if (manual !== undefined && manual !== null && manual !== '') return manual;
+  if (autoFallback) return contact?.first_name || '';
+  return '';
 }
 
 // Envía una plantilla wa_api APROBADA al cliente.
 //   templateId    → id en message_templates de la plantilla a enviar
 //   manualValues  → array (index = placeholder N-1) con valores para los Manual
-async function sendWhatsAppTemplate(db, convo, templateId, manualValues = []) {
+async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { autoFallback = false } = {}) {
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
 
   // Cargar plantilla con sus campos parseados (buttons, bodyPlaceholders).
@@ -166,7 +171,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = []) {
     const params = [];
     for (let i = 0; i < max; i++) {
       const ph = Array.isArray(tpl.bodyPlaceholders) ? tpl.bodyPlaceholders[i] : null;
-      const value = _resolvePlaceholder(ph, contact, manualValues, i);
+      const value = _resolvePlaceholder(ph, contact, manualValues, i, autoFallback);
       if (!value) {
         throw new Error(`Falta el valor para placeholder {{${i + 1}}} (${ph?.label || 'sin nombre'}). ${ph?.contactField ? 'El contacto no tiene ese campo.' : 'Es Manual — provee el valor al enviar.'}`);
       }
@@ -202,7 +207,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = []) {
   }
   return { externalId: data.messages?.[0]?.id || null, renderedBody: bodyText.replace(/\{\{(\d+)\}\}/g, (_, n) => {
     const ph = tpl.bodyPlaceholders?.[Number(n) - 1];
-    return _resolvePlaceholder(ph, contact, manualValues, Number(n) - 1);
+    return _resolvePlaceholder(ph, contact, manualValues, Number(n) - 1, autoFallback);
   }) };
 }
 

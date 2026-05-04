@@ -376,7 +376,7 @@ async function executeStep(db, step, ctx) {
       try {
         const convo = convoSvc.getById(db, null, ctx.convoId);
         if (!convo) return false;
-        const result = await sendWhatsAppTemplate(db, convo, templateId, c.manualValues || []);
+        const result = await sendWhatsAppTemplate(db, convo, templateId, c.manualValues || [], { autoFallback: true });
         convoSvc.addMessage(db, null, ctx.convoId, {
           externalId: result.externalId,
           direction: 'outgoing',

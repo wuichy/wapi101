@@ -1,5 +1,9 @@
-// Lógica de clientes (contactos). Expone funciones puras que reciben `db`.
+// Lógica de clientes (contactos). Expone funciones puras que reciben `db` + `tenantId`.
 // Las rutas HTTP viven en routes.js — este archivo no sabe de Express.
+//
+// Convención multi-tenant: todas las funciones públicas reciben tenantId como
+// segundo argumento (después de db) y filtran/stampan en todas las queries.
+// Esto evita que un advisor del tenant A vea/edite datos del tenant B.
 
 function normalizePhone(raw) {
   if (!raw) return null;
@@ -16,9 +20,9 @@ function isValidEmail(s) {
 }
 
 // Convierte un row de SQLite (snake_case) a camelCase y agrega tags + expedientes.
-function hydrate(db, row) {
+function hydrate(db, tenantId, row) {
   if (!row) return null;
-  const tags = db.prepare('SELECT tag FROM contact_tags WHERE contact_id = ? ORDER BY id').all(row.id).map((r) => r.tag);
+  const tags = db.prepare('SELECT tag FROM contact_tags WHERE contact_id = ? AND tenant_id = ? ORDER BY id').all(row.id, tenantId).map((r) => r.tag);
   const expedients = db.prepare(`
     SELECT e.id, e.name, e.value, e.pipeline_id, e.stage_id,
            p.name AS pipeline_name, p.color AS pipeline_color,
@@ -26,9 +30,9 @@ function hydrate(db, row) {
     FROM expedients e
     JOIN pipelines p ON p.id = e.pipeline_id
     JOIN stages s ON s.id = e.stage_id
-    WHERE e.contact_id = ?
+    WHERE e.contact_id = ? AND e.tenant_id = ?
     ORDER BY e.created_at DESC
-  `).all(row.id);
+  `).all(row.id, tenantId);
 
   // Cargar fieldValues de todos los expedients en una sola query (evita N+1)
   // para que el modal de Contacto pueda renderizar y editar los campos custom.
@@ -41,8 +45,8 @@ function hydrate(db, row) {
              cfd.label, cfd.field_type, cfd.options
         FROM custom_field_values cfv
         JOIN custom_field_defs cfd ON cfd.id = cfv.field_id
-       WHERE cfv.entity = 'expedient' AND cfv.record_id IN (${placeholders})
-    `).all(...expIds);
+       WHERE cfv.entity = 'expedient' AND cfv.tenant_id = ? AND cfv.record_id IN (${placeholders})
+    `).all(tenantId, ...expIds);
     for (const r of fvRows) {
       if (!fieldValuesByExp[r.exp_id]) fieldValuesByExp[r.exp_id] = [];
       fieldValuesByExp[r.exp_id].push({
@@ -87,49 +91,46 @@ const SORTABLE = {
   email:           'email COLLATE NOCASE',
   createdAt:       'created_at',
   updatedAt:       'updated_at',
-  expedientCount:  '(SELECT COUNT(*) FROM expedients WHERE expedients.contact_id = contacts.id)'
+  expedientCount:  '(SELECT COUNT(*) FROM expedients WHERE expedients.contact_id = contacts.id AND expedients.tenant_id = contacts.tenant_id)'
 };
 
-function list(db, { search, page = 1, pageSize = 50, sortBy = 'createdAt', sortDir = 'desc' } = {}) {
+function list(db, tenantId, { search, page = 1, pageSize = 50, sortBy = 'createdAt', sortDir = 'desc' } = {}) {
   // Sanitiza paginación
   const allowedSizes = [10, 25, 50, 100, 200];
   pageSize = allowedSizes.includes(Number(pageSize)) ? Number(pageSize) : 50;
   page = Math.max(1, Number(page) || 1);
 
   // ─── Modo especial: solo duplicados ───
-  // Agrupa contactos por teléfono normalizado (sin caracteres no-numéricos) y
-  // por email; muestra solo los grupos con 2+ contactos. Útil para revisar
-  // antes de o después de importar de otro CRM.
   if (sortBy === 'duplicates') {
-    return _listDuplicates(db, { search, page, pageSize });
+    return _listDuplicates(db, tenantId, { search, page, pageSize });
   }
 
   // Sanitiza sort (whitelist + dir)
   const sortExpr = SORTABLE[sortBy] || SORTABLE.createdAt;
   const dir = String(sortDir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
-  // Tiebreaker: id DESC (más reciente entre empates)
   const orderBy = `${sortExpr} ${dir}, id DESC`;
 
   let countRow, rows;
   if (search) {
     const q = `%${search.toLowerCase()}%`;
     const where = `
-      WHERE LOWER(first_name) LIKE ?
+      WHERE tenant_id = ?
+        AND (LOWER(first_name) LIKE ?
          OR LOWER(IFNULL(last_name, '')) LIKE ?
          OR LOWER(IFNULL(phone, '')) LIKE ?
-         OR LOWER(IFNULL(email, '')) LIKE ?
+         OR LOWER(IFNULL(email, '')) LIKE ?)
     `;
-    countRow = db.prepare(`SELECT COUNT(*) AS n FROM contacts ${where}`).get(q, q, q, q);
+    countRow = db.prepare(`SELECT COUNT(*) AS n FROM contacts ${where}`).get(tenantId, q, q, q, q);
     rows = db.prepare(`SELECT * FROM contacts ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
-      .all(q, q, q, q, pageSize, (page - 1) * pageSize);
+      .all(tenantId, q, q, q, q, pageSize, (page - 1) * pageSize);
   } else {
-    countRow = db.prepare('SELECT COUNT(*) AS n FROM contacts').get();
-    rows = db.prepare(`SELECT * FROM contacts ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
-      .all(pageSize, (page - 1) * pageSize);
+    countRow = db.prepare('SELECT COUNT(*) AS n FROM contacts WHERE tenant_id = ?').get(tenantId);
+    rows = db.prepare(`SELECT * FROM contacts WHERE tenant_id = ? ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+      .all(tenantId, pageSize, (page - 1) * pageSize);
   }
 
   return {
-    items: rows.map((r) => hydrate(db, r)),
+    items: rows.map((r) => hydrate(db, tenantId, r)),
     total: countRow.n,
     page,
     pageSize,
@@ -140,36 +141,35 @@ function list(db, { search, page = 1, pageSize = 50, sortBy = 'createdAt', sortD
 }
 
 // Devuelve solo contactos que comparten teléfono (normalizado) o email con
-// otro contacto. Los agrupa de forma que duplicados queden adyacentes.
-function _listDuplicates(db, { search, page, pageSize }) {
-  // Sub-query: teléfonos normalizados (solo dígitos) que aparecen 2+ veces
-  // y emails (lowercase, trim) que aparecen 2+ veces.
-  // Si el contacto tiene null/empty no cuenta como duplicado.
+// otro contacto del MISMO tenant. Cross-tenant no cuenta como duplicado.
+function _listDuplicates(db, tenantId, { search, page, pageSize }) {
   const dupQuery = `
     SELECT c.*,
            LOWER(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(c.phone, ''), '+', ''), ' ', ''), '-', ''), '(', '')) AS phone_norm,
            LOWER(TRIM(IFNULL(c.email, ''))) AS email_norm
       FROM contacts c
-     WHERE (
-       phone_norm <> '' AND phone_norm IN (
+     WHERE c.tenant_id = ?
+       AND (
+       (LOWER(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(c.phone, ''), '+', ''), ' ', ''), '-', ''), '(', '')) <> '' AND
+        LOWER(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(c.phone, ''), '+', ''), ' ', ''), '-', ''), '(', '')) IN (
          SELECT LOWER(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(phone, ''), '+', ''), ' ', ''), '-', ''), '(', ''))
            FROM contacts
-          WHERE IFNULL(phone, '') <> ''
+          WHERE tenant_id = ? AND IFNULL(phone, '') <> ''
           GROUP BY LOWER(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(phone, ''), '+', ''), ' ', ''), '-', ''), '(', ''))
          HAVING COUNT(*) > 1
        )
      ) OR (
-       email_norm <> '' AND email_norm IN (
+       LOWER(TRIM(IFNULL(c.email, ''))) <> '' AND
+       LOWER(TRIM(IFNULL(c.email, ''))) IN (
          SELECT LOWER(TRIM(IFNULL(email, '')))
            FROM contacts
-          WHERE IFNULL(email, '') <> ''
+          WHERE tenant_id = ? AND IFNULL(email, '') <> ''
           GROUP BY LOWER(TRIM(IFNULL(email, '')))
          HAVING COUNT(*) > 1
        )
-     )
+     ))
   `;
-  let allDupes = db.prepare(dupQuery).all();
-  // Filtro adicional por búsqueda libre
+  let allDupes = db.prepare(dupQuery).all(tenantId, tenantId, tenantId);
   if (search) {
     const q = String(search).toLowerCase();
     allDupes = allDupes.filter(c =>
@@ -179,8 +179,6 @@ function _listDuplicates(db, { search, page, pageSize }) {
       (c.email || '').toLowerCase().includes(q)
     );
   }
-  // Orden: agrupar por phone_norm primero (los duplicados quedan juntos),
-  // después por email_norm, después por created_at desc dentro del grupo
   allDupes.sort((a, b) => {
     if (a.phone_norm !== b.phone_norm) return a.phone_norm.localeCompare(b.phone_norm);
     if (a.email_norm !== b.email_norm) return a.email_norm.localeCompare(b.email_norm);
@@ -192,7 +190,7 @@ function _listDuplicates(db, { search, page, pageSize }) {
   const pageRows = allDupes.slice(start, start + pageSize);
 
   return {
-    items: pageRows.map((r) => hydrate(db, r)),
+    items: pageRows.map((r) => hydrate(db, tenantId, r)),
     total,
     page,
     pageSize,
@@ -202,84 +200,89 @@ function _listDuplicates(db, { search, page, pageSize }) {
   };
 }
 
-function getById(db, id) {
-  const row = db.prepare('SELECT * FROM contacts WHERE id = ?').get(id);
-  return hydrate(db, row);
+function getById(db, tenantId, id) {
+  const row = db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(id, tenantId);
+  return hydrate(db, tenantId, row);
 }
 
-// Busca duplicado por phone normalizado o email lowercased
-function findDuplicate(db, { phone, email }) {
+// Busca duplicado por phone normalizado o email lowercased — siempre dentro del mismo tenant
+function findDuplicate(db, tenantId, { phone, email }) {
   const normPhone = normalizePhone(phone);
   const normEmail = email ? email.trim().toLowerCase() : null;
   if (!normPhone && !normEmail) return null;
 
   const rows = db.prepare(`
     SELECT * FROM contacts
-    WHERE (? IS NOT NULL AND phone = ?)
-       OR (? IS NOT NULL AND LOWER(email) = ?)
+    WHERE tenant_id = ?
+      AND ((? IS NOT NULL AND phone = ?)
+       OR (? IS NOT NULL AND LOWER(email) = ?))
     LIMIT 1
-  `).all(normPhone, normPhone, normEmail, normEmail);
+  `).all(tenantId, normPhone, normPhone, normEmail, normEmail);
   return rows[0] || null;
 }
 
-function create(db, { firstName, lastName, phone, email, tags = [] }) {
+function create(db, tenantId, { firstName, lastName, phone, email, tags = [] }) {
   if (!firstName || !firstName.trim()) {
     throw new Error('El nombre es obligatorio');
   }
   const trx = db.transaction(() => {
     const result = db.prepare(`
-      INSERT INTO contacts (first_name, last_name, phone, email)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO contacts (tenant_id, first_name, last_name, phone, email)
+      VALUES (?, ?, ?, ?, ?)
     `).run(
+      tenantId,
       firstName.trim(),
       lastName?.trim() || null,
       normalizePhone(phone),
       email?.trim() || null
     );
     const id = result.lastInsertRowid;
-    const insertTag = db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag) VALUES (?, ?)');
+    const insertTag = db.prepare('INSERT OR IGNORE INTO contact_tags (tenant_id, contact_id, tag) VALUES (?, ?, ?)');
     for (const tag of tags) {
       const t = String(tag).trim();
-      if (t) insertTag.run(id, t);
+      if (t) insertTag.run(tenantId, id, t);
     }
     return id;
   });
   const id = trx();
-  return getById(db, id);
+  return getById(db, tenantId, id);
 }
 
-function update(db, id, { firstName, lastName, phone, email, tags }) {
+function update(db, tenantId, id, { firstName, lastName, phone, email, tags }) {
   const trx = db.transaction(() => {
-    db.prepare(`
+    const r = db.prepare(`
       UPDATE contacts
       SET first_name = ?, last_name = ?, phone = ?, email = ?, updated_at = unixepoch()
-      WHERE id = ?
+      WHERE id = ? AND tenant_id = ?
     `).run(
       firstName?.trim() || '',
       lastName?.trim() || null,
       normalizePhone(phone),
       email?.trim() || null,
-      id
+      id,
+      tenantId
     );
+    if (r.changes === 0) return false; // contacto no existe o no pertenece al tenant
     if (Array.isArray(tags)) {
-      db.prepare('DELETE FROM contact_tags WHERE contact_id = ?').run(id);
-      const insertTag = db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag) VALUES (?, ?)');
+      db.prepare('DELETE FROM contact_tags WHERE contact_id = ? AND tenant_id = ?').run(id, tenantId);
+      const insertTag = db.prepare('INSERT OR IGNORE INTO contact_tags (tenant_id, contact_id, tag) VALUES (?, ?, ?)');
       for (const tag of tags) {
         const t = String(tag).trim();
-        if (t) insertTag.run(id, t);
+        if (t) insertTag.run(tenantId, id, t);
       }
     }
+    return true;
   });
-  trx();
-  return getById(db, id);
+  const ok = trx();
+  return ok ? getById(db, tenantId, id) : null;
 }
 
-function remove(db, id, advisor) {
-  const row = db.prepare('SELECT * FROM contacts WHERE id = ?').get(id);
+function remove(db, tenantId, id, advisor) {
+  const row = db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) return false;
-  const tags = db.prepare('SELECT tag FROM contact_tags WHERE contact_id = ?').all(id).map(r => r.tag);
+  const tags = db.prepare('SELECT tag FROM contact_tags WHERE contact_id = ? AND tenant_id = ?').all(id, tenantId).map(r => r.tag);
   const trash = require('../trash/service');
-  trash.save(db, {
+  trash.save(db, tenantId, {
     entityType:    'contact',
     entityId:      id,
     entityName:    [row.first_name, row.last_name].filter(Boolean).join(' '),
@@ -287,12 +290,12 @@ function remove(db, id, advisor) {
     deletedById:   advisor?.id,
     deletedByName: advisor?.name,
   });
-  return db.prepare('DELETE FROM contacts WHERE id = ?').run(id).changes > 0;
+  return db.prepare('DELETE FROM contacts WHERE id = ? AND tenant_id = ?').run(id, tenantId).changes > 0;
 }
 
 // Importación bulk con detección de duplicados.
 // dupePolicy: 'skip' | 'update' | 'create'
-function importBulk(db, rows, { dupePolicy = 'skip', bulkTag = null } = {}) {
+function importBulk(db, tenantId, rows, { dupePolicy = 'skip', bulkTag = null } = {}) {
   const result = { created: 0, updated: 0, skipped: 0, errors: 0 };
 
   const trx = db.transaction(() => {
@@ -303,14 +306,14 @@ function importBulk(db, rows, { dupePolicy = 'skip', bulkTag = null } = {}) {
         continue;
       }
 
-      const dupe = findDuplicate(db, { phone: r.phone, email: r.email });
+      const dupe = findDuplicate(db, tenantId, { phone: r.phone, email: r.email });
       if (dupe) {
         if (dupePolicy === 'skip') {
           result.skipped++;
           continue;
         }
         if (dupePolicy === 'update') {
-          update(db, dupe.id, {
+          update(db, tenantId, dupe.id, {
             firstName: firstName || dupe.first_name,
             lastName: r.lastName || dupe.last_name,
             phone: r.phone || dupe.phone,
@@ -318,7 +321,7 @@ function importBulk(db, rows, { dupePolicy = 'skip', bulkTag = null } = {}) {
             tags: undefined
           });
           if (bulkTag) {
-            db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag) VALUES (?, ?)').run(dupe.id, bulkTag);
+            db.prepare('INSERT OR IGNORE INTO contact_tags (tenant_id, contact_id, tag) VALUES (?, ?, ?)').run(tenantId, dupe.id, bulkTag);
           }
           result.updated++;
           continue;
@@ -327,7 +330,7 @@ function importBulk(db, rows, { dupePolicy = 'skip', bulkTag = null } = {}) {
       }
 
       const tags = bulkTag ? [bulkTag] : [];
-      create(db, {
+      create(db, tenantId, {
         firstName: firstName || (r.lastName || '').trim(),
         lastName: firstName ? r.lastName : '',
         phone: r.phone,

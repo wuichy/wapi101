@@ -4,24 +4,24 @@ const service  = require('./service');
 module.exports = function createTrashRouter(db) {
   const router = express.Router();
 
-  router.get('/', (_req, res, next) => {
-    try { res.json({ items: service.list(db) }); }
+  router.get('/', (req, res, next) => {
+    try { res.json({ items: service.list(db, req.tenantId) }); }
     catch (err) { next(err); }
   });
 
   router.post('/:id/restore', (req, res, next) => {
-    try { res.json({ item: service.restore(db, Number(req.params.id)) }); }
+    try { res.json({ item: service.restore(db, req.tenantId, Number(req.params.id)) }); }
     catch (err) { res.status(400).json({ error: err.message }); }
   });
 
   router.delete('/:id', (req, res, next) => {
-    try { service.permanentDelete(db, Number(req.params.id)); res.json({ ok: true }); }
+    try { service.permanentDelete(db, req.tenantId, Number(req.params.id)); res.json({ ok: true }); }
     catch (err) { res.status(400).json({ error: err.message }); }
   });
 
-  router.delete('/', (_req, res, next) => {
+  router.delete('/', (req, res, next) => {
     try {
-      db.prepare('DELETE FROM trash').run();
+      db.prepare('DELETE FROM trash WHERE tenant_id = ?').run(req.tenantId);
       res.json({ ok: true });
     } catch (err) { next(err); }
   });

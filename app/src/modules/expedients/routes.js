@@ -8,34 +8,34 @@ module.exports = function createExpedientsRouter(db) {
 
   // Búsqueda de contactos para el selector del modal
   router.get('/contacts-search', (req, res, next) => {
-    try { res.json({ items: service.searchContacts(db, req.query.q || '') }); }
+    try { res.json({ items: service.searchContacts(db, req.tenantId, req.query.q || '') }); }
     catch (e) { next(e); }
   });
 
   // Definiciones de campos personalizados
-  router.get('/field-defs', (_req, res, next) => {
-    try { res.json({ items: service.listFieldDefs(db, 'expedient') }); }
+  router.get('/field-defs', (req, res, next) => {
+    try { res.json({ items: service.listFieldDefs(db, req.tenantId, 'expedient') }); }
     catch (e) { next(e); }
   });
   router.post('/field-defs', (req, res, next) => {
-    try { res.status(201).json({ item: service.createFieldDef(db, req.body || {}) }); }
+    try { res.status(201).json({ item: service.createFieldDef(db, req.tenantId, req.body || {}) }); }
     catch (e) { res.status(400).json({ error: e.message }); }
   });
   router.patch('/field-defs/:id', (req, res, next) => {
-    try { res.json({ item: service.updateFieldDef(db, Number(req.params.id), req.body || {}) }); }
+    try { res.json({ item: service.updateFieldDef(db, req.tenantId, Number(req.params.id), req.body || {}) }); }
     catch (e) { res.status(400).json({ error: e.message }); }
   });
   router.delete('/field-defs/:id', (req, res, next) => {
     try {
-      const ok = service.removeFieldDef(db, Number(req.params.id));
+      const ok = service.removeFieldDef(db, req.tenantId, Number(req.params.id));
       if (!ok) return res.status(404).json({ error: 'Campo no encontrado' });
       res.status(204).end();
     } catch (e) { next(e); }
   });
 
   // Tags
-  router.get('/tags', (_req, res, next) => {
-    try { res.json({ items: service.listTags(db) }); }
+  router.get('/tags', (req, res, next) => {
+    try { res.json({ items: service.listTags(db, req.tenantId) }); }
     catch (e) { next(e); }
   });
 
@@ -48,14 +48,14 @@ module.exports = function createExpedientsRouter(db) {
       if (rawFieldFilters) {
         try { fieldFilters = JSON.parse(rawFieldFilters); } catch (_) { fieldFilters = {}; }
       }
-      res.json(service.list(db, { search, page, pageSize, sortBy, sortDir, tags, fieldFilters }));
+      res.json(service.list(db, req.tenantId, { search, page, pageSize, sortBy, sortDir, tags, fieldFilters }));
     }
     catch (e) { next(e); }
   });
 
   router.get('/:id', (req, res, next) => {
     try {
-      const item = service.getById(db, Number(req.params.id));
+      const item = service.getById(db, req.tenantId, Number(req.params.id));
       if (!item) return res.status(404).json({ error: 'Expediente no encontrado' });
       res.json({ item });
     } catch (e) { next(e); }
@@ -64,7 +64,7 @@ module.exports = function createExpedientsRouter(db) {
   router.post('/', (req, res, next) => {
     let item;
     try {
-      item = service.create(db, req.body || {});
+      item = service.create(db, req.tenantId, req.body || {});
       activity.log(db, {
         expedientId: item.id,
         contactId:   item.contactId,
@@ -97,8 +97,8 @@ module.exports = function createExpedientsRouter(db) {
   router.patch('/:id', (req, res, next) => {
     let prev, item;
     try {
-      prev = service.getById(db, Number(req.params.id));
-      item = service.update(db, Number(req.params.id), req.body || {});
+      prev = service.getById(db, req.tenantId, Number(req.params.id));
+      item = service.update(db, req.tenantId, Number(req.params.id), req.body || {});
       if (!item) return res.status(404).json({ error: 'Expediente no encontrado' });
       res.json({ item });
     } catch (e) { return res.status(400).json({ error: e.message }); }
@@ -138,7 +138,7 @@ module.exports = function createExpedientsRouter(db) {
 
       // Cambio de teléfono — comparar via contacts table
       if (req.body.phone !== undefined) {
-        const prevPhone = db.prepare('SELECT phone FROM contacts WHERE id = ?').get(prev.contactId)?.phone;
+        const prevPhone = db.prepare('SELECT phone FROM contacts WHERE id = ? AND tenant_id = ?').get(prev.contactId, req.tenantId)?.phone;
         if (prevPhone !== req.body.phone) {
           activity.log(db, { ...base, type: 'phone_change',
             description: `Teléfono: "${prevPhone || ''}" → "${req.body.phone || ''}"` });
@@ -176,7 +176,7 @@ module.exports = function createExpedientsRouter(db) {
 
   router.delete('/:id', (req, res, next) => {
     try {
-      const ok = service.remove(db, Number(req.params.id), req.advisor);
+      const ok = service.remove(db, req.tenantId, Number(req.params.id), req.advisor);
       if (!ok) return res.status(404).json({ error: 'Expediente no encontrado' });
       res.status(204).end();
     } catch (e) { next(e); }
@@ -185,9 +185,9 @@ module.exports = function createExpedientsRouter(db) {
   // ── Actividad del expediente ──
   router.get('/:id/activity', (req, res, next) => {
     try {
-      const exp = service.getById(db, Number(req.params.id));
+      const exp = service.getById(db, req.tenantId, Number(req.params.id));
       if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
-      const items = activity.list(db, exp.id);
+      const items = activity.list(db, req.tenantId, exp.id);
       res.json({ items });
     } catch (e) { next(e); }
   });
@@ -195,14 +195,14 @@ module.exports = function createExpedientsRouter(db) {
   // ── Bots del expediente (por contacto) ──
   router.get('/:id/bots', (req, res, next) => {
     try {
-      const exp = service.getById(db, Number(req.params.id));
+      const exp = service.getById(db, req.tenantId, Number(req.params.id));
       if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
 
-      const bots = db.prepare('SELECT * FROM salsbots WHERE enabled = 1 ORDER BY name').all()
+      const bots = db.prepare('SELECT * FROM salsbots WHERE enabled = 1 AND tenant_id = ? ORDER BY name').all(req.tenantId)
         .map(b => {
           const pause = db.prepare(
-            'SELECT paused FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ?'
-          ).get(exp.contactId, b.id);
+            'SELECT paused FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?'
+          ).get(exp.contactId, b.id, req.tenantId);
           const steps = (() => { try { return JSON.parse(b.steps || '[]'); } catch { return []; } })();
           return {
             id:           b.id,
@@ -221,12 +221,12 @@ module.exports = function createExpedientsRouter(db) {
   // GET /api/expedients/:id/bot-runs
   router.get('/:id/bot-runs', (req, res, next) => {
     try {
-      const exp = service.getById(db, Number(req.params.id));
+      const exp = service.getById(db, req.tenantId, Number(req.params.id));
       if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
       const runs = db.prepare(`
-        SELECT * FROM bot_runs WHERE contact_id = ?
+        SELECT * FROM bot_runs WHERE contact_id = ? AND tenant_id = ?
         ORDER BY started_at DESC LIMIT 30
-      `).all(exp.contactId);
+      `).all(exp.contactId, req.tenantId);
       res.json({ items: runs, hasRunning: runs.some(r => r.status === 'running' || r.status === 'paused') });
     } catch (e) { next(e); }
   });
@@ -234,15 +234,15 @@ module.exports = function createExpedientsRouter(db) {
   // PATCH /api/expedients/:id/bots/:botId
   router.patch('/:id/bots/:botId', (req, res, next) => {
     try {
-      const exp = service.getById(db, Number(req.params.id));
+      const exp = service.getById(db, req.tenantId, Number(req.params.id));
       if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
       const botId  = Number(req.params.botId);
       const paused = req.body.paused ? 1 : 0;
       db.prepare(`
-        INSERT INTO contact_bot_pauses (contact_id, bot_id, paused, updated_at)
-        VALUES (?, ?, ?, unixepoch())
+        INSERT INTO contact_bot_pauses (tenant_id, contact_id, bot_id, paused, updated_at)
+        VALUES (?, ?, ?, ?, unixepoch())
         ON CONFLICT (contact_id, bot_id) DO UPDATE SET paused = excluded.paused, updated_at = excluded.updated_at
-      `).run(exp.contactId, botId, paused);
+      `).run(req.tenantId, exp.contactId, botId, paused);
       res.json({ ok: true, paused: !!paused });
     } catch (e) { next(e); }
   });

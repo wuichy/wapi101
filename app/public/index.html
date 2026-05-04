@@ -1168,6 +1168,15 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <input type="text" class="int-input tpl-header-text" id="tplHeader" placeholder="Texto del encabezado (máx 60 chars)" maxlength="60" />
               <!-- Sub-campo: Media (oculto por default) -->
               <div class="tpl-header-media" id="tplHeaderMediaBox" hidden>
+                <!-- Preview del archivo ya subido (al editar) -->
+                <div class="tpl-header-media-preview" id="tplHeaderMediaPreview" hidden>
+                  <div class="tpl-header-media-preview-thumb" id="tplHeaderMediaPreviewThumb"></div>
+                  <div class="tpl-header-media-preview-info">
+                    <span class="tpl-header-media-preview-label">Archivo actual</span>
+                    <a class="tpl-header-media-preview-link" id="tplHeaderMediaPreviewLink" target="_blank" rel="noopener">Ver</a>
+                  </div>
+                  <button type="button" class="tpl-header-media-remove" id="tplHeaderMediaRemoveBtn" title="Quitar archivo (selecciona otro nuevo después)">×</button>
+                </div>
                 <input type="file" class="tpl-header-file" id="tplHeaderFile" accept="image/*,video/*,application/pdf" />
                 <p class="tpl-hint-inline" id="tplHeaderMediaStatus">Selecciona un archivo. Se sube a Meta como ejemplo de header.</p>
               </div>

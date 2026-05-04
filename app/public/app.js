@@ -10359,12 +10359,21 @@ function renderTemplates() {
 // State del modal de plantillas
 let _tplDraftButtons = [];        // [{type, text, url?, phone_number?}]
 let _tplDraftMediaFile = null;    // File pendiente de upload
+// Media existente del header al editar (preserved hasta que el user pique
+// otro archivo o haga click en "× Quitar"). Si _tplDraftRemoveMedia=true
+// al guardar, mandamos headerMediaHandle/Url=null para borrar el archivo viejo.
+let _tplDraftExistingMedia = null;  // { headerType, headerMediaUrl, headerMediaHandle } o null
+let _tplDraftRemoveMedia = false;
 let _tplDraftPlaceholders = [];   // [{label, example, contactField}] — uno por cada {{N}} del body
 let _tplDraftTagIds = [];         // ids de tags asignadas en el modal
 
 function openTplModal(tmpl = null) {
   _tplEditId = tmpl?.id || null;
   _tplDraftMediaFile = null;
+  _tplDraftRemoveMedia = false;
+  // Limpiar el file input — si quedó algo de la sesión anterior se borra
+  const fileInput0 = document.getElementById('tplHeaderFile');
+  if (fileInput0) fileInput0.value = '';
   const modal = document.getElementById('tplModal');
   if (!modal) return;
   const card = modal.querySelector('.tpl-modal-card');
@@ -10382,11 +10391,16 @@ function openTplModal(tmpl = null) {
     const radio = document.querySelector(`input[name="tplType"][value="${tmpl.type}"]`);
     if (radio) radio.checked = true;
 
-    // Header type
+    // Header type — guardamos la media existente para preview + toggle de remove
     const ht = (tmpl.headerType || 'TEXT').toUpperCase();
     const htRadio = document.querySelector(`input[name="tplHeaderType"][value="${ht}"]`);
     if (htRadio) htRadio.checked = true;
-    setHeaderTypeUI(ht, !!tmpl.headerMediaHandle);
+    _tplDraftExistingMedia = (ht !== 'TEXT' && tmpl.headerMediaHandle) ? {
+      headerType:        ht,
+      headerMediaUrl:    tmpl.headerMediaUrl || null,
+      headerMediaHandle: tmpl.headerMediaHandle,
+    } : null;
+    setHeaderTypeUI(ht, _tplDraftExistingMedia);
 
     // Buttons
     _tplDraftButtons = Array.isArray(tmpl.buttons) ? JSON.parse(JSON.stringify(tmpl.buttons)) : [];
@@ -10405,7 +10419,8 @@ function openTplModal(tmpl = null) {
     document.getElementById('tplTypeFreeForm').checked = true;
     const htText = document.querySelector('input[name="tplHeaderType"][value="TEXT"]');
     if (htText) htText.checked = true;
-    setHeaderTypeUI('TEXT', false);
+    _tplDraftExistingMedia = null;
+    setHeaderTypeUI('TEXT', null);
     _tplDraftButtons = [];
     _tplDraftPlaceholders = [];
     _tplDraftTagIds = [];
@@ -10542,17 +10557,53 @@ function applyTplLockState(tmpl) {
   }
 }
 
-function setHeaderTypeUI(type, hasExistingMedia) {
+// existingMedia: { headerType, headerMediaUrl, headerMediaHandle } o null
+function setHeaderTypeUI(type, existingMedia) {
   const isMedia = type && type !== 'TEXT';
   const txtInput = document.getElementById('tplHeader');
   const mediaBox = document.getElementById('tplHeaderMediaBox');
   const mediaStatus = document.getElementById('tplHeaderMediaStatus');
+  const previewBox = document.getElementById('tplHeaderMediaPreview');
+  const previewThumb = document.getElementById('tplHeaderMediaPreviewThumb');
+  const previewLink = document.getElementById('tplHeaderMediaPreviewLink');
+
   if (txtInput) txtInput.hidden = !!isMedia;
   if (mediaBox) mediaBox.hidden = !isMedia;
-  if (isMedia && mediaStatus) {
-    mediaStatus.textContent = hasExistingMedia
-      ? 'Ya hay un archivo subido. Selecciona uno nuevo solo si quieres reemplazarlo.'
-      : 'Selecciona un archivo. Se sube a Meta como ejemplo de header.';
+  if (!isMedia) return;
+
+  // Solo se muestra el preview si: hay media existente Y el tipo coincide
+  // (si el user cambió IMAGE → VIDEO, el preview viejo no aplica).
+  const showPreview = !!(existingMedia && existingMedia.headerType === type && !_tplDraftRemoveMedia);
+
+  if (previewBox) previewBox.hidden = !showPreview;
+
+  if (showPreview && previewThumb) {
+    const url = existingMedia.headerMediaUrl;
+    if (type === 'IMAGE' && url) {
+      previewThumb.innerHTML = `<img src="${escHtml(url)}" alt="Header" />`;
+    } else if (type === 'VIDEO') {
+      previewThumb.innerHTML = '<div class="tpl-header-media-icon">🎬</div>';
+    } else if (type === 'DOCUMENT') {
+      previewThumb.innerHTML = '<div class="tpl-header-media-icon">📄</div>';
+    } else {
+      previewThumb.innerHTML = '<div class="tpl-header-media-icon">📎</div>';
+    }
+    if (previewLink) {
+      if (url) { previewLink.href = url; previewLink.style.display = ''; }
+      else previewLink.style.display = 'none';
+    }
+  }
+
+  if (mediaStatus) {
+    if (showPreview) {
+      mediaStatus.textContent = '✓ Archivo guardado. Selecciona uno nuevo solo si querés reemplazarlo, o tocá × para quitarlo.';
+    } else if (existingMedia && existingMedia.headerType !== type) {
+      mediaStatus.textContent = `Cambiaste el tipo a ${type}. El archivo ${existingMedia.headerType} anterior se reemplazará al guardar — sube el nuevo aquí.`;
+    } else if (_tplDraftRemoveMedia) {
+      mediaStatus.textContent = 'Marcado para quitar. Selecciona un archivo nuevo o guardá vacío para dejar el header sin archivo.';
+    } else {
+      mediaStatus.textContent = 'Selecciona un archivo. Se sube a Meta como ejemplo de header.';
+    }
   }
 }
 
@@ -10842,6 +10893,18 @@ async function saveTpl() {
     buttons: buttons.length ? buttons : null,
     bodyPlaceholders: placeholders.length ? placeholders : null,
   };
+
+  // Si el user pidió quitar el archivo existente Y no eligió uno nuevo,
+  // mandamos los campos a null para que el backend los borre. Si eligió
+  // uno nuevo, _tplDraftRemoveMedia ya se canceló y el upload posterior
+  // sobrescribe los valores. Si cambió el tipo de header (IMAGE → DOCUMENT),
+  // también limpiamos los valores viejos para que no queden inconsistentes.
+  const typeChanged = _tplDraftExistingMedia && _tplDraftExistingMedia.headerType !== headerType;
+  if (_tplDraftRemoveMedia || (headerType === 'TEXT' && _tplDraftExistingMedia) || typeChanged) {
+    payload.headerMediaHandle = null;
+    payload.headerMediaUrl    = null;
+    payload.headerMediaId     = null;
+  }
   if (errEl) errEl.hidden = true;
 
   try {
@@ -11292,8 +11355,19 @@ function setupTemplates() {
   // Header type radios — toggle texto/media
   document.querySelectorAll('input[name="tplHeaderType"]').forEach(r => {
     r.addEventListener('change', () => {
-      setHeaderTypeUI(r.value, false);
+      setHeaderTypeUI(r.value, _tplDraftExistingMedia);
     });
+  });
+
+  // Botón × Quitar archivo existente al editar — marca para borrar al guardar
+  document.getElementById('tplHeaderMediaRemoveBtn')?.addEventListener('click', () => {
+    if (!confirm('¿Quitar el archivo del header? El header quedará sin imagen hasta que subas otro o guardes.')) return;
+    _tplDraftRemoveMedia = true;
+    _tplDraftMediaFile = null;
+    const fileInput = document.getElementById('tplHeaderFile');
+    if (fileInput) fileInput.value = '';
+    const ht = document.querySelector('input[name="tplHeaderType"]:checked')?.value || 'TEXT';
+    setHeaderTypeUI(ht, _tplDraftExistingMedia);
   });
 
   // Captura de archivo — valida tipo y tamaño según las reglas de Meta para
@@ -11306,6 +11380,8 @@ function setupTemplates() {
   document.getElementById('tplHeaderFile')?.addEventListener('change', (e) => {
     const f = e.target.files?.[0];
     if (!f) { _tplDraftMediaFile = null; return; }
+    // Cualquier archivo nuevo cancela el "quitar"
+    _tplDraftRemoveMedia = false;
 
     const ht = document.querySelector('input[name="tplHeaderType"]:checked')?.value || 'TEXT';
     const rules = TPL_MEDIA_RULES[ht];

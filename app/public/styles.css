@@ -7252,6 +7252,75 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   background: #f8fafc;
 }
 .tpl-header-file { font-size: 13px; }
+
+/* Preview del archivo subido en plantillas WA API */
+.tpl-header-media-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.tpl-header-media-preview-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #d1fae5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tpl-header-media-preview-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tpl-header-media-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.tpl-header-media-preview-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tpl-header-media-preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #065f46;
+}
+.tpl-header-media-preview-link {
+  font-size: 11px;
+  color: #047857;
+  text-decoration: underline;
+  width: fit-content;
+}
+.tpl-header-media-remove {
+  background: transparent;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+}
+.tpl-header-media-remove:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
 .tpl-buttons-list {
   display: flex;
   flex-direction: column;

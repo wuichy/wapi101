@@ -5371,6 +5371,41 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .bot-tag-filter:hover { border-color: var(--accent); color: var(--text); }
 .bot-tag-filter.is-active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .bot-tag-filter.is-active .bot-tag-dot { box-shadow: 0 0 0 2px #fff inset; }
+
+/* Pill de filtro 'Errores' — siempre con tinte rojo, más prominente */
+.bot-tag-filter.is-error-pill {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 600;
+}
+.bot-tag-filter.is-error-pill:hover {
+  border-color: #ef4444;
+  background: #fee2e2;
+  color: #991b1b;
+}
+.bot-tag-filter.is-error-pill.is-active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+.bot-tag-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: rgba(239, 68, 68, 0.15);
+  color: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 2px;
+}
+.bot-tag-filter.is-error-pill.is-active .bot-tag-filter-count {
+  background: rgba(255, 255, 255, 0.25);
+}
 .bot-sort-select {
   margin-left: auto;
   padding: 6px 28px 6px 12px;

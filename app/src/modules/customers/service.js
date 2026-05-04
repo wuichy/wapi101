@@ -96,6 +96,14 @@ function list(db, { search, page = 1, pageSize = 50, sortBy = 'createdAt', sortD
   pageSize = allowedSizes.includes(Number(pageSize)) ? Number(pageSize) : 50;
   page = Math.max(1, Number(page) || 1);
 
+  // ─── Modo especial: solo duplicados ───
+  // Agrupa contactos por teléfono normalizado (sin caracteres no-numéricos) y
+  // por email; muestra solo los grupos con 2+ contactos. Útil para revisar
+  // antes de o después de importar de otro CRM.
+  if (sortBy === 'duplicates') {
+    return _listDuplicates(db, { search, page, pageSize });
+  }
+
   // Sanitiza sort (whitelist + dir)
   const sortExpr = SORTABLE[sortBy] || SORTABLE.createdAt;
   const dir = String(sortDir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
@@ -128,6 +136,69 @@ function list(db, { search, page = 1, pageSize = 50, sortBy = 'createdAt', sortD
     totalPages: Math.max(1, Math.ceil(countRow.n / pageSize)),
     sortBy: SORTABLE[sortBy] ? sortBy : 'createdAt',
     sortDir: dir.toLowerCase()
+  };
+}
+
+// Devuelve solo contactos que comparten teléfono (normalizado) o email con
+// otro contacto. Los agrupa de forma que duplicados queden adyacentes.
+function _listDuplicates(db, { search, page, pageSize }) {
+  // Sub-query: teléfonos normalizados (solo dígitos) que aparecen 2+ veces
+  // y emails (lowercase, trim) que aparecen 2+ veces.
+  // Si el contacto tiene null/empty no cuenta como duplicado.
+  const dupQuery = `
+    SELECT c.*,
+           LOWER(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(c.phone, ''), '+', ''), ' ', ''), '-', ''), '(', '')) AS phone_norm,
+           LOWER(TRIM(IFNULL(c.email, ''))) AS email_norm
+      FROM contacts c
+     WHERE (
+       phone_norm <> '' AND phone_norm IN (
+         SELECT LOWER(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(phone, ''), '+', ''), ' ', ''), '-', ''), '(', ''))
+           FROM contacts
+          WHERE IFNULL(phone, '') <> ''
+          GROUP BY LOWER(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(phone, ''), '+', ''), ' ', ''), '-', ''), '(', ''))
+         HAVING COUNT(*) > 1
+       )
+     ) OR (
+       email_norm <> '' AND email_norm IN (
+         SELECT LOWER(TRIM(IFNULL(email, '')))
+           FROM contacts
+          WHERE IFNULL(email, '') <> ''
+          GROUP BY LOWER(TRIM(IFNULL(email, '')))
+         HAVING COUNT(*) > 1
+       )
+     )
+  `;
+  let allDupes = db.prepare(dupQuery).all();
+  // Filtro adicional por búsqueda libre
+  if (search) {
+    const q = String(search).toLowerCase();
+    allDupes = allDupes.filter(c =>
+      (c.first_name || '').toLowerCase().includes(q) ||
+      (c.last_name || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q)
+    );
+  }
+  // Orden: agrupar por phone_norm primero (los duplicados quedan juntos),
+  // después por email_norm, después por created_at desc dentro del grupo
+  allDupes.sort((a, b) => {
+    if (a.phone_norm !== b.phone_norm) return a.phone_norm.localeCompare(b.phone_norm);
+    if (a.email_norm !== b.email_norm) return a.email_norm.localeCompare(b.email_norm);
+    return (b.created_at || 0) - (a.created_at || 0);
+  });
+
+  const total = allDupes.length;
+  const start = (page - 1) * pageSize;
+  const pageRows = allDupes.slice(start, start + pageSize);
+
+  return {
+    items: pageRows.map((r) => hydrate(db, r)),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    sortBy: 'duplicates',
+    sortDir: 'desc',
   };
 }
 

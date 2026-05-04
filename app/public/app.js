@@ -2074,7 +2074,7 @@ function showView(viewName) {
     if (searchInput) { searchInput.placeholder = 'Buscar integración…'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
   } else if (viewName === 'bot') {
-    if (searchInput) { searchInput.placeholder = 'Buscar bots…'; searchInput.value = ''; }
+    if (searchInput) { searchInput.placeholder = 'Buscar bots, plantilla, pipeline o etapa…'; searchInput.value = _botSearch || ''; }
     if (plExtras) plExtras.hidden = true;
   } else if (viewName === 'contactos') {
     if (searchInput) { searchInput.placeholder = 'Buscar por nombre, teléfono o email...'; searchInput.value = CUSTOMER_FILTER || ''; }
@@ -4326,6 +4326,51 @@ let sbStepCounter = 0;
 let sbTagIds = [];        // tag IDs asignados al bot en edición
 let _botTags = [];
 let _botTagFilter = null; // null = todos, number = id de tag
+let _botSearch = '';      // texto de búsqueda en lista de bots
+
+// Verifica si un bot matchea el query (case-insensitive). Busca en:
+// - nombre del bot
+// - texto del disparador (keyword, etc.)
+// - nombre del pipeline + etapa cuando trigger es pipeline_stage
+// - nombres de etiquetas asignadas
+// - tipos de step (mensaje, plantilla, etapa, etc.)
+function _botMatchesQuery(bot, q) {
+  if ((bot.name || '').toLowerCase().includes(q)) return true;
+  if ((bot.trigger_value || '').toLowerCase().includes(q)) return true;
+  // Trigger pipeline_stage → resolver pipeline + stage
+  if (bot.trigger_type === 'pipeline_stage' && bot.trigger_value) {
+    const stageId = Number(bot.trigger_value);
+    const info = _resolveStage(stageId);
+    if (info) {
+      const text = `${info.pipelineName} ${info.stageName}`.toLowerCase();
+      if (text.includes(q)) return true;
+    }
+  }
+  // Etiquetas
+  if (Array.isArray(bot.tags) && bot.tags.some(t => (t.name || '').toLowerCase().includes(q))) return true;
+  // Pipelines y etapas dentro de los steps
+  if (Array.isArray(bot.steps)) {
+    for (const step of bot.steps) {
+      const c = step.config || {};
+      // Step "stage" → buscar pipeline y etapa
+      if (step.type === 'stage') {
+        if ((c.stageName || '').toLowerCase().includes(q)) return true;
+        const pl = (PIPELINES || []).find(p => p.id == c.pipelineId);
+        if (pl && (pl.name || '').toLowerCase().includes(q)) return true;
+      }
+      // Step "template" → buscar nombre de plantilla
+      if (step.type === 'template') {
+        const tpl = (_tplItems || []).find(t => t.id == c.templateId);
+        if (tpl && ((tpl.displayName || tpl.name || '').toLowerCase().includes(q))) return true;
+      }
+      // Step "tag" → contenido del tag
+      if (step.type === 'tag' && (c.tag || '').toLowerCase().includes(q)) return true;
+      // Step "message" → cuerpo
+      if (step.type === 'message' && (c.text || '').toLowerCase().includes(q)) return true;
+    }
+  }
+  return false;
+}
 // Recuperar preferencia de orden persistida
 let _botSort = (() => { try { return localStorage.getItem('botSort') || 'manual'; } catch { return 'manual'; } })();
 // Persistir cambios de orden
@@ -4508,9 +4553,16 @@ function renderBotList() {
 
   renderBotTagFilters();
 
-  const filteredBots = _botTagFilter === null
+  // 1. Filtro por etiqueta
+  let filteredBots = _botTagFilter === null
     ? sbBots
     : sbBots.filter(b => Array.isArray(b.tags) && b.tags.some(t => t.id === _botTagFilter));
+  // 2. Filtro por búsqueda — busca por nombre, etiquetas, trigger y nombre
+  //    legible del pipeline/etapa (cuando trigger es pipeline_stage).
+  const q = (_botSearch || '').trim().toLowerCase();
+  if (q) {
+    filteredBots = filteredBots.filter(b => _botMatchesQuery(b, q));
+  }
   const visibleBots = sortBots(filteredBots);
 
   if (!sbBots.length) {
@@ -4521,7 +4573,9 @@ function renderBotList() {
   empty.hidden = true;
 
   if (!visibleBots.length) {
-    list.innerHTML = `<div class="bot-list-empty-filter">Ningún bot tiene esta etiqueta.</div>`;
+    const reason = q ? `No hay bots que coincidan con "${escHtml(q)}".`
+                     : 'Ningún bot tiene esta etiqueta.';
+    list.innerHTML = `<div class="bot-list-empty-filter">${reason}</div>`;
     return;
   }
 
@@ -5095,6 +5149,17 @@ function setupBot() {
   document.getElementById('botBackBtn')?.addEventListener('click', () => {
     closeBotBuilder();
     loadSalsbots();
+  });
+
+  // Búsqueda en la lista de bots (la barra del topbar cuando estamos en /bot)
+  let _botSearchDebounce;
+  document.getElementById('topbarSearchInput')?.addEventListener('input', (e) => {
+    if (document.body.dataset.viewActive !== 'bot') return;
+    clearTimeout(_botSearchDebounce);
+    _botSearchDebounce = setTimeout(() => {
+      _botSearch = e.target.value;
+      renderBotList();
+    }, 200);
   });
 
   // Create buttons

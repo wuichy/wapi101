@@ -5684,21 +5684,46 @@ function setupBot() {
     picker.hidden = !picker.hidden;
   });
 
-  // Insert between button (delegado en el flow)
+  // Insert between button (delegado en el flow).
+  // Posiciona el picker centrado sobre el botón "+", con clamping a los bordes
+  // del viewport para que nunca quede off-screen. El CSS base del picker tiene
+  // transform: translateX(-50%) (para auto-centrarse bajo el "Agregar paso" del
+  // final). Acá reseteamos ese transform y calculamos left absoluto en píxeles.
   document.getElementById('sbStepsFlow')?.addEventListener('click', (e) => {
     const insertBtn = e.target.closest('.sb-insert-between');
     if (!insertBtn) return;
     e.stopPropagation();
     _sbInsertAfter = insertBtn.dataset.insertAfter;
     const picker = document.getElementById('sbStepPicker');
-    // Posicionar el picker cerca del botón
-    const rect = insertBtn.getBoundingClientRect();
-    const builderRect = document.getElementById('sbStepsFlow').closest('.sb-canvas')?.getBoundingClientRect();
+    if (!picker) return;
+
+    // Mostrar primero (con transform reseteado) para que getBoundingClientRect
+    // del picker dé el ancho real renderizado.
     picker.style.position = 'fixed';
-    picker.style.top = `${rect.bottom + 6}px`;
-    picker.style.left = `${rect.left - 60}px`;
+    picker.style.transform = 'none';
+    picker.style.left = '0px';
+    picker.style.top = '0px';
     picker.style.removeProperty('width');
     picker.hidden = false;
+
+    const btnRect = insertBtn.getBoundingClientRect();
+    const pickerW = picker.offsetWidth || 320;
+    const pickerH = picker.offsetHeight || 200;
+    const margin = 8;
+
+    // Centrar horizontal sobre el botón, clamping al viewport
+    const btnCenterX = btnRect.left + btnRect.width / 2;
+    let left = btnCenterX - pickerW / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - pickerW - margin));
+
+    // Vertical: debajo del botón si cabe; arriba si no
+    let top = btnRect.bottom + 6;
+    if (top + pickerH > window.innerHeight - margin) {
+      top = Math.max(margin, btnRect.top - pickerH - 6);
+    }
+
+    picker.style.left = `${left}px`;
+    picker.style.top  = `${top}px`;
   });
 
   // Pick step type

@@ -3,13 +3,35 @@ function toStage(s) {
   if (s.alarm_meta) {
     try { alarmMeta = JSON.parse(s.alarm_meta); } catch { alarmMeta = null; }
   }
+  // Multi-alarmas: el array se guarda en alarms_json. Si está vacío y hay
+  // single-alarm legacy en alarm_type, sintetizamos un array de 1 elemento
+  // para que el frontend pueda tratar todo de forma uniforme.
+  let alarms = [];
+  if (s.alarms_json) {
+    try {
+      const parsed = JSON.parse(s.alarms_json);
+      if (Array.isArray(parsed)) alarms = parsed;
+    } catch { alarms = []; }
+  }
+  if (!alarms.length && s.alarm_type) {
+    alarms = [{
+      id: 'a1',
+      type: s.alarm_type,
+      threshold_seconds: s.alarm_threshold_seconds || null,
+      meta: alarmMeta || {},
+    }];
+  }
   return {
     id: s.id, name: s.name, color: s.color, sortOrder: s.sort_order, kind: s.kind,
     bot_id: s.bot_id || null,
     stale_hours: s.stale_hours || null,
-    alarm_type: s.alarm_type || null,
-    alarm_threshold_seconds: s.alarm_threshold_seconds || null,
-    alarm_meta: alarmMeta,
+    // Single-alarm legacy (mantenido para que vistas/código viejo no rompan).
+    // Refleja el primer elemento del array — si solo hay una alarma se ve igual
+    // que antes; si hay varias, las extras quedan solo en `alarms`.
+    alarm_type: alarms[0]?.type || null,
+    alarm_threshold_seconds: alarms[0]?.threshold_seconds || null,
+    alarm_meta: alarms[0]?.meta || null,
+    alarms,
   };
 }
 function toPipeline(p, stages) {
@@ -100,7 +122,6 @@ function updateStage(db, tenantId, id, patch) {
   const newName   = patch.name  !== undefined ? (patch.name.trim() || s.name) : s.name;
   const newColor  = patch.color !== undefined ? patch.color : s.color;
   const newKind   = patch.kind  !== undefined ? patch.kind  : s.kind;
-  // Si se asigna un bot, validar que pertenezca al mismo tenant
   let newBotId = s.bot_id;
   if ('bot_id' in patch) {
     const bid = patch.bot_id ? Number(patch.bot_id) : null;
@@ -109,19 +130,67 @@ function updateStage(db, tenantId, id, patch) {
     }
     newBotId = bid;
   }
-  const newStale  = 'stale_hours' in patch ? (patch.stale_hours ? Number(patch.stale_hours) : null) : s.stale_hours;
-  const newAlarmType = 'alarm_type' in patch ? (patch.alarm_type || null) : s.alarm_type;
-  const newAlarmThreshold = 'alarm_threshold_seconds' in patch
-    ? (patch.alarm_threshold_seconds ? Number(patch.alarm_threshold_seconds) : null)
-    : s.alarm_threshold_seconds;
-  let newAlarmMeta = s.alarm_meta;
-  if ('alarm_meta' in patch) {
-    if (patch.alarm_meta == null) newAlarmMeta = null;
-    else if (typeof patch.alarm_meta === 'string') newAlarmMeta = patch.alarm_meta;
-    else newAlarmMeta = JSON.stringify(patch.alarm_meta);
+  const newStale = 'stale_hours' in patch ? (patch.stale_hours ? Number(patch.stale_hours) : null) : s.stale_hours;
+
+  // ── Alarmas ──
+  // Caminos de actualización:
+  //   1. patch.alarms (array) → reemplaza el array completo (modo multi-alarmas)
+  //   2. patch.alarm_type/threshold/meta → modo legacy (single alarm).
+  //      Lo mapeamos a un array de 1 elemento para mantener consistencia.
+  // El primer elemento se duplica también en columnas alarm_* legacy para que
+  // queries antiguas y la lógica de healthz/migraciones futuras sigan viendo algo.
+  let newAlarms = null;
+  if (Array.isArray(patch.alarms)) {
+    newAlarms = patch.alarms
+      .filter(a => a && a.type) // ignora vacíos
+      .map((a, i) => ({
+        id: a.id || `a${i + 1}`,
+        type: String(a.type),
+        threshold_seconds: a.threshold_seconds ? Number(a.threshold_seconds) : null,
+        meta: (a.meta && typeof a.meta === 'object') ? a.meta : {},
+      }));
+  } else if ('alarm_type' in patch) {
+    // Legacy: el caller mandó la forma vieja. La convertimos a array de 1.
+    if (!patch.alarm_type) {
+      newAlarms = [];
+    } else {
+      let metaObj = {};
+      if (patch.alarm_meta && typeof patch.alarm_meta === 'object') metaObj = patch.alarm_meta;
+      else if (typeof patch.alarm_meta === 'string') {
+        try { metaObj = JSON.parse(patch.alarm_meta); } catch {}
+      }
+      newAlarms = [{
+        id: 'a1',
+        type: patch.alarm_type,
+        threshold_seconds: patch.alarm_threshold_seconds ? Number(patch.alarm_threshold_seconds) : null,
+        meta: metaObj,
+      }];
+    }
   }
-  db.prepare('UPDATE stages SET name=?, color=?, kind=?, bot_id=?, stale_hours=?, alarm_type=?, alarm_threshold_seconds=?, alarm_meta=? WHERE id=? AND tenant_id=?')
-    .run(newName, newColor, newKind, newBotId, newStale, newAlarmType, newAlarmThreshold, newAlarmMeta, id, tenantId);
+
+  // Si no hay update de alarmas, mantén lo que había
+  let newAlarmsJson, newAlarmType, newAlarmThreshold, newAlarmMetaCol;
+  if (newAlarms === null) {
+    newAlarmsJson      = s.alarms_json || '[]';
+    newAlarmType       = s.alarm_type;
+    newAlarmThreshold  = s.alarm_threshold_seconds;
+    newAlarmMetaCol    = s.alarm_meta;
+  } else {
+    newAlarmsJson      = JSON.stringify(newAlarms);
+    const first        = newAlarms[0] || null;
+    newAlarmType       = first ? first.type : null;
+    newAlarmThreshold  = first ? first.threshold_seconds : null;
+    newAlarmMetaCol    = first ? JSON.stringify(first.meta || {}) : null;
+  }
+
+  db.prepare(`
+    UPDATE stages
+       SET name=?, color=?, kind=?, bot_id=?, stale_hours=?,
+           alarm_type=?, alarm_threshold_seconds=?, alarm_meta=?, alarms_json=?
+     WHERE id=? AND tenant_id=?
+  `).run(newName, newColor, newKind, newBotId, newStale,
+         newAlarmType, newAlarmThreshold, newAlarmMetaCol, newAlarmsJson, id, tenantId);
+
   return db.prepare('SELECT * FROM stages WHERE id = ? AND tenant_id = ?').get(id, tenantId);
 }
 

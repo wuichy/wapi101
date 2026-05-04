@@ -473,72 +473,24 @@
         </div>
       </div>
 
-      <!-- Modal: configurar alarma de etapa -->
+      <!-- Modal: configurar alarmas de etapa (multi-alarmas) -->
       <div class="modal-backdrop" id="alarmModal" hidden>
-        <div class="modal-box" style="max-width:520px">
+        <div class="modal-box" style="max-width:560px">
           <header class="modal-header">
-            <h2>Alarma de etapa <span id="alarmModalStageName" style="color:var(--text-muted);font-weight:500"></span></h2>
+            <h2>Alarmas de etapa <span id="alarmModalStageName" style="color:var(--text-muted);font-weight:500"></span></h2>
             <button class="modal-close" data-close-alarm>×</button>
           </header>
           <div class="modal-body">
-            <p class="alarm-help">Marca leads en rojo cuando se cumpla la condición elegida. Útil para detectar leads abandonados, sin respuesta o estancados.</p>
+            <p class="alarm-help">Marca leads en rojo cuando se cumplan las condiciones elegidas. Podés agregar varias alarmas — la tarjeta se marcará si <strong>cualquiera</strong> se dispara. Útil para detectar leads abandonados, sin respuesta o estancados.</p>
 
-            <label class="form-field">
-              <span>Tipo de condición</span>
-              <select id="alarmType" class="form-input">
-                <option value="">— Sin alarma —</option>
-                <option value="time_in_stage">⏱ Tiempo en la etapa</option>
-                <option value="awaiting_our_reply">💬 Sin respuesta nuestra al lead</option>
-                <option value="no_activity">🥶 Sin actividad en el chat (lead frío)</option>
-                <option value="lead_no_reply">📤 Lead no respondió nuestro último mensaje</option>
-                <option value="missing_tag">🏷 Falta etiqueta requerida</option>
-                <option value="value_threshold">💰 Lead "grande" sin movimiento</option>
-                <option value="bot_paused">🤖 Bot pausado mucho tiempo</option>
-                <option value="empty_field">📋 Campo personalizado vacío</option>
-              </select>
-            </label>
+            <div id="alarmsList"></div>
 
-            <p id="alarmTypeDesc" class="alarm-type-desc"></p>
-
-            <!-- Tiempo: número + unidad -->
-            <div class="alarm-time-row" id="alarmTimeRow" hidden>
-              <label class="form-field" style="flex:1">
-                <span>Cantidad</span>
-                <input type="number" id="alarmTimeAmount" min="1" placeholder="Ej. 24" class="form-input" />
-              </label>
-              <label class="form-field" style="flex:1">
-                <span>Unidad</span>
-                <select id="alarmTimeUnit" class="form-input">
-                  <option value="seconds">Segundos</option>
-                  <option value="minutes">Minutos</option>
-                  <option value="hours" selected>Horas</option>
-                  <option value="days">Días</option>
-                </select>
-              </label>
-            </div>
-
-            <!-- Etiqueta requerida -->
-            <label class="form-field" id="alarmTagRow" hidden>
-              <span>Etiqueta que el lead debe tener</span>
-              <input type="text" id="alarmTagName" class="form-input" placeholder="Ej. Cotizado" maxlength="40" />
-            </label>
-
-            <!-- Valor mínimo -->
-            <label class="form-field" id="alarmValueRow" hidden>
-              <span>Valor mínimo del expediente ($)</span>
-              <input type="number" id="alarmMinValue" class="form-input" min="0" step="100" placeholder="Ej. 5000" />
-            </label>
-
-            <!-- Campo personalizado -->
-            <label class="form-field" id="alarmFieldRow" hidden>
-              <span>Campo personalizado que debe estar lleno</span>
-              <select id="alarmFieldSelect" class="form-input">
-                <option value="">— Selecciona un campo —</option>
-              </select>
-            </label>
+            <button class="btn btn--ghost" id="alarmAddBtn" type="button" style="margin-top:10px;width:100%">
+              + Agregar alarma
+            </button>
+            <p id="alarmsEmptyHint" class="alarm-type-desc" hidden style="text-align:center;margin-top:10px">No hay alarmas configuradas. Click en "+ Agregar alarma" para crear una.</p>
           </div>
           <footer class="modal-footer">
-            <button class="btn btn--danger-ghost" id="alarmDeleteBtn" hidden>Quitar alarma</button>
             <div style="flex:1"></div>
             <button class="btn btn--ghost" data-close-alarm>Cancelar</button>
             <button class="btn btn--primary" id="alarmSaveBtn">Guardar</button>

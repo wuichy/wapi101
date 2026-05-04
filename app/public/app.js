@@ -4940,14 +4940,33 @@ function renderBotList() {
     </div>`;
 }
 
-function openBotBuilder(bot) {
+// _botBuilderReturnTo: contexto desde el cual se abrió el builder, para que
+// el botón "←" sepa a dónde volver. Valores:
+//   null/undefined → volver a la lista de bots (default)
+//   'pipelines'    → volver a la vista de pipelines (kanban)
+//   'templates'    → volver a la vista de plantillas
+//   'expedientes'  → volver al modal de expediente (si lo abrieron desde ahí)
+let _botBuilderReturnTo = null;
+
+function openBotBuilder(bot, returnTo = null) {
+  _botBuilderReturnTo = returnTo;
+  // Ajustar texto del botón "←" según el origen
+  const backBtn = document.getElementById('botBackBtn');
+  if (backBtn) {
+    const labels = { pipelines: 'Pipelines', templates: 'Plantillas', expedientes: 'Expedientes' };
+    const label = labels[returnTo] || 'Bots';
+    // Mantener el SVG y solo cambiar el texto
+    const svg = backBtn.querySelector('svg');
+    backBtn.innerHTML = '';
+    if (svg) backBtn.appendChild(svg);
+    backBtn.appendChild(document.createTextNode(' ' + label));
+  }
+
   sbCurrentId = bot ? bot.id : null;
   sbCurrentIssues = bot && Array.isArray(bot.issues) ? bot.issues : [];
   sbSteps = bot
     ? JSON.parse(JSON.stringify(bot.steps)).map((s, i) => {
         sbStepCounter = Math.max(sbStepCounter, i + 1);
-        // Asegurar que cada step tiene _id estable. Si el backend devuelve _id
-        // ya, lo respetamos; los issues del backend usan el _id de los steps.
         return { ...s, _id: s._id || `s${i}` };
       })
     : [];
@@ -5541,10 +5560,21 @@ function collectAllSteps() {
 }
 
 function setupBot() {
-  // Back button
+  // Back button — devuelve al contexto desde el que se abrió el builder
   document.getElementById('botBackBtn')?.addEventListener('click', () => {
+    const returnTo = _botBuilderReturnTo;
     closeBotBuilder();
-    loadSalsbots();
+    if (returnTo === 'pipelines') {
+      showView('pipelines');
+      // showView('pipelines') ya re-renderiza los kanbans, no hace falta más
+    } else if (returnTo === 'templates') {
+      showView('plantillas');
+    } else if (returnTo === 'expedientes') {
+      showView('expedientes');
+    } else {
+      loadSalsbots();
+    }
+    _botBuilderReturnTo = null;
   });
 
   // Búsqueda en la lista de bots (la barra del topbar cuando estamos en /bot)
@@ -6748,7 +6778,8 @@ function renderPipelinesBoard() {
 
   board.innerHTML = pipeline.stages.map(stage => {
     const cards = expByStage[stage.id] || [];
-    const alarmActive = !!stage.alarm_type;
+    // alarmActive considera el array nuevo y el legacy (vía _stageAlarms helper)
+    const alarmActive = _stageAlarms(stage).length > 0;
     return `
       <div class="pl-column" data-stage-id="${stage.id}" data-drop-stage="${stage.id}">
         <div class="pl-col-header">
@@ -6761,8 +6792,13 @@ function renderPipelinesBoard() {
         </div>
         <div class="pl-col-body">
           ${cards.length ? cards.map(e => {
-            const isStale = showAlarms && evalStageAlarm(stage, e, nowSec);
-            const overdueLabel = isStale ? `<span class="pl-card-stale-pill" title="${escHtml(alarmReason(stage))}">⚠ ${escHtml(alarmShortLabel(stage.alarm_type))}</span>` : '';
+            const triggered = showAlarms ? evalStageAlarmsTriggered(stage, e, nowSec) : [];
+            const isStale = triggered.length > 0;
+            const overdueLabel = isStale
+              ? (triggered.length === 1
+                  ? `<span class="pl-card-stale-pill" title="${escHtml(alarmReason(stage))}">⚠ ${escHtml(alarmShortLabel(triggered[0].type))}</span>`
+                  : `<span class="pl-card-stale-pill" title="${escHtml(triggered.map(a => ALARM_TYPE_LABELS[a.type] || a.type).join(' · '))}">⚠ ${triggered.length} razones</span>`)
+              : '';
             // Ícono de error de entrega — muestra solo el icono, click → modal
             const failure = e.deliveryFailure;
             const deliveryIcon = failure
@@ -7972,7 +8008,8 @@ function setupPipelines() {
       }
       return;
     }
-    // Hint del bot — navega al bot builder con el bot abierto
+    // Hint del bot — navega al bot builder con el bot abierto.
+    // Pasamos returnTo='pipelines' para que el botón "←" devuelva a esta vista.
     const botHint = e.target.closest('[data-go-to-bot]');
     if (botHint) {
       e.stopPropagation();
@@ -7982,7 +8019,7 @@ function setupPipelines() {
         await loadSalsbots();
         bot = sbBots.find(b => b.id === botId);
       }
-      if (bot) { showView('bot'); openBotBuilder(bot); }
+      if (bot) { showView('bot'); openBotBuilder(bot, 'pipelines'); }
       else toast('No se encontró el bot', 'error');
       return;
     }
@@ -8176,30 +8213,53 @@ function alarmShortLabel(type) {
   if (type === 'empty_field')        return 'Campo vacío';
   return 'Estancado';
 }
-function alarmButtonLabel(stage) {
-  if (!stage.alarm_type) return 'Alarma';
-  const ico = (ALARM_TYPE_LABELS[stage.alarm_type] || '').slice(0, 2);
-  const t = stage.alarm_threshold_seconds ? fmtDuration(stage.alarm_threshold_seconds) : '';
-  return `${ico} ${t}`.trim();
-}
-function alarmReason(stage) {
-  if (!stage.alarm_type) return '';
-  const lbl = ALARM_TYPE_LABELS[stage.alarm_type] || stage.alarm_type;
-  const t = stage.alarm_threshold_seconds ? ` (${fmtDuration(stage.alarm_threshold_seconds)})` : '';
-  return `${lbl}${t}`;
+
+// Devuelve el array normalizado de alarmas de una etapa. Maneja tanto el
+// nuevo modelo multi-alarmas (.alarms) como el legacy (.alarm_type).
+function _stageAlarms(stage) {
+  if (Array.isArray(stage.alarms) && stage.alarms.length) return stage.alarms;
+  if (stage.alarm_type) {
+    return [{
+      id: 'a1',
+      type: stage.alarm_type,
+      threshold_seconds: stage.alarm_threshold_seconds || null,
+      meta: stage.alarm_meta || {},
+    }];
+  }
+  return [];
 }
 
-// Evalúa si un expediente cumple la condición de alarma de su etapa actual.
-function evalStageAlarm(stage, e, nowSec) {
-  if (!stage.alarm_type) return false;
-  const sec  = Number(stage.alarm_threshold_seconds || 0);
-  const meta = stage.alarm_meta || {};
+function alarmButtonLabel(stage) {
+  const arr = _stageAlarms(stage);
+  if (!arr.length) return 'Alarma';
+  if (arr.length === 1) {
+    const a = arr[0];
+    const ico = (ALARM_TYPE_LABELS[a.type] || '').slice(0, 2);
+    const t = a.threshold_seconds ? fmtDuration(a.threshold_seconds) : '';
+    return `${ico} ${t}`.trim();
+  }
+  return `⚠ ${arr.length} alarmas`;
+}
+function alarmReason(stage) {
+  const arr = _stageAlarms(stage);
+  if (!arr.length) return '';
+  return arr.map(a => {
+    const lbl = ALARM_TYPE_LABELS[a.type] || a.type;
+    const t = a.threshold_seconds ? ` (${fmtDuration(a.threshold_seconds)})` : '';
+    return `${lbl}${t}`;
+  }).join(' · ');
+}
+
+// Evalúa una sola alarma contra un expediente. Devuelve true si dispara.
+function _evalSingleAlarm(alarm, e, nowSec) {
+  if (!alarm || !alarm.type) return false;
+  const sec  = Number(alarm.threshold_seconds || 0);
+  const meta = alarm.meta || {};
   const tIn  = e.stageEnteredAt || e.updatedAt || e.createdAt;
-  switch (stage.alarm_type) {
+  switch (alarm.type) {
     case 'time_in_stage':
       return sec > 0 && tIn && (nowSec - tIn) > sec;
     case 'awaiting_our_reply': {
-      // Lead escribió, nadie le contestó después
       if (!e.lastIncomingAt) return false;
       const leadIsLast = !e.lastMessageAt || e.lastIncomingAt >= e.lastMessageAt - 1;
       return sec > 0 && leadIsLast && (nowSec - e.lastIncomingAt) > sec;
@@ -8209,7 +8269,6 @@ function evalStageAlarm(stage, e, nowSec) {
       return sec > 0 && lastAny > 0 && (nowSec - lastAny) > sec;
     }
     case 'lead_no_reply': {
-      // Le escribimos último, no contestaron
       if (!e.lastMessageAt) return false;
       const weAreLast = !e.lastIncomingAt || e.lastMessageAt > e.lastIncomingAt;
       return sec > 0 && weAreLast && (nowSec - e.lastMessageAt) > sec;
@@ -8241,6 +8300,20 @@ function evalStageAlarm(stage, e, nowSec) {
   return false;
 }
 
+// Devuelve true si CUALQUIERA de las alarmas configuradas dispara para el
+// expediente. Usado para marcar la card del kanban en rojo.
+function evalStageAlarm(stage, e, nowSec) {
+  const alarms = _stageAlarms(stage);
+  return alarms.some(a => _evalSingleAlarm(a, e, nowSec));
+}
+
+// Devuelve el array de alarmas que están disparando ahora — útil para
+// mostrar todas las razones simultáneas en tooltip / banner.
+function evalStageAlarmsTriggered(stage, e, nowSec) {
+  const alarms = _stageAlarms(stage);
+  return alarms.filter(a => _evalSingleAlarm(a, e, nowSec));
+}
+
 // Convierte cantidad+unidad → segundos
 function alarmTimeToSeconds(amount, unit) {
   const n = Number(amount);
@@ -8260,6 +8333,10 @@ function alarmSecondsToTime(seconds) {
 }
 
 let _alarmEditingStageId = null;
+// Estado del modal: array de alarmas en edición. Cada elemento tiene la
+// forma { id, type, threshold_seconds, meta }. Se reescriben al guardar.
+let _alarmDraft = [];
+let _alarmFieldDefs = []; // cache de field-defs para el selector empty_field
 
 async function handleStageAlarmClick(stageId) {
   let stage = null;
@@ -8269,99 +8346,188 @@ async function handleStageAlarmClick(stageId) {
   }
   if (!stage) return;
   _alarmEditingStageId = stageId;
-
-  const modal = document.getElementById('alarmModal');
-  document.getElementById('alarmModalStageName').textContent = `· ${stage.name}`;
-  document.getElementById('alarmType').value = stage.alarm_type || '';
-  // Cargar campos custom para el selector empty_field
-  await populateAlarmFieldSelect(stage);
-  // Pre-llenar valores
-  if (stage.alarm_threshold_seconds) {
-    const t = alarmSecondsToTime(stage.alarm_threshold_seconds);
-    document.getElementById('alarmTimeAmount').value = t.amount;
-    document.getElementById('alarmTimeUnit').value   = t.unit;
-  } else {
-    document.getElementById('alarmTimeAmount').value = '';
-    document.getElementById('alarmTimeUnit').value   = 'hours';
-  }
-  document.getElementById('alarmTagName').value     = stage.alarm_meta?.tag || '';
-  document.getElementById('alarmMinValue').value    = stage.alarm_meta?.minValue || '';
-  document.getElementById('alarmFieldSelect').value = stage.alarm_meta?.fieldId || '';
-  document.getElementById('alarmDeleteBtn').hidden  = !stage.alarm_type;
-  updateAlarmModalUI();
-  modal.hidden = false;
-}
-
-function updateAlarmModalUI() {
-  const type = document.getElementById('alarmType').value;
-  document.getElementById('alarmTypeDesc').textContent = ALARM_TYPE_DESCS[type] || (type === '' ? 'Selecciona una condición para activar la alarma.' : '');
-  document.getElementById('alarmTimeRow').hidden  = !ALARM_TYPES_NEED_TIME.has(type);
-  document.getElementById('alarmTagRow').hidden   = type !== 'missing_tag';
-  document.getElementById('alarmValueRow').hidden = type !== 'value_threshold';
-  document.getElementById('alarmFieldRow').hidden = type !== 'empty_field';
-}
-
-async function populateAlarmFieldSelect(stage) {
-  const sel = document.getElementById('alarmFieldSelect');
-  if (!sel) return;
+  // Cargar field-defs una vez por apertura (para el selector empty_field)
   try {
     const data = await api('GET', '/api/expedients/field-defs');
-    const items = data.items || [];
-    sel.innerHTML = '<option value="">— Selecciona un campo —</option>' +
-      items.map(f => `<option value="${f.id}">${escHtml(f.label)}</option>`).join('');
-    if (stage.alarm_meta?.fieldId) sel.value = stage.alarm_meta.fieldId;
-  } catch (_) {
-    sel.innerHTML = '<option value="">No se pudieron cargar los campos</option>';
+    _alarmFieldDefs = data.items || [];
+  } catch { _alarmFieldDefs = []; }
+
+  // Hidratar el draft. Si la stage tiene .alarms (multi), úsalo;
+  // si no, sintetiza un array de 1 desde los campos legacy.
+  let initial = [];
+  if (Array.isArray(stage.alarms) && stage.alarms.length) {
+    initial = stage.alarms.map((a, i) => ({
+      id: a.id || `a${i + 1}`,
+      type: a.type,
+      threshold_seconds: a.threshold_seconds || null,
+      meta: a.meta || {},
+    }));
+  } else if (stage.alarm_type) {
+    initial = [{
+      id: 'a1',
+      type: stage.alarm_type,
+      threshold_seconds: stage.alarm_threshold_seconds || null,
+      meta: stage.alarm_meta || {},
+    }];
   }
+  _alarmDraft = initial;
+
+  document.getElementById('alarmModalStageName').textContent = `· ${stage.name}`;
+  renderAlarmsList();
+  document.getElementById('alarmModal').hidden = false;
+}
+
+function renderAlarmsList() {
+  const list = document.getElementById('alarmsList');
+  const emptyHint = document.getElementById('alarmsEmptyHint');
+  if (!list) return;
+
+  if (!_alarmDraft.length) {
+    list.innerHTML = '';
+    if (emptyHint) emptyHint.hidden = false;
+    return;
+  }
+  if (emptyHint) emptyHint.hidden = true;
+
+  list.innerHTML = _alarmDraft.map((a, idx) => buildAlarmRowHtml(a, idx)).join('');
+}
+
+function buildAlarmRowHtml(a, idx) {
+  const type = a.type || '';
+  const needsTime = ALARM_TYPES_NEED_TIME.has(type);
+  const t = a.threshold_seconds ? alarmSecondsToTime(a.threshold_seconds) : { amount: '', unit: 'hours' };
+  const meta = a.meta || {};
+  return `
+    <div class="alarm-row" data-alarm-idx="${idx}">
+      <div class="alarm-row-header">
+        <span class="alarm-row-num">#${idx + 1}</span>
+        <button type="button" class="alarm-row-del" data-alarm-del="${idx}" title="Quitar esta alarma">×</button>
+      </div>
+      <label class="form-field">
+        <span>Tipo de condición</span>
+        <select class="form-input" data-alarm-type="${idx}">
+          <option value="">— Selecciona —</option>
+          <option value="time_in_stage"      ${type==='time_in_stage'?'selected':''}>⏱ Tiempo en la etapa</option>
+          <option value="awaiting_our_reply" ${type==='awaiting_our_reply'?'selected':''}>💬 Sin respuesta nuestra al lead</option>
+          <option value="no_activity"        ${type==='no_activity'?'selected':''}>🥶 Sin actividad (lead frío)</option>
+          <option value="lead_no_reply"      ${type==='lead_no_reply'?'selected':''}>📤 Lead no respondió</option>
+          <option value="missing_tag"        ${type==='missing_tag'?'selected':''}>🏷 Falta etiqueta requerida</option>
+          <option value="value_threshold"    ${type==='value_threshold'?'selected':''}>💰 Lead grande estancado</option>
+          <option value="bot_paused"         ${type==='bot_paused'?'selected':''}>🤖 Bot pausado mucho tiempo</option>
+          <option value="empty_field"        ${type==='empty_field'?'selected':''}>📋 Campo personalizado vacío</option>
+        </select>
+      </label>
+      ${type ? `<p class="alarm-type-desc">${escHtml(ALARM_TYPE_DESCS[type] || '')}</p>` : ''}
+      ${needsTime ? `
+        <div class="alarm-time-row">
+          <label class="form-field" style="flex:1">
+            <span>Cantidad</span>
+            <input type="number" class="form-input" min="1" placeholder="Ej. 24"
+                   value="${escHtml(t.amount)}" data-alarm-time-amt="${idx}" />
+          </label>
+          <label class="form-field" style="flex:1">
+            <span>Unidad</span>
+            <select class="form-input" data-alarm-time-unit="${idx}">
+              <option value="seconds" ${t.unit==='seconds'?'selected':''}>Segundos</option>
+              <option value="minutes" ${t.unit==='minutes'?'selected':''}>Minutos</option>
+              <option value="hours"   ${t.unit==='hours'?'selected':''}>Horas</option>
+              <option value="days"    ${t.unit==='days'?'selected':''}>Días</option>
+            </select>
+          </label>
+        </div>
+      ` : ''}
+      ${type === 'missing_tag' ? `
+        <label class="form-field">
+          <span>Etiqueta que el lead debe tener</span>
+          <input type="text" class="form-input" maxlength="40" placeholder="Ej. Cotizado"
+                 value="${escHtml(meta.tag || '')}" data-alarm-meta-tag="${idx}" />
+        </label>` : ''}
+      ${type === 'value_threshold' ? `
+        <label class="form-field">
+          <span>Valor mínimo del expediente ($)</span>
+          <input type="number" class="form-input" min="0" step="100" placeholder="Ej. 5000"
+                 value="${escHtml(meta.minValue || '')}" data-alarm-meta-minvalue="${idx}" />
+        </label>` : ''}
+      ${type === 'empty_field' ? `
+        <label class="form-field">
+          <span>Campo personalizado que debe estar lleno</span>
+          <select class="form-input" data-alarm-meta-fieldid="${idx}">
+            <option value="">— Selecciona un campo —</option>
+            ${_alarmFieldDefs.map(f => `<option value="${f.id}" ${Number(meta.fieldId)===f.id?'selected':''}>${escHtml(f.label)}</option>`).join('')}
+          </select>
+        </label>` : ''}
+    </div>
+  `;
+}
+
+function _readAlarmDraftFromDom() {
+  // Lee inputs visibles del DOM y actualiza _alarmDraft (preserva orden).
+  // Esto se llama antes de re-render o de save.
+  document.querySelectorAll('[data-alarm-idx]').forEach(rowEl => {
+    const idx = Number(rowEl.dataset.alarmIdx);
+    const a = _alarmDraft[idx];
+    if (!a) return;
+    const typeSel = rowEl.querySelector(`[data-alarm-type="${idx}"]`);
+    if (typeSel) a.type = typeSel.value;
+    const amt = rowEl.querySelector(`[data-alarm-time-amt="${idx}"]`);
+    const unit = rowEl.querySelector(`[data-alarm-time-unit="${idx}"]`);
+    if (amt && unit) {
+      a.threshold_seconds = alarmTimeToSeconds(amt.value, unit.value);
+    }
+    const tag = rowEl.querySelector(`[data-alarm-meta-tag="${idx}"]`);
+    const minV = rowEl.querySelector(`[data-alarm-meta-minvalue="${idx}"]`);
+    const fId = rowEl.querySelector(`[data-alarm-meta-fieldid="${idx}"]`);
+    a.meta = a.meta || {};
+    if (tag)  a.meta.tag = tag.value.trim();
+    if (minV) a.meta.minValue = Number(minV.value) || 0;
+    if (fId)  a.meta.fieldId = Number(fId.value) || 0;
+  });
 }
 
 function closeAlarmModal() {
   document.getElementById('alarmModal').hidden = true;
   _alarmEditingStageId = null;
+  _alarmDraft = [];
 }
 
-async function saveAlarmFromModal() {
+async function saveAlarmsFromModal() {
   if (!_alarmEditingStageId) return;
-  const type = document.getElementById('alarmType').value;
-  let payload;
-  if (!type) {
-    payload = { alarm_type: null, alarm_threshold_seconds: null, alarm_meta: null, stale_hours: null };
-  } else {
-    let seconds = null;
-    if (ALARM_TYPES_NEED_TIME.has(type)) {
-      const amount = document.getElementById('alarmTimeAmount').value;
-      const unit   = document.getElementById('alarmTimeUnit').value;
-      seconds = alarmTimeToSeconds(amount, unit);
-      if (!seconds) { toast('Ingresa una cantidad de tiempo válida', 'warning'); return; }
+  _readAlarmDraftFromDom();
+
+  // Validar cada alarma
+  const valid = [];
+  for (const [idx, a] of _alarmDraft.entries()) {
+    if (!a.type) continue; // ignorar filas sin tipo seleccionado
+    if (ALARM_TYPES_NEED_TIME.has(a.type) && !a.threshold_seconds) {
+      toast(`Alarma #${idx + 1}: ingresa una cantidad de tiempo válida`, 'warning');
+      return;
     }
-    const meta = {};
-    if (type === 'missing_tag') {
-      const tag = document.getElementById('alarmTagName').value.trim();
-      if (!tag) { toast('Ingresa el nombre de la etiqueta', 'warning'); return; }
-      meta.tag = tag;
+    if (a.type === 'missing_tag' && !a.meta?.tag) {
+      toast(`Alarma #${idx + 1}: ingresa el nombre de la etiqueta`, 'warning');
+      return;
     }
-    if (type === 'value_threshold') {
-      const minValue = Number(document.getElementById('alarmMinValue').value);
-      if (!(minValue > 0)) { toast('Ingresa un valor mínimo mayor a 0', 'warning'); return; }
-      meta.minValue = minValue;
+    if (a.type === 'value_threshold' && !(Number(a.meta?.minValue) > 0)) {
+      toast(`Alarma #${idx + 1}: ingresa un valor mínimo mayor a 0`, 'warning');
+      return;
     }
-    if (type === 'empty_field') {
-      const fieldId = Number(document.getElementById('alarmFieldSelect').value);
-      if (!fieldId) { toast('Selecciona un campo personalizado', 'warning'); return; }
-      meta.fieldId = fieldId;
+    if (a.type === 'empty_field' && !Number(a.meta?.fieldId)) {
+      toast(`Alarma #${idx + 1}: selecciona un campo personalizado`, 'warning');
+      return;
     }
-    payload = {
-      alarm_type: type,
-      alarm_threshold_seconds: seconds,
-      alarm_meta: Object.keys(meta).length ? meta : null,
-      stale_hours: null,
-    };
+    valid.push({
+      id: a.id || `a${valid.length + 1}`,
+      type: a.type,
+      threshold_seconds: a.threshold_seconds || null,
+      meta: a.meta || {},
+    });
   }
+
   try {
-    await api('PATCH', `/api/pipelines/stages/${_alarmEditingStageId}`, payload);
+    await api('PATCH', `/api/pipelines/stages/${_alarmEditingStageId}`, { alarms: valid });
     closeAlarmModal();
     await loadPipelinesKanban();
-    toast(payload.alarm_type ? 'Alarma configurada' : 'Alarma desactivada', 'success');
+    if (valid.length) toast(`${valid.length} alarma${valid.length===1?'':'s'} configurada${valid.length===1?'':'s'}`, 'success');
+    else toast('Alarmas removidas', 'success');
   } catch (err) { toast(err.message, 'error'); }
 }
 
@@ -8372,13 +8538,35 @@ function setupAlarmModal() {
   document.getElementById('alarmModal')?.addEventListener('click', e => {
     if (e.target.id === 'alarmModal') closeAlarmModal();
   });
-  document.getElementById('alarmType')?.addEventListener('change', updateAlarmModalUI);
-  document.getElementById('alarmSaveBtn')?.addEventListener('click', saveAlarmFromModal);
-  document.getElementById('alarmDeleteBtn')?.addEventListener('click', async () => {
-    if (!confirm('¿Quitar la alarma de esta etapa?')) return;
-    document.getElementById('alarmType').value = '';
-    await saveAlarmFromModal();
+
+  // Re-render cuando cambia el tipo (porque cambian los campos visibles)
+  document.getElementById('alarmsList')?.addEventListener('change', (e) => {
+    if (e.target.matches('[data-alarm-type]')) {
+      _readAlarmDraftFromDom();
+      renderAlarmsList();
+    }
   });
+
+  // Eliminar una alarma del draft
+  document.getElementById('alarmsList')?.addEventListener('click', (e) => {
+    const del = e.target.closest('[data-alarm-del]');
+    if (del) {
+      e.preventDefault();
+      _readAlarmDraftFromDom();
+      const idx = Number(del.dataset.alarmDel);
+      _alarmDraft.splice(idx, 1);
+      renderAlarmsList();
+    }
+  });
+
+  // Agregar nueva alarma vacía
+  document.getElementById('alarmAddBtn')?.addEventListener('click', () => {
+    _readAlarmDraftFromDom();
+    _alarmDraft.push({ id: `a${_alarmDraft.length + 1}`, type: '', threshold_seconds: null, meta: {} });
+    renderAlarmsList();
+  });
+
+  document.getElementById('alarmSaveBtn')?.addEventListener('click', saveAlarmsFromModal);
 }
 
 // ─── Chat search ───
@@ -11268,19 +11456,19 @@ function setupTemplates() {
 
   // Card actions (delegated)
   document.getElementById('tplList')?.addEventListener('click', async (e) => {
-    // Click en pastilla "Usado en: <bot>" → abrir el bot builder
+    // Click en pastilla "Usado en: <bot>" → abrir el bot builder.
+    // returnTo='templates' para que "←" devuelva a la lista de plantillas.
     const botPill = e.target.closest('[data-go-to-bot]');
     if (botPill) {
       const botId = Number(botPill.dataset.goToBot);
       const bot = sbBots.find(b => b.id === botId);
       if (bot) {
         showView('bot');
-        openBotBuilder(bot);
+        openBotBuilder(bot, 'templates');
       } else {
-        // Si sbBots no se ha cargado todavía, recarga y reintenta
         await loadSalsbots();
         const fresh = sbBots.find(b => b.id === botId);
-        if (fresh) { showView('bot'); openBotBuilder(fresh); }
+        if (fresh) { showView('bot'); openBotBuilder(fresh, 'templates'); }
         else toast('No se encontró el bot', 'error');
       }
       return;

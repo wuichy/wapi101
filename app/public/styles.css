@@ -5196,6 +5196,51 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   margin-bottom: 14px;
 }
 .alarm-time-row .form-field { margin-bottom: 0; }
+
+/* Multi-alarmas: cada alarma es una "tarjeta" dentro del modal */
+.alarm-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: #fafbfc;
+}
+.alarm-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.alarm-row-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(0,0,0,.04);
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: .5px;
+}
+.alarm-row-del {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  font-weight: 400;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.alarm-row-del:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+.alarm-row .alarm-type-desc {
+  margin: 4px 0 12px;
+  min-height: 0;
+}
 #alarmModal .form-field { margin-bottom: 14px; }
 #alarmModal .form-field > span { display: block; font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
 #alarmModal .form-input {

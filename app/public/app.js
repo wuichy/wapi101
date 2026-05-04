@@ -2660,7 +2660,9 @@ function renderExpedientRows(items) {
   paginator.hidden = false;
   tbody.innerHTML = items.map((exp) => {
     const tagsHtml = exp.tags.map((t) => `<span class="exp-tag">${escapeHtml(t)}</span>`).join('') || '—';
-    const stageColor = exp.stageKind === 'won' ? '#10b981' : exp.stageKind === 'lost' ? '#ef4444' : '#2563eb';
+    // Usar los colores reales de la BD; fallback a kind si no llegan.
+    const sColor = exp.stageColor || (exp.stageKind === 'won' ? '#10b981' : exp.stageKind === 'lost' ? '#ef4444' : '#94a3b8');
+    const pColor = exp.pipelineColor || '#64748b';
     return `
       <tr data-exp-id="${exp.id}" style="cursor:pointer">
         <td>
@@ -2668,8 +2670,13 @@ function renderExpedientRows(items) {
         </td>
         <td><div class="exp-contact">${escapeHtml(exp.contactName || '—')}</div></td>
         <td>
-          <span class="exp-pipeline-badge" style="background:${stageColor}18;color:${stageColor}">
-            ${escapeHtml(exp.pipelineName || '')} › ${escapeHtml(exp.stageName || '')}
+          <span class="exp-pipeline-badge-wrap">
+            <span class="exp-pipeline-name" style="color:${pColor};border-left:3px solid ${pColor}">${escapeHtml(exp.pipelineName || '')}</span>
+            <span class="exp-pipeline-arrow">→</span>
+            <span class="exp-stage-pill" style="background:${sColor}1a;color:${sColor};border:1px solid ${sColor}66">
+              <span class="exp-stage-dot" style="background:${sColor}"></span>
+              ${escapeHtml(exp.stageName || '')}
+            </span>
           </span>
         </td>
         <td>${tagsHtml}</td>

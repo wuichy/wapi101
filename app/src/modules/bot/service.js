@@ -133,6 +133,19 @@ function _validateBot(db, bot) {
           issues.push({ stepId, kind: 'empty_message', severity: 'warn',
             message: 'El mensaje está vacío — no se enviará nada.' });
         }
+        // Si el texto vino de una plantilla básica (botón "Usar plantilla básica")
+        // y esa plantilla fue eliminada, mostramos un AVISO (no error). El bot
+        // sigue funcionando porque el texto ya está copiado, pero perdió la
+        // trazabilidad con el original.
+        const fromTpl = Number(c.fromTemplateId || 0);
+        if (fromTpl) {
+          const tpl = db.prepare('SELECT id FROM message_templates WHERE id = ?').get(fromTpl);
+          if (!tpl) {
+            issues.push({ stepId, kind: 'source_template_deleted', severity: 'warn',
+              message: `La plantilla origen del texto fue eliminada (#${fromTpl}). El mensaje sigue funcionando pero ya no hay vínculo con la plantilla.`,
+              hint: 'Si actualizaste la plantilla esperando que el bot reflejara el cambio, ahora tendrás que editar el texto a mano.' });
+          }
+        }
         break;
       }
       case 'tag': {

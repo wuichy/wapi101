@@ -4662,6 +4662,39 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .sb-step-body .sb-row input,
 .sb-step-body .sb-row select { flex: 1; }
 
+/* Chip que indica el origen del texto de un step "Enviar mensaje" — cuando
+   el texto vino de una plantilla básica (botón Usar plantilla básica). */
+.sb-msg-from-tpl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px dashed rgba(37, 99, 235, 0.3);
+  padding: 4px 8px 4px 10px;
+  border-radius: 6px;
+  margin-top: 4px;
+  width: fit-content;
+}
+.sb-msg-from-tpl strong { color: var(--accent, #2563eb); font-weight: 600; }
+.sb-msg-from-tpl-clear {
+  background: rgba(0,0,0,.06);
+  border: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-muted);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sb-msg-from-tpl-clear:hover { background: #fee2e2; color: #dc2626; }
+
 /* Chips para el step "Agregar etiqueta" — soporta varias etiquetas con coma */
 .sb-tag-chip-wrap {
   display: flex;

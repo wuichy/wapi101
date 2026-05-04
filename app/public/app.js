@@ -5086,6 +5086,20 @@ function buildStepBody(step) {
           <button type="button" class="sb-tpl-insert-btn" data-sid="${sid}" title="Inserta el cuerpo de una plantilla básica">📋 Usar plantilla básica</button>
         </div>
         <textarea data-field="text" data-sid="${sid}" rows="4" placeholder="Escribe el mensaje aquí…">${escHtml(c.text || '')}</textarea>
+        ${(() => {
+          // Si el texto vino de una plantilla básica (insertada con el botón),
+          // mostramos un hint del origen. Si la plantilla fue eliminada, lo
+          // dice también para que el user sepa por qué hay un aviso en este step.
+          const fromId = Number(c.fromTemplateId || 0);
+          if (!fromId) return '';
+          const tpl = (_tplItems || []).find(t => t.id === fromId);
+          const label = tpl ? (tpl.displayName || tpl.name) : `Plantilla #${fromId} (eliminada)`;
+          return `<div class="sb-msg-from-tpl">
+            📋 Texto de plantilla: <strong>${escHtml(label)}</strong>
+            ${tpl ? `<button type="button" class="sb-msg-from-tpl-clear" data-sid="${sid}" title="Quitar referencia a la plantilla origen">×</button>` : ''}
+          </div>`;
+        })()}
+        <input type="hidden" data-field="fromTemplateId" data-sid="${sid}" value="${escHtml(c.fromTemplateId || '')}" />
         <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Variables: {nombre} {apellido} {telefono} {email} · Para plantillas WhatsApp API aprobadas usa el step "Enviar plantilla".</p>`;
     case 'template': {
       // Solo plantillas wa_api APROBADAS por Meta — las demás no se pueden enviar.
@@ -5916,12 +5930,32 @@ function setupBot() {
   // Delegamos a nivel de botBuilder porque las step-cards se re-renderizan.
   document.getElementById('botBuilder')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.sb-tpl-insert-btn');
-    if (!btn) return;
-    e.preventDefault();
-    const sid = btn.dataset.sid;
-    const textarea = document.querySelector(`textarea[data-sid="${sid}"][data-field="text"]`);
-    if (!textarea) return;
-    openTplPickerForBotMessage(btn, textarea);
+    if (btn) {
+      e.preventDefault();
+      const sid = btn.dataset.sid;
+      const textarea = document.querySelector(`textarea[data-sid="${sid}"][data-field="text"]`);
+      if (!textarea) return;
+      openTplPickerForBotMessage(btn, textarea);
+      return;
+    }
+    // Quitar la referencia a la plantilla origen (clear fromTemplateId)
+    const clearBtn = e.target.closest('.sb-msg-from-tpl-clear');
+    if (clearBtn) {
+      e.preventDefault();
+      const sid = clearBtn.dataset.sid;
+      const hidden = document.querySelector(`input[data-field="fromTemplateId"][data-sid="${sid}"]`);
+      if (hidden) {
+        hidden.value = '';
+        hidden.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      // Re-render del body del step para que desaparezca el chip
+      const step = sbSteps.find(s => s._id === sid);
+      if (step) {
+        if (step.config) step.config.fromTemplateId = '';
+        const body = document.querySelector(`[data-body-sid="${sid}"]`);
+        if (body) body.innerHTML = buildStepBody(step);
+      }
+    }
   });
 
   // Helper: en inputs de creación de etiquetas, teclear "," dispara el submit
@@ -9743,6 +9777,29 @@ function _renderTplPickerList(query) {
         ta.value = tpl.body || '';
         ta.dispatchEvent(new Event('input'));
         ta.focus();
+        // Si estamos en bot-message, guardar el origen del texto para que la
+        // validación pueda avisar si esa plantilla se borra después. Persiste
+        // al guardar el bot porque collectStepConfig lee inputs por
+        // [data-field], así que escribimos un input hidden hermano del textarea.
+        if (_tplPickerCtx.mode === 'bot-message' && tpl.id) {
+          const sid = ta.dataset.sid;
+          if (sid) {
+            const body = document.querySelector(`[data-body-sid="${sid}"]`);
+            if (body) {
+              let hidden = body.querySelector(`input[data-field="fromTemplateId"]`);
+              if (!hidden) {
+                hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.dataset.field = 'fromTemplateId';
+                hidden.dataset.sid = sid;
+                body.appendChild(hidden);
+              }
+              hidden.value = String(tpl.id);
+              // Disparar el handler para que sbSteps[].config se actualice
+              hidden.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          }
+        }
       }
       document.getElementById('rhTplPicker').hidden = true;
       _tplPickerCtx = null;

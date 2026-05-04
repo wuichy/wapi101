@@ -388,15 +388,30 @@ async function executeStep(db, step, ctx) {
       if (!pipelineId || !stageId || !ctx.contactId) return false;
 
       try {
-        const exp = db.prepare(
-          'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? LIMIT 1'
-        ).get(ctx.contactId, pipelineId);
+        // BUSCAR el expediente ABIERTO del contacto (en CUALQUIER pipeline).
+        // Antes la query buscaba por contact_id + pipeline_id, lo que causaba
+        // duplicados cuando el bot cruzaba al contacto entre pipelines:
+        // si Wuichy tenía exp en "1 MES" y el bot intentaba moverlo a
+        // "8 MESES", la query no encontraba (pipeline_id distinto) y CREABA
+        // un expediente nuevo. Resultado: 2 expedientes abiertos del mismo
+        // contacto + el viejo "atorado" en su pipeline original.
+        // Ahora busca cualquier expediente en estado in_progress y lo mueve.
+        // Si lo movemos a un pipeline distinto, también cambia pipeline_id.
+        const exp = db.prepare(`
+          SELECT e.id
+            FROM expedients e
+            JOIN stages s ON s.id = e.stage_id
+           WHERE e.contact_id = ?
+             AND COALESCE(s.kind, 'in_progress') = 'in_progress'
+           ORDER BY e.created_at DESC
+           LIMIT 1
+        `).get(ctx.contactId);
 
         let resolvedExpId = null;
         if (exp) {
           expedientSvc.update(db, exp.id, { stageId, pipelineId });
           resolvedExpId = exp.id;
-          _log('info', `expediente ${exp.id} movido a etapa ${stageId}`);
+          _log('info', `expediente ${exp.id} movido a etapa ${stageId} (pipeline ${pipelineId})`);
         } else {
           const created = expedientSvc.create(db, {
             contactId:  ctx.contactId,
@@ -404,7 +419,7 @@ async function executeStep(db, step, ctx) {
             stageId,
           });
           resolvedExpId = created.id;
-          _log('info', `expediente creado (${created.id}) en pipeline ${pipelineId} etapa ${stageId}`);
+          _log('info', `expediente creado (${created.id}) en pipeline ${pipelineId} etapa ${stageId} (no había abierto)`);
         }
 
         // Encadenar: dispara bots que escuchan la nueva etapa.

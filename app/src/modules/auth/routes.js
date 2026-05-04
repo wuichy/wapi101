@@ -128,7 +128,7 @@ module.exports = function createAuthRouter(db) {
           appSecret,
           appId,
         };
-        integration = await integrationService.connectRaw(db, provider, creds, {
+        integration = await integrationService.connectRaw(db, null, provider, creds, {
           displayName: page.name,
           externalId: page.id,
         });
@@ -150,7 +150,7 @@ module.exports = function createAuthRouter(db) {
           appSecret,
           appId,
         };
-        integration = await integrationService.connectRaw(db, provider, creds, {
+        integration = await integrationService.connectRaw(db, null, provider, creds, {
           displayName: igData.username ? `@${igData.username}` : igData.name || `IG ${igId}`,
           externalId: igId,
         });
@@ -161,7 +161,7 @@ module.exports = function createAuthRouter(db) {
         const wabaData = await wabaRes.json();
         const creds = { systemUserToken: userToken, appId, appSecret };
         const bizName = wabaData.data?.[0]?.name || 'WhatsApp Business';
-        integration = await integrationService.connectRaw(db, provider, creds, {
+        integration = await integrationService.connectRaw(db, null, provider, creds, {
           displayName: bizName,
           externalId: wabaData.data?.[0]?.id || `wl-${Date.now()}`,
         });
@@ -229,7 +229,7 @@ module.exports = function createAuthRouter(db) {
         refreshToken: tokenData.refresh_token,
         openId: user.open_id || tokenData.open_id,
       };
-      const integration = await integrationService.connectRaw(db, 'tiktok', creds, {
+      const integration = await integrationService.connectRaw(db, null, 'tiktok', creds, {
         displayName: user.display_name ? `@${user.display_name}` : `TikTok ${user.open_id || ''}`,
         externalId: user.open_id || tokenData.open_id,
       });

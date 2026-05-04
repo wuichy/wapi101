@@ -42,9 +42,8 @@ function hydrate(row) {
   };
 }
 
-function listAll(db) {
-  // Devuelve catálogo + integraciones existentes por cada provider
-  const rows = db.prepare('SELECT * FROM integrations ORDER BY id DESC').all();
+function listAll(db, tenantId) {
+  const rows = db.prepare('SELECT * FROM integrations WHERE tenant_id = ? ORDER BY id DESC').all(tenantId);
   const integrations = rows.map(hydrate);
 
   return providers.list().map((p) => {
@@ -53,14 +52,19 @@ function listAll(db) {
   });
 }
 
-function getById(db, id) {
-  const row = db.prepare('SELECT * FROM integrations WHERE id = ?').get(id);
+// tenantId puede ser null para callers internos (sender, webhooks) que ya
+// validaron la pertenencia por otro lado.
+function getById(db, tenantId, id) {
+  const row = tenantId == null
+    ? db.prepare('SELECT * FROM integrations WHERE id = ?').get(id)
+    : db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   return hydrate(row);
 }
 
-// Recupera credenciales en plano (para uso interno: tests, llamadas a la API real)
-function getCredentialsPlain(db, id) {
-  const row = db.prepare('SELECT credentials_enc FROM integrations WHERE id = ?').get(id);
+function getCredentialsPlain(db, tenantId, id) {
+  const row = tenantId == null
+    ? db.prepare('SELECT credentials_enc FROM integrations WHERE id = ?').get(id)
+    : db.prepare('SELECT credentials_enc FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) return null;
   return row.credentials_enc ? decryptJson(row.credentials_enc) : null;
 }
@@ -79,14 +83,12 @@ function mergeCredentials(provider, existing, incoming) {
   return merged;
 }
 
-async function connect(db, providerKey, incomingCreds) {
+async function connect(db, tenantId, providerKey, incomingCreds) {
   const provider = providers.get(providerKey);
   if (!provider) throw new Error(`Provider desconocido: ${providerKey}`);
 
-  // Flujo QR (whatsapp-lite vía Baileys): no validamos credenciales —
-  // creamos un row pendiente y arrancamos la sesión que generará el QR.
   if (provider.meta?.authType === 'qr') {
-    return connectQr(db, providerKey);
+    return connectQr(db, tenantId, providerKey);
   }
 
   const missing = provider.fields
@@ -101,28 +103,33 @@ async function connect(db, providerKey, incomingCreds) {
   const displayName = testResult.displayName || provider.meta.name;
   const encrypted = encryptJson(incomingCreds);
 
+  // La unicidad por (provider, external_id) sigue siendo global por ahora.
+  // En la práctica un mismo phone_number_id no puede estar en 2 tenants
+  // (Meta solo lo asigna a una cuenta), así que no hay colisión real.
   const existing = externalId
     ? db.prepare('SELECT * FROM integrations WHERE provider = ? AND external_id = ?').get(providerKey, externalId)
     : null;
 
   let savedId;
   if (existing) {
+    if (existing.tenant_id !== tenantId) {
+      throw new Error(`Esta integración ya está conectada en otra cuenta. Contacta soporte.`);
+    }
     db.prepare(`
       UPDATE integrations
       SET status = 'connected', display_name = ?, credentials_enc = ?, last_error = NULL,
           connected_at = unixepoch(), updated_at = unixepoch()
-      WHERE id = ?
-    `).run(displayName, encrypted, existing.id);
+      WHERE id = ? AND tenant_id = ?
+    `).run(displayName, encrypted, existing.id, tenantId);
     savedId = existing.id;
   } else {
     const result = db.prepare(`
-      INSERT INTO integrations (provider, status, display_name, external_id, credentials_enc, connected_at)
-      VALUES (?, 'connected', ?, ?, ?, unixepoch())
-    `).run(providerKey, displayName, externalId, encrypted);
+      INSERT INTO integrations (tenant_id, provider, status, display_name, external_id, credentials_enc, connected_at)
+      VALUES (?, ?, 'connected', ?, ?, ?, unixepoch())
+    `).run(tenantId, providerKey, displayName, externalId, encrypted);
     savedId = result.lastInsertRowid;
   }
 
-  // Telegram: registrar webhook automáticamente
   if (providerKey === 'telegram' && provider.setWebhook) {
     const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
     const webhookUrl = `${baseUrl}/webhooks/telegram`;
@@ -134,11 +141,11 @@ async function connect(db, providerKey, incomingCreds) {
     }
   }
 
-  return getById(db, savedId);
+  return getById(db, tenantId, savedId);
 }
 
-async function update(db, id, incomingCreds) {
-  const row = db.prepare('SELECT * FROM integrations WHERE id = ?').get(id);
+async function update(db, tenantId, id, incomingCreds) {
+  const row = db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) throw new Error('Integración no encontrada');
   const provider = providers.get(row.provider);
   if (!provider) throw new Error(`Provider desconocido: ${row.provider}`);
@@ -148,8 +155,8 @@ async function update(db, id, incomingCreds) {
 
   const test = await provider.test({ credentials: merged });
   if (!test.ok) {
-    db.prepare('UPDATE integrations SET status = ?, last_error = ?, updated_at = unixepoch() WHERE id = ?')
-      .run('error', test.message, id);
+    db.prepare('UPDATE integrations SET status = ?, last_error = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+      .run('error', test.message, id, tenantId);
     throw new Error(test.message || 'No pude validar las credenciales');
   }
 
@@ -157,66 +164,61 @@ async function update(db, id, incomingCreds) {
     UPDATE integrations
     SET status = 'connected', display_name = ?, external_id = ?, credentials_enc = ?,
         last_error = NULL, connected_at = unixepoch(), updated_at = unixepoch()
-    WHERE id = ?
-  `).run(test.displayName || row.display_name, test.externalId || row.external_id, encryptJson(merged), id);
+    WHERE id = ? AND tenant_id = ?
+  `).run(test.displayName || row.display_name, test.externalId || row.external_id, encryptJson(merged), id, tenantId);
 
-  return getById(db, id);
+  return getById(db, tenantId, id);
 }
 
-async function testExisting(db, id) {
-  const row = db.prepare('SELECT * FROM integrations WHERE id = ?').get(id);
+async function testExisting(db, tenantId, id) {
+  const row = db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) throw new Error('Integración no encontrada');
   const provider = providers.get(row.provider);
   if (!provider) throw new Error(`Provider desconocido: ${row.provider}`);
   const creds = row.credentials_enc ? (decryptJson(row.credentials_enc) || {}) : {};
   const result = await provider.test({ credentials: creds });
   if (result.ok) {
-    db.prepare('UPDATE integrations SET status = ?, last_error = NULL, updated_at = unixepoch() WHERE id = ?')
-      .run('connected', id);
+    db.prepare('UPDATE integrations SET status = ?, last_error = NULL, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+      .run('connected', id, tenantId);
   } else {
-    db.prepare('UPDATE integrations SET status = ?, last_error = ?, updated_at = unixepoch() WHERE id = ?')
-      .run('error', result.message || 'Test falló', id);
+    db.prepare('UPDATE integrations SET status = ?, last_error = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+      .run('error', result.message || 'Test falló', id, tenantId);
   }
   return result;
 }
 
-function disconnect(db, id) {
-  // Si es una sesión de WhatsApp Web, cerrarla y borrar auth files
+function disconnect(db, tenantId, id) {
   try {
-    const row = db.prepare('SELECT provider FROM integrations WHERE id = ?').get(id);
+    const row = db.prepare('SELECT provider FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
     if (row?.provider === 'whatsapp-lite') {
       const manager = require('./whatsapp-web/manager');
       manager.stopSession(id, { logout: true, removeAuth: true })
         .catch(err => console.warn(`[wa-web] stopSession ${id}:`, err.message));
     }
   } catch (_) {}
-  return db.prepare('DELETE FROM integrations WHERE id = ?').run(id).changes > 0;
+  return db.prepare('DELETE FROM integrations WHERE id = ? AND tenant_id = ?').run(id, tenantId).changes > 0;
 }
 
 // Flujo QR: crea integración pendiente y arranca sesión Baileys.
 // El QR se obtiene con qrStatus(id) — frontend lo polea cada ~1.5s.
-async function connectQr(db, providerKey) {
-  // Reutilizar SOLO si hay una sesión activa en proceso (connecting/pending).
-  // 'disconnected' y 'error' son estados terminales — empezar con un row nuevo
-  // y dejar que el usuario decida qué hacer con el viejo (la papelera lo guardará).
+async function connectQr(db, tenantId, providerKey) {
   const existing = db.prepare(
-    `SELECT id FROM integrations WHERE provider = ? AND status IN ('pending','connecting') ORDER BY id DESC LIMIT 1`
-  ).get(providerKey);
+    `SELECT id FROM integrations WHERE provider = ? AND tenant_id = ? AND status IN ('pending','connecting') ORDER BY id DESC LIMIT 1`
+  ).get(providerKey, tenantId);
 
   let id;
   if (existing) {
     id = existing.id;
-    db.prepare(`UPDATE integrations SET status = 'connecting', last_error = NULL, updated_at = unixepoch() WHERE id = ?`)
-      .run(id);
+    db.prepare(`UPDATE integrations SET status = 'connecting', last_error = NULL, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?`)
+      .run(id, tenantId);
   } else {
     const result = db.prepare(`
-      INSERT INTO integrations (provider, status, display_name, external_id)
-      VALUES (?, 'connecting', ?, NULL)
-    `).run(providerKey, providers.get(providerKey).meta.name);
+      INSERT INTO integrations (tenant_id, provider, status, display_name, external_id)
+      VALUES (?, ?, 'connecting', ?, NULL)
+    `).run(tenantId, providerKey, providers.get(providerKey).meta.name);
     id = result.lastInsertRowid;
   }
 
-  // Arrancar Baileys (no esperamos al QR — el frontend lo polea)
   const manager = require('./whatsapp-web/manager');
   manager.startSession(id).catch(err => {
     console.error(`[wa-web ${id}] startSession falló:`, err.message);
@@ -224,11 +226,11 @@ async function connectQr(db, providerKey) {
       .run(err.message, id);
   });
 
-  return getById(db, id);
+  return getById(db, tenantId, id);
 }
 
-function qrStatus(db, id) {
-  const row = db.prepare('SELECT provider, status, display_name, external_id, last_error FROM integrations WHERE id = ?').get(id);
+function qrStatus(db, tenantId, id) {
+  const row = db.prepare('SELECT provider, status, display_name, external_id, last_error FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) return null;
   if (row.provider !== 'whatsapp-lite') return null;
   const manager = require('./whatsapp-web/manager');
@@ -246,39 +248,45 @@ function qrStatus(db, id) {
 }
 
 // Guarda una integración que ya fue autenticada por OAuth (el caller provee tokens y metadatos).
-// No llama a provider.test() porque el token ya fue verificado en el flujo OAuth.
-async function connectRaw(db, providerKey, creds, { displayName, externalId }) {
+// El caller (auth/routes) puede no tener tenantId todavía si la sesión OAuth se inició
+// sin contexto auth — en ese caso pasa null y se asume tenant 1 (Lucho) por defecto.
+// Cuando se onboarde el 2do tenant, /auth/start guardará el tenant en oauth_states
+// y el callback lo recuperará para pasarlo aquí explícito.
+async function connectRaw(db, tenantId, providerKey, creds, { displayName, externalId }) {
+  const t = tenantId || 1; // fallback Lucho mientras OAuth no se reescribe
   const encrypted = encryptJson(creds);
   const existing = externalId
     ? db.prepare('SELECT * FROM integrations WHERE provider = ? AND external_id = ?').get(providerKey, String(externalId))
     : null;
 
   if (existing) {
+    if (existing.tenant_id !== t) {
+      throw new Error('Esta integración ya pertenece a otra cuenta.');
+    }
     db.prepare(`
       UPDATE integrations
       SET status = 'connected', display_name = ?, credentials_enc = ?, last_error = NULL,
           connected_at = unixepoch(), updated_at = unixepoch()
-      WHERE id = ?
-    `).run(displayName, encrypted, existing.id);
-    return getById(db, existing.id);
+      WHERE id = ? AND tenant_id = ?
+    `).run(displayName, encrypted, existing.id, t);
+    return getById(db, t, existing.id);
   }
 
   const r = db.prepare(`
-    INSERT INTO integrations (provider, status, display_name, external_id, credentials_enc, connected_at)
-    VALUES (?, 'connected', ?, ?, ?, unixepoch())
-  `).run(providerKey, displayName, String(externalId || ''), encrypted);
-  return getById(db, r.lastInsertRowid);
+    INSERT INTO integrations (tenant_id, provider, status, display_name, external_id, credentials_enc, connected_at)
+    VALUES (?, ?, 'connected', ?, ?, ?, unixepoch())
+  `).run(t, providerKey, displayName, String(externalId || ''), encrypted);
+  return getById(db, t, r.lastInsertRowid);
 }
 
-// Actualiza solo el routing (pipeline/stage) de una integración existente.
-function updateRouting(db, id, { pipelineId, stageId, pipelineName, stageName }) {
-  const row = db.prepare('SELECT * FROM integrations WHERE id = ?').get(id);
+function updateRouting(db, tenantId, id, { pipelineId, stageId, pipelineName, stageName }) {
+  const row = db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) throw new Error('Integración no encontrada');
   const config = row.config ? (JSON.parse(row.config) || {}) : {};
   config.routing = { pipelineId, stageId, pipelineName: pipelineName || null, stageName: stageName || null };
-  db.prepare('UPDATE integrations SET config = ?, updated_at = unixepoch() WHERE id = ?')
-    .run(JSON.stringify(config), id);
-  return getById(db, id);
+  db.prepare('UPDATE integrations SET config = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+    .run(JSON.stringify(config), id, tenantId);
+  return getById(db, tenantId, id);
 }
 
 module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting };

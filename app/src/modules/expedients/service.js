@@ -50,7 +50,34 @@ function hydrate(db, row) {
     lastMessageAt:  row.last_message_at  || null,
     botPaused:      !!row.conv_bot_paused,
     botPausedAt:    row.bot_paused_at || null,
+    // Detectar si el último mensaje saliente del contacto falló — para
+    // mostrar un ícono de alerta en la tarjeta del kanban.
+    deliveryFailure: _lastDeliveryFailure(db, row.contact_id),
   };
+}
+
+// Devuelve { reason, at, provider } si el último mensaje OUTGOING del contacto
+// (en cualquier conversación) está en estado 'failed'. null si está OK.
+function _lastDeliveryFailure(db, contactId) {
+  if (!contactId) return null;
+  try {
+    const row = db.prepare(`
+      SELECT m.status, m.error_reason, m.created_at, m.provider
+        FROM messages m
+        JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.contact_id = ? AND m.direction = 'outgoing'
+       ORDER BY m.created_at DESC, m.id DESC
+       LIMIT 1
+    `).get(contactId);
+    if (row && row.status === 'failed') {
+      return {
+        reason: row.error_reason || 'Error desconocido',
+        at: row.created_at,
+        provider: row.provider,
+      };
+    }
+  } catch (_) {}
+  return null;
 }
 
 // Subquery: una sola fila por contact_id con stats de la conversación más reciente

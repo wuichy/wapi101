@@ -550,6 +550,14 @@ async function openConversation(convoId) {
         </button>
       ` : '';
 
+      const failure = convo.deliveryFailure;
+      const failureBadge = failure
+        ? `<button type="button" class="rh-delivery-error-badge ${classifyDeliveryError(failure.reason)}" data-show-delivery-error title="Click para ver detalle">
+            ${deliveryErrorIconSvg(classifyDeliveryError(failure.reason))}
+            <span class="rh-delivery-error-label">${escapeHtml(deliveryErrorShortLabel(classifyDeliveryError(failure.reason)))}</span>
+          </button>`
+        : '';
+
       metaEl.innerHTML = `
         <span>${escapeHtml(convo.phone)}</span>
         <span class="rh-conversation-origin">
@@ -558,6 +566,7 @@ async function openConversation(convoId) {
             ${escapeHtml(PROVIDER_LABEL[convo.provider] || convo.provider)}
           </span>
         </span>
+        ${failureBadge}
         ${pipelinePill}
       `;
       // Click en pipeline pill → abre el expediente
@@ -565,6 +574,11 @@ async function openConversation(convoId) {
         e.stopPropagation();
         const id = Number(e.currentTarget.dataset.openExp);
         openExpDetail(id, 'chats');
+      });
+      // Click en badge de error → modal con detalle
+      metaEl.querySelector('[data-show-delivery-error]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showDeliveryErrorModal(convo);
       });
     }
     openChatContact({ id: convo.contactId, botPaused: convo.botPaused, convoId });
@@ -578,6 +592,148 @@ async function openConversation(convoId) {
   const form = document.querySelector('.rh-reply-form');
   if (form) form.dataset.convoId = convoId;
   refreshReplyFormState();
+}
+
+// Clasifica el motivo de error en una de varias categorías para mostrar
+// icono específico. Más específico = mejor; el resto cae a 'other'.
+function classifyDeliveryError(reason) {
+  const r = String(reason || '').toLowerCase();
+  if (r.includes('bloqueó') || r.includes('blocked') || r.includes('blocked tus mensajes')) return 'blocked';
+  if (r.includes('sin whatsapp') || r.includes('no registrado') || r.includes('not on whatsapp')) return 'no_whatsapp';
+  if (r.includes('no es válido') || r.includes('no válido') || r.includes('formato')) return 'invalid_number';
+  if (r.includes('suspendid') || r.includes('pausada')) return 'suspended';
+  if (r.includes('no acepta') || r.includes('privacy')) return 'privacy';
+  if (r.includes('plantilla') || r.includes('template')) return 'template';
+  if (r.includes('24 hora') || r.includes('ventana') || r.includes('window')) return 'window_closed';
+  if (r.includes('rate limit') || r.includes('too many')) return 'rate_limit';
+  return 'other';
+}
+
+// Etiqueta corta para el badge (cabe poco). Click abre detalle.
+function deliveryErrorShortLabel(category) {
+  return ({
+    blocked:        'Bloqueado',
+    no_whatsapp:    'Sin WhatsApp',
+    invalid_number: 'Número inválido',
+    suspended:      'Suspendido',
+    privacy:        'Privacidad',
+    template:       'Plantilla',
+    window_closed:  '24h cerrada',
+    rate_limit:     'Rate limit',
+    other:          'Error envío',
+  })[category] || 'Error';
+}
+
+// Icono SVG por categoría — todos en stroke currentColor para tomar el color del badge.
+function deliveryErrorIconSvg(category) {
+  const svgs = {
+    blocked: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><circle cx="10" cy="10" r="7"/><line x1="5" y1="5" x2="15" y2="15"/></svg>`,
+    no_whatsapp: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M5 11a5 5 0 0 1 10 0v3a2 2 0 0 1-2 2h-1v-4h2"/><path d="M5 11v3a2 2 0 0 0 2 2h1v-4H6"/><line x1="3" y1="3" x2="17" y2="17"/></svg>`,
+    invalid_number: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M5 4h2l2 4-2 1a8 8 0 0 0 4 4l1-2 4 2v2a2 2 0 0 1-2 2A12 12 0 0 1 3 6a2 2 0 0 1 2-2z"/><line x1="3" y1="3" x2="17" y2="17"/></svg>`,
+    suspended: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><circle cx="10" cy="10" r="7"/><line x1="8" y1="8" x2="8" y2="12"/><line x1="12" y1="8" x2="12" y2="12"/></svg>`,
+    privacy: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><rect x="5" y="9" width="10" height="8" rx="1"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg>`,
+    template: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><rect x="3" y="3" width="14" height="14" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/></svg>`,
+    window_closed: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><circle cx="10" cy="11" r="6"/><polyline points="10 7 10 11 13 13"/></svg>`,
+    rate_limit: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="6" x2="11" y2="6"/><line x1="3" y1="14" x2="13" y2="14"/></svg>`,
+    other: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><polygon points="10 2 18 17 2 17 10 2"/><line x1="10" y1="8" x2="10" y2="12"/><circle cx="10" cy="14.5" r="0.6" fill="currentColor"/></svg>`,
+  };
+  return svgs[category] || svgs.other;
+}
+
+// Texto largo + sugerencias de acción según categoría.
+function deliveryErrorDetail(category, reason, provider) {
+  const providerLabel = (PROVIDER_LABEL && PROVIDER_LABEL[provider]) || provider || 'el canal';
+  const map = {
+    blocked: {
+      title: '🚫 El lead te bloqueó',
+      desc: 'El destinatario te bloqueó en ' + providerLabel + ', así que no recibe tus mensajes.',
+      action: 'Marca este expediente como "Perdido" o intenta contactarlo por otro canal (llamada, email, otra red social).',
+    },
+    no_whatsapp: {
+      title: '📵 Número sin WhatsApp',
+      desc: 'Este número no tiene una cuenta activa de WhatsApp. Posiblemente nunca lo instaló o lo desinstaló.',
+      action: 'Verifica que el número tenga el código de país correcto (ej: +52 1 33...). Si sigue fallando, usa otro canal.',
+    },
+    invalid_number: {
+      title: '⚠ Número con formato inválido',
+      desc: 'El número del destinatario no pasa la validación de ' + providerLabel + '. Probablemente le falta el código de país o tiene caracteres raros.',
+      action: 'Edita el contacto y arregla el número (formato +52 1 33 1234 5678 para México).',
+    },
+    suspended: {
+      title: '⛔ Cuenta del lead suspendida',
+      desc: 'La cuenta del destinatario fue suspendida por ' + providerLabel + ' o está temporalmente pausada.',
+      action: 'No puedes hacer nada hasta que el lead reactive su cuenta. Mantenlo en seguimiento manual.',
+    },
+    privacy: {
+      title: '🔒 Lead bloquea mensajes de empresa',
+      desc: 'El destinatario tiene activada una opción de privacidad que bloquea mensajes de cuentas de WhatsApp Business.',
+      action: 'Contáctalo por otro canal y pídele que añada tu número a contactos para poder recibirte.',
+    },
+    template: {
+      title: '📋 Problema con plantilla',
+      desc: 'La plantilla que se intentó enviar no fue aceptada por Meta. Puede estar pendiente de aprobación, rechazada o eliminada.',
+      action: 'Ve a Plantillas y revisa el estado de la que estabas usando. Considera cambiar el bot a otra plantilla aprobada.',
+    },
+    window_closed: {
+      title: '⏰ Ventana de 24h cerrada',
+      desc: 'Han pasado más de 24 horas desde el último mensaje del lead. WhatsApp Business API solo permite mensajes libres dentro de 24h.',
+      action: 'Solo puedes enviar plantillas aprobadas por Meta. Espera a que el lead te escriba para reabrir la ventana.',
+    },
+    rate_limit: {
+      title: '🐢 Límite de envío alcanzado',
+      desc: 'Meta limitó tu cuenta por enviar demasiados mensajes en poco tiempo.',
+      action: 'Espera 5-10 minutos y vuelve a intentar. Si pasa seguido, tu calidad de cuenta puede haber bajado.',
+    },
+    other: {
+      title: '⚠ Error de entrega',
+      desc: reason || 'Hubo un problema al entregar el mensaje pero no pudimos clasificar el motivo exacto.',
+      action: 'Revisa los logs del server o intenta enviar otra vez. Si pasa seguido, contacta a soporte.',
+    },
+  };
+  return map[category] || map.other;
+}
+
+function showDeliveryErrorModal(convo) {
+  const failure = convo.deliveryFailure;
+  if (!failure) return;
+  const cat = classifyDeliveryError(failure.reason);
+  const det = deliveryErrorDetail(cat, failure.reason, convo.provider);
+  const when = new Date(failure.at * 1000).toLocaleString('es-MX', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+
+  // Modal sencillo construido al vuelo
+  const existing = document.getElementById('rhDelivErrModal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'rhDelivErrModal';
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:480px">
+      <header class="modal-header">
+        <h2>${escapeHtml(det.title)}</h2>
+        <button class="modal-close" data-close-deliv-err>×</button>
+      </header>
+      <div class="modal-body">
+        <div class="rh-deliv-err-icon ${cat}">${deliveryErrorIconSvg(cat)}</div>
+        <p class="rh-deliv-err-desc">${escapeHtml(det.desc)}</p>
+        <div class="rh-deliv-err-action">
+          <strong>¿Qué puedo hacer?</strong>
+          <p>${escapeHtml(det.action)}</p>
+        </div>
+        <div class="rh-deliv-err-meta">
+          <div><strong>Detalle técnico:</strong> ${escapeHtml(failure.reason)}</div>
+          <div><strong>Cuándo:</strong> ${when}</div>
+          ${failure.provider ? `<div><strong>Canal:</strong> ${escapeHtml(PROVIDER_LABEL[failure.provider] || failure.provider)}</div>` : ''}
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button class="btn btn--ghost" data-close-deliv-err>Cerrar</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelectorAll('[data-close-deliv-err]').forEach(el => el.addEventListener('click', () => modal.remove()));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
 }
 
 // Abre la ficha del contacto desde el header del chat. Busca primero en
@@ -6460,9 +6616,17 @@ function renderPipelinesBoard() {
           ${cards.length ? cards.map(e => {
             const isStale = showAlarms && evalStageAlarm(stage, e, nowSec);
             const overdueLabel = isStale ? `<span class="pl-card-stale-pill" title="${escHtml(alarmReason(stage))}">⚠ ${escHtml(alarmShortLabel(stage.alarm_type))}</span>` : '';
+            // Ícono de error de entrega — muestra solo el icono, click → modal
+            const failure = e.deliveryFailure;
+            const deliveryIcon = failure
+              ? (() => { const cat = classifyDeliveryError(failure.reason); return `
+                  <button type="button" class="pl-card-deliv-err ${cat}" data-deliv-err-exp="${e.id}" title="${escHtml(deliveryErrorShortLabel(cat))} — click para ver detalle">
+                    ${deliveryErrorIconSvg(cat)}
+                  </button>`; })()
+              : '';
             return `
-            <div class="pl-card ${isStale ? 'is-stale' : ''}" data-exp-id="${e.id}" draggable="true">
-              <div class="pl-card-name ${e.nameIsAuto ? 'is-auto-name' : ''}">${escHtml(e.name || 'Sin nombre')}</div>
+            <div class="pl-card ${isStale ? 'is-stale' : ''} ${failure ? 'has-delivery-error' : ''}" data-exp-id="${e.id}" draggable="true">
+              <div class="pl-card-name ${e.nameIsAuto ? 'is-auto-name' : ''}">${escHtml(e.name || 'Sin nombre')}${deliveryIcon}</div>
               <div class="pl-card-contact">${escHtml(e.contactName || '—')}</div>
               <div class="pl-card-footer">
                 <div class="pl-card-tags">${overdueLabel}${(e.tags || []).slice(0,2).map(t => `<span class="pl-card-tag">${escHtml(t)}</span>`).join('')}</div>
@@ -7644,6 +7808,21 @@ function setupPipelines() {
     if (alarmBtn) {
       e.stopPropagation();
       handleStageAlarmClick(Number(alarmBtn.dataset.stageAlarm));
+      return;
+    }
+    // Ícono de error de entrega en tarjeta — abre modal con detalle
+    const deliv = e.target.closest('[data-deliv-err-exp]');
+    if (deliv) {
+      e.stopPropagation();
+      const expId = Number(deliv.dataset.delivErrExp);
+      const exp = (PL_EXP_CACHE || []).find(x => x.id === expId);
+      if (exp?.deliveryFailure) {
+        // Construimos un objeto convo-like para reusar el modal
+        showDeliveryErrorModal({
+          provider: exp.deliveryFailure.provider || 'whatsapp',
+          deliveryFailure: exp.deliveryFailure,
+        });
+      }
       return;
     }
     // Hint del bot — navega al bot builder con el bot abierto

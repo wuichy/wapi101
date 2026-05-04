@@ -26,6 +26,22 @@ function hydrateConvo(db, row) {
   const firstName = contact?.first_name || '';
   const lastName  = contact?.last_name  || '';
   const name = [firstName, lastName].filter(Boolean).join(' ') || row.external_id || `#${row.id}`;
+
+  // Detectar si el último mensaje saliente está en estado 'failed' — eso
+  // significa que hay un problema activo con la entrega (lead bloqueó, número
+  // sin WhatsApp, suspendido, etc.). Si después hay otro outgoing exitoso
+  // (sent/delivered/read), el problema se considera resuelto.
+  const lastOut = db.prepare(`
+    SELECT status, error_reason, created_at
+      FROM messages
+     WHERE conversation_id = ? AND direction = 'outgoing'
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1
+  `).get(row.id);
+  const deliveryFailure = (lastOut && lastOut.status === 'failed')
+    ? { reason: lastOut.error_reason || 'Error desconocido', at: lastOut.created_at }
+    : null;
+
   return {
     id:            row.id,
     contactId:     row.contact_id,
@@ -44,6 +60,7 @@ function hydrateConvo(db, row) {
     pinned:         !!row.pinned,
     archived:       !!row.archived,
     mutedUntil:     row.muted_until || null,
+    deliveryFailure, // null si el último outgoing fue OK; objeto si falló
     createdAt:      row.created_at,
   };
 }

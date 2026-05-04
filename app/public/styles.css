@@ -3356,6 +3356,124 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   color: var(--accent, #2563eb);
 }
 
+/* Badge de error de entrega en el header del chat — colores por categoría */
+.rh-delivery-error-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform .12s, box-shadow .12s;
+}
+.rh-delivery-error-badge:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(15,23,42,.12); }
+.rh-delivery-error-badge.blocked,
+.rh-delivery-error-badge.no_whatsapp,
+.rh-delivery-error-badge.invalid_number,
+.rh-delivery-error-badge.suspended {
+  background: #fee2e2; color: #991b1b; border-color: #fca5a5;
+}
+.rh-delivery-error-badge.window_closed,
+.rh-delivery-error-badge.template,
+.rh-delivery-error-badge.privacy {
+  background: #fef3c7; color: #78350f; border-color: #fcd34d;
+}
+.rh-delivery-error-badge.rate_limit,
+.rh-delivery-error-badge.other {
+  background: #fef3c7; color: #92400e; border-color: #fcd34d;
+}
+.rh-delivery-error-label { letter-spacing: 0.01em; }
+
+/* Ícono de error de entrega en la tarjeta del kanban */
+.pl-card-deliv-err {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid;
+  background: #fff;
+  cursor: pointer;
+  margin-left: 6px;
+  flex-shrink: 0;
+  transition: transform .12s;
+  padding: 0;
+}
+.pl-card-deliv-err:hover { transform: scale(1.15); }
+.pl-card-deliv-err.blocked,
+.pl-card-deliv-err.no_whatsapp,
+.pl-card-deliv-err.invalid_number,
+.pl-card-deliv-err.suspended {
+  background: #fee2e2; color: #dc2626; border-color: #fca5a5;
+}
+.pl-card-deliv-err.window_closed,
+.pl-card-deliv-err.template,
+.pl-card-deliv-err.privacy,
+.pl-card-deliv-err.rate_limit,
+.pl-card-deliv-err.other {
+  background: #fef3c7; color: #d97706; border-color: #fcd34d;
+}
+.pl-card.has-delivery-error .pl-card-name {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Modal de detalle del error de entrega */
+.rh-deliv-err-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  background: #fee2e2;
+  color: #dc2626;
+}
+.rh-deliv-err-icon.blocked,
+.rh-deliv-err-icon.no_whatsapp,
+.rh-deliv-err-icon.invalid_number,
+.rh-deliv-err-icon.suspended { background: #fee2e2; color: #dc2626; }
+.rh-deliv-err-icon.window_closed,
+.rh-deliv-err-icon.template,
+.rh-deliv-err-icon.privacy,
+.rh-deliv-err-icon.rate_limit,
+.rh-deliv-err-icon.other { background: #fef3c7; color: #d97706; }
+.rh-deliv-err-icon svg { width: 28px; height: 28px; }
+.rh-deliv-err-desc {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0 0 16px;
+  text-align: center;
+}
+.rh-deliv-err-action {
+  background: #f8fafc;
+  border-left: 3px solid var(--accent, #2563eb);
+  padding: 12px 14px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+.rh-deliv-err-action strong { display: block; font-size: 12px; color: var(--accent, #2563eb); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+.rh-deliv-err-action p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); }
+.rh-deliv-err-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  padding: 10px 12px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rh-deliv-err-meta strong { color: var(--text); }
+
 /* Pipeline · Etapa pill clickable en el header del chat */
 .rh-pipeline-pill {
   display: inline-flex;

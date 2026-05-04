@@ -231,10 +231,14 @@ function listMessages(db, tenantId, conversationId, { page = 1, pageSize = 60 } 
   page = Math.max(1, Number(page) || 1);
 
   const countRow = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ? AND tenant_id = ?').get(conversationId, t);
+  // Página 1 = mensajes más recientes; páginas siguientes = más viejos.
+  // Traemos DESC con OFFSET y luego invertimos a ASC para el render cronológico.
   const rows = db.prepare(`
-    SELECT * FROM messages WHERE conversation_id = ? AND tenant_id = ?
-    ORDER BY created_at ASC, id ASC
-    LIMIT ? OFFSET ?
+    SELECT * FROM (
+      SELECT * FROM messages WHERE conversation_id = ? AND tenant_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ? OFFSET ?
+    ) ORDER BY created_at ASC, id ASC
   `).all(conversationId, t, pageSize, (page - 1) * pageSize);
 
   return {

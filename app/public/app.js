@@ -10642,7 +10642,59 @@ function applyAppointmentsVisibility() {
     loadMinAdvisors(),
   ]);
   startChatPolling();
+  startVersionCheck();
 });
+
+// ─── Detección de nueva versión del server (anti-blanco-tras-deploy) ───
+// Cada 2min consulta /api/version. Si cambia respecto al primero que vio,
+// el server fue redeployed → muestra un toast con botón "Recargar". Esto
+// evita que el cliente quede pegado con app.js viejo + index.html nuevo.
+let _bootVersion = null;
+let _versionToastShown = false;
+async function _fetchVersion() {
+  try {
+    const r = await fetch('/api/version', { cache: 'no-store' });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d.version || null;
+  } catch { return null; }
+}
+async function startVersionCheck() {
+  _bootVersion = await _fetchVersion();
+  if (!_bootVersion) return;
+  setInterval(async () => {
+    if (_versionToastShown) return;
+    const v = await _fetchVersion();
+    if (v && v !== _bootVersion) {
+      _versionToastShown = true;
+      _showUpdateToast();
+    }
+  }, 120 * 1000);
+}
+function _showUpdateToast() {
+  const el = document.createElement('div');
+  el.className = 'app-update-toast';
+  el.innerHTML = `
+    <span>🔄 Hay una versión nueva de Wapi101 disponible</span>
+    <button type="button" id="appUpdateReloadBtn">Recargar</button>
+    <button type="button" id="appUpdateDismissBtn" aria-label="Cerrar">×</button>
+  `;
+  document.body.appendChild(el);
+  document.getElementById('appUpdateReloadBtn').addEventListener('click', async () => {
+    // Limpiar caches del SW antes de recargar para asegurar fresh
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch {}
+    location.reload();
+  });
+  document.getElementById('appUpdateDismissBtn').addEventListener('click', () => {
+    el.remove();
+    _versionToastShown = false;
+  });
+}
 
 // Cache mínimo de asesores (id+name) para selectores de asignación.
 // Accesible por cualquier asesor autenticado (vs /api/advisors que requiere admin).
@@ -12364,6 +12416,12 @@ async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
     _swReg = await navigator.serviceWorker.register('/sw.js');
+    // Forzar check de actualización del SW al boot. Sin esto, el browser solo
+    // checaría /sw.js cada 24h, dejando a clientes con SW viejo cacheando shell
+    // viejo. Con .update() forzamos a comparar bytes y si el SW cambió, el
+    // nuevo entra en estado "waiting" → activa al cerrar/abrir tab (o por
+    // skipWaiting() del propio SW).
+    try { await _swReg.update(); } catch (_) {}
   } catch (err) {
     console.warn('[sw] register failed:', err.message);
   }

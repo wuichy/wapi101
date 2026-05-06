@@ -74,10 +74,45 @@ mountSafe('/webhooks', require('./src/modules/integrations/webhooks'));
 // la firma. NO se debe poner detrás de express.json() global.
 mountSafe('/webhooks/stripe', require('./src/modules/billing/webhook'));
 
+// ─── Cache-busting de assets ─────────────────────────────────────────────
+// Problema: en cada deploy, navegadores (especialmente iOS Safari, Cloudflare,
+// SW PWA) sirven app.js/styles.css cacheados → la app aparece en blanco o con
+// JS incompatible con el HTML nuevo. ETag/no-cache no es suficiente en
+// entornos reales con proxies.
+//
+// Solución: pegar ?v=<BUILD_VERSION> a cada <script>/<link> servido. La URL
+// cambia en cada deploy (cada reinicio del proceso) → cache key cambia →
+// browser y SW descargan fresco automáticamente.
+const BUILD_VERSION = String(Date.now());
+const HTML_FILES = ['index.html', 'login.html', 'super.html', 'signup.html', 'landing.html', 'privacy.html', 'terms.html'];
+const _htmlCache = {};
+function _injectVersion(html) {
+  return html
+    .replace(/(<script\b[^>]*?\bsrc\s*=\s*["'])([^"'?]+\.js)(["'])/gi, `$1$2?v=${BUILD_VERSION}$3`)
+    .replace(/(<link\b[^>]*?\bhref\s*=\s*["'])([^"'?]+\.css)(["'])/gi, `$1$2?v=${BUILD_VERSION}$3`);
+}
+for (const file of HTML_FILES) {
+  try {
+    const content = fs.readFileSync(path.join(__dirname, 'public', file), 'utf8');
+    _htmlCache[file] = _injectVersion(content);
+  } catch (err) {
+    console.warn(`[boot] No se pudo precargar ${file}: ${err.message}`);
+  }
+}
+console.log(`[boot] BUILD_VERSION=${BUILD_VERSION} (${Object.keys(_htmlCache).length} HTMLs versionados)`);
+
+// Endpoint público (no requiere auth) para que el cliente detecte si hay
+// versión nueva en el server y prompt al usuario para recargar.
+app.get('/api/version', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ version: BUILD_VERSION });
+});
+
 // Sirve la página HTML del super-admin ANTES de montar el router (sino el
 // authMiddleware del router intercepta la GET /super y devuelve 401).
 app.get('/super', (_req, res) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
+  if (_htmlCache['super.html']) return res.type('html').send(_htmlCache['super.html']);
   res.sendFile(path.join(__dirname, 'public', 'super.html'));
 });
 
@@ -393,6 +428,7 @@ app.use('/uploads', express.static(config.uploadsDir, {
 
 const _sendFile = (file) => (_req, res) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
+  if (_htmlCache[file]) return res.type('html').send(_htmlCache[file]);
   res.sendFile(path.join(__dirname, 'public', file));
 };
 

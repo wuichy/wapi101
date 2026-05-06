@@ -3266,6 +3266,51 @@ body[data-view-active="chats"] .main { background: #f2f2f7; }
   line-height: 1.6;
 }
 
+/* Toast persistente de "Hay nueva versión" tras deploy */
+.app-update-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1d4ed8;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(30, 64, 175, 0.35);
+  z-index: 9999;
+  max-width: 92vw;
+  animation: appUpdateSlide .3s ease-out;
+}
+.app-update-toast button {
+  background: #fff;
+  color: #1d4ed8;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.app-update-toast button:hover { background: #eff6ff; }
+.app-update-toast button[aria-label="Cerrar"] {
+  background: transparent;
+  color: #fff;
+  padding: 4px 8px;
+  font-size: 16px;
+  line-height: 1;
+}
+.app-update-toast button[aria-label="Cerrar"]:hover { background: rgba(255,255,255,.15); }
+@keyframes appUpdateSlide {
+  from { transform: translate(-50%, 30px); opacity: 0; }
+  to   { transform: translate(-50%, 0);    opacity: 1; }
+}
+
 /* Empty state cuando no hay conversación seleccionada */
 .rh-empty-state {
   display: flex;

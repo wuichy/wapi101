@@ -81,6 +81,12 @@ app.get('/super', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'super.html'));
 });
 
+// Páginas legales (públicas, sin auth). Servidas como rutas explícitas para
+// que aparezcan limpio en URL (sin .html) y para que Meta/Cloudflare las
+// puedan crawlear sin issue.
+app.get('/privacy', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy.html')));
+app.get('/terms',   (_req, res) => res.sendFile(path.join(__dirname, 'public', 'terms.html')));
+
 // ─── Super-admin API: monta ANTES del authMiddleware (/api). Tiene su propio
 // flujo de auth con tokens sa_*. NO usa req.tenantId ni filtros multi-tenant.
 mountSafe('/super', require('./src/modules/super/routes'));

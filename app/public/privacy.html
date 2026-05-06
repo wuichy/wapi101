@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aviso de Privacidad · Wapi101</title>
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0; padding: 0; background: #f8fafc; color: #0f172a;
+      line-height: 1.65;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 48px 24px; }
+    header { border-bottom: 2px solid #e2e8f0; padding-bottom: 24px; margin-bottom: 32px; }
+    .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; }
+    .brand-mark {
+      width: 36px; height: 36px; background: #2563eb; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; border-radius: 8px;
+    }
+    .brand-name { font-size: 20px; font-weight: 700; }
+    h1 { font-size: 28px; margin: 16px 0 8px; }
+    h2 { font-size: 20px; margin: 32px 0 12px; color: #1e293b; }
+    h3 { font-size: 16px; margin: 20px 0 8px; color: #334155; }
+    p, li { font-size: 15px; color: #334155; }
+    ul, ol { padding-left: 24px; }
+    .updated { color: #64748b; font-size: 13px; margin-top: 8px; }
+    .disclaimer {
+      background: #fef3c7; border-left: 4px solid #f59e0b;
+      padding: 16px; margin: 24px 0; border-radius: 4px; font-size: 14px;
+    }
+    a { color: #2563eb; }
+    footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid #e2e8f0;
+             font-size: 13px; color: #64748b; }
+    footer a { margin-right: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/" class="brand">
+        <span class="brand-mark">W</span>
+        <span class="brand-name">Wapi101</span>
+      </a>
+      <h1>Aviso de Privacidad</h1>
+      <p class="updated">Última actualización: 6 de mayo de 2026</p>
+    </header>
+
+    <div class="disclaimer">
+      <strong>⚠️ Este documento es una versión inicial.</strong> Recomendamos a los usuarios consultar a un abogado especializado para una revisión legal completa antes de su uso en operación comercial. Aplican las leyes mexicanas, en particular la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP).
+    </div>
+
+    <h2>1. Identidad del responsable</h2>
+    <p>
+      <strong>Wapi101</strong> (en adelante, "Wapi101", "nosotros", "el servicio") opera la plataforma SaaS accesible en <a href="https://wapi101.com">https://wapi101.com</a>. Para contacto sobre privacidad: <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a>.
+    </p>
+
+    <h2>2. Datos personales que recabamos</h2>
+    <p>Recabamos los siguientes datos para prestar el servicio:</p>
+
+    <h3>2.1 Datos de la cuenta del cliente (administrador del CRM)</h3>
+    <ul>
+      <li>Nombre, apellido, correo electrónico, número de teléfono</li>
+      <li>Nombre de usuario y contraseña (almacenada con hash <em>scrypt/PBKDF2</em>, nunca en texto claro)</li>
+      <li>Razón social y datos fiscales para facturación, en su caso</li>
+    </ul>
+
+    <h3>2.2 Datos de tus contactos finales (administrados por ti como cliente del CRM)</h3>
+    <p>Cuando usas Wapi101 como herramienta para gestionar tus propios clientes, almacenamos en tu nombre:</p>
+    <ul>
+      <li>Nombres, números de teléfono y correos electrónicos de tus contactos</li>
+      <li>Mensajes intercambiados a través de WhatsApp, Messenger, Instagram, Telegram</li>
+      <li>Notas, etiquetas y datos de oportunidades comerciales (pipelines)</li>
+      <li>Archivos adjuntos enviados o recibidos en conversaciones</li>
+    </ul>
+    <p>
+      <strong>Importante:</strong> respecto a estos datos, tú actúas como <em>responsable del tratamiento</em> y Wapi101 como <em>encargado del tratamiento</em>. Tú eres responsable de obtener el consentimiento de tus contactos para procesar sus datos.
+    </p>
+
+    <h3>2.3 Datos de pago</h3>
+    <p>
+      Los datos de pago (números de tarjeta, fechas de vencimiento, CVV) NO se almacenan en nuestros servidores. Son procesados directamente por <a href="https://stripe.com">Stripe</a>, nuestro procesador de pagos certificado PCI-DSS Nivel 1.
+    </p>
+
+    <h3>2.4 Datos técnicos automáticos</h3>
+    <ul>
+      <li>Direcciones IP, identificadores de dispositivo, user-agent del navegador</li>
+      <li>Registros de actividad (logs) con fines de auditoría y seguridad</li>
+      <li>Cookies de sesión necesarias para mantener tu sesión iniciada</li>
+    </ul>
+
+    <h2>3. Finalidades del tratamiento</h2>
+    <p>Tus datos los usamos para:</p>
+    <ol>
+      <li>Crear y mantener tu cuenta y procesar tus pagos</li>
+      <li>Prestar el servicio de CRM multicanal contratado</li>
+      <li>Enviar notificaciones operativas (verificación de cuenta, vencimiento de prueba, recibos)</li>
+      <li>Atender solicitudes de soporte técnico</li>
+      <li>Cumplir con obligaciones fiscales y legales aplicables</li>
+      <li>Detectar y prevenir fraude, abuso y violaciones de los Términos</li>
+    </ol>
+
+    <h2>4. Transferencia de datos a terceros</h2>
+    <p>Compartimos datos solamente con los siguientes terceros, exclusivamente para prestar el servicio:</p>
+    <ul>
+      <li><strong>Stripe Inc.</strong> — procesamiento de pagos (Estados Unidos)</li>
+      <li><strong>Meta Platforms, Inc.</strong> — entrega de mensajes a través de WhatsApp Cloud API, Messenger e Instagram (Estados Unidos)</li>
+      <li><strong>DigitalOcean LLC</strong> — alojamiento del servicio (Estados Unidos)</li>
+      <li><strong>Cloudflare, Inc.</strong> — protección DDoS, CDN y DNS (Estados Unidos)</li>
+      <li><strong>Anthropic, PBC</strong> — modelo de IA opcional para respuestas automáticas, cuando lo actives (Estados Unidos)</li>
+    </ul>
+    <p>
+      Estos terceros tienen sus propias políticas de privacidad y son contratados con cláusulas de confidencialidad. NO vendemos tus datos a anunciantes ni a terceros para fines comerciales no relacionados con el servicio.
+    </p>
+
+    <h2>5. Tus derechos ARCO</h2>
+    <p>De conformidad con la LFPDPPP, tienes derecho a:</p>
+    <ul>
+      <li><strong>Acceder</strong> a los datos personales que tenemos sobre ti</li>
+      <li><strong>Rectificar</strong> datos incorrectos o desactualizados</li>
+      <li><strong>Cancelar</strong> el uso de tus datos cuando ya no sean necesarios</li>
+      <li><strong>Oponerte</strong> a usos específicos de tus datos</li>
+    </ul>
+    <p>
+      Para ejercer estos derechos, envía un correo a <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a> desde la cuenta de correo registrada, indicando claramente cuál derecho deseas ejercer. Te responderemos dentro de los 20 días hábiles establecidos por ley.
+    </p>
+
+    <h2>6. Conservación de datos</h2>
+    <p>
+      Mantenemos tus datos mientras tu cuenta esté activa. Tras la cancelación de la cuenta, conservamos los datos por <strong>30 días</strong> en respaldos para permitir recuperación en caso de cancelación accidental, después de los cuales se eliminan permanentemente. Conservamos registros financieros (facturas, recibos) por el plazo que la ley fiscal mexicana exige (5 años).
+    </p>
+
+    <h2>7. Seguridad</h2>
+    <p>Aplicamos medidas técnicas y organizacionales razonables, incluyendo:</p>
+    <ul>
+      <li>Cifrado en tránsito (TLS 1.2+) y en reposo para credenciales sensibles (AES-256-GCM)</li>
+      <li>Hash criptográfico de contraseñas (PBKDF2/scrypt con sales aleatorias por cuenta)</li>
+      <li>Autenticación multi-tenant con aislamiento estricto entre cuentas de clientes</li>
+      <li>Auditoría y registros de acceso al sistema</li>
+      <li>Copias de seguridad cifradas</li>
+    </ul>
+
+    <h2>8. Cookies</h2>
+    <p>
+      Usamos cookies estrictamente necesarias para mantener tu sesión iniciada en la plataforma. NO usamos cookies de seguimiento publicitario ni de terceros con fines comerciales. La única excepción son las cookies de seguridad y analítica básica de Cloudflare, indispensables para la operación.
+    </p>
+
+    <h2>9. Menores de edad</h2>
+    <p>
+      Wapi101 es una herramienta empresarial y NO está dirigida a menores de 18 años. No recabamos datos de menores conscientemente. Si crees que un menor ha proporcionado datos, contáctanos para eliminarlos.
+    </p>
+
+    <h2>10. Cambios al aviso</h2>
+    <p>
+      Podemos actualizar este aviso para reflejar cambios en la legislación o en nuestros servicios. Las modificaciones se publicarán en esta misma página con la fecha de "Última actualización". Para cambios sustanciales, te notificaremos por correo a la cuenta registrada al menos 15 días antes de que entren en vigor.
+    </p>
+
+    <h2>11. Aceptación</h2>
+    <p>
+      Al usar Wapi101 manifiestas que has leído, comprendido y aceptado este Aviso de Privacidad y los <a href="/terms">Términos del Servicio</a>.
+    </p>
+
+    <footer>
+      <a href="/">Inicio</a>
+      <a href="/terms">Términos del Servicio</a>
+      <a href="mailto:soporte@wapi101.com">Contacto</a>
+      <p style="margin-top: 16px; color: #94a3b8;">© 2026 Wapi101. Todos los derechos reservados.</p>
+    </footer>
+  </div>
+</body>
+</html>

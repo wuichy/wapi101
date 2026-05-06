@@ -10418,7 +10418,6 @@ function applyAppointmentsVisibility() {
     window.location.replace(url.toString());
   }
   document.getElementById('navCacheBtn')?.addEventListener('click', clearCacheAndReload);
-  document.getElementById('navBrandCacheBtn')?.addEventListener('click', clearCacheAndReload);
 
   // Bloquear autofill/sugerencias del navegador en inputs estáticos y dinámicos
   // Aplicar idioma guardado en boot ANTES de cualquier render

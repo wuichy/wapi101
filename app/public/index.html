@@ -50,7 +50,7 @@
         </a>
         <a href="#expedientes" class="nav-item" data-view="expedientes" data-i18n="nav.expedientes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          <span>Expedientes</span>
+          <span>Leads</span>
         </a>
         <a href="#contactos" class="nav-item" data-view="contactos" data-i18n="nav.contactos">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
@@ -154,7 +154,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
             Campos
           </button>
-          <button class="btn btn--primary" id="expAddBtn">+ Nuevo expediente</button>
+          <button class="btn btn--primary" id="expAddBtn">+ Nuevo lead</button>
         </div>
         <div class="topbar-customers-extras" id="topbarCustomersExtras" hidden>
           <div class="sort-menu">
@@ -170,8 +170,8 @@
               <button class="sort-option" data-sort-by="name" data-sort-dir="asc"  data-label="Nombre A-Z">🔤 Nombre A → Z</button>
               <button class="sort-option" data-sort-by="name" data-sort-dir="desc" data-label="Nombre Z-A">🔤 Nombre Z → A</button>
               <div class="sort-separator"></div>
-              <button class="sort-option" data-sort-by="expedientCount" data-sort-dir="desc" data-label="Más expedientes">⭐ Más expedientes primero</button>
-              <button class="sort-option" data-sort-by="expedientCount" data-sort-dir="asc"  data-label="Menos expedientes">⬇ Menos expedientes primero</button>
+              <button class="sort-option" data-sort-by="expedientCount" data-sort-dir="desc" data-label="Más leads">⭐ Más leads primero</button>
+              <button class="sort-option" data-sort-by="expedientCount" data-sort-dir="asc"  data-label="Menos leads">⬇ Menos leads primero</button>
               <div class="sort-separator"></div>
               <button class="sort-option" data-sort-by="duplicates" data-sort-dir="desc" data-label="Duplicados">⚠ Solo duplicados</button>
             </div>
@@ -241,7 +241,7 @@
                 <button class="rh-ctx-item" data-ctx-action="markUnread">👁 Marcar como no leído</button>
                 <button class="rh-ctx-item" data-ctx-action="bot">🤖 <span data-ctx-label-bot>Pausar bot</span></button>
                 <button class="rh-ctx-item" data-ctx-action="contact">👤 Ver ficha del contacto</button>
-                <button class="rh-ctx-item" data-ctx-action="expedient">📂 Abrir expediente</button>
+                <button class="rh-ctx-item" data-ctx-action="expedient">📂 Abrir lead</button>
                 <button class="rh-ctx-item" data-ctx-action="copyPhone">📋 Copiar teléfono</button>
                 <hr class="rh-ctx-sep">
                 <button class="rh-ctx-item" data-ctx-action="mute">🔇 <span data-ctx-label-mute>Silenciar 1h</span></button>
@@ -275,7 +275,7 @@
                     <div class="rh-personal-tags-popover" id="rhPersonalTagsPopover" hidden>
                       <div class="rh-ptp-header">
                         <strong>Mis etiquetas privadas</strong>
-                        <span>Solo tú las ves — no afectan al expediente.</span>
+                        <span>Solo tú las ves — no afectan al lead.</span>
                       </div>
                       <div class="rh-ptp-assigned" id="rhPtpAssigned"></div>
                       <input type="text" class="rh-ptp-input" id="rhPtpInput" placeholder="Crea o asigna (teclea ',')" maxlength="40" />
@@ -574,7 +574,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
               </div>
               <div class="dash-card-body">
-                <span class="dash-card-label">Expedientes</span>
+                <span class="dash-card-label">Leads</span>
                 <span class="dash-card-value" id="dashExps">—</span>
                 <span class="dash-card-sub">en total</span>
               </div>
@@ -604,8 +604,9 @@
           <table class="exp-table" id="expTable">
             <thead>
               <tr>
-                <th>Nombre</th>
+                <th>Nombre del lead</th>
                 <th>Contacto</th>
+                <th>Email</th>
                 <th>Pipeline › Etapa</th>
                 <th>Etiquetas</th>
                 <th>Creado</th>
@@ -616,8 +617,8 @@
           </table>
           <div class="exp-empty" id="expEmpty" hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><path d="M9 12h6m-3-3v6m-7 4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-            <p>No hay expedientes aún</p>
-            <button class="btn btn--primary" id="expAddBtnEmpty">+ Crear primer expediente</button>
+            <p>No hay leads aún</p>
+            <button class="btn btn--primary" id="expAddBtnEmpty">+ Crear primer lead</button>
           </div>
         </div>
 
@@ -637,22 +638,22 @@
         </div>
       </section>
 
-      <!-- ─── VISTA: Detalle de expediente ─── -->
+      <!-- ─── VISTA: Detalle de lead ─── -->
       <section class="view view-exp-detail" data-view="exp-detail" hidden>
         <div class="exp-detail-shell">
-          <!-- Panel izquierdo: info del expediente -->
+          <!-- Panel izquierdo: info del lead -->
           <aside class="exp-detail-left">
             <div class="exp-detail-topbar">
               <button class="btn btn--ghost btn--sm exp-detail-back" id="expDetailBack">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-                <span class="exp-detail-back-label">Expedientes</span>
+                <span class="exp-detail-back-label">Leads</span>
               </button>
             </div>
 
             <div class="exp-detail-info" id="expDetailInfo"><!-- JS --></div>
             <div class="exp-detail-bots" id="expDetailBots"><!-- JS --></div>
             <div class="exp-detail-delete-zone">
-              <button class="btn btn--danger btn--sm" id="expDetailDeleteBtn">Eliminar expediente</button>
+              <button class="btn btn--danger btn--sm" id="expDetailDeleteBtn">Eliminar lead</button>
             </div>
           </aside>
 
@@ -732,12 +733,12 @@
         </div>
       </section>
 
-      <!-- ─── MODAL: Expediente (crear / editar) ─── -->
+      <!-- ─── MODAL: Lead (crear / editar) ─── -->
       <div class="modal" id="expModal" hidden>
         <div class="modal-backdrop" data-close-exp></div>
         <div class="modal-card modal-card--lg">
           <header class="modal-header">
-            <h3 id="expModalTitle">Nuevo expediente</h3>
+            <h3 id="expModalTitle">Nuevo lead</h3>
             <button class="icon-btn" data-close-exp aria-label="Cerrar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -746,7 +747,7 @@
             <!-- Columna izquierda: datos principales -->
             <div class="exp-form-main">
               <div class="int-field">
-                <label>Nombre del expediente</label>
+                <label>Nombre del lead</label>
                 <input type="text" id="expName" placeholder="ej. Proyecto web, Cotización #001..." autocomplete="off" />
               </div>
 
@@ -828,7 +829,7 @@
 
           <div id="expModalError" class="int-error" style="margin:0 24px 12px" hidden></div>
           <footer class="modal-footer">
-            <button type="button" class="btn btn--danger-ghost" id="expDeleteBtn" hidden>Eliminar expediente</button>
+            <button type="button" class="btn btn--danger-ghost" id="expDeleteBtn" hidden>Eliminar lead</button>
             <div style="flex:1"></div>
             <button type="button" class="btn btn--ghost" data-close-exp>Cancelar</button>
             <button type="submit" form="expForm" class="btn btn--primary" id="expSaveBtn">Guardar</button>
@@ -843,7 +844,7 @@
           <header class="modal-header">
             <div>
               <h3>Campos personalizados</h3>
-              <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">Se muestran en todos los expedientes</p>
+              <p style="margin:2px 0 0;font-size:12px;color:var(--text-muted)">Se muestran en todos los leads</p>
             </div>
             <button class="icon-btn" data-close-fields aria-label="Cerrar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -892,22 +893,22 @@
         </div>
       </div>
 
-      <!-- ─── MODAL: Importar expedientes ─── -->
+      <!-- ─── MODAL: Importar leads ─── -->
       <div class="modal" id="expImportModal" hidden>
         <div class="modal-backdrop" data-close-exp-import></div>
         <div class="modal-card modal-card--lg">
           <header class="modal-header">
-            <h3>Importar expedientes</h3>
+            <h3>Importar leads</h3>
             <button class="icon-btn" data-close-exp-import>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </header>
           <div class="modal-body">
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
-              Pega el listado de expedientes. Cada línea es un expediente. Campos separados por coma:
+              Pega el listado de leads. Cada línea es un lead. Campos separados por coma:
               <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px">Nombre, Contacto (nombre o teléfono), Pipeline, Etapa</code>
             </p>
-            <textarea id="expImportText" rows="10" placeholder="Mi Expediente, Juan García, Ventas, Nuevo&#10;Proyecto X, +52 55 1234 5678, Proyectos, En revisión" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:13px;resize:vertical;box-sizing:border-box;outline:none;"></textarea>
+            <textarea id="expImportText" rows="10" placeholder="Mi Lead, Juan García, Ventas, Nuevo&#10;Proyecto X, +52 55 1234 5678, Proyectos, En revisión" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:13px;resize:vertical;box-sizing:border-box;outline:none;"></textarea>
             <div id="expImportPreview" style="margin-top:16px"></div>
           </div>
           <footer class="modal-footer">
@@ -925,7 +926,7 @@
             <div class="th">Teléfono</div>
             <div class="th">Email</div>
             <div class="th">Etiquetas</div>
-            <div class="th">Expedientes</div>
+            <div class="th">Leads</div>
             <div class="th">Creado</div>
             <div class="th"></div>
           </div>
@@ -1065,14 +1066,14 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </div>
             </div>
 
-            <!-- Sección Expedientes -->
+            <!-- Sección Leads -->
             <div class="modal-section" id="expedientsSection">
               <div class="modal-section-head">
-                <h4>Expedientes <small id="expedientsSectionCount"></small></h4>
-                <button type="button" class="btn btn--ghost" id="addExpedientBtn">+ Agregar expediente</button>
+                <h4>Leads <small id="expedientsSectionCount"></small></h4>
+                <button type="button" class="btn btn--ghost" id="addExpedientBtn">+ Agregar lead</button>
               </div>
               <div id="editExpedientsList" class="edit-expedients-list"></div>
-              <p class="settings-note" id="expedientsEmptyNote" hidden>Este contacto no tiene expedientes. Crea uno para asociarlo a un pipeline y etapa.</p>
+              <p class="settings-note" id="expedientsEmptyNote" hidden>Este contacto no tiene leads. Crea uno para asociarlo a un pipeline y etapa.</p>
             </div>
 
             <footer class="modal-footer">
@@ -1336,7 +1337,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             </button>
           </header>
           <div class="modal-body">
-            <p class="routing-intro">Los mensajes nuevos de esta integración crearán expedientes automáticamente. Elige dónde deben llegar.</p>
+            <p class="routing-intro">Los mensajes nuevos de esta integración crearán leads automáticamente. Elige dónde deben llegar.</p>
             <div class="routing-fields">
               <div class="form-group">
                 <label>Pipeline</label>
@@ -1458,7 +1459,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <select id="sbTriggerType">
                   <option value="keyword">Palabra clave en mensaje</option>
                   <option value="new_contact">Nuevo contacto creado</option>
-                  <option value="pipeline_stage">Expediente entra a etapa</option>
+                  <option value="pipeline_stage">Lead entra a etapa</option>
                   <option value="always">Cualquier mensaje entrante</option>
                   <option value="outbound">Manual / Outbound (tú inicias)</option>
                 </select>
@@ -1671,7 +1672,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                           </div>
                           <div>
                             <div class="adv-perm-name">Escribir y editar</div>
-                            <div class="adv-perm-desc">Enviar mensajes, editar expedientes y contactos</div>
+                            <div class="adv-perm-desc">Enviar mensajes, editar leads y contactos</div>
                           </div>
                         </div>
                         <div class="adv-perm-toggle">
@@ -1687,7 +1688,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                           </div>
                           <div>
                             <div class="adv-perm-name">Eliminar registros</div>
-                            <div class="adv-perm-desc">Borrar expedientes, contactos y conversaciones</div>
+                            <div class="adv-perm-desc">Borrar leads, contactos y conversaciones</div>
                           </div>
                         </div>
                         <div class="adv-perm-toggle">
@@ -1806,7 +1807,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     <select>
                       <option>Sugerir respuesta (vendedor revisa antes de enviar)</option>
                       <option>Auto-responder (sin intervención humana)</option>
-                      <option>Solo lectura (clasifica expedientes, no responde)</option>
+                      <option>Solo lectura (clasifica leads, no responde)</option>
                     </select>
                   </label>
                   <label class="form-field">
@@ -1860,7 +1861,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <div class="trash-filters">
                 <button class="trash-filter-btn is-active" data-filter="all">Todo</button>
                 <button class="trash-filter-btn" data-filter="contact">Contactos</button>
-                <button class="trash-filter-btn" data-filter="expedient">Expedientes</button>
+                <button class="trash-filter-btn" data-filter="expedient">Leads</button>
                 <button class="trash-filter-btn" data-filter="pipeline">Pipelines</button>
                 <button class="trash-filter-btn" data-filter="stage">Etapas</button>
                 <button class="trash-filter-btn" data-filter="salsbot">Bots</button>

@@ -344,4 +344,16 @@ function importBulk(db, tenantId, rows, { dupePolicy = 'skip', bulkTag = null } 
   return result;
 }
 
-module.exports = { list, getById, create, update, remove, importBulk, findDuplicate, normalizePhone, isValidEmail };
+// Setea el avatar de un contacto. Llamado por webhooks (sync con FB/IG profile_pic)
+// y por endpoint manual del frontend. Idempotente: no actualiza si la URL es la misma.
+function setAvatar(db, tenantId, contactId, avatarUrl) {
+  if (!contactId || !avatarUrl) return false;
+  const row = db.prepare('SELECT avatar_url FROM contacts WHERE id = ? AND tenant_id = ?').get(contactId, tenantId);
+  if (!row) return false;
+  if (row.avatar_url === avatarUrl) return false;
+  db.prepare('UPDATE contacts SET avatar_url = ?, avatar_updated_at = unixepoch(), updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+    .run(avatarUrl, contactId, tenantId);
+  return true;
+}
+
+module.exports = { list, getById, create, update, remove, importBulk, findDuplicate, normalizePhone, isValidEmail, setAvatar };

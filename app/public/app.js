@@ -13,7 +13,7 @@ const I18N_TRANSLATIONS = {
     'nav.inicio': 'Inicio',
     'nav.chats': 'Chats',
     'nav.pipelines': 'Pipelines',
-    'nav.expedientes': 'Expedientes',
+    'nav.expedientes': 'Leads',
     'nav.contactos': 'Contactos',
     'nav.plantillas': 'Plantillas',
     'nav.integraciones': 'Integraciones',
@@ -561,7 +561,7 @@ async function openConversation(convoId) {
       const exp = inProgress || expedients[0] || null;
 
       const pipelinePill = exp ? `
-        <button type="button" class="rh-pipeline-pill" data-open-exp="${exp.id}" title="Ver expediente">
+        <button type="button" class="rh-pipeline-pill" data-open-exp="${exp.id}" title="Ver lead">
           <span class="rh-pipeline-pill-name">${escapeHtml(exp.pipelineName || 'Pipeline')}</span>
           <span class="rh-pipeline-pill-arrow">→</span>
           <span class="rh-pipeline-pill-stage" style="background:${exp.stageColor || '#94a3b8'}1a;color:${exp.stageColor || '#475569'};border-color:${exp.stageColor || '#cbd5e1'}66">
@@ -668,7 +668,7 @@ function deliveryErrorDetail(category, reason, provider) {
     blocked: {
       title: '🚫 El lead te bloqueó',
       desc: 'El destinatario te bloqueó en ' + providerLabel + ', así que no recibe tus mensajes.',
-      action: 'Marca este expediente como "Perdido" o intenta contactarlo por otro canal (llamada, email, otra red social).',
+      action: 'Marca este lead como "Perdido" o intenta contactarlo por otro canal (llamada, email, otra red social).',
     },
     no_whatsapp: {
       title: '📵 Número sin WhatsApp',
@@ -1258,7 +1258,7 @@ function renderEditExpedients() {
     return `
       <div class="edit-exp-row ${exp._isNew ? "is-new" : ""}" data-idx="${idx}">
         <label>
-          <span>Nombre del expediente</span>
+          <span>Nombre del lead</span>
           <input type="text" data-field="name" value="${escapeHtml(exp.name || "")}" placeholder="Ej: Serum Facial" />
         </label>
         <label>
@@ -1290,7 +1290,7 @@ function renderEditExpedients() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 18l6-6-6-6"/></svg>
               Abrir detalle
             </button>` : ''}
-          <button type="button" class="edit-exp-delete" data-action="remove-exp" title="Eliminar expediente">
+          <button type="button" class="edit-exp-delete" data-action="remove-exp" title="Eliminar lead">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
           </button>
         </div>
@@ -1343,8 +1343,8 @@ function renderEditExpedients() {
     });
     row.querySelector('[data-action="remove-exp"]').addEventListener("click", () => {
       const exp = EDIT_EXPEDIENTS[idx];
-      const label = exp.name || `expediente #${idx + 1}`;
-      if (exp._isNew || confirm(`¿Eliminar el expediente "${label}"?`)) {
+      const label = exp.name || `lead #${idx + 1}`;
+      if (exp._isNew || confirm(`¿Eliminar el lead "${label}"?`)) {
         EDIT_EXPEDIENTS.splice(idx, 1);
         renderEditExpedients();
       }
@@ -1531,7 +1531,7 @@ function setupCustomers() {
       if (editingCustomerId) summary.push("Contacto actualizado");
       else summary.push("Contacto creado");
       const expChanged = toDelete.length + toCreate.length + toUpdate.length;
-      if (expChanged) summary.push(`${expChanged} expediente${expChanged === 1 ? "" : "s"} actualizado${expChanged === 1 ? "" : "s"}`);
+      if (expChanged) summary.push(`${expChanged} lead${expChanged === 1 ? "" : "s"} actualizado${expChanged === 1 ? "" : "s"}`);
 
       closeCustomerModal();
       await loadCustomers();
@@ -2322,7 +2322,7 @@ function showView(viewName) {
   const plExtras = document.getElementById('topbarPlExtras');
   const topbarActions = document.getElementById('topbarActions');
   if (viewName === 'pipelines') {
-    if (searchInput) { searchInput.placeholder = 'Buscar expediente…'; searchInput.value = PL_FILTERS.q || ''; }
+    if (searchInput) { searchInput.placeholder = 'Buscar lead…'; searchInput.value = PL_FILTERS.q || ''; }
     if (plExtras) plExtras.hidden = false;
     renderPipelineViewSwitch();
     renderPipelinesBoard();
@@ -2336,7 +2336,7 @@ function showView(viewName) {
     if (searchInput) { searchInput.placeholder = 'Buscar por nombre, teléfono o email...'; searchInput.value = CUSTOMER_FILTER || ''; }
     if (plExtras) plExtras.hidden = true;
   } else if (viewName === 'expedientes') {
-    if (searchInput) { searchInput.placeholder = 'Buscar expediente…'; searchInput.value = (EXP_FILTERS && EXP_FILTERS.q) || ''; }
+    if (searchInput) { searchInput.placeholder = 'Buscar lead…'; searchInput.value = (EXP_FILTERS && EXP_FILTERS.q) || ''; }
     if (plExtras) plExtras.hidden = true;
   } else if (viewName === 'plantillas') {
     if (searchInput) { searchInput.placeholder = 'Buscar plantilla…'; searchInput.value = (typeof _tplFilter !== 'undefined' ? _tplFilter : '') || ''; }
@@ -2462,9 +2462,9 @@ const ALL_WH_EVENTS = [
   { key: 'message.sent',            label: 'Mensaje enviado' },
   { key: 'contact.created',         label: 'Contacto creado' },
   { key: 'contact.updated',         label: 'Contacto actualizado' },
-  { key: 'expedient.created',       label: 'Expediente creado' },
-  { key: 'expedient.stage_changed', label: 'Expediente cambió de etapa' },
-  { key: 'expedient.closed',        label: 'Expediente cerrado' },
+  { key: 'expedient.created',       label: 'Lead creado' },
+  { key: 'expedient.stage_changed', label: 'Lead cambió de etapa' },
+  { key: 'expedient.closed',        label: 'Lead cerrado' },
 ];
 
 async function loadIntegrations() {
@@ -3150,12 +3150,16 @@ function renderExpedientRows(items) {
     // Usar los colores reales de la BD; fallback a kind si no llegan.
     const sColor = exp.stageColor || (exp.stageKind === 'won' ? '#10b981' : exp.stageKind === 'lost' ? '#ef4444' : '#94a3b8');
     const pColor = exp.pipelineColor || '#64748b';
+    const emailHtml = exp.contactEmail
+      ? `<a href="mailto:${escapeHtml(exp.contactEmail)}" class="exp-contact-email" onclick="event.stopPropagation()">${escapeHtml(exp.contactEmail)}</a>`
+      : '<span class="exp-contact-email is-empty">—</span>';
     return `
       <tr data-exp-id="${exp.id}" style="cursor:pointer">
         <td>
           <div class="exp-name${exp.nameIsAuto ? ' is-auto-name' : ''}">${escapeHtml(exp.name || 'Sin nombre')}</div>
         </td>
         <td><div class="exp-contact">${escapeHtml(exp.contactName || '—')}</div></td>
+        <td>${emailHtml}</td>
         <td>
           <span class="exp-pipeline-badge-wrap">
             <span class="exp-pipeline-name" style="color:${pColor};border-left:3px solid ${pColor}">${escapeHtml(exp.pipelineName || '')}</span>
@@ -3225,7 +3229,7 @@ async function openExpDetail(id, from = 'expedientes') {
     ]);
     EXP_DETAIL = expData.item;
     EXP_DETAIL_FROM = from;
-  } catch (err) { toast('Error cargando expediente', 'error'); return; }
+  } catch (err) { toast('Error cargando lead', 'error'); return; }
 
   // Persist so page refresh restores this view
   localStorage.setItem('lastView', 'exp-detail');
@@ -3234,7 +3238,7 @@ async function openExpDetail(id, from = 'expedientes') {
 
   // Update back button label
   const backLbl = document.querySelector('.exp-detail-back-label');
-  if (backLbl) backLbl.textContent = from === 'pipelines' ? 'Pipeline' : 'Expedientes';
+  if (backLbl) backLbl.textContent = from === 'pipelines' ? 'Pipeline' : 'Leads';
 
   showView('exp-detail');
   renderExpDetailInfo();
@@ -3298,12 +3302,12 @@ function renderExpDetailInfo() {
 
   root.innerHTML = `
     <div class="exp-detail-section">
-      <div class="exp-detail-section-title">Expediente</div>
+      <div class="exp-detail-section-title">Lead</div>
       <div class="exp-detail-field editable-field" data-field-id="name" data-field-type="builtin">
         <span class="exp-detail-field-label">Nombre</span>
         <div class="edf-cell">
           <span class="exp-detail-field-value edf-display${exp.nameIsAuto ? ' is-auto-name' : ''}">${escapeHtml(exp.name || '—')}</span>
-          <input class="edf-input" type="text" value="${escapeHtml(exp.nameIsAuto ? '' : exp.name || '')}" placeholder="Nombre del expediente" data-original="${escapeHtml(exp.nameIsAuto ? '' : exp.name || '')}" />
+          <input class="edf-input" type="text" value="${escapeHtml(exp.nameIsAuto ? '' : exp.name || '')}" placeholder="Nombre del lead" data-original="${escapeHtml(exp.nameIsAuto ? '' : exp.name || '')}" />
         </div>
       </div>
       <div class="exp-detail-field editable-field" data-field-id="pipeline" data-field-type="builtin">
@@ -3875,7 +3879,7 @@ function setupExpDetail() {
     if (!confirm(`¿Eliminar el expediente "${EXP_DETAIL.name}"? Esta acción no se puede deshacer.`)) return;
     try {
       await api('DELETE', `/api/expedients/${EXP_DETAIL.id}`);
-      toast('Expediente eliminado', 'success');
+      toast('Lead eliminado', 'success');
       showView(EXP_DETAIL_FROM);
       EXP_DETAIL = null;
       if (EXP_DETAIL_FROM === 'expedientes') await loadExpedients();
@@ -4052,11 +4056,11 @@ async function openExpModal(idOrNull = null) {
     try {
       const data = await api('GET', `/api/expedients/${idOrNull}`);
       EXP_EDIT = data.item;
-    } catch (err) { toast('Error cargando expediente', 'error'); return; }
+    } catch (err) { toast('Error cargando lead', 'error'); return; }
   }
 
   const exp = EXP_EDIT;
-  document.getElementById('expModalTitle').textContent = exp ? 'Editar expediente' : 'Nuevo expediente';
+  document.getElementById('expModalTitle').textContent = exp ? 'Editar lead' : 'Nuevo lead';
   document.getElementById('expName').value = exp?.name || '';
   document.getElementById('expDeleteBtn').hidden = !exp;
   document.getElementById('expModalError').hidden = true;
@@ -4227,10 +4231,10 @@ async function saveExpedient(e) {
   try {
     if (EXP_EDIT) {
       await api('PATCH', `/api/expedients/${EXP_EDIT.id}`, { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues });
-      toast('Expediente actualizado', 'success');
+      toast('Lead actualizado', 'success');
     } else {
       await api('POST', '/api/expedients', { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues });
-      toast('Expediente creado', 'success');
+      toast('Lead creado', 'success');
     }
     closeExpModal();
     await loadExpedients();
@@ -4522,12 +4526,12 @@ function setupExpedients() {
   document.querySelectorAll('[data-close-exp]').forEach((el) => el.addEventListener('click', closeExpModal));
   document.getElementById('expForm')?.addEventListener('submit', saveExpedient);
   document.getElementById('expDeleteBtn')?.addEventListener('click', async () => {
-    if (!EXP_EDIT || !confirm(`¿Eliminar el expediente "${EXP_EDIT.name || 'sin nombre'}"?`)) return;
+    if (!EXP_EDIT || !confirm(`¿Eliminar el lead "${EXP_EDIT.name || 'sin nombre'}"?`)) return;
     try {
       await api('DELETE', `/api/expedients/${EXP_EDIT.id}`);
       closeExpModal();
       await loadExpedients();
-      toast('Expediente eliminado', 'success');
+      toast('Lead eliminado', 'success');
     } catch (err) { toast(err.message, 'error'); }
   });
 
@@ -4741,7 +4745,7 @@ const SB_BRANCH_LABELS = {
 const SB_TRIGGER_LABELS = {
   keyword:        'Palabra clave',
   new_contact:    'Nuevo contacto',
-  pipeline_stage: 'Expediente entra a etapa',
+  pipeline_stage: 'Lead entra a etapa',
   always:         'Cualquier mensaje',
   outbound:       'Manual / Outbound',
 };
@@ -4978,7 +4982,7 @@ function openBotBuilder(bot, returnTo = null) {
   // Ajustar texto del botón "←" según el origen
   const backBtn = document.getElementById('botBackBtn');
   if (backBtn) {
-    const labels = { pipelines: 'Pipelines', templates: 'Plantillas', expedientes: 'Expedientes' };
+    const labels = { pipelines: 'Pipelines', templates: 'Plantillas', expedientes: 'Leads' };
     const label = labels[returnTo] || 'Bots';
     // Mantener el SVG y solo cambiar el texto
     const svg = backBtn.querySelector('svg');
@@ -5352,7 +5356,7 @@ function buildStepBody(step) {
           ${opts}
         </select>
         <p style="font-size:12px;color:var(--text-muted);margin:8px 0 4px;line-height:1.5">
-          Este bot terminará y se ejecutará el bot seleccionado para el mismo contacto, en su mismo expediente.
+          Este bot terminará y se ejecutará el bot seleccionado para el mismo contacto, en su mismo lead.
         </p>`;
     }
     case 'wait_response': {
@@ -6893,16 +6897,24 @@ function renderPipelinesBoard() {
                     ${deliveryErrorIconSvg(cat)}
                   </button>`; })()
               : '';
+            const contactName = e.contactName || '—';
+            const initials = (contactName || '?').split(/\s+/).slice(0, 2).map(s => s.charAt(0).toUpperCase()).join('') || '?';
+            const avatarHtml = e.contactAvatarUrl
+              ? `<img class="pl-card-avatar" src="${escHtml(e.contactAvatarUrl)}" alt="" onerror="this.outerHTML='<span class=&quot;pl-card-avatar pl-card-avatar--initials&quot;>${escHtml(initials)}</span>'" />`
+              : `<span class="pl-card-avatar pl-card-avatar--initials">${escHtml(initials)}</span>`;
             return `
             <div class="pl-card ${isStale ? 'is-stale' : ''} ${failure ? 'has-delivery-error' : ''}" data-exp-id="${e.id}" draggable="true">
               <div class="pl-card-name ${e.nameIsAuto ? 'is-auto-name' : ''}">${escHtml(e.name || 'Sin nombre')}${deliveryIcon}</div>
-              <div class="pl-card-contact">${escHtml(e.contactName || '—')}</div>
+              <div class="pl-card-contact-row">
+                ${avatarHtml}
+                <div class="pl-card-contact">${escHtml(contactName)}</div>
+              </div>
               <div class="pl-card-footer">
                 <div class="pl-card-tags">${overdueLabel}${(e.tags || []).slice(0,2).map(t => `<span class="pl-card-tag">${escHtml(t)}</span>`).join('')}</div>
                 <span class="pl-card-date">${fmtDate(e.createdAt)}</span>
               </div>
             </div>`;
-          }).join('') : `<div class="pl-col-empty">Sin expedientes</div>`}
+          }).join('') : `<div class="pl-col-empty">Sin leads</div>`}
         </div>
         <div class="pl-col-footer">
           ${(() => {
@@ -6912,7 +6924,7 @@ function renderPipelinesBoard() {
             if (!stage.bot_id) return '';
             const bot = (sbBots || []).find(b => b.id === stage.bot_id);
             if (!bot) return '';
-            return `<button type="button" class="pl-col-bot-hint" data-go-to-bot="${bot.id}" title="Click para abrir el bot &quot;${escHtml(bot.name)}&quot;. Se ejecuta automáticamente cuando un expediente entra a esta etapa.">
+            return `<button type="button" class="pl-col-bot-hint" data-go-to-bot="${bot.id}" title="Click para abrir el bot &quot;${escHtml(bot.name)}&quot;. Se ejecuta automáticamente cuando un lead entra a esta etapa.">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
                 <rect x="4" y="9" width="16" height="11" rx="2"/>
                 <path d="M12 4v3"/>
@@ -6992,7 +7004,7 @@ function renderPipelinesList() {
         </thead>
         <tbody>
           ${filtered.length === 0
-            ? `<tr><td colspan="6" class="pl-list-empty-row">No hay expedientes en este pipeline.</td></tr>`
+            ? `<tr><td colspan="6" class="pl-list-empty-row">No hay leads en este pipeline.</td></tr>`
             : filtered.map(e => {
                 const stage = stagesById[e.stageId];
                 const stageColor = stage?.color || '#94a3b8';
@@ -7048,7 +7060,7 @@ function setupPipelinesListHandlers(filtered, pipeline) {
     const stageId = Number(e.target.value);
     if (!stageId || !PL_LIST_SELECTED.size) return;
     const stage = pipeline.stages.find(s => s.id === stageId);
-    if (!confirm(`¿Mover ${PL_LIST_SELECTED.size} expediente(s) a la etapa "${stage?.name}"?`)) {
+    if (!confirm(`¿Mover ${PL_LIST_SELECTED.size} lead(s) a la etapa "${stage?.name}"?`)) {
       e.target.value = '';
       return;
     }
@@ -7067,7 +7079,7 @@ function setupPipelinesListHandlers(filtered, pipeline) {
   // Eliminar
   document.getElementById('plListBulkDelete')?.addEventListener('click', async () => {
     if (!PL_LIST_SELECTED.size) return;
-    if (!confirm(`¿Eliminar ${PL_LIST_SELECTED.size} expediente(s)? Se mueven a la papelera (recuperables 30 días).`)) return;
+    if (!confirm(`¿Eliminar ${PL_LIST_SELECTED.size} lead(s)? Se mueven a la papelera (recuperables 30 días).`)) return;
     const ids = [...PL_LIST_SELECTED];
     let ok = 0, fail = 0;
     for (const id of ids) {
@@ -8270,14 +8282,14 @@ const ALARM_TYPE_LABELS = {
   empty_field:          '📋 Campo vacío',
 };
 const ALARM_TYPE_DESCS = {
-  time_in_stage:        'El expediente lleva más del tiempo permitido sin moverse de esta etapa.',
+  time_in_stage:        'El lead lleva más del tiempo permitido sin moverse de esta etapa.',
   awaiting_our_reply:   'El lead te escribió y nadie le ha respondido en el tiempo configurado. La más urgente.',
   no_activity:          'No hay mensajes (entrantes ni salientes) en el chat hace más del tiempo configurado. Lead enfriándose.',
   lead_no_reply:        'Le escribiste al lead y no contestó en el tiempo configurado. Hora de un follow-up.',
   missing_tag:          'El lead lleva en la etapa más del tiempo y no tiene la etiqueta requerida.',
   value_threshold:      'Lead con valor mayor al mínimo lleva tiempo estancado en la etapa. Prioriza los más caros.',
   bot_paused:           'El bot está pausado en este chat hace más del tiempo configurado.',
-  empty_field:          'El expediente lleva en la etapa más del tiempo y un campo personalizado sigue vacío.',
+  empty_field:          'El lead lleva en la etapa más del tiempo y un campo personalizado sigue vacío.',
 };
 const ALARM_TYPES_NEED_TIME = new Set(['time_in_stage', 'awaiting_our_reply', 'no_activity', 'lead_no_reply', 'missing_tag', 'value_threshold', 'bot_paused', 'empty_field']);
 
@@ -8530,7 +8542,7 @@ function buildAlarmRowHtml(a, idx) {
         </label>` : ''}
       ${type === 'value_threshold' ? `
         <label class="form-field">
-          <span>Valor mínimo del expediente ($)</span>
+          <span>Valor mínimo del lead ($)</span>
           <input type="number" class="form-input" min="0" step="100" placeholder="Ej. 5000"
                  value="${escHtml(meta.minValue || '')}" data-alarm-meta-minvalue="${idx}" />
         </label>` : ''}
@@ -9041,7 +9053,7 @@ async function handleChatContextAction(action) {
       case 'expedient': {
         const exp = (PL_EXP_CACHE || []).find(e => e.contactId === convo.contactId && (e.stageKind === 'in_progress' || !e.stageKind));
         if (exp) openExpDetail(exp.id, 'chats');
-        else toast('Este contacto no tiene expediente abierto', 'info');
+        else toast('Este contacto no tiene lead abierto', 'info');
         break;
       }
       case 'copyPhone':
@@ -9670,7 +9682,7 @@ setInterval(() => {
 
 // ═══════ Papelera ═══════
 
-const TRASH_LABELS = { contact: 'Contacto', expedient: 'Expediente', pipeline: 'Pipeline', stage: 'Etapa', salsbot: 'Bot' };
+const TRASH_LABELS = { contact: 'Contacto', expedient: 'Lead', pipeline: 'Pipeline', stage: 'Etapa', salsbot: 'Bot' };
 const TRASH_ICONS  = {
   contact:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
   expedient: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,

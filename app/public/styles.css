@@ -8104,3 +8104,44 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .billing-footnote a {
   color: #64748b;
 }
+
+/* Avatar de contacto en cards de pipeline */
+.pl-card-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.pl-card-avatar {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+  background: #e2e8f0;
+}
+.pl-card-avatar--initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #94a3b8;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.pl-card-contact-row .pl-card-contact {
+  flex: 1;
+  margin-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Email column en lista de leads */
+.exp-contact-email {
+  color: #2563eb;
+  font-size: 13px;
+  text-decoration: none;
+}
+.exp-contact-email:hover { text-decoration: underline; }
+.exp-contact-email.is-empty { color: #94a3b8; cursor: default; }

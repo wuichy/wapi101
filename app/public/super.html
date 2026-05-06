@@ -402,6 +402,143 @@
       background: #fff;
     }
 
+    /* ───────── Reportes ───────── */
+    .sr-badge {
+      background: var(--sa-danger); color: #fff;
+      font-size: 10px; font-weight: 700;
+      min-width: 18px; height: 18px;
+      padding: 0 5px; border-radius: 99px;
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-left: auto;
+    }
+    .sr-toolbar {
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: wrap; margin-bottom: 14px;
+    }
+    .sr-filter {
+      background: #fff; border: 1px solid var(--sa-border); border-radius: 3px;
+      padding: 4px 10px; font-size: 12px; cursor: pointer;
+      color: var(--sa-text); font-family: inherit;
+    }
+    .sr-filter.is-active {
+      background: var(--sa-accent); color: #fff; border-color: var(--sa-accent);
+    }
+    .sr-filter-count {
+      display: inline-block; margin-left: 4px;
+      font-weight: 600; opacity: .8;
+    }
+    .sr-row-title { font-weight: 600; color: var(--sa-text); }
+    .sr-row-tenant {
+      display: inline-block; font-size: 11px;
+      color: var(--sa-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .sr-type-badge {
+      font-size: 11px; font-weight: 500;
+      padding: 1px 7px; border-radius: 3px;
+      border: 1px solid transparent;
+      display: inline-block;
+    }
+    .sr-type-bug         { background: #fcf0f1; color: #6b1d1d; border-color: #ecbcbc; }
+    .sr-type-design      { background: #fcf6e6; color: #6f4d00; border-color: #ecd97a; }
+    .sr-type-suggestion  { background: #f0f6fc; color: #1d4d8c; border-color: #b6d3ec; }
+    .sr-type-question    { background: #f3f0fc; color: #4d1d8c; border-color: #d0c0ec; }
+
+    .sr-prio-low      { color: var(--sa-muted); font-size: 11px; }
+    .sr-prio-medium   { color: var(--sa-text); font-size: 11px; font-weight: 500; }
+    .sr-prio-high     { color: #b35900; font-size: 11px; font-weight: 600; }
+    .sr-prio-urgent   { color: var(--sa-danger); font-size: 11px; font-weight: 700; }
+
+    .sr-detail-meta {
+      display: flex; flex-wrap: wrap; gap: 8px 16px;
+      font-size: 12px; color: var(--sa-muted);
+      margin-bottom: 14px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--sa-border-l);
+    }
+    .sr-detail-meta strong { color: var(--sa-text); font-weight: 600; }
+    .sr-detail-body {
+      background: #f6f7f7; border-left: 3px solid var(--sa-border);
+      padding: 12px 14px; border-radius: 0 4px 4px 0;
+      font-size: 13px; line-height: 1.55;
+      white-space: pre-wrap; word-wrap: break-word;
+      max-height: 240px; overflow-y: auto;
+    }
+    .sr-detail-attachments {
+      display: grid; gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      margin-top: 14px;
+    }
+    .sr-attach {
+      border: 1px solid var(--sa-border-l); border-radius: 4px;
+      overflow: hidden; background: #f6f7f7;
+      aspect-ratio: 4/3;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: border-color .12s;
+    }
+    .sr-attach:hover { border-color: var(--sa-accent); }
+    .sr-attach img,
+    .sr-attach video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .sr-attach-doc {
+      font-size: 11px; color: var(--sa-muted);
+      text-align: center; padding: 14px;
+      word-break: break-all;
+    }
+    .sr-section-label {
+      font-size: 11px; font-weight: 600;
+      color: var(--sa-muted);
+      text-transform: uppercase; letter-spacing: .04em;
+      margin-top: 18px; margin-bottom: 6px;
+    }
+    .sr-admin-response {
+      width: 100%; min-height: 80px;
+      padding: 8px 10px; font-size: 13px;
+      border: 1px solid var(--sa-border); border-radius: 3px;
+      font-family: inherit; resize: vertical;
+      box-sizing: border-box;
+    }
+    .sr-admin-response:focus {
+      outline: none; border-color: var(--sa-accent);
+      box-shadow: 0 0 0 1px var(--sa-accent);
+    }
+    .sr-actions-row {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .sr-status-pick {
+      display: flex; gap: 0;
+      border: 1px solid var(--sa-border); border-radius: 3px;
+      overflow: hidden;
+    }
+    .sr-status-pick button {
+      background: #fff; border: none;
+      padding: 5px 10px; font-size: 12px; cursor: pointer;
+      color: var(--sa-text); font-family: inherit;
+      border-right: 1px solid var(--sa-border);
+    }
+    .sr-status-pick button:last-child { border-right: none; }
+    .sr-status-pick button.is-active {
+      background: var(--sa-accent); color: #fff;
+    }
+    .sr-status-pick button:hover:not(.is-active) { background: #f6f7f7; }
+
+    /* Lightbox simple para attachment */
+    .sr-lightbox {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.85);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200; padding: 40px;
+      cursor: zoom-out;
+    }
+    .sr-lightbox img,
+    .sr-lightbox video {
+      max-width: 100%; max-height: 100%;
+      object-fit: contain;
+    }
+
     /* ───────── Notice (mensajes WP-style) ───────── */
     .sa-notice {
       background: #fff; border-left: 4px solid var(--sa-accent);
@@ -463,6 +600,11 @@
         <span>Tenants</span>
       </a>
       <div class="sa-nav-section">Sistema</div>
+      <a class="sa-nav-item" data-section="reports">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+        <span>Reportes</span>
+        <span id="srBadge" class="sr-badge" hidden></span>
+      </a>
       <a class="sa-nav-item" data-section="health">
         <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         <span>Salud</span>
@@ -525,6 +667,40 @@
       </div>
     </section>
 
+    <!-- Section: Reportes -->
+    <section data-section-pane="reports" hidden>
+      <div class="sa-page-head">
+        <h1 class="sa-page-title">Reportes de clientes</h1>
+      </div>
+      <p class="sa-page-sub">Bugs, sugerencias y preguntas que tus clientes envían desde Configuración → Reportes. Aquí los administras: respondes, marcas en progreso o resuelves.</p>
+
+      <div class="sr-toolbar" id="srFilters">
+        <button class="sr-filter is-active" data-rfilter="">Todos <span class="sr-filter-count" id="srcAll">0</span></button>
+        <button class="sr-filter" data-rfilter="open">Abiertos <span class="sr-filter-count" id="srcOpen">0</span></button>
+        <button class="sr-filter" data-rfilter="in_progress">En progreso <span class="sr-filter-count" id="srcInProgress">0</span></button>
+        <button class="sr-filter" data-rfilter="resolved">Resueltos <span class="sr-filter-count" id="srcResolved">0</span></button>
+        <button class="sr-filter" data-rfilter="wontfix">No se hará <span class="sr-filter-count" id="srcWontfix">0</span></button>
+      </div>
+
+      <div class="sa-card">
+        <table class="sa-table">
+          <thead>
+            <tr>
+              <th style="width:30%">Reporte</th>
+              <th style="width:18%">Tenant</th>
+              <th style="width:10%">Tipo</th>
+              <th style="width:10%">Prioridad</th>
+              <th style="width:12%">Estado</th>
+              <th style="width:14%">Creado</th>
+              <th style="width:6%"></th>
+            </tr>
+          </thead>
+          <tbody id="srTbody"></tbody>
+        </table>
+        <div class="empty-state" id="srEmpty" hidden>No hay reportes que coincidan con el filtro.</div>
+      </div>
+    </section>
+
     <!-- Section: Salud -->
     <section data-section-pane="health" hidden>
       <div class="sa-page-head">
@@ -541,6 +717,23 @@
     </section>
   </main>
 </div>
+
+<!-- ────────── MODAL: Detalle de reporte ────────── -->
+<div id="reportModal" class="sa-modal-bg" hidden>
+  <div class="sa-modal" style="max-width:640px">
+    <div class="sa-modal-head" id="srdTitle">Reporte</div>
+    <div class="sa-modal-body" id="srdBody">
+      <!-- contenido renderizado por JS -->
+    </div>
+    <div class="sa-modal-foot">
+      <button type="button" class="btn-ghost" id="srdClose">Cerrar</button>
+      <button type="button" class="btn-primary" id="srdSave">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox para attachments -->
+<div id="srLightbox" class="sr-lightbox" hidden></div>
 
 <!-- ────────── MODAL: Crear tenant ────────── -->
 <div id="createModal" class="sa-modal-bg" hidden>
@@ -629,6 +822,8 @@ function showDashboard(sa) {
   $('meName').textContent = sa.name || sa.username;
   switchSection('dashboard');
   loadTenants();
+  refreshReportsBadge();
+  setInterval(refreshReportsBadge, 60000);
   pingHealth();
   setInterval(pingHealth, 30000);
 }
@@ -657,7 +852,7 @@ $('logoutBtn').addEventListener('click', async () => {
 });
 
 // ── Navegación entre secciones ──
-const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', health: 'Salud del sistema' };
+const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', reports: 'Reportes', health: 'Salud del sistema' };
 $('saNav').addEventListener('click', (e) => {
   const item = e.target.closest('[data-section]');
   if (!item) return;
@@ -672,7 +867,226 @@ function switchSection(name) {
     el.hidden = el.dataset.sectionPane !== name;
   });
   $('saTopbarTitle').textContent = SECTION_TITLES[name] || name;
+  if (name === 'reports') loadReports();
 }
+
+// ──────────── Reportes (cross-tenant) ────────────
+const REPORT_TYPE_LABELS = {
+  bug:        '🐛 Bug',
+  design:     '🎨 Diseño',
+  suggestion: '💡 Sugerencia',
+  question:   '❓ Pregunta',
+};
+const REPORT_PRIO_LABELS = { low: 'Baja', medium: 'Media', high: 'Alta', urgent: 'Urgente' };
+const REPORT_STATUS_LABELS = { open: 'Abierto', in_progress: 'En progreso', resolved: 'Resuelto', wontfix: 'No se hará' };
+
+let _reports = [];
+let _reportFilter = '';
+let _reportDetail = null;
+
+async function loadReports() {
+  try {
+    const data = await api('GET', '/reports');
+    _reports = data.items || [];
+    renderReports();
+    updateReportsBadge();
+  } catch (err) {
+    $('srTbody').innerHTML = `<tr><td colspan="7" class="empty-state">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function refreshReportsBadge() {
+  try {
+    const data = await api('GET', '/reports?status=open');
+    const n = (data.items || []).length;
+    const badge = $('srBadge');
+    if (n > 0) { badge.hidden = false; badge.textContent = n > 99 ? '99+' : String(n); }
+    else { badge.hidden = true; }
+  } catch { /* silent */ }
+}
+
+function updateReportsBadge() {
+  const n = _reports.filter(r => r.status === 'open').length;
+  const badge = $('srBadge');
+  if (n > 0) { badge.hidden = false; badge.textContent = n > 99 ? '99+' : String(n); }
+  else { badge.hidden = true; }
+}
+
+function renderReports() {
+  // Contadores por status
+  const byStatus = { open: 0, in_progress: 0, resolved: 0, wontfix: 0 };
+  for (const r of _reports) byStatus[r.status] = (byStatus[r.status] || 0) + 1;
+  $('srcAll').textContent        = _reports.length;
+  $('srcOpen').textContent       = byStatus.open;
+  $('srcInProgress').textContent = byStatus.in_progress;
+  $('srcResolved').textContent   = byStatus.resolved;
+  $('srcWontfix').textContent    = byStatus.wontfix;
+
+  const list = _reportFilter ? _reports.filter(r => r.status === _reportFilter) : _reports;
+  const tbody = $('srTbody');
+  const empty = $('srEmpty');
+  if (!list.length) { tbody.innerHTML = ''; empty.hidden = false; return; }
+  empty.hidden = true;
+
+  tbody.innerHTML = list.map(r => `
+    <tr data-id="${r.id}">
+      <td>
+        <div class="sr-row-title">${escapeHtml(r.title)}</div>
+        ${(r.attachments || []).length ? `<span style="font-size:11px;color:var(--sa-muted)">📎 ${r.attachments.length} adjunto${r.attachments.length === 1 ? '' : 's'}</span>` : ''}
+      </td>
+      <td>
+        <div>${escapeHtml(r.tenantName || '—')}</div>
+        <span class="sr-row-tenant">${escapeHtml(r.tenantSlug || '')}</span>
+      </td>
+      <td><span class="sr-type-badge sr-type-${r.type}">${REPORT_TYPE_LABELS[r.type] || r.type}</span></td>
+      <td><span class="sr-prio-${r.priority}">${REPORT_PRIO_LABELS[r.priority] || r.priority}</span></td>
+      <td><span class="sa-status sa-status-${_statusToClass(r.status)}">${REPORT_STATUS_LABELS[r.status] || r.status}</span></td>
+      <td>${fmtDateTime(r.createdAt)}</td>
+      <td><button class="btn-ghost" data-rdetail="${r.id}">Abrir</button></td>
+    </tr>
+  `).join('');
+}
+
+function _statusToClass(s) {
+  if (s === 'open')        return 'trial';
+  if (s === 'in_progress') return 'active';
+  if (s === 'resolved')    return 'active';
+  if (s === 'wontfix')     return 'cancelled';
+  return 'suspended';
+}
+
+function fmtDateTime(ts) {
+  if (!ts) return '—';
+  return new Date(ts * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// Filtros
+$('srFilters').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-rfilter]');
+  if (!btn) return;
+  document.querySelectorAll('#srFilters .sr-filter').forEach(b => b.classList.toggle('is-active', b === btn));
+  _reportFilter = btn.dataset.rfilter || '';
+  renderReports();
+});
+
+// Abrir detalle
+$('srTbody').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-rdetail]');
+  if (!btn) return;
+  const id = Number(btn.dataset.rdetail);
+  const r = _reports.find(x => x.id === id);
+  if (r) openReportDetail(r);
+});
+
+function openReportDetail(r) {
+  _reportDetail = r;
+  $('srdTitle').textContent = `Reporte #${r.id} · ${REPORT_TYPE_LABELS[r.type] || r.type}`;
+
+  const attachments = (r.attachments || []).map((a, i) => {
+    const url = a.url || '';
+    const mime = a.mimetype || '';
+    if (mime.startsWith('image/')) {
+      return `<div class="sr-attach" data-att="${i}"><img src="${escapeHtml(url)}" alt=""></div>`;
+    }
+    if (mime.startsWith('video/')) {
+      return `<div class="sr-attach" data-att="${i}"><video src="${escapeHtml(url)}" muted preload="metadata"></video></div>`;
+    }
+    return `<a class="sr-attach sr-attach-doc" href="${escapeHtml(url)}" target="_blank">${escapeHtml(a.filename || 'archivo')}</a>`;
+  }).join('');
+
+  // Si ya hay admin_response con prefijo "[ETA: xxx] ...", separarlo
+  let etaPre = '';
+  let respText = r.adminResponse || '';
+  const m = respText.match(/^\[ETA:\s*([^\]]+)\]\s*(.*)$/s);
+  if (m) { etaPre = m[1].trim(); respText = m[2]; }
+
+  $('srdBody').innerHTML = `
+    <div class="sr-detail-meta">
+      <span><strong>Tenant:</strong> ${escapeHtml(r.tenantName || '—')} <span style="color:var(--sa-muted)">(${escapeHtml(r.tenantSlug || '')})</span></span>
+      <span><strong>Asesor:</strong> ${escapeHtml(r.advisorName || '—')}</span>
+      <span><strong>Tipo:</strong> ${REPORT_TYPE_LABELS[r.type] || r.type}</span>
+      <span><strong>Prioridad:</strong> <span class="sr-prio-${r.priority}">${REPORT_PRIO_LABELS[r.priority] || r.priority}</span></span>
+      <span><strong>Creado:</strong> ${fmtDateTime(r.createdAt)}</span>
+      ${r.resolvedAt ? `<span><strong>Cerrado:</strong> ${fmtDateTime(r.resolvedAt)}</span>` : ''}
+    </div>
+
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px">${escapeHtml(r.title)}</div>
+    <div class="sr-detail-body">${r.body ? escapeHtml(r.body) : '<em style="color:var(--sa-muted)">(Sin descripción)</em>'}</div>
+
+    ${attachments ? `
+      <div class="sr-section-label">Adjuntos (${(r.attachments || []).length})</div>
+      <div class="sr-detail-attachments">${attachments}</div>
+    ` : ''}
+
+    <div class="sr-section-label">Estado</div>
+    <div class="sr-status-pick" id="srdStatusPick">
+      <button data-sst="open" class="${r.status === 'open' ? 'is-active' : ''}">Abierto</button>
+      <button data-sst="in_progress" class="${r.status === 'in_progress' ? 'is-active' : ''}">En progreso</button>
+      <button data-sst="resolved" class="${r.status === 'resolved' ? 'is-active' : ''}">Resuelto</button>
+      <button data-sst="wontfix" class="${r.status === 'wontfix' ? 'is-active' : ''}">No se hará</button>
+    </div>
+
+    <div class="sr-section-label">ETA estimada (opcional)</div>
+    <input type="text" id="srdEta" class="sr-admin-response" style="min-height:auto" placeholder="ej. esta semana, 3 días, 2026-05-15…" value="${escapeHtml(etaPre)}">
+
+    <div class="sr-section-label">Respuesta al cliente</div>
+    <textarea class="sr-admin-response" id="srdResponse" placeholder="Responde al cliente. Visible en su pestaña Reportes.">${escapeHtml(respText)}</textarea>
+  `;
+
+  // Click en el status pick
+  document.getElementById('srdStatusPick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sst]');
+    if (!b) return;
+    document.querySelectorAll('#srdStatusPick button').forEach(x => x.classList.toggle('is-active', x === b));
+  });
+
+  // Click en attachment para lightbox
+  document.querySelectorAll('#srdBody [data-att]').forEach(el => {
+    el.addEventListener('click', () => openLightbox(r.attachments[Number(el.dataset.att)]));
+  });
+
+  $('reportModal').hidden = false;
+}
+
+function currentDetailStatus() {
+  return document.querySelector('#srdStatusPick button.is-active')?.dataset.sst || _reportDetail?.status || 'open';
+}
+
+async function saveReportChanges() {
+  if (!_reportDetail) return;
+  const status        = currentDetailStatus();
+  const adminResponse = document.getElementById('srdResponse')?.value || '';
+  const eta           = document.getElementById('srdEta')?.value || '';
+  const btn = $('srdSave');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    await api('PATCH', `/reports/${_reportDetail.id}`, { status, adminResponse, eta });
+    $('reportModal').hidden = true;
+    await loadReports();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar cambios';
+  }
+}
+
+$('srdClose').addEventListener('click', () => { $('reportModal').hidden = true; });
+$('srdSave').addEventListener('click', saveReportChanges);
+$('reportModal').addEventListener('click', (e) => {
+  if (e.target.id === 'reportModal') $('reportModal').hidden = true;
+});
+
+function openLightbox(att) {
+  if (!att?.url) return;
+  const lb = $('srLightbox');
+  const isImg = (att.mimetype || '').startsWith('image/');
+  const isVideo = (att.mimetype || '').startsWith('video/');
+  if (isImg)        lb.innerHTML = `<img src="${escapeHtml(att.url)}" alt="">`;
+  else if (isVideo) lb.innerHTML = `<video src="${escapeHtml(att.url)}" controls autoplay></video>`;
+  else              return; // documentos abren con su <a target="_blank">
+  lb.hidden = false;
+}
+$('srLightbox').addEventListener('click', () => { $('srLightbox').hidden = true; $('srLightbox').innerHTML = ''; });
 
 // ── Ping de salud ──
 async function pingHealth() {

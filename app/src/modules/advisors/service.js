@@ -11,11 +11,20 @@ function hashPassword(password) {
 }
 
 function verifyPassword(password, stored) {
+  if (!stored || typeof stored !== 'string' || !stored.includes(':')) return false;
   const [salt, hash] = stored.split(':');
-  const attempt = crypto.scryptSync(password, salt, SCRYPT_PARAMS.dkLen, {
-    N: SCRYPT_PARAMS.N, r: SCRYPT_PARAMS.r, p: SCRYPT_PARAMS.p,
-  }).toString('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(attempt, 'hex'));
+  if (!salt || !hash) return false;
+  try {
+    const attempt = crypto.scryptSync(password, salt, SCRYPT_PARAMS.dkLen, {
+      N: SCRYPT_PARAMS.N, r: SCRYPT_PARAMS.r, p: SCRYPT_PARAMS.p,
+    }).toString('hex');
+    const a = Buffer.from(hash, 'hex');
+    const b = Buffer.from(attempt, 'hex');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch (_) {
+    return false;
+  }
 }
 
 function generateToken() {

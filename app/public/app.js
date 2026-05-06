@@ -18,7 +18,7 @@ const I18N_TRANSLATIONS = {
     'nav.plantillas': 'Plantillas',
     'nav.integraciones': 'Integraciones',
     'nav.bot': 'Bot',
-    'nav.ajustes': 'Ajustes',
+    'nav.ajustes': 'Configuración',
     'nav.collapse': 'Colapsar menú',
     'nav.expand': 'Expandir menú',
     // Ajustes — tabs
@@ -9447,6 +9447,41 @@ function onAttachFileSelected(file, type) {
   reader.readAsDataURL(file);
 }
 
+// Pre-carga el header_media de una plantilla free_form como _rhPendingAttachment
+// para que se envíe junto con el texto al mandar el mensaje. Sin esto, el adjunto
+// guardado en la plantilla simple se ignoraba al enviar.
+async function loadTemplateMediaAsAttachment(tpl) {
+  const r = await fetch(tpl.headerMediaUrl, { credentials: 'same-origin' });
+  if (!r.ok) throw new Error(`HTTP ${r.status} al descargar ${tpl.headerMediaUrl}`);
+  const blob = await r.blob();
+  const ext = (tpl.headerMediaUrl.split('?')[0].split('.').pop() || '').toLowerCase();
+  const safeExt = /^[a-z0-9]{1,8}$/.test(ext) ? ext : 'bin';
+  const filename = `plantilla-${tpl.id}-${tpl.name || 'media'}.${safeExt}`;
+  const mimetype = blob.type || (
+    tpl.headerType === 'IMAGE' ? 'image/jpeg' :
+    tpl.headerType === 'VIDEO' ? 'video/mp4' :
+    'application/octet-stream'
+  );
+  const file = new File([blob], filename, { type: mimetype });
+  const typeMap = { IMAGE: 'image', VIDEO: 'video', DOCUMENT: 'file', AUDIO: 'audio' };
+  await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      _rhPendingAttachment = {
+        file,
+        dataUrl: reader.result,
+        type: typeMap[tpl.headerType] || 'file',
+        mimetype,
+        filename,
+      };
+      showAttachPreview();
+      resolve();
+    };
+    reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
 function showAttachPreview() {
   const att = _rhPendingAttachment;
   if (!att) return;
@@ -10166,12 +10201,18 @@ function _renderTplPickerList(query) {
         return;
       }
 
-      // free_form → copiar texto al textarea (comportamiento clásico)
+      // free_form → copiar texto al textarea (comportamiento clásico) + adjunto si la plantilla
+      // tiene header media. Solo aplica cuando se elige plantilla desde el chat (no bot-message).
       const ta = _tplPickerCtx.textarea;
       if (ta) {
         ta.value = tpl.body || '';
         ta.dispatchEvent(new Event('input'));
         ta.focus();
+        if (_tplPickerCtx.mode !== 'bot-message' && tpl.headerMediaUrl && tpl.headerType && tpl.headerType !== 'TEXT') {
+          loadTemplateMediaAsAttachment(tpl).catch(err => {
+            toast('No se pudo cargar el adjunto de la plantilla: ' + err.message, 'warning');
+          });
+        }
         // Si estamos en bot-message, guardar el origen del texto para que la
         // validación pueda avisar si esa plantilla se borra después. Persiste
         // al guardar el bot porque collectStepConfig lee inputs por

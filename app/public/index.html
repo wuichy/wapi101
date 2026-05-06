@@ -72,6 +72,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>
           <span>Ajustes</span>
         </a>
+        <a href="#suscripcion" class="nav-item" data-view="suscripcion" data-admin-only hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+          <span>Suscripción</span>
+        </a>
       </nav>
 
       <button class="nav-collapse-btn" id="navCollapseBtn" aria-label="Colapsar menú">
@@ -2160,6 +2164,43 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <button class="btn btn--primary" id="accSavePassword">Cambiar contraseña</button>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- ═════════ VISTA: SUSCRIPCIÓN ═════════ -->
+      <section class="view view-billing" data-view="suscripcion" hidden>
+        <div class="billing-wrap">
+          <header class="billing-header">
+            <h2>Suscripción</h2>
+            <p class="billing-sub">Elige el plan que mejor se ajuste a tu negocio. 14 días de prueba gratis en todos los planes.</p>
+          </header>
+
+          <!-- Estado actual -->
+          <div class="billing-status" id="billingStatus" hidden></div>
+
+          <!-- Toggle mensual/anual -->
+          <div class="billing-toggle">
+            <button class="bt-opt is-active" data-interval="month">Mensual</button>
+            <button class="bt-opt" data-interval="year">Anual <span class="bt-save">−20%</span></button>
+          </div>
+
+          <!-- Cards de planes -->
+          <div class="billing-plans" id="billingPlans">
+            <div class="billing-loading">Cargando planes…</div>
+          </div>
+
+          <!-- Botón Manage Subscription (solo si ya hay sub activa) -->
+          <div class="billing-manage" id="billingManage" hidden>
+            <button class="btn btn--ghost" id="billingPortalBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+              Administrar suscripción (cambiar tarjeta, ver facturas, cancelar)
+            </button>
+          </div>
+
+          <p class="billing-footnote">
+            Pagos procesados por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.
+            Lee <a href="/terms" target="_blank">Términos</a> y <a href="/privacy" target="_blank">Privacidad</a>.
+          </p>
         </div>
       </section>
     </main>

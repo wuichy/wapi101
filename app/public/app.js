@@ -2302,7 +2302,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion']);
 function showView(viewName) {
   const navItems = document.querySelectorAll(".nav-item");
   const views = document.querySelectorAll(".view");
@@ -11829,4 +11829,193 @@ function setupNotifications() {
       el.addEventListener('click', () => { refreshNotifPaneState(); loadNotifLog(); });
     }
   });
+}
+
+// ═══════ BILLING (Suscripción) ═══════
+let _billingPlans = null;
+let _billingSub = null;
+let _billingInterval = 'month'; // 'month' | 'year'
+
+async function loadBilling() {
+  const root = document.getElementById('billingPlans');
+  if (!root) return;
+  root.innerHTML = '<div class="billing-loading">Cargando planes…</div>';
+  try {
+    const [plansResp, subResp] = await Promise.all([
+      api('GET', '/api/billing/plans'),
+      api('GET', '/api/billing/subscription'),
+    ]);
+    _billingPlans = plansResp.plans || [];
+    _billingSub = subResp;
+    renderBillingStatus();
+    renderBillingPlans();
+  } catch (err) {
+    root.innerHTML = `<div class="billing-loading" style="color:#ef4444">Error: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderBillingStatus() {
+  const el = document.getElementById('billingStatus');
+  const manageEl = document.getElementById('billingManage');
+  if (!el) return;
+  const sub = _billingSub?.subscription;
+  if (!sub) {
+    el.hidden = true;
+    if (manageEl) manageEl.hidden = true;
+    return;
+  }
+
+  const status = sub.status;
+  const periodEnd = sub.periodEnd ? new Date(sub.periodEnd * 1000) : null;
+  const fmt = (d) => d.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  let icon, text, cls;
+  if (status === 'trialing') {
+    icon = '🎁';
+    cls = 'is-trial';
+    text = `<strong>Trial activo</strong>Tu prueba gratuita termina el ${periodEnd ? fmt(periodEnd) : '—'}. Después se cobrará tu plan automáticamente.`;
+  } else if (status === 'active') {
+    icon = '✓';
+    cls = '';
+    text = `<strong>Suscripción activa</strong>Próxima renovación: ${periodEnd ? fmt(periodEnd) : '—'}`;
+  } else if (status === 'past_due' || status === 'unpaid') {
+    icon = '⚠️';
+    cls = 'is-past_due';
+    text = `<strong>Pago pendiente</strong>Tu último cobro falló. Actualiza tu método de pago para evitar la cancelación.`;
+  } else if (status === 'canceled') {
+    icon = '✕';
+    cls = 'is-canceled';
+    text = `<strong>Suscripción cancelada</strong>El servicio sigue activo hasta ${periodEnd ? fmt(periodEnd) : 'el fin del período pagado'}.`;
+  } else {
+    icon = 'ℹ️';
+    cls = '';
+    text = `<strong>${status}</strong>Estado de suscripción: ${status}`;
+  }
+
+  el.className = 'billing-status ' + cls;
+  el.innerHTML = `<span class="bs-icon">${icon}</span><div class="bs-text">${text}</div>`;
+  el.hidden = false;
+  if (manageEl) manageEl.hidden = false;
+}
+
+function _detectCurrentPlanKey() {
+  // Heurística: compara priceIds de _billingSub con los de _billingPlans
+  // (necesitaríamos exponer el priceId de la sub actual desde el backend para
+  // un match perfecto. Por ahora detectamos por status; si está suscrito,
+  // ningún card sale como "actual" hasta que mejoremos el endpoint).
+  return null;
+}
+
+function renderBillingPlans() {
+  const root = document.getElementById('billingPlans');
+  if (!root || !_billingPlans) return;
+  const currentKey = _detectCurrentPlanKey();
+
+  root.innerHTML = _billingPlans.map((p) => {
+    const price = _billingInterval === 'year' ? p.yearlyPrice : p.monthlyPrice;
+    const priceId = _billingInterval === 'year' ? p.priceIdYearly : p.priceIdMonthly;
+    const period = _billingInterval === 'year' ? 'mes (cobrado anual)' : 'mes';
+    const yearlyNote = _billingInterval === 'year' ? `<p class="bp-price-note">$${(p.yearlyPrice * 12).toFixed(2)} ${p.currency}/año (ahorras 20%)</p>` : '';
+    const isCurrent = currentKey === p.key;
+    const featuredClass = p.featured ? ' is-featured' : '';
+    const currentClass = isCurrent ? ' is-current' : '';
+    const ctaText = isCurrent ? 'Plan actual' : (_billingSub?.subscription ? 'Cambiar a ' + p.name : 'Empezar trial');
+    const features = (p.features || []).map(f => `<li>${escHtml(f)}</li>`).join('');
+    const missing = (p.missingFeatures || []).map(f => `<li class="is-missing">${escHtml(f)}</li>`).join('');
+    return `
+      <div class="bp-card${featuredClass}${currentClass}">
+        <div>
+          <h3 class="bp-name">${escHtml(p.name)}</h3>
+          <p class="bp-tagline">${escHtml(p.tagline)}</p>
+        </div>
+        <div>
+          <div class="bp-price">
+            <span class="amount">$${price}</span>
+            <span class="currency">${p.currency}</span>
+            <span class="period">/${period}</span>
+          </div>
+          ${yearlyNote}
+        </div>
+        <ul class="bp-features">${features}${missing}</ul>
+        <button class="bp-cta" data-plan-key="${p.key}" ${(!priceId || isCurrent) ? 'disabled' : ''}>
+          ${escHtml(ctaText)}
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  // Wire up buttons
+  root.querySelectorAll('.bp-cta:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => onSubscribe(btn.dataset.planKey));
+  });
+}
+
+async function onSubscribe(planKey) {
+  const plan = _billingPlans.find(p => p.key === planKey);
+  if (!plan) return;
+  const priceId = _billingInterval === 'year' ? plan.priceIdYearly : plan.priceIdMonthly;
+  if (!priceId) {
+    toast('Este plan no está disponible aún', 'warning');
+    return;
+  }
+  try {
+    const r = await api('POST', '/api/billing/checkout', { priceId });
+    if (r.url) window.location.href = r.url;
+    else toast('No se pudo iniciar el checkout', 'error');
+  } catch (err) {
+    toast(err.message || 'Error iniciando checkout', 'error');
+  }
+}
+
+async function onOpenPortal() {
+  try {
+    const r = await api('POST', '/api/billing/portal', {});
+    if (r.url) window.open(r.url, '_blank');
+    else toast('No se pudo abrir el portal', 'error');
+  } catch (err) {
+    toast(err.message || 'Error abriendo portal', 'error');
+  }
+}
+
+function setupBillingView() {
+  // Toggle mensual/anual
+  document.querySelectorAll('.billing-toggle .bt-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _billingInterval = btn.dataset.interval;
+      document.querySelectorAll('.billing-toggle .bt-opt').forEach(b => b.classList.toggle('is-active', b === btn));
+      renderBillingPlans();
+    });
+  });
+  // Portal button
+  document.getElementById('billingPortalBtn')?.addEventListener('click', onOpenPortal);
+
+  // Cargar al entrar a la vista
+  document.querySelectorAll('.nav-item[data-view="suscripcion"]').forEach(n => {
+    n.addEventListener('click', () => {
+      // showView ya se ejecutó por el handler general; cargar data
+      setTimeout(loadBilling, 50);
+    });
+  });
+
+  // Si la URL trae ?billing=success al regresar de Stripe, mostrar la vista
+  // y un toast.
+  const params = new URLSearchParams(location.search);
+  if (params.get('billing') === 'success') {
+    setTimeout(() => {
+      showView('suscripcion');
+      loadBilling();
+      toast('¡Suscripción activada! Bienvenido a Wapi101.', 'success', 6000);
+      // Limpiar query string
+      history.replaceState({}, '', location.pathname);
+    }, 500);
+  } else if (params.get('billing') === 'cancelled') {
+    toast('Checkout cancelado. Puedes intentar de nuevo cuando quieras.', 'warning', 5000);
+    history.replaceState({}, '', location.pathname);
+  }
+}
+// Auto-init cuando carga el script
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupBillingView);
+} else {
+  setupBillingView();
 }

@@ -2302,7 +2302,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','recordatorios']);
 function showView(viewName) {
   const navItems = document.querySelectorAll(".nav-item");
   const views = document.querySelectorAll(".view");
@@ -12071,4 +12071,372 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setupBillingView);
 } else {
   setupBillingView();
+}
+
+// ═══════ RECORDATORIOS / TASKS ═══════
+let _tasksFilter = 'overdue';
+let _tasksItems = [];
+let _tasksEditId = null;     // null = crear nueva, número = editar existente
+let _tasksAdvisors = [];     // cache para dropdown del modal
+
+async function loadTasks() {
+  const root = document.getElementById('tasksList');
+  if (!root) return;
+  root.innerHTML = '<div class="tasks-loading">Cargando…</div>';
+  try {
+    const r = await api('GET', `/api/tasks?filter=${_tasksFilter}`);
+    _tasksItems = r.items || [];
+    renderTaskList();
+    refreshTaskCounts();
+  } catch (err) {
+    root.innerHTML = `<div class="tasks-empty" style="color:#ef4444">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function refreshTaskCounts() {
+  try {
+    const [overdue, today, upcoming] = await Promise.all([
+      api('GET', '/api/tasks?filter=overdue&limit=500'),
+      api('GET', '/api/tasks?filter=today&limit=500'),
+      api('GET', '/api/tasks?filter=upcoming&limit=500'),
+    ]);
+    const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+    set('ttCountOverdue', overdue.items?.length || 0);
+    set('ttCountToday',   today.items?.length || 0);
+    set('ttCountUpcoming', upcoming.items?.length || 0);
+  } catch (_) {}
+}
+
+function fmtTaskDue(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dDate = new Date(d); dDate.setHours(0,0,0,0);
+  const diffDays = Math.round((dDate - today) / (24*3600*1000));
+  const time = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (diffDays === 0)  return `Hoy ${time}`;
+  if (diffDays === 1)  return `Mañana ${time}`;
+  if (diffDays === -1) return `Ayer ${time}`;
+  if (diffDays < 0)    return `${Math.abs(diffDays)} días vencido · ${d.toLocaleDateString('es-MX', {day:'numeric',month:'short'})} ${time}`;
+  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) + ' ' + time;
+}
+
+function renderTaskList() {
+  const root = document.getElementById('tasksList');
+  if (!root) return;
+  if (!_tasksItems.length) {
+    const emptyMsg = {
+      overdue:   '🎉 ¡Sin tareas vencidas!',
+      today:     'No hay tareas para hoy',
+      upcoming:  'No hay tareas próximas',
+      completed: 'No hay tareas completadas',
+    }[_tasksFilter] || 'No hay tareas';
+    root.innerHTML = `<div class="tasks-empty">${emptyMsg}</div>`;
+    return;
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const startOfToday = Math.floor(new Date(new Date().setHours(0,0,0,0)).getTime() / 1000);
+  const endOfToday   = Math.floor(new Date(new Date().setHours(23,59,59,999)).getTime() / 1000);
+
+  root.innerHTML = _tasksItems.map(t => {
+    const isOverdue  = !t.completed && t.dueAt < now;
+    const isToday    = !t.completed && t.dueAt >= startOfToday && t.dueAt <= endOfToday;
+    const dueClass   = isOverdue ? 'is-overdue' : isToday ? 'is-today' : '';
+    const itemClass  = `task-item ${isOverdue ? 'is-overdue' : ''} ${t.completed ? 'is-completed' : ''}`;
+    const checkSvg   = t.completed
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>'
+      : '';
+    const linkHtml = t.expedientName
+      ? `<span class="task-link" data-go-to-exp="${t.expedientId}">📂 ${escapeHtml(t.expedientName)}</span>`
+      : (t.contactName ? `<span class="task-link">👤 ${escapeHtml(t.contactName)}</span>` : '');
+    const assignedHtml = t.assignedAdvisorName
+      ? `<span class="task-meta-item">👤 ${escapeHtml(t.assignedAdvisorName)}</span>`
+      : '<span class="task-meta-item" style="color:#94a3b8">Sin asignar</span>';
+    return `
+      <div class="${itemClass}" data-task-id="${t.id}">
+        <div class="task-checkbox" data-task-toggle="${t.id}">${checkSvg}</div>
+        <div class="task-body">
+          <div class="task-title" data-task-edit="${t.id}">${escapeHtml(t.title)}</div>
+          ${t.description ? `<div class="task-desc">${escapeHtml(t.description)}</div>` : ''}
+          <div class="task-meta">
+            <span class="task-meta-item task-due ${dueClass}">⏰ ${fmtTaskDue(t.dueAt)}</span>
+            ${assignedHtml}
+            ${linkHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Wire toggle complete
+  root.querySelectorAll('[data-task-toggle]').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = Number(el.dataset.taskToggle);
+      const t = _tasksItems.find(x => x.id === id);
+      if (!t) return;
+      try {
+        await api('PATCH', `/api/tasks/${id}`, { completed: !t.completed });
+        await loadTasks();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+  // Wire edit (click en título)
+  root.querySelectorAll('[data-task-edit]').forEach(el => {
+    el.addEventListener('click', () => openTaskModal(Number(el.dataset.taskEdit)));
+  });
+  // Wire link a expediente
+  root.querySelectorAll('[data-go-to-exp]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const expId = Number(el.dataset.goToExp);
+      if (typeof openExpDetail === 'function') openExpDetail(expId);
+    });
+  });
+}
+
+async function loadAdvisorsForTaskModal() {
+  if (_tasksAdvisors.length) return;
+  try {
+    const r = await api('GET', '/api/advisors');
+    _tasksAdvisors = r.items || [];
+  } catch (_) { _tasksAdvisors = []; }
+}
+
+async function openTaskModal(taskId = null, presetExpedientId = null, presetExpedientName = null) {
+  await loadAdvisorsForTaskModal();
+  _tasksEditId = taskId;
+  const modal = document.getElementById('taskModal');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('taskModalTitle');
+  const titleInput = document.getElementById('taskTitle');
+  const descInput = document.getElementById('taskDescription');
+  const dueInput = document.getElementById('taskDueAt');
+  const assignSel = document.getElementById('taskAssignedAdvisorId');
+  const expIdInput = document.getElementById('taskExpedientId');
+  const expLabelInput = document.getElementById('taskExpedientLabel');
+  const deleteBtn = document.getElementById('taskDeleteBtn');
+
+  // Llenar dropdown asignados
+  const me = _profile;
+  assignSel.innerHTML = '<option value="">— Ninguno (sin asignar) —</option>'
+    + _tasksAdvisors.filter(a => a.active).map(a =>
+      `<option value="${a.id}">${escapeHtml(a.name || a.username)}${a.id === me.id ? ' (yo)' : ''}</option>`
+    ).join('');
+
+  if (taskId) {
+    // Editar
+    const t = _tasksItems.find(x => x.id === taskId);
+    if (!t) return;
+    titleEl.textContent = 'Editar tarea';
+    titleInput.value = t.title || '';
+    descInput.value = t.description || '';
+    const d = new Date(t.dueAt * 1000);
+    const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    dueInput.value = isoLocal;
+    assignSel.value = t.assignedAdvisorId || '';
+    expIdInput.value = t.expedientId || '';
+    expLabelInput.value = t.expedientName || (t.contactName ? `Contacto: ${t.contactName}` : '');
+    deleteBtn.hidden = false;
+  } else {
+    // Nueva
+    titleEl.textContent = 'Nueva tarea';
+    titleInput.value = '';
+    descInput.value = '';
+    // Default: 1 hora desde ahora
+    const d = new Date(Date.now() + 60 * 60 * 1000);
+    d.setSeconds(0, 0);
+    const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    dueInput.value = isoLocal;
+    assignSel.value = me?.id || '';
+    expIdInput.value = presetExpedientId || '';
+    expLabelInput.value = presetExpedientName || '';
+    deleteBtn.hidden = true;
+  }
+
+  modal.hidden = false;
+  setTimeout(() => titleInput.focus(), 50);
+}
+
+function closeTaskModal() {
+  const modal = document.getElementById('taskModal');
+  if (modal) modal.hidden = true;
+  _tasksEditId = null;
+}
+
+async function saveTask() {
+  const title = document.getElementById('taskTitle').value.trim();
+  const description = document.getElementById('taskDescription').value.trim();
+  const dueLocal = document.getElementById('taskDueAt').value;
+  const assignedAdvisorId = document.getElementById('taskAssignedAdvisorId').value;
+  const expedientId = document.getElementById('taskExpedientId').value;
+  if (!title) { toast('El título es requerido', 'warning'); return; }
+  if (!dueLocal) { toast('La fecha de vencimiento es requerida', 'warning'); return; }
+  const dueAt = Math.floor(new Date(dueLocal).getTime() / 1000);
+
+  const body = {
+    title,
+    description: description || null,
+    dueAt,
+    assignedAdvisorId: assignedAdvisorId ? Number(assignedAdvisorId) : null,
+    expedientId: expedientId ? Number(expedientId) : null,
+  };
+  try {
+    if (_tasksEditId) {
+      await api('PATCH', `/api/tasks/${_tasksEditId}`, body);
+      toast('Tarea actualizada', 'success');
+    } else {
+      await api('POST', '/api/tasks', body);
+      toast('Tarea creada', 'success');
+    }
+    closeTaskModal();
+    await loadTasks();
+    // Si estamos viendo lead detail con cards de pipeline, refrescar iconos
+    if (typeof refreshPipelineTaskIcons === 'function') refreshPipelineTaskIcons();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function deleteCurrentTask() {
+  if (!_tasksEditId) return;
+  if (!confirm('¿Eliminar esta tarea?')) return;
+  try {
+    await api('DELETE', `/api/tasks/${_tasksEditId}`);
+    toast('Tarea eliminada', 'success');
+    closeTaskModal();
+    await loadTasks();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function setupTasksView() {
+  // Tabs
+  document.querySelectorAll('.tasks-tabs .tt-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _tasksFilter = btn.dataset.filter;
+      document.querySelectorAll('.tasks-tabs .tt-tab').forEach(b => b.classList.toggle('is-active', b === btn));
+      loadTasks();
+    });
+  });
+  document.getElementById('taskNewBtn')?.addEventListener('click', () => openTaskModal(null));
+  document.getElementById('taskCancelBtn')?.addEventListener('click', closeTaskModal);
+  document.getElementById('taskDeleteBtn')?.addEventListener('click', deleteCurrentTask);
+  document.getElementById('taskForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    saveTask();
+  });
+  document.getElementById('taskModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'taskModal') closeTaskModal();
+  });
+
+  // Cargar al entrar a la vista
+  document.querySelectorAll('.nav-item[data-view="recordatorios"]').forEach(n => {
+    n.addEventListener('click', () => setTimeout(loadTasks, 50));
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupTasksView);
+} else {
+  setupTasksView();
+}
+
+// ─── Iconos calendario en pipeline cards (cierra Sección 2 pendiente) ───
+let _pipelineTaskCounts = {}; // { expedientId: { pending, overdue } }
+async function refreshPipelineTaskIcons(expedientIds = null) {
+  // Si no se pasan ids, los infiero de los cards visibles
+  if (!expedientIds) {
+    const cards = document.querySelectorAll('.pl-card[data-exp-id]');
+    expedientIds = Array.from(cards).map(c => Number(c.dataset.expId)).filter(Boolean);
+  }
+  if (!expedientIds.length) { _pipelineTaskCounts = {}; return; }
+  try {
+    const r = await api('GET', '/api/tasks/by-expedients?ids=' + expedientIds.join(','));
+    _pipelineTaskCounts = r.counts || {};
+    renderPipelineTaskIcons();
+  } catch (_) { /* silent */ }
+}
+
+function renderPipelineTaskIcons() {
+  document.querySelectorAll('.pl-card[data-exp-id]').forEach(card => {
+    const expId = Number(card.dataset.expId);
+    const counts = _pipelineTaskCounts[expId];
+    // Quitar icono viejo
+    card.querySelectorAll('.pl-card-task-icon').forEach(el => el.remove());
+    if (!counts || !counts.pending) return;
+    const nameRow = card.querySelector('.pl-card-name');
+    if (!nameRow) return;
+    const cls = counts.overdue > 0 ? 'has-overdue' : 'has-pending';
+    const icon = counts.overdue > 0 ? '⏰' : '📅';
+    const title = counts.overdue > 0
+      ? `${counts.overdue} tarea(s) vencida(s) de ${counts.pending} total`
+      : `${counts.pending} tarea(s) pendiente(s)`;
+    const span = document.createElement('span');
+    span.className = `pl-card-task-icon ${cls}`;
+    span.title = title;
+    span.textContent = icon;
+    nameRow.appendChild(span);
+  });
+}
+
+// Hook al render del kanban: cuando se redibuja, refresca iconos
+const _origRenderKanban = window.renderPipelinesBoard;
+if (typeof _origRenderKanban === 'function') {
+  // Wrapper que re-fetcha tasks y agrega iconos
+  window.renderPipelinesBoard = function(...args) {
+    const result = _origRenderKanban.apply(this, args);
+    setTimeout(() => refreshPipelineTaskIcons(), 100);
+    return result;
+  };
+}
+
+// ─── Tareas dentro del detalle del lead ───
+async function renderExpDetailTasks() {
+  const root = document.getElementById('expDetailTasks');
+  if (!root || !EXP_DETAIL) return;
+  try {
+    const r = await api('GET', `/api/tasks?expedientId=${EXP_DETAIL.id}&filter=pending&limit=20`);
+    const items = r.items || [];
+    const itemsHtml = items.length
+      ? items.map(t => {
+          const now = Math.floor(Date.now() / 1000);
+          const cls = t.dueAt < now ? 'is-overdue' : '';
+          return `
+            <div class="exp-detail-task ${cls}" data-task-id="${t.id}">
+              <span class="exp-detail-task-due">${escapeHtml(fmtTaskDue(t.dueAt))}</span>
+              <span class="exp-detail-task-title">${escapeHtml(t.title)}</span>
+            </div>
+          `;
+        }).join('')
+      : '<p class="exp-detail-task-empty">Sin tareas pendientes para este lead.</p>';
+    root.innerHTML = `
+      <div class="exp-detail-section-title">Tareas</div>
+      <div class="exp-detail-tasks-body">
+        ${itemsHtml}
+        <button class="btn btn--ghost btn--sm" id="expDetailAddTaskBtn">+ Nueva tarea</button>
+      </div>
+    `;
+    document.getElementById('expDetailAddTaskBtn')?.addEventListener('click', () => {
+      openTaskModal(null, EXP_DETAIL.id, EXP_DETAIL.name || `Lead #${EXP_DETAIL.id}`);
+    });
+    root.querySelectorAll('[data-task-id]').forEach(el => {
+      el.addEventListener('click', () => {
+        // Cargar la tarea desde el server (no la tenemos en _tasksItems aquí)
+        api('GET', `/api/tasks/${el.dataset.taskId}`).then(t => {
+          _tasksItems = [t]; // hack para que openTaskModal la encuentre
+          openTaskModal(Number(el.dataset.taskId));
+        });
+      });
+    });
+  } catch (err) {
+    root.innerHTML = `<p class="exp-detail-task-empty" style="color:#ef4444">Error: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+// Hook al render del lead detail para que cargue tareas
+const _origRenderExpInfo = window.renderExpDetailInfo;
+if (typeof _origRenderExpInfo === 'function') {
+  window.renderExpDetailInfo = function(...args) {
+    const r = _origRenderExpInfo.apply(this, args);
+    setTimeout(renderExpDetailTasks, 50);
+    return r;
+  };
 }

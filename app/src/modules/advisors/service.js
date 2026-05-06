@@ -53,16 +53,40 @@ function deleteSession(db, token) {
   db.prepare('DELETE FROM advisor_sessions WHERE token = ?').run(token);
 }
 
-// Login NO recibe tenantId — todavía es por username/email global. Cuando
-// onboardée el 2do tenant, /api/auth/login aceptará un tenantSlug opcional
-// (subdominio o input explícito) y filtrará por tenant aquí.
-function login(db, usernameOrEmail, password) {
-  const advisor = db.prepare(
-    'SELECT * FROM advisors WHERE (username = ? OR email = ?) AND active = 1'
-  ).get(usernameOrEmail, usernameOrEmail);
-  if (!advisor) return null;
-  if (!verifyPassword(password, advisor.password_hash)) return null;
-  return advisor;
+// Login multi-tenant.
+//
+// Modos:
+//   - Con tenantSlug: resuelve tenant_id desde slug y filtra advisors por
+//     tenant + username/email + active. Si el slug no existe → AMBIGUOUS_SLUG.
+//   - Sin tenantSlug (legacy / single-tenant deploys): busca globalmente.
+//     Si hay 1 solo match → OK. Si hay >1 → SLUG_REQUIRED (el caller debe
+//     pedir tenantSlug). Mientras solo hay 1 tenant en el sistema, el flujo
+//     legacy sigue funcionando sin cambios.
+//
+// Retorna:
+//   { advisor }                      — login OK
+//   { error: 'INVALID_CREDS' }       — credenciales inválidas (genérico para
+//                                      no leakear si existe el usuario o no)
+//   { error: 'SLUG_REQUIRED' }       — múltiples cuentas con ese username,
+//                                      el caller debe pedir tenantSlug
+function login(db, usernameOrEmail, password, tenantSlug = null) {
+  let candidates;
+  if (tenantSlug) {
+    const tenant = db.prepare('SELECT id FROM tenants WHERE slug = ?').get(tenantSlug);
+    if (!tenant) return { error: 'INVALID_CREDS' }; // slug inexistente → genérico
+    candidates = db.prepare(
+      'SELECT * FROM advisors WHERE (username = ? OR email = ?) AND tenant_id = ? AND active = 1'
+    ).all(usernameOrEmail, usernameOrEmail, tenant.id);
+  } else {
+    candidates = db.prepare(
+      'SELECT * FROM advisors WHERE (username = ? OR email = ?) AND active = 1'
+    ).all(usernameOrEmail, usernameOrEmail);
+  }
+  if (candidates.length === 0) return { error: 'INVALID_CREDS' };
+  if (candidates.length > 1)  return { error: 'SLUG_REQUIRED' };
+  const advisor = candidates[0];
+  if (!verifyPassword(password, advisor.password_hash)) return { error: 'INVALID_CREDS' };
+  return { advisor };
 }
 
 function list(db, tenantId) {

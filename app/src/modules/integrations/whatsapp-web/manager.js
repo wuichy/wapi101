@@ -20,6 +20,83 @@ const {
 // integrationId → { sock, status, qrDataUrl, qrRaw, phoneNumber, error, startedAt, lastConnAt }
 const sessions = new Map();
 
+// Extrae body + type de un mensaje entrante de Baileys. Cubre los tipos más
+// comunes; cuando no hay texto, devuelve un placeholder visible (ej. "🖼️ Imagen")
+// para que la burbuja no aparezca vacía mientras no descarguemos los adjuntos.
+function extractIncomingBody(message) {
+  if (!message) return { body: '', messageType: 'unknown' };
+
+  // Algunos tipos envuelven el contenido real en un sub-mensaje
+  if (message.ephemeralMessage?.message)            return extractIncomingBody(message.ephemeralMessage.message);
+  if (message.viewOnceMessage?.message)             return extractIncomingBody(message.viewOnceMessage.message);
+  if (message.viewOnceMessageV2?.message)           return extractIncomingBody(message.viewOnceMessageV2.message);
+  if (message.viewOnceMessageV2Extension?.message)  return extractIncomingBody(message.viewOnceMessageV2Extension.message);
+  if (message.documentWithCaptionMessage?.message)  return extractIncomingBody(message.documentWithCaptionMessage.message);
+
+  const messageType = Object.keys(message)[0] || 'unknown';
+
+  // Texto puro
+  if (message.conversation)              return { body: message.conversation, messageType: 'text' };
+  if (message.extendedTextMessage?.text) return { body: message.extendedTextMessage.text, messageType: 'text' };
+
+  // Media con caption opcional
+  if (message.imageMessage)    return { body: message.imageMessage.caption    || '🖼️ Imagen',     messageType: 'image' };
+  if (message.videoMessage)    return { body: message.videoMessage.caption    || '🎬 Video',      messageType: 'video' };
+  if (message.documentMessage) {
+    const cap = message.documentMessage.caption;
+    const file = message.documentMessage.fileName || message.documentMessage.title || 'Documento';
+    return { body: cap || `📄 ${file}`, messageType: 'document' };
+  }
+  if (message.audioMessage) {
+    const isPtt = message.audioMessage.ptt;
+    return { body: isPtt ? '🎙️ Mensaje de voz' : '🎵 Audio', messageType: isPtt ? 'voice' : 'audio' };
+  }
+  if (message.stickerMessage)  return { body: '🩰 Sticker',     messageType: 'sticker' };
+
+  // Ubicaciones
+  if (message.locationMessage) {
+    const lat = message.locationMessage.degreesLatitude;
+    const lng = message.locationMessage.degreesLongitude;
+    const name = message.locationMessage.name || message.locationMessage.address || '';
+    const coords = (lat != null && lng != null) ? ` (${lat.toFixed(5)}, ${lng.toFixed(5)})` : '';
+    return { body: `📍 Ubicación${name ? ` · ${name}` : ''}${coords}`, messageType: 'location' };
+  }
+  if (message.liveLocationMessage) return { body: '📍 Ubicación en vivo', messageType: 'live_location' };
+
+  // Contactos
+  if (message.contactMessage) {
+    const name = message.contactMessage.displayName || 'Contacto';
+    return { body: `👤 ${name}`, messageType: 'contact' };
+  }
+  if (message.contactsArrayMessage) {
+    const n = (message.contactsArrayMessage.contacts || []).length;
+    return { body: `👤 ${n} contacto${n === 1 ? '' : 's'}`, messageType: 'contacts' };
+  }
+
+  // Botones / listas / templates (responses)
+  if (message.buttonsResponseMessage)        return { body: message.buttonsResponseMessage.selectedDisplayText || message.buttonsResponseMessage.selectedButtonId || '🔘 Botón', messageType: 'button_reply' };
+  if (message.listResponseMessage)           return { body: message.listResponseMessage.title || '📋 Lista', messageType: 'list_reply' };
+  if (message.templateButtonReplyMessage)    return { body: message.templateButtonReplyMessage.selectedDisplayText || '🔘 Botón', messageType: 'template_reply' };
+  if (message.interactiveResponseMessage)    return { body: '🔘 Respuesta interactiva', messageType: 'interactive_reply' };
+
+  // Encuestas
+  if (message.pollCreationMessage)   return { body: `📊 Encuesta: ${message.pollCreationMessage.name || ''}`.trim(), messageType: 'poll' };
+  if (message.pollUpdateMessage)     return { body: '📊 Voto en encuesta', messageType: 'poll_vote' };
+
+  // Reacciones
+  if (message.reactionMessage) {
+    const emoji = message.reactionMessage.text || '';
+    return { body: emoji ? `Reaccionó: ${emoji}` : 'Quitó la reacción', messageType: 'reaction' };
+  }
+
+  // Sistemas / silenciables
+  if (message.protocolMessage)              return { body: '', messageType: 'protocol' };          // edits, deletes, key changes
+  if (message.senderKeyDistributionMessage) return { body: '', messageType: 'system_keys' };
+
+  // Fallback: tipo desconocido
+  return { body: `📩 Mensaje (${messageType})`, messageType };
+}
+
 // Callbacks globales (los registra el caller; no los hardcodeamos aquí para mantener desacoplado)
 let onMessageCallback = null;
 let onConnectedCallback = null;
@@ -151,13 +228,11 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
       if (!remoteJid.endsWith('@s.whatsapp.net')) continue;
 
       const phone = remoteJid.replace('@s.whatsapp.net', '');
-      const body =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption ||
-        msg.message.videoMessage?.caption ||
-        msg.message.documentMessage?.caption ||
-        '';
+      const { body, messageType } = extractIncomingBody(msg.message);
+
+      // Saltar mensajes de sistema (revokes, key changes, etc.) que no deben
+      // mostrarse como burbujas en el chat.
+      if (messageType === 'protocol' || messageType === 'system_keys') continue;
 
       try {
         onMessageCallback?.(integrationId, {
@@ -166,7 +241,7 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
           body,
           pushName:      msg.pushName || null,
           timestamp:     Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
-          messageType:   Object.keys(msg.message)[0] || 'text',
+          messageType,
         });
       } catch (err) {
         console.error(`[wa-web ${integrationId}] onMessage error:`, err.message);

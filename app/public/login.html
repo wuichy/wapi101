@@ -137,7 +137,7 @@
         if (!res.ok) throw new Error(data.error || 'Error al iniciar sesión');
         localStorage.setItem('rh_token', data.token);
         localStorage.setItem('rh_advisor', JSON.stringify(data.advisor));
-        window.location.href = '/';
+        window.location.href = '/app';
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';

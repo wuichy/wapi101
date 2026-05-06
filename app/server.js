@@ -87,6 +87,20 @@ app.get('/super', (_req, res) => {
 app.get('/privacy', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy.html')));
 app.get('/terms',   (_req, res) => res.sendFile(path.join(__dirname, 'public', 'terms.html')));
 
+// Catálogo público de planes (lo necesita la landing y la página /pricing).
+// Se monta ANTES del authMiddleware. Reusa la lógica del módulo billing.
+app.get('/api/public/plans', (_req, res) => {
+  const billingRoutes = require('./src/modules/billing/routes');
+  // El módulo solo exporta el factory del router; reproducimos la lógica
+  // local para no duplicar — getPlans() está en routes pero no exportado.
+  // Mejor: definir aquí la misma forma de obtener plans.
+  res.json({ plans: [
+    { key:'starter',  name:'Starter',  tagline:'Para emprendedores solos', monthlyPrice:29,  yearlyPrice:23.20,  currency:'USD', features:['1 usuario','500 contactos','1 número WhatsApp','1,000 conversaciones/mes','3 pipelines','Plantillas básicas (5)','Adjuntos en chat','Alarmas multi-condición'], missingFeatures:['Bots con flujos','Webhooks salientes','API pública','IA auto-respuesta'], priceIdMonthly: process.env.STRIPE_PRICE_STARTER_MONTHLY || null, priceIdYearly: process.env.STRIPE_PRICE_STARTER_YEARLY || null },
+    { key:'pro',      name:'Pro',      tagline:'Para PyMEs 2-10 personas', monthlyPrice:79,  yearlyPrice:63.20,  currency:'USD', featured:true, features:['5 usuarios','Contactos ilimitados','3 números WhatsApp','Conversaciones ilimitadas','Pipelines ilimitados','Bots con flujos visuales','50 plantillas WA aprobadas','Webhooks salientes','API pública','Reportes completos'], missingFeatures:['IA auto-respuesta','White-label'], priceIdMonthly: process.env.STRIPE_PRICE_PRO_MONTHLY || null, priceIdYearly: process.env.STRIPE_PRICE_PRO_YEARLY || null },
+    { key:'business', name:'Business', tagline:'Para equipos 20+ personas', monthlyPrice:199, yearlyPrice:159.20, currency:'USD', features:['20 usuarios','Todo de Pro','Números WhatsApp ilimitados','Plantillas ilimitadas','IA auto-respuesta (Anthropic)','White-label (logo propio)','Reportes avanzados con export','Onboarding dedicado','Soporte chat 4h SLA'], missingFeatures:[], priceIdMonthly: process.env.STRIPE_PRICE_BUSINESS_MONTHLY || null, priceIdYearly: process.env.STRIPE_PRICE_BUSINESS_YEARLY || null },
+  ]});
+});
+
 // ─── Super-admin API: monta ANTES del authMiddleware (/api). Tiene su propio
 // flujo de auth con tokens sa_*. NO usa req.tenantId ni filtros multi-tenant.
 mountSafe('/super', require('./src/modules/super/routes'));
@@ -138,6 +152,90 @@ app.post('/api/auth/logout', (req, res) => {
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : null;
   if (token) advisorSvc.deleteSession(db, token);
   res.json({ ok: true });
+});
+
+// ─── Signup público — crea tenant + admin + auto-login ─────────────────
+// Sin auth. Registra rate-limit básico por IP en memoria (5 intentos / 10 min)
+// para mitigar bots; el rate limit "real" se hace después con Redis o similar.
+const _signupAttempts = new Map();
+function _signupRateLimit(ip) {
+  const now = Date.now();
+  const entry = _signupAttempts.get(ip) || { count: 0, resetAt: now + 10*60*1000 };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + 10*60*1000; }
+  entry.count++;
+  _signupAttempts.set(ip, entry);
+  return entry.count <= 5;
+}
+function _slugify(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+}
+
+app.post('/api/auth/signup', async (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+  if (!_signupRateLimit(ip)) {
+    return res.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' });
+  }
+
+  const { companyName, adminName, email, password } = req.body || {};
+  if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Nombre de la empresa requerido' });
+  if (!adminName || !adminName.trim())     return res.status(400).json({ error: 'Tu nombre es requerido' });
+  if (!email || !email.includes('@'))      return res.status(400).json({ error: 'Email inválido' });
+  if (!password || password.length < 8)    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+
+  // Auto-generar slug y username
+  let slug = _slugify(companyName);
+  if (!slug || slug.length < 2) return res.status(400).json({ error: 'El nombre de la empresa genera un slug inválido' });
+  // Si el slug existe, agregar sufijo numérico
+  let attempt = 0, finalSlug = slug;
+  while (db.prepare('SELECT id FROM tenants WHERE slug = ?').get(finalSlug)) {
+    attempt++;
+    finalSlug = slug + '-' + attempt;
+    if (attempt > 99) return res.status(409).json({ error: 'No se pudo generar un slug único, intenta otro nombre' });
+  }
+  const username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  try {
+    const superSvc = require('./src/modules/super/service');
+    const result = superSvc.createTenant(db, {
+      slug: finalSlug,
+      displayName: companyName.trim(),
+      plan: 'free',
+      adminName: adminName.trim(),
+      adminUsername: username,
+      adminEmail: email.trim(),
+      adminPassword: password,
+    });
+
+    // Auto-login: crear session inmediato
+    const advisor = result.tenant && db.prepare(
+      "SELECT * FROM advisors WHERE tenant_id = ? AND role = 'admin' AND active = 1 ORDER BY id DESC LIMIT 1"
+    ).get(result.tenant.id);
+    if (!advisor) throw new Error('No se pudo crear el admin');
+    const token = advisorSvc.createSession(db, advisor.id);
+
+    res.json({
+      token,
+      advisor: {
+        id: advisor.id,
+        name: advisor.name,
+        username: advisor.username,
+        role: advisor.role,
+        permissions: JSON.parse(advisor.permissions || '{}'),
+        tenantId: advisor.tenant_id,
+      },
+      tenant: {
+        slug: result.tenant.slug,
+        displayName: result.tenant.display_name,
+        plan: result.tenant.plan,
+      },
+    });
+  } catch (err) {
+    // Mensajes de error legibles para el frontend
+    const msg = err.message || 'Error al crear la cuenta';
+    const code = /Email|UNIQUE/i.test(msg) ? 409 : 400;
+    res.status(code).json({ error: msg });
+  }
 });
 
 // ─── Proteger todas las rutas /api/* con auth ───
@@ -279,12 +377,36 @@ app.use('/uploads', express.static(config.uploadsDir, {
   index: false,
 }));
 
+// ─── Routing del producto SaaS ───
+// /            → Landing pública (con auto-detect: si hay token, redirige a /app)
+// /login       → Pantalla de login del CRM
+// /signup      → Form de signup público (crea tenant + admin + auto-login)
+// /app, /app/* → CRM SPA (index.html)
+//
+// Estas rutas se montan ANTES del express.static general para que ganen
+// precedencia sobre los archivos HTML correspondientes que serían servidos
+// con el path por default.
+
+const _sendFile = (file) => (_req, res) => {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', file));
+};
+
+app.get('/',         _sendFile('landing.html'));
+app.get('/login',    _sendFile('login.html'));
+app.get('/signup',   _sendFile('signup.html'));
+app.get('/app',      _sendFile('index.html'));
+app.get('/app/*',    _sendFile('index.html')); // SPA routing — cualquier ruta interna del CRM
+
 // Estáticos — HTML/CSS/JS sin caché agresivo (always revalidate via ETag).
 // Imágenes/fonts mantienen el comportamiento default de express.static.
 // Esto evita que Safari/Cloudflare retengan versiones viejas tras un deploy:
 // el browser pregunta cada vez "¿sigue siendo válido?" y el server devuelve
 // 304 si no cambió, 200 con el archivo nuevo si sí.
+// IMPORTANTE: index:false para que express.static NO sirva index.html en /
+// (la ruta '/' ya la maneja el handler de landing arriba).
 app.use(express.static(path.join(__dirname, 'public'), {
+  index: false,
   setHeaders: (res, filePath) => {
     if (/\.(html|css|js|json|map)$/i.test(filePath)) {
       res.set('Cache-Control', 'no-cache, must-revalidate');

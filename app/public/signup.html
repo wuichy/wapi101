@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Crear cuenta · Wapi101</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f1f5f9; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 32px 20px;
+    }
+    .card {
+      background: #fff; max-width: 460px; width: 100%;
+      padding: 40px 32px; border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 24px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px; background: #2563eb; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; border-radius: 8px;
+    }
+    .logo-text { font-size: 18px; font-weight: 700; color: #0f172a; }
+    h1 { font-size: 24px; font-weight: 700; color: #0f172a; margin-bottom: 6px; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: #334155; margin-bottom: 6px;
+    }
+    .field input {
+      width: 100%; padding: 11px 14px; border: 1px solid #e2e8f0;
+      border-radius: 8px; font-size: 14px; font-family: inherit;
+      background: #fff; color: #0f172a;
+      transition: all 0.15s;
+    }
+    .field input:focus {
+      outline: 0; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    }
+    .field-help { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .btn {
+      width: 100%; padding: 12px; background: #2563eb; color: #fff;
+      border: 0; border-radius: 8px; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; margin-top: 12px;
+    }
+    .btn:hover:not(:disabled) { background: #1d4ed8; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .err {
+      background: rgba(239,68,68,.1); color: #b91c1c; padding: 10px 12px;
+      border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none;
+    }
+    .footer {
+      text-align: center; margin-top: 24px; font-size: 13px; color: #64748b;
+    }
+    .footer a { color: #2563eb; text-decoration: none; font-weight: 500; }
+    .legal-note {
+      text-align: center; margin-top: 16px; font-size: 11px; color: #94a3b8;
+    }
+    .legal-note a { color: #64748b; }
+    .trial-banner {
+      background: #ecfdf5; border: 1px solid #a7f3d0;
+      padding: 12px 14px; border-radius: 8px; margin-bottom: 20px;
+      font-size: 13px; color: #064e3b;
+    }
+    .trial-banner strong { display: block; margin-bottom: 2px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <a href="/" class="logo" style="text-decoration:none">
+      <span class="logo-icon">W</span>
+      <span class="logo-text">Wapi101</span>
+    </a>
+
+    <h1>Crea tu cuenta</h1>
+    <p class="subtitle">Empieza tu prueba gratuita de 14 días. Sin tarjeta.</p>
+
+    <div class="trial-banner">
+      <strong>🎁 Trial completo del plan Pro</strong>
+      Acceso a bots, pipelines ilimitados y todas las funciones por 14 días.
+    </div>
+
+    <div class="err" id="signupError"></div>
+
+    <form id="signupForm" autocomplete="on">
+      <div class="field">
+        <label for="companyName">Nombre de tu empresa</label>
+        <input type="text" id="companyName" placeholder="ej. Acme Cosméticos" required minlength="2" maxlength="60" />
+        <div class="field-help">Como aparecerá en tu workspace</div>
+      </div>
+
+      <div class="field">
+        <label for="adminName">Tu nombre</label>
+        <input type="text" id="adminName" placeholder="ej. Pepe Pérez" autocomplete="name" required minlength="2" maxlength="60" />
+      </div>
+
+      <div class="field">
+        <label for="email">Correo electrónico</label>
+        <input type="email" id="email" placeholder="tu@empresa.com" autocomplete="email" required />
+      </div>
+
+      <div class="field">
+        <label for="password">Contraseña</label>
+        <input type="password" id="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required minlength="8" />
+        <div class="field-help">Mínimo 8 caracteres. Usa mayúsculas, números y símbolos.</div>
+      </div>
+
+      <button class="btn" type="submit" id="signupBtn">Crear cuenta y empezar trial</button>
+    </form>
+
+    <p class="footer">
+      ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>
+    </p>
+    <p class="legal-note">
+      Al crear cuenta aceptas nuestros <a href="/terms" target="_blank">Términos del Servicio</a> y <a href="/privacy" target="_blank">Aviso de Privacidad</a>.
+    </p>
+  </div>
+
+  <script>
+    const form = document.getElementById('signupForm');
+    const errEl = document.getElementById('signupError');
+    const btn = document.getElementById('signupBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.style.display = 'none';
+      const data = {
+        companyName: document.getElementById('companyName').value.trim(),
+        adminName: document.getElementById('adminName').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value,
+      };
+      btn.disabled = true;
+      btn.textContent = 'Creando tu cuenta…';
+      try {
+        const r = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const out = await r.json();
+        if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
+        // Guardar token en localStorage usando la clave que la SPA del CRM espera
+        localStorage.setItem('rh_session', out.token);
+        localStorage.setItem('wapi101_token', out.token); // compat
+        // Redirigir al CRM
+        location.href = '/app';
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Crear cuenta y empezar trial';
+      }
+    });
+  </script>
+</body>
+</html>

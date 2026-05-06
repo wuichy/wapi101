@@ -213,7 +213,7 @@ function logout() {
   if (token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
   localStorage.removeItem('rh_token');
   localStorage.removeItem('rh_advisor');
-  window.location.href = '/login.html';
+  window.location.href = '/login';
 }
 
 // ═══════ Estado de conexión global ═══════
@@ -9819,7 +9819,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Redirigir a login si no hay token
   if (!getToken()) {
     const redir = window.PERSONAL_MODE ? '?redirect=/chat' : '';
-    window.location.href = '/login.html' + redir;
+    window.location.href = '/login' + redir;
     return;
   }
 

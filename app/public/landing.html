@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Wapi101 — CRM multicanal para LATAM</title>
+  <meta name="description" content="CRM multicanal para WhatsApp, Messenger, Instagram y Telegram. Bots visuales, pipelines kanban y plantillas aprobadas. Empieza gratis 14 días, sin tarjeta." />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+  <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Wapi101 — CRM multicanal para LATAM" />
+  <meta property="og:description" content="WhatsApp + Messenger + Instagram + Telegram en una sola bandeja. Bots visuales, pipelines kanban, plantillas aprobadas." />
+  <meta property="og:image" content="https://wapi101.com/icons/wapi101-logo.svg" />
+  <meta property="og:url" content="https://wapi101.com" />
+  <meta property="og:type" content="website" />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --accent: #10b981;
+      --text: #0f172a;
+      --text-soft: #64748b;
+      --border: #e2e8f0;
+      --bg-soft: #f8fafc;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--text);
+      line-height: 1.6;
+      background: #fff;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+    /* Topbar */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; max-width: 1140px; margin: 0 auto;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 18px; }
+    .brand-mark {
+      width: 32px; height: 32px; background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; border-radius: 8px;
+    }
+    .topbar-nav { display: flex; align-items: center; gap: 24px; font-size: 14px; }
+    .topbar-nav a { color: var(--text-soft); }
+    .topbar-nav a:hover { color: var(--text); }
+    .btn {
+      display: inline-block; padding: 10px 20px;
+      border-radius: 8px; font-weight: 600; font-size: 14px;
+      transition: all 0.15s; cursor: pointer; border: 0; text-align: center;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg-soft); }
+    .btn-lg { padding: 14px 32px; font-size: 16px; border-radius: 10px; }
+    @media (max-width: 720px) {
+      .topbar-nav a:not(.btn) { display: none; }
+    }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 60px;
+      background: linear-gradient(180deg, #fff 0%, var(--bg-soft) 100%);
+    }
+    .hero-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
+    }
+    .hero h1 {
+      font-size: 48px; font-weight: 800; line-height: 1.15;
+      letter-spacing: -0.02em; margin-bottom: 16px;
+    }
+    .hero h1 em { font-style: normal; color: var(--primary); }
+    .hero p.lead {
+      font-size: 18px; color: var(--text-soft); margin-bottom: 32px;
+    }
+    .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+    .hero-trust { margin-top: 24px; font-size: 13px; color: var(--text-soft); }
+    .hero-trust strong { color: var(--text); }
+
+    .hero-mockup {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.04);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .mockup-bar {
+      display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--border);
+      background: #f1f5f9;
+    }
+    .mockup-bar span { width: 10px; height: 10px; border-radius: 50%; }
+    .mockup-bar span:nth-child(1) { background: #ef4444; }
+    .mockup-bar span:nth-child(2) { background: #f59e0b; }
+    .mockup-bar span:nth-child(3) { background: #10b981; }
+    .mockup-body { padding: 24px; min-height: 280px; }
+    .mockup-chat { display: flex; flex-direction: column; gap: 8px; }
+    .bubble { padding: 10px 14px; border-radius: 16px; font-size: 14px; max-width: 75%; }
+    .bubble-in  { background: #f1f5f9; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .bubble-out { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+      .hero h1 { font-size: 36px; }
+    }
+
+    /* Section title */
+    .section { padding: 80px 0; }
+    .section-light { background: var(--bg-soft); }
+    .section-title {
+      text-align: center; font-size: 32px; font-weight: 800;
+      letter-spacing: -0.01em; margin-bottom: 12px;
+    }
+    .section-sub {
+      text-align: center; color: var(--text-soft); font-size: 17px;
+      max-width: 640px; margin: 0 auto 48px;
+    }
+
+    /* Features */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+    }
+    .feature {
+      padding: 32px 24px; background: #fff;
+      border: 1px solid var(--border); border-radius: 12px;
+      transition: all 0.15s;
+    }
+    .feature:hover { border-color: var(--primary); box-shadow: 0 8px 16px rgba(37,99,235,0.06); }
+    .feature-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: rgba(37,99,235,0.1); color: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px; font-size: 22px;
+    }
+    .feature h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+    .feature p { color: var(--text-soft); font-size: 14px; }
+    @media (max-width: 720px) {
+      .features-grid { grid-template-columns: 1fr; }
+    }
+
+    /* How it works */
+    .steps {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; counter-reset: step;
+    }
+    .step { padding: 24px; }
+    .step-num {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; margin-bottom: 16px;
+    }
+    .step h3 { font-size: 18px; margin-bottom: 8px; }
+    .step p { color: var(--text-soft); font-size: 14px; }
+    @media (max-width: 720px) {
+      .steps { grid-template-columns: 1fr; gap: 16px; }
+    }
+
+    /* Pricing */
+    .pricing-toggle {
+      display: inline-flex; background: #f1f5f9; border-radius: 999px;
+      padding: 4px; gap: 4px; margin: 0 auto 32px; display: flex;
+      width: max-content;
+    }
+    .pt-opt {
+      background: transparent; border: 0; padding: 8px 20px; border-radius: 999px;
+      font-size: 14px; font-weight: 600; color: var(--text-soft); cursor: pointer;
+      transition: all 0.15s;
+    }
+    .pt-opt.is-active { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .pt-save {
+      display: inline-block; margin-left: 6px; padding: 2px 8px;
+      background: #dcfce7; color: #14532d; border-radius: 4px;
+      font-size: 11px; font-weight: 700;
+    }
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+      max-width: 980px; margin: 0 auto;
+    }
+    .price-card {
+      padding: 32px 24px; background: #fff;
+      border: 2px solid var(--border); border-radius: 16px;
+      display: flex; flex-direction: column; gap: 16px;
+      position: relative;
+    }
+    .price-card.featured { border-color: var(--primary); }
+    .price-card.featured::before {
+      content: 'Más popular'; position: absolute; top: -12px; left: 50%;
+      transform: translateX(-50%); background: var(--primary); color: #fff;
+      padding: 4px 12px; border-radius: 999px; font-size: 11px;
+      font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .price-card h3 { font-size: 22px; }
+    .price-card .tagline { color: var(--text-soft); font-size: 13px; }
+    .price-card .amount { font-size: 36px; font-weight: 800; }
+    .price-card .period { font-size: 14px; color: var(--text-soft); }
+    .price-card ul { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+    .price-card ul li { display: flex; gap: 8px; align-items: flex-start; }
+    .price-card ul li::before { content: '✓'; color: var(--accent); font-weight: 700; }
+    .price-card .btn { margin-top: auto; }
+    @media (max-width: 900px) {
+      .pricing-grid { grid-template-columns: 1fr; max-width: 380px; }
+    }
+
+    /* FAQ */
+    .faq { max-width: 720px; margin: 0 auto; }
+    .faq-item {
+      border-bottom: 1px solid var(--border); padding: 20px 0;
+    }
+    .faq-item summary {
+      cursor: pointer; font-weight: 600; font-size: 16px;
+      list-style: none; display: flex; justify-content: space-between; align-items: center;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after { content: '+'; font-size: 24px; color: var(--primary); transition: transform 0.2s; }
+    .faq-item[open] summary::after { transform: rotate(45deg); }
+    .faq-item p { color: var(--text-soft); margin-top: 12px; font-size: 15px; }
+
+    /* CTA final */
+    .final-cta {
+      text-align: center; padding: 80px 24px;
+      background: linear-gradient(135deg, var(--primary) 0%, #1e40af 100%);
+      color: #fff; border-radius: 16px; margin: 60px auto;
+      max-width: 1080px;
+    }
+    .final-cta h2 { font-size: 32px; font-weight: 800; margin-bottom: 12px; }
+    .final-cta p { opacity: 0.9; margin-bottom: 24px; }
+    .final-cta .btn-primary {
+      background: #fff; color: var(--primary);
+    }
+    .final-cta .btn-primary:hover { background: #f1f5f9; }
+
+    /* Footer */
+    footer {
+      padding: 40px 24px; background: #0f172a; color: #94a3b8; font-size: 14px;
+    }
+    .footer-grid {
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 32px;
+      max-width: 1140px; margin: 0 auto;
+    }
+    .footer-grid h4 { color: #fff; font-size: 13px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .footer-grid a { color: #cbd5e1; display: block; margin-bottom: 8px; }
+    .footer-grid a:hover { color: #fff; }
+    .footer-bottom {
+      max-width: 1140px; margin: 32px auto 0; padding-top: 24px;
+      border-top: 1px solid #1e293b; text-align: center; font-size: 13px;
+    }
+    @media (max-width: 720px) {
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Topbar -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <a href="/" class="brand">
+      <span class="brand-mark">W</span>
+      Wapi101
+    </a>
+    <nav class="topbar-nav">
+      <a href="#features">Funcionalidades</a>
+      <a href="#pricing">Precios</a>
+      <a href="#faq">FAQ</a>
+      <a href="/login" class="btn btn-ghost">Iniciar sesión</a>
+      <a href="/signup" class="btn btn-primary">Empieza gratis</a>
+    </nav>
+  </div>
+</header>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <h1>Tu <em>WhatsApp Business</em> + CRM en uno solo</h1>
+        <p class="lead">
+          Automatiza ventas con bots visuales, pipelines kanban y todos tus canales de mensajería en una sola bandeja. Hecho para PyMEs y emprendedores en LATAM.
+        </p>
+        <div class="hero-ctas">
+          <a href="/signup" class="btn btn-primary btn-lg">Empieza gratis 14 días →</a>
+          <a href="#features" class="btn btn-ghost btn-lg">Ver cómo funciona</a>
+        </div>
+        <p class="hero-trust">
+          ⭐ <strong>Sin tarjeta de crédito.</strong> Trial completo del plan Pro. Cancela cuando quieras.
+        </p>
+      </div>
+      <div class="hero-mockup">
+        <div class="mockup-bar"><span></span><span></span><span></span></div>
+        <div class="mockup-body">
+          <div class="mockup-chat">
+            <div class="bubble bubble-in">Hola, ¿tienen disponible el serum facial?</div>
+            <div class="bubble bubble-out">¡Hola! Sí, tenemos en stock. ¿Te mando el catálogo? 🌿</div>
+            <div class="bubble bubble-in">Sí porfa</div>
+            <div class="bubble bubble-out">Listo, te enviamos el PDF y un cupón de 15% para primera compra 🎁</div>
+            <div class="bubble bubble-in">Perfecto, lo reviso 🙌</div>
+          </div>
+          <p style="text-align:center;color:#64748b;font-size:12px;margin-top:24px;">Ejemplo de conversación con bot automatizado</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="section" id="features">
+  <div class="container">
+    <h2 class="section-title">Todo lo que necesitas para vender</h2>
+    <p class="section-sub">Wapi101 reemplaza WhatsApp Web + un CRM clásico + tu hoja de Excel + tus mil chats. Todo en una sola pantalla.</p>
+    <div class="features-grid">
+      <div class="feature">
+        <div class="feature-icon">💬</div>
+        <h3>Multi-canal</h3>
+        <p>WhatsApp Cloud API, Messenger, Instagram y Telegram en una sola bandeja unificada.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🤖</div>
+        <h3>Bots visuales</h3>
+        <p>Crea flujos automáticos sin código. Mensaje → espera → respuesta → cambio de etapa.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📊</div>
+        <h3>Pipelines kanban</h3>
+        <p>Como Trello pero para tus ventas. Mueve clientes entre etapas con drag-and-drop.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📋</div>
+        <h3>Plantillas WA</h3>
+        <p>Manda plantillas aprobadas por Meta directo desde el CRM. Con imágenes y botones.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">⏰</div>
+        <h3>Alarmas</h3>
+        <p>Te avisa cuando un lead lleva días estancado. Configura por etapa, hasta múltiples por etapa.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📎</div>
+        <h3>Adjuntos</h3>
+        <p>Manda imagen, audio, PDF, video desde el chat. Adjuntos también en plantillas.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="section section-light">
+  <div class="container">
+    <h2 class="section-title">Empieza en 5 minutos</h2>
+    <p class="section-sub">Sin instalación, sin servidor propio, sin curva de aprendizaje empinada.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Crea tu cuenta</h3>
+        <p>Regístrate gratis con tu email. Trial de 14 días sin tarjeta de crédito.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Conecta WhatsApp</h3>
+        <p>Vincula tu número de WhatsApp Business en 30 segundos vía Meta o escaneando QR.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Crea tu primer bot</h3>
+        <p>Diseña un flujo de bienvenida o seguimiento con el editor visual. Listo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section class="section" id="pricing">
+  <div class="container">
+    <h2 class="section-title">Precios simples y transparentes</h2>
+    <p class="section-sub">Empieza gratis 14 días. Sin tarjeta. Cancela cuando quieras.</p>
+
+    <div class="pricing-toggle" style="display:flex;justify-content:center;margin:0 auto 32px;">
+      <button class="pt-opt is-active" data-interval="month">Mensual</button>
+      <button class="pt-opt" data-interval="year">Anual <span class="pt-save">−20%</span></button>
+    </div>
+
+    <div class="pricing-grid" id="pricingGrid">
+      <p style="grid-column: 1 / -1; text-align:center; color: var(--text-soft);">Cargando planes…</p>
+    </div>
+    <p style="text-align:center;margin-top:24px;font-size:13px;color:var(--text-soft);">
+      Pagos procesados de forma segura por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.
+    </p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section section-light" id="faq">
+  <div class="container">
+    <h2 class="section-title">Preguntas frecuentes</h2>
+    <div class="faq">
+      <details class="faq-item">
+        <summary>¿Qué pasa cuando termina el trial de 14 días?</summary>
+        <p>Si no agregas un método de pago, tu cuenta se degrada al plan gratuito (con 50 contactos, 1 conversación activa, branding visible). Puedes seguir usando Wapi101 sin tarjeta, solo con esos límites. Para volver al plan completo, suscríbete cuando quieras.</p>
+      </details>
+      <details class="faq-item">
+        <summary>¿Necesito tener una cuenta de WhatsApp Business API ya configurada?</summary>
+        <p>No es indispensable para arrancar. Puedes empezar conectando tu WhatsApp normal vía QR (modo Lite, sin verificación oficial). Cuando estés listo para volumen alto, te ayudamos a registrar tu WhatsApp Cloud API oficial con Meta.</p>
+      </details>
+      <details class="faq-item">
+        <summary>¿Mis contactos están seguros? ¿Pueden ver mis chats otros usuarios?</summary>
+        <p>Tus datos están aislados por workspace. Ningún otro cliente de Wapi101 puede ver tus chats ni tus contactos. Las credenciales (tokens de WhatsApp, API keys) se guardan cifradas con AES-256-GCM. Lee nuestro <a href="/privacy">Aviso de Privacidad</a>.</p>
+      </details>
+      <details class="faq-item">
+        <summary>¿Puedo cancelar en cualquier momento?</summary>
+        <p>Sí, sin penalizaciones. Cancela desde tu panel de cuenta en Wapi101 o directamente en el portal de Stripe. El servicio sigue activo hasta el fin del período pagado.</p>
+      </details>
+      <details class="faq-item">
+        <summary>¿Cobran en pesos mexicanos o dólares?</summary>
+        <p>Actualmente cobramos en USD para mantener consistencia internacional. Tu banco hace la conversión automática a tu moneda local. Pronto agregaremos cobro directo en MXN para clientes mexicanos.</p>
+      </details>
+      <details class="faq-item">
+        <summary>¿Tienen versión para Mac/Windows/iOS/Android?</summary>
+        <p>Wapi101 es 100% web. Funciona en cualquier navegador moderno. Es PWA, así que puedes "instalarla" en tu Mac/iPhone/Android desde el navegador y se abre como app nativa.</p>
+      </details>
+      <details class="faq-item">
+        <summary>¿Puedo importar mis contactos de otro CRM?</summary>
+        <p>Sí, soportamos importación desde Kommo, HubSpot y CSV genérico. Para casos complejos, te ayudamos con la migración manualmente sin costo durante el onboarding.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="container">
+  <div class="final-cta">
+    <h2>¿Listo para vender más por WhatsApp?</h2>
+    <p>14 días gratis. Sin tarjeta. Cancela cuando quieras.</p>
+    <a href="/signup" class="btn btn-primary btn-lg">Empieza gratis ahora →</a>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-grid">
+    <div>
+      <a href="/" class="brand" style="color: #fff;">
+        <span class="brand-mark">W</span>
+        Wapi101
+      </a>
+      <p style="margin-top: 12px; font-size: 13px;">CRM multicanal para LATAM. Hecho con cariño en México.</p>
+    </div>
+    <div>
+      <h4>Producto</h4>
+      <a href="#features">Funcionalidades</a>
+      <a href="#pricing">Precios</a>
+      <a href="/login">Iniciar sesión</a>
+      <a href="/signup">Empezar gratis</a>
+    </div>
+    <div>
+      <h4>Recursos</h4>
+      <a href="#faq">FAQ</a>
+      <a href="mailto:soporte@wapi101.com">Contacto</a>
+    </div>
+    <div>
+      <h4>Legal</h4>
+      <a href="/privacy">Privacidad</a>
+      <a href="/terms">Términos</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    © 2026 Wapi101. Todos los derechos reservados.
+  </div>
+</footer>
+
+<script>
+// ─── Auto-detect: si ya estás logueado, redirige al app ───
+(function() {
+  const token = localStorage.getItem('rh_session') || localStorage.getItem('wapi101_token');
+  if (token) {
+    // Tiene sesión activa, llevarlo directo al CRM
+    location.replace('/app');
+  }
+})();
+
+// ─── Toggle mensual/anual + render de planes ───
+let _interval = 'month';
+let _plans = [];
+
+async function loadPlans() {
+  try {
+    const r = await fetch('/api/public/plans');
+    const data = await r.json();
+    _plans = data.plans || [];
+    renderPlans();
+  } catch (e) {
+    document.getElementById('pricingGrid').innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#ef4444">Error cargando planes</p>';
+  }
+}
+
+function renderPlans() {
+  const grid = document.getElementById('pricingGrid');
+  grid.innerHTML = _plans.map(p => {
+    const price = _interval === 'year' ? p.yearlyPrice : p.monthlyPrice;
+    const period = _interval === 'year' ? 'mes (cobrado anual)' : 'mes';
+    const yearlyNote = _interval === 'year' ? `<p style="font-size:12px;color:var(--text-soft);">$${(p.yearlyPrice * 12).toFixed(2)} ${p.currency}/año</p>` : '';
+    const featured = p.featured ? ' featured' : '';
+    const features = (p.features || []).slice(0, 6).map(f => `<li>${f}</li>`).join('');
+    return `
+      <div class="price-card${featured}">
+        <div>
+          <h3>${p.name}</h3>
+          <p class="tagline">${p.tagline}</p>
+        </div>
+        <div>
+          <span class="amount">$${price}</span> <span class="period">${p.currency} / ${period}</span>
+          ${yearlyNote}
+        </div>
+        <ul>${features}</ul>
+        <a href="/signup" class="btn btn-primary">Empezar gratis 14 días</a>
+      </div>
+    `;
+  }).join('');
+}
+
+document.querySelectorAll('.pt-opt').forEach(b => {
+  b.addEventListener('click', () => {
+    _interval = b.dataset.interval;
+    document.querySelectorAll('.pt-opt').forEach(x => x.classList.toggle('is-active', x === b));
+    renderPlans();
+  });
+});
+
+loadPlans();
+</script>
+
+</body>
+</html>

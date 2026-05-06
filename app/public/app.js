@@ -2302,7 +2302,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','recordatorios']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','recordatorios','calendario','aplicaciones']);
 function showView(viewName) {
   const navItems = document.querySelectorAll(".nav-item");
   const views = document.querySelectorAll(".view");
@@ -12603,4 +12603,281 @@ if (document.readyState === 'loading') {
 } else {
   setupChatInfoPanel();
   setupMobileChatToggle();
+}
+
+// ═══════ VISTA CALENDARIO ═══════
+let _calCurrent = new Date(); // mes actualmente visible
+let _calTasks = [];          // tareas del mes cargadas
+
+const MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DAY_HEADERS_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+async function loadCalendar() {
+  const grid = document.getElementById('calGrid');
+  const label = document.getElementById('calCurrentLabel');
+  if (!grid || !label) return;
+
+  // Set label
+  label.textContent = `${MONTH_NAMES_ES[_calCurrent.getMonth()]} ${_calCurrent.getFullYear()}`;
+
+  // Cargar TODAS las tareas (pending + completed) del rango del mes
+  // (incluyendo días previos/siguientes que se ven en el grid)
+  const firstDayMonth = new Date(_calCurrent.getFullYear(), _calCurrent.getMonth(), 1);
+  const lastDayMonth = new Date(_calCurrent.getFullYear(), _calCurrent.getMonth() + 1, 0);
+  // Inicio del grid: domingo previo al primer día del mes
+  const gridStart = new Date(firstDayMonth);
+  gridStart.setDate(firstDayMonth.getDate() - firstDayMonth.getDay());
+  const gridEnd = new Date(lastDayMonth);
+  gridEnd.setDate(lastDayMonth.getDate() + (6 - lastDayMonth.getDay()));
+
+  try {
+    const r = await api('GET', '/api/tasks?filter=all&limit=500');
+    _calTasks = (r.items || []).filter(t => {
+      const d = new Date(t.dueAt * 1000);
+      return d >= gridStart && d <= new Date(gridEnd.getTime() + 24*3600*1000);
+    });
+  } catch (_) { _calTasks = []; }
+
+  // Construir grid
+  const today = new Date(); today.setHours(0,0,0,0);
+  let html = '';
+  for (const dh of DAY_HEADERS_ES) html += `<div class="cal-day-header">${dh}</div>`;
+
+  const cur = new Date(gridStart);
+  // Recorrer 6 semanas (42 celdas) — siempre cubre cualquier mes
+  for (let w = 0; w < 6; w++) {
+    let weekHasMonthDay = false;
+    for (let d = 0; d < 7; d++) {
+      const isOtherMonth = cur.getMonth() !== _calCurrent.getMonth();
+      if (!isOtherMonth) weekHasMonthDay = true;
+      const isToday = cur.getTime() === today.getTime();
+      const dayStart = new Date(cur); dayStart.setHours(0,0,0,0);
+      const dayEnd = new Date(cur); dayEnd.setHours(23,59,59,999);
+      const dayTasks = _calTasks.filter(t => {
+        const td = new Date(t.dueAt * 1000);
+        return td >= dayStart && td <= dayEnd;
+      });
+      const tasksHtml = dayTasks.slice(0, 3).map(t => {
+        const cls = t.completed ? 'is-completed' : (t.dueAt < Math.floor(Date.now()/1000) ? 'is-overdue' : '');
+        return `<div class="cal-task-pill ${cls}" data-task-id="${t.id}" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>`;
+      }).join('');
+      const moreHtml = dayTasks.length > 3 ? `<div class="cal-task-more">+${dayTasks.length - 3} más</div>` : '';
+      const isoDate = cur.toISOString().slice(0, 10);
+      html += `
+        <div class="cal-cell ${isOtherMonth ? 'is-other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${isoDate}">
+          <span class="cal-day-num">${cur.getDate()}</span>
+          ${tasksHtml}
+          ${moreHtml}
+        </div>
+      `;
+      cur.setDate(cur.getDate() + 1);
+    }
+    // Si la semana siguiente ya no tiene días del mes actual, cortar
+    if (!weekHasMonthDay && w >= 4) break;
+  }
+  grid.innerHTML = html;
+
+  // Wire click en celda (crear tarea con esa fecha pre-cargada)
+  grid.querySelectorAll('.cal-cell').forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      // Si clickearon en una task pill, abrir modal de edit
+      const taskId = e.target.closest('.cal-task-pill')?.dataset?.taskId;
+      if (taskId) {
+        e.stopPropagation();
+        api('GET', `/api/tasks/${taskId}`).then(t => {
+          _tasksItems = [t];
+          openTaskModal(Number(taskId));
+        });
+        return;
+      }
+      // Click en celda vacía → nueva tarea con fecha pre-cargada
+      const dateStr = cell.dataset.date;
+      if (!dateStr) return;
+      const d = new Date(dateStr + 'T09:00:00');
+      _tasksEditId = null;
+      // Abrir modal y luego setear fecha
+      setTimeout(() => {
+        openTaskModal(null);
+        setTimeout(() => {
+          const dueInput = document.getElementById('taskDueAt');
+          if (dueInput) {
+            const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            dueInput.value = isoLocal;
+          }
+        }, 100);
+      }, 50);
+    });
+  });
+}
+
+function setupCalendarView() {
+  document.getElementById('calPrevBtn')?.addEventListener('click', () => {
+    _calCurrent.setMonth(_calCurrent.getMonth() - 1);
+    loadCalendar();
+  });
+  document.getElementById('calNextBtn')?.addEventListener('click', () => {
+    _calCurrent.setMonth(_calCurrent.getMonth() + 1);
+    loadCalendar();
+  });
+  document.getElementById('calTodayBtn')?.addEventListener('click', () => {
+    _calCurrent = new Date();
+    loadCalendar();
+  });
+  document.getElementById('calAddBtn')?.addEventListener('click', () => openTaskModal(null));
+
+  // Cargar al entrar a la vista
+  document.querySelectorAll('.nav-item[data-view="calendario"]').forEach(n => {
+    n.addEventListener('click', () => setTimeout(loadCalendar, 50));
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupCalendarView);
+} else {
+  setupCalendarView();
+}
+
+// ═══════ Fuentes de Conocimiento (IA) ═══════
+let _kbItems = [];
+let _kbEditId = null;
+
+async function loadKnowledgeSources() {
+  const root = document.getElementById('kbList');
+  if (!root) return;
+  root.innerHTML = '<div class="kb-loading">Cargando…</div>';
+  try {
+    const r = await api('GET', '/api/ai-knowledge');
+    _kbItems = r.items || [];
+    renderKbList();
+  } catch (err) {
+    root.innerHTML = `<div class="kb-empty" style="color:#ef4444">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderKbList() {
+  const root = document.getElementById('kbList');
+  if (!root) return;
+  if (!_kbItems.length) {
+    root.innerHTML = `
+      <div class="kb-empty">
+        <p>Aún no tienes fuentes de conocimiento.</p>
+        <p style="font-size:12px;margin-top:8px">Agrega información sobre tu empresa, productos, políticas o tono de voz para que la IA responda mejor.</p>
+      </div>
+    `;
+    return;
+  }
+  root.innerHTML = _kbItems.map(s => `
+    <div class="kb-item ${s.active ? '' : 'is-inactive'}" data-kb-id="${s.id}">
+      <div class="kb-item-head">
+        <span class="kb-item-title">${escapeHtml(s.title)}</span>
+        ${s.category ? `<span class="kb-item-cat">${escapeHtml(s.category)}</span>` : ''}
+        <span class="kb-item-toggle ${s.active ? 'is-on' : ''}" data-kb-toggle="${s.id}" title="${s.active ? 'Activa (IA la usa)' : 'Desactivada (IA la ignora)'}"></span>
+      </div>
+      <div class="kb-item-content">${escapeHtml(s.content || '')}</div>
+    </div>
+  `).join('');
+
+  root.querySelectorAll('[data-kb-toggle]').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = Number(el.dataset.kbToggle);
+      const item = _kbItems.find(x => x.id === id);
+      if (!item) return;
+      try {
+        await api('PATCH', `/api/ai-knowledge/${id}`, { active: !item.active });
+        await loadKnowledgeSources();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
+  root.querySelectorAll('[data-kb-id]').forEach(el => {
+    el.addEventListener('click', () => openKbModal(Number(el.dataset.kbId)));
+  });
+}
+
+function openKbModal(id = null) {
+  _kbEditId = id;
+  const titleEl = document.getElementById('kbModalTitle');
+  const titleInput = document.getElementById('kbTitle');
+  const categoryInput = document.getElementById('kbCategory');
+  const contentInput = document.getElementById('kbContent');
+  const deleteBtn = document.getElementById('kbDeleteBtn');
+  if (!titleEl) return;
+
+  if (id) {
+    const it = _kbItems.find(x => x.id === id);
+    if (!it) return;
+    titleEl.textContent = 'Editar fuente';
+    titleInput.value = it.title;
+    categoryInput.value = it.category || '';
+    contentInput.value = it.content || '';
+    deleteBtn.hidden = false;
+  } else {
+    titleEl.textContent = 'Nueva fuente';
+    titleInput.value = '';
+    categoryInput.value = '';
+    contentInput.value = '';
+    deleteBtn.hidden = true;
+  }
+  document.getElementById('kbModal').hidden = false;
+  setTimeout(() => titleInput.focus(), 50);
+}
+
+function closeKbModal() {
+  const modal = document.getElementById('kbModal');
+  if (modal) modal.hidden = true;
+  _kbEditId = null;
+}
+
+async function saveKb() {
+  const body = {
+    title: document.getElementById('kbTitle').value.trim(),
+    category: document.getElementById('kbCategory').value.trim(),
+    content: document.getElementById('kbContent').value.trim(),
+  };
+  if (!body.title || !body.content) {
+    toast('Título y contenido son requeridos', 'warning');
+    return;
+  }
+  try {
+    if (_kbEditId) {
+      await api('PATCH', `/api/ai-knowledge/${_kbEditId}`, body);
+      toast('Fuente actualizada', 'success');
+    } else {
+      await api('POST', '/api/ai-knowledge', body);
+      toast('Fuente creada', 'success');
+    }
+    closeKbModal();
+    await loadKnowledgeSources();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function deleteKb() {
+  if (!_kbEditId) return;
+  if (!confirm('¿Eliminar esta fuente? La IA dejará de usarla.')) return;
+  try {
+    await api('DELETE', `/api/ai-knowledge/${_kbEditId}`);
+    toast('Fuente eliminada', 'success');
+    closeKbModal();
+    await loadKnowledgeSources();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function setupKnowledgeBase() {
+  document.getElementById('kbAddBtn')?.addEventListener('click', () => openKbModal(null));
+  document.getElementById('kbCancelBtn')?.addEventListener('click', closeKbModal);
+  document.getElementById('kbDeleteBtn')?.addEventListener('click', deleteKb);
+  document.getElementById('kbForm')?.addEventListener('submit', (e) => { e.preventDefault(); saveKb(); });
+  document.getElementById('kbModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'kbModal') closeKbModal();
+  });
+
+  // Cargar al entrar al tab IA dentro de Configuración (cuando se active)
+  // Por ahora cargamos al abrir Configuración por primera vez
+  document.querySelectorAll('.nav-item[data-view="ajustes"]').forEach(n => {
+    n.addEventListener('click', () => setTimeout(loadKnowledgeSources, 100));
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupKnowledgeBase);
+} else {
+  setupKnowledgeBase();
 }

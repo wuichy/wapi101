@@ -37,6 +37,9 @@ const I18N_TRANSLATIONS = {
     'config.alarms.section': 'Pipelines',
     'config.alarms.title': 'Mostrar alarmas de leads estancados',
     'config.alarms.desc': 'Activa el botón rojo de alarma al pie de cada columna del tablero. Apaga este switch para ocultar tanto el botón como los rojos sin borrar la configuración guardada en cada etapa.',
+    'config.appointments.section': 'Citas',
+    'config.appointments.title': 'Habilitar módulo de Citas',
+    'config.appointments.desc': 'Activa la sección de Citas en el menú y los nodos del bot para agendar y enviar recordatorios. Apágalo si todavía no usas citas para ocultar la UI.',
     // Botones comunes
     'btn.save': 'Guardar',
     'btn.cancel': 'Cancelar',
@@ -110,6 +113,9 @@ const I18N_TRANSLATIONS = {
     'config.alarms.section': 'Pipelines',
     'config.alarms.title': 'Show stale lead alarms',
     'config.alarms.desc': 'Activates the red alarm button at the bottom of each column on the board. Turn this off to hide both the button and the red highlights without deleting the configuration saved on each stage.',
+    'config.appointments.section': 'Appointments',
+    'config.appointments.title': 'Enable Appointments module',
+    'config.appointments.desc': 'Turn on the Appointments section in the menu and the bot nodes for scheduling and sending reminders. Keep it off until you start using appointments to hide the UI.',
     // Common buttons
     'btn.save': 'Save',
     'btn.cancel': 'Cancel',
@@ -2568,6 +2574,16 @@ function setupSettingsTabs() {
       try { localStorage.setItem('plAlarmsEnabled', alarmsToggle.checked ? '1' : '0'); } catch {}
       // Re-renderizar el tablero si está visible para reflejar el cambio
       if (document.body.dataset.viewActive === 'pipelines') renderPipelinesBoard();
+    });
+  }
+
+  // Switch: habilitar módulo de Citas (oculta/muestra la sección)
+  const apptToggle = document.getElementById('cfgAppointmentsEnabled');
+  if (apptToggle) {
+    apptToggle.checked = isAppointmentsEnabled();
+    apptToggle.addEventListener('change', () => {
+      try { localStorage.setItem('appointmentsEnabled', apptToggle.checked ? '1' : '0'); } catch {}
+      applyAppointmentsVisibility();
     });
   }
 
@@ -10344,7 +10360,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (_advisor.role === 'admin') {
       document.querySelectorAll('[data-admin-only]').forEach(e => { e.hidden = false; });
     }
+    applyAppointmentsVisibility();
   }
+
+// Citas: feature flag local. Default OFF (la Fase B aún no está construida).
+function isAppointmentsEnabled() {
+  try { return localStorage.getItem('appointmentsEnabled') === '1'; }
+  catch { return false; }
+}
+function applyAppointmentsVisibility() {
+  const enabled = isAppointmentsEnabled();
+  document.querySelectorAll('[data-feature="appointments"]').forEach(el => {
+    el.hidden = !enabled;
+  });
+}
   document.getElementById('navLogoutBtn')?.addEventListener('click', () => {
     if (confirm('¿Cerrar sesión?')) logout();
   });

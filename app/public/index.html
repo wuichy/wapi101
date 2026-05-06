@@ -36,8 +36,9 @@
 
       <nav class="nav" id="nav">
         <a href="#inicio" class="nav-item" data-view="inicio" data-i18n="nav.inicio">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8v10a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2V11z"/></svg>
-          <span>Inicio</span>
+          <!-- Icono: barras de gráfico (analíticas) en lugar de la casa que era "Inicio" -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span>Analíticas</span>
         </a>
         <a href="#chats" class="nav-item is-active" data-view="chats" data-i18n="nav.chats">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 01-4 4H8l-5 4V7a4 4 0 014-4h10a4 4 0 014 4z"/></svg>
@@ -543,7 +544,7 @@
         <div class="dash-shell">
           <header class="dash-header">
             <div>
-              <h1 class="dash-title">Dashboard</h1>
+              <h1 class="dash-title">Analíticas</h1>
               <p class="dash-subtitle" id="dashSubtitle">Cargando...</p>
             </div>
             <button class="btn btn--ghost btn--sm" id="dashRefreshBtn">
@@ -551,6 +552,27 @@
               Actualizar
             </button>
           </header>
+
+          <!-- Filtros: período + selector de asesor (solo admin) + comparativa -->
+          <div class="dash-filters">
+            <div class="dash-filter-group" id="dashPeriodPills">
+              <button class="dash-pill is-active" data-period="today">Hoy</button>
+              <button class="dash-pill" data-period="yesterday">Ayer</button>
+              <button class="dash-pill" data-period="week">Esta semana</button>
+              <button class="dash-pill" data-period="month">Este mes</button>
+              <button class="dash-pill" data-period="year">Este año</button>
+            </div>
+            <div class="dash-filter-group" id="dashAdvisorFilter" hidden>
+              <label class="dash-filter-label">Asesor:</label>
+              <select id="dashAdvisorSelect" class="form-select">
+                <option value="">Todo el equipo</option>
+              </select>
+            </div>
+            <label class="dash-filter-toggle">
+              <input type="checkbox" id="dashCompareToggle" />
+              <span>Comparar con período anterior</span>
+            </label>
+          </div>
 
           <!-- Fila 1: mensajes enviados / recibidos -->
           <div class="dash-row">
@@ -628,6 +650,28 @@
               <!-- barras SVG generadas por JS -->
             </div>
             <div class="dash-chart-labels" id="dashChartLabels"></div>
+          </div>
+
+          <!-- Tabla breakdown por advisor (solo admin) -->
+          <div class="dash-team-card" id="dashTeamCard" hidden>
+            <div class="dash-team-header">
+              <h3>Productividad del equipo</h3>
+              <p class="dash-team-sub">Métricas por asesor en el período seleccionado.</p>
+            </div>
+            <div class="dash-team-table-wrap">
+              <table class="dash-team-table">
+                <thead>
+                  <tr>
+                    <th>Asesor</th>
+                    <th>Contactos</th>
+                    <th>Leads</th>
+                    <th>Mensajes (equipo)</th>
+                    <th>Tareas hechas</th>
+                  </tr>
+                </thead>
+                <tbody id="dashTeamTbody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>

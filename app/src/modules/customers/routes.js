@@ -30,6 +30,16 @@ module.exports = function createCustomersRouter(db) {
   router.post('/', (req, res, next) => {
     try {
       const item = service.create(db, req.tenantId, req.body || {});
+      // Track activity
+      try {
+        require('../analytics/service').log(db, {
+          tenantId: req.tenantId,
+          kind: 'contact_created',
+          advisorId: req.advisor?.id || null,
+          targetType: 'contact',
+          targetId: item.id,
+        });
+      } catch (_) {}
       res.status(201).json({ item });
     } catch (err) {
       if (/obligatorio/i.test(err.message)) return res.status(400).json({ error: err.message });

@@ -10,7 +10,7 @@ function escapeHtml(s) {
 const I18N_TRANSLATIONS = {
   'es-MX': {
     // Nav sidebar
-    'nav.inicio': 'Inicio',
+    'nav.inicio': 'Analíticas',
     'nav.chats': 'Chats',
     'nav.pipelines': 'Pipelines',
     'nav.expedientes': 'Leads',
@@ -83,7 +83,7 @@ const I18N_TRANSLATIONS = {
   },
   'en': {
     // Nav sidebar
-    'nav.inicio': 'Home',
+    'nav.inicio': 'Analytics',
     'nav.chats': 'Chats',
     'nav.pipelines': 'Pipelines',
     'nav.expedientes': 'Cases',
@@ -2222,38 +2222,124 @@ function setupMachineTokens() {
 
 // ═══════ Dashboard / Inicio ═══════
 
+// ═══════ DASHBOARD ANALYTICS ═══════
+let _dashPeriod = 'today';
+let _dashAdvisorId = '';
+let _dashCompare = false;
+
+const PERIOD_LABELS = {
+  today: 'hoy',
+  yesterday: 'ayer',
+  week: 'los últimos 7 días',
+  month: 'este mes',
+  year: 'este año',
+};
+
 async function loadDashboard() {
   const subtitle = document.getElementById('dashSubtitle');
   if (subtitle) {
     const now = new Date();
     const h = now.getHours();
     const greeting = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
-    subtitle.textContent = `${greeting} · ${now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}`;
+    const advisor = _profile?.firstName || _profile?.name || _advisor?.name || '';
+    subtitle.textContent = `${greeting}${advisor ? ', ' + advisor : ''} · Analíticas de ${PERIOD_LABELS[_dashPeriod] || _dashPeriod}`;
   }
 
   try {
-    const d = await api('GET', '/api/stats');
+    // Cargar advisors para selector (solo si admin y aún no cargados)
+    if (_advisor?.role === 'admin') {
+      const filter = document.getElementById('dashAdvisorFilter');
+      if (filter) filter.hidden = false;
+      const select = document.getElementById('dashAdvisorSelect');
+      if (select && !select.dataset.loaded) {
+        try {
+          const r = await api('GET', '/api/analytics/advisors');
+          select.innerHTML = '<option value="">Todo el equipo</option>'
+            + (r.items || []).map(a => `<option value="${a.id}">${escapeHtml(a.name || a.username)}</option>`).join('');
+          select.dataset.loaded = '1';
+        } catch (_) {}
+      }
+    }
+
+    const params = new URLSearchParams({ period: _dashPeriod });
+    if (_dashAdvisorId) params.set('advisorId', _dashAdvisorId);
+    if (_dashCompare) params.set('compare', '1');
+    const d = await api('GET', '/api/analytics/dashboard?' + params.toString());
     renderDashboard(d);
   } catch (err) {
     console.error('loadDashboard', err);
   }
 }
 
+function _fmtPct(curr, prev) {
+  if (!prev) return curr > 0 ? '+∞' : '—';
+  const pct = ((curr - prev) / prev) * 100;
+  const sign = pct > 0 ? '+' : '';
+  return `${sign}${pct.toFixed(0)}%`;
+}
+
 function renderDashboard(d) {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   const fmt = n => (n ?? 0).toLocaleString('es-MX');
+  const m = d.metrics || {};
+  const prev = d.previous?.metrics || null;
 
-  set('dashMsgReceived',    fmt(d.messages.received));
-  set('dashMsgReceivedToday', `+${fmt(d.messages.receivedToday)} hoy · +${fmt(d.messages.receivedWeek)} esta semana`);
-  set('dashMsgSent',        fmt(d.messages.sent));
-  set('dashMsgSentToday',   `+${fmt(d.messages.sentToday)} hoy · +${fmt(d.messages.sentWeek)} esta semana`);
-  set('dashConvos',         fmt(d.conversations.total));
-  set('dashConvosUnread',   d.conversations.unread ? `${fmt(d.conversations.unread)} sin leer` : 'todas leídas');
-  set('dashContacts',       fmt(d.contacts.total));
-  set('dashContactsToday',  d.contacts.newToday ? `+${fmt(d.contacts.newToday)} hoy` : 'sin nuevos hoy');
-  set('dashExps',           fmt(d.expedients.total));
+  set('dashMsgReceived', fmt(m.messagesReceived));
+  set('dashMsgReceivedToday', prev
+    ? `${_fmtPct(m.messagesReceived, prev.messagesReceived)} vs período anterior (${fmt(prev.messagesReceived)})`
+    : `${fmt(m.messagesReceived)} en ${PERIOD_LABELS[_dashPeriod]}`);
 
-  renderDashChart(d.daily || []);
+  set('dashMsgSent', fmt(m.messagesSent));
+  set('dashMsgSentToday', prev
+    ? `${_fmtPct(m.messagesSent, prev.messagesSent)} vs período anterior (${fmt(prev.messagesSent)})`
+    : `${fmt(m.messagesSent)} en ${PERIOD_LABELS[_dashPeriod]}`);
+
+  set('dashContacts', fmt(m.contactsCreated));
+  set('dashContactsToday', prev
+    ? `${_fmtPct(m.contactsCreated, prev.contactsCreated)} vs período anterior`
+    : `nuevos en ${PERIOD_LABELS[_dashPeriod]}`);
+
+  set('dashExps', fmt(m.leadsCreated));
+  set('dashConvos', fmt(m.leadsWon || 0));
+  set('dashConvosUnread', `${fmt(m.leadsLost || 0)} perdidos · ${fmt(m.tasksCompleted || 0)} tareas hechas`);
+
+  // Breakdown por advisor (solo admin sin filtro)
+  const teamCard = document.getElementById('dashTeamCard');
+  const teamBody = document.getElementById('dashTeamTbody');
+  if (teamCard && teamBody) {
+    if (d.byAdvisor && d.byAdvisor.length) {
+      teamCard.hidden = false;
+      teamBody.innerHTML = d.byAdvisor.map(a => `
+        <tr data-advisor-id="${a.id}">
+          <td>
+            <div class="dash-team-name">${escapeHtml(a.name || a.username)}</div>
+            <div class="dash-team-role">${a.role === 'admin' ? 'Admin' : 'Asesor'}</div>
+          </td>
+          <td>${fmt(a.contacts || 0)}</td>
+          <td>${fmt(a.leads || 0)}</td>
+          <td>${fmt(a.messages_sent_team || 0)}</td>
+          <td>${fmt(a.tasks_completed || 0)}</td>
+        </tr>
+      `).join('');
+      // Click en fila → filtrar por ese advisor
+      teamBody.querySelectorAll('tr[data-advisor-id]').forEach(tr => {
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', () => {
+          _dashAdvisorId = tr.dataset.advisorId;
+          const sel = document.getElementById('dashAdvisorSelect');
+          if (sel) sel.value = _dashAdvisorId;
+          loadDashboard();
+        });
+      });
+    } else {
+      teamCard.hidden = true;
+    }
+  }
+
+  // Gráfica semanal: si tenemos period=week genera con datos diarios.
+  // Por simplicidad, generamos un placeholder de 7 días con los conteos
+  // del período actual (no daily breakdown del backend aún).
+  renderDashChart([]);
 }
 
 function renderDashChart(daily) {
@@ -2299,6 +2385,24 @@ function renderDashChart(daily) {
 
 function setupDashboard() {
   document.getElementById('dashRefreshBtn')?.addEventListener('click', loadDashboard);
+  // Pills de período
+  document.querySelectorAll('#dashPeriodPills .dash-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      _dashPeriod = pill.dataset.period;
+      document.querySelectorAll('#dashPeriodPills .dash-pill').forEach(p => p.classList.toggle('is-active', p === pill));
+      loadDashboard();
+    });
+  });
+  // Selector de advisor
+  document.getElementById('dashAdvisorSelect')?.addEventListener('change', (e) => {
+    _dashAdvisorId = e.target.value;
+    loadDashboard();
+  });
+  // Toggle comparativa
+  document.getElementById('dashCompareToggle')?.addEventListener('change', (e) => {
+    _dashCompare = e.target.checked;
+    loadDashboard();
+  });
 }
 
 // ═══════ Navegación ═══════

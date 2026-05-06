@@ -69,10 +69,20 @@ module.exports = function createExpedientsRouter(db) {
         expedientId: item.id,
         contactId:   item.contactId,
         type:        'created',
-        description: `Expediente creado en "${item.pipelineName || ''}" · ${item.stageName || ''}`,
+        description: `Lead creado en "${item.pipelineName || ''}" · ${item.stageName || ''}`,
         advisorId:   req.advisor?.id,
         advisorName: req.advisor?.name,
       });
+      // Track for Dashboard Analytics
+      try {
+        require('../analytics/service').log(db, {
+          tenantId: req.tenantId,
+          kind: 'lead_created',
+          advisorId: req.advisor?.id || null,
+          targetType: 'expedient',
+          targetId: item.id,
+        });
+      } catch (_) {}
       res.status(201).json({ item });
     }
     catch (e) { return res.status(400).json({ error: e.message }); }

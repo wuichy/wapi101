@@ -70,6 +70,9 @@ function mountSafe(mountPath, factory) {
 
 // ─── Webhooks PRIMERO: necesitan body crudo (HMAC). Cada handler usa express.raw() internamente.
 mountSafe('/webhooks', require('./src/modules/integrations/webhooks'));
+// Stripe webhook va en su propio mount porque necesita raw body para verificar
+// la firma. NO se debe poner detrás de express.json() global.
+mountSafe('/webhooks/stripe', require('./src/modules/billing/webhook'));
 
 // Sirve la página HTML del super-admin ANTES de montar el router (sino el
 // authMiddleware del router intercepta la GET /super y devuelve 401).
@@ -238,6 +241,7 @@ mountSafe('/api/advisors',           require('./src/modules/advisors/routes'));
 mountSafe('/api/trash',              require('./src/modules/trash/routes'));
 mountSafe('/api/reports',            require('./src/modules/reports/routes'));
 mountSafe('/api/push',               require('./src/modules/notifications/routes'));
+mountSafe('/api/billing',            require('./src/modules/billing/routes'));
 
 // Manejador global de errores
 app.use((err, _req, res, _next) => {

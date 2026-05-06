@@ -34,11 +34,28 @@ function getDb(dbPath) {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-    const trx = db.transaction(() => {
-      db.exec(sql);
-      db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
-    });
-    trx();
+    // Patrón oficial SQLite para alteraciones que tocan FKs:
+    // foreign_keys=OFF ANTES de la transacción, foreign_key_check al final
+    // para garantizar consistencia, foreign_keys=ON después.
+    // PRAGMA foreign_keys es ignorado dentro de transacciones, por eso va
+    // afuera. Las migrations sin DROP TABLE de tablas referenciadas no
+    // afecta — el OFF/ON es transparente.
+    db.pragma('foreign_keys = OFF');
+    try {
+      const trx = db.transaction(() => {
+        db.exec(sql);
+        db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
+      });
+      trx();
+      // Validar consistencia post-migration. Si hay violaciones, falla
+      // explícito (mejor que dejar la DB en estado inconsistente).
+      const violations = db.prepare('PRAGMA foreign_key_check').all();
+      if (violations.length) {
+        throw new Error(`Migration ${file} dejó ${violations.length} violaciones de FK: ${JSON.stringify(violations.slice(0, 5))}`);
+      }
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
     console.log(`[db] migración aplicada: ${file}`);
   }
 

@@ -13,7 +13,12 @@
 -- En SQLite no se puede ALTER TABLE DROP CONSTRAINT, así que se recrea cada
 -- tabla con INSERT SELECT preservando IDs (las FKs siguen apuntando porque
 -- los row ids no cambian) y se hace RENAME al nombre original.
--- foreign_keys está ON pero DROP TABLE no dispara cascades.
+--
+-- IMPORTANTE: el runner de migrations (src/db/index.js) desactiva
+-- foreign_keys ANTES de la transacción de cada migration y los reactiva
+-- después con un foreign_key_check de validación. Esto sigue el patrón
+-- oficial de SQLite para alteraciones de tablas con FKs:
+-- https://www.sqlite.org/lang_altertable.html#otheralter
 
 -- ========== advisors ==========
 CREATE TABLE advisors_new (

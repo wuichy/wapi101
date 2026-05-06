@@ -57,6 +57,9 @@ module.exports = function createAuthRouter(db) {
   const router = express.Router();
 
   // ─── Meta (Facebook, Instagram, Messenger, WhatsApp Lite) ───
+  // Para multi-tenant: el state debe ser pre-creado por POST /api/auth/oauth/prepare
+  // (con auth) que stashea el tenant_id. Si llega sin state válido (legacy o
+  // request suelto), genera uno con tenant 1 como fallback safe.
   router.get('/meta/start', (req, res) => {
     const appId = process.env.META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
@@ -64,12 +67,19 @@ module.exports = function createAuthRouter(db) {
       return oauthError(res, 'No están configuradas las credenciales de Meta (META_APP_ID / META_APP_SECRET en el archivo .env).');
     }
 
-    const provider = req.query.provider || 'messenger';
-    const state = makeState();
-
-    // Limpiar estados viejos (>1h) y guardar el nuevo
-    db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
-    db.prepare("INSERT INTO oauth_states (state, provider) VALUES (?, ?)").run(state, provider);
+    let state, provider;
+    if (req.query.state) {
+      const stateRow = db.prepare("SELECT * FROM oauth_states WHERE state = ?").get(req.query.state);
+      if (!stateRow) return oauthError(res, 'Sesión OAuth inválida o expirada. Inténtalo de nuevo desde el CRM.');
+      state = stateRow.state;
+      provider = stateRow.provider;
+    } else {
+      // Fallback legacy: sin state pre-creado, asume tenant 1
+      provider = req.query.provider || 'messenger';
+      state = makeState();
+      db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
+      db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, ?, 1)").run(state, provider);
+    }
 
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
     const redirectUri = encodeURIComponent(`${baseUrl}/auth/meta/callback`);
@@ -96,6 +106,7 @@ module.exports = function createAuthRouter(db) {
     db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
     const provider = stateRow.provider;
+    const tenantId = stateRow.tenant_id || 1;
     const appId = process.env.META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -128,7 +139,7 @@ module.exports = function createAuthRouter(db) {
           appSecret,
           appId,
         };
-        integration = await integrationService.connectRaw(db, null, provider, creds, {
+        integration = await integrationService.connectRaw(db, tenantId, provider, creds, {
           displayName: page.name,
           externalId: page.id,
         });
@@ -150,7 +161,7 @@ module.exports = function createAuthRouter(db) {
           appSecret,
           appId,
         };
-        integration = await integrationService.connectRaw(db, null, provider, creds, {
+        integration = await integrationService.connectRaw(db, tenantId, provider, creds, {
           displayName: igData.username ? `@${igData.username}` : igData.name || `IG ${igId}`,
           externalId: igId,
         });
@@ -161,7 +172,7 @@ module.exports = function createAuthRouter(db) {
         const wabaData = await wabaRes.json();
         const creds = { systemUserToken: userToken, appId, appSecret };
         const bizName = wabaData.data?.[0]?.name || 'WhatsApp Business';
-        integration = await integrationService.connectRaw(db, null, provider, creds, {
+        integration = await integrationService.connectRaw(db, tenantId, provider, creds, {
           displayName: bizName,
           externalId: wabaData.data?.[0]?.id || `wl-${Date.now()}`,
         });
@@ -182,9 +193,17 @@ module.exports = function createAuthRouter(db) {
       return oauthError(res, 'No están configuradas las credenciales de TikTok (TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET en .env).');
     }
 
-    const state = makeState();
-    db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
-    db.prepare("INSERT INTO oauth_states (state, provider) VALUES (?, ?)").run(state, 'tiktok');
+    let state;
+    if (req.query.state) {
+      const stateRow = db.prepare("SELECT * FROM oauth_states WHERE state = ?").get(req.query.state);
+      if (!stateRow) return oauthError(res, 'Sesión OAuth inválida o expirada. Inténtalo de nuevo desde el CRM.');
+      state = stateRow.state;
+    } else {
+      // Fallback legacy: tenant 1
+      state = makeState();
+      db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
+      db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, 'tiktok', 1)").run(state);
+    }
 
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
     const redirectUri = encodeURIComponent(`${baseUrl}/auth/tiktok/callback`);
@@ -202,6 +221,7 @@ module.exports = function createAuthRouter(db) {
     if (!stateRow) return oauthError(res, 'Estado OAuth inválido o expirado.');
     db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
+    const tenantId = stateRow.tenant_id || 1;
     const clientKey = process.env.TIKTOK_CLIENT_KEY;
     const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -229,7 +249,7 @@ module.exports = function createAuthRouter(db) {
         refreshToken: tokenData.refresh_token,
         openId: user.open_id || tokenData.open_id,
       };
-      const integration = await integrationService.connectRaw(db, null, 'tiktok', creds, {
+      const integration = await integrationService.connectRaw(db, tenantId, 'tiktok', creds, {
         displayName: user.display_name ? `@${user.display_name}` : `TikTok ${user.open_id || ''}`,
         externalId: user.open_id || tokenData.open_id,
       });

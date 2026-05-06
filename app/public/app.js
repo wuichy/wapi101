@@ -2588,10 +2588,23 @@ function bindIntegrationListeners(root) {
 }
 
 // ─── OAuth popup ───
-function connectOAuth(providerKey, authType) {
+async function connectOAuth(providerKey, authType) {
+  // Multi-tenant: pre-creamos el state en backend (con auth) ANTES de abrir
+  // el popup para que el callback sepa a qué tenant pertenece la integración.
+  // El popup es un GET sin headers Auth, por eso el state debe venir pre-creado.
+  const provider = authType === 'oauth_tiktok' ? 'tiktok' : providerKey;
+  let state;
+  try {
+    const r = await api('POST', '/api/auth/oauth/prepare', { provider });
+    state = r.state;
+  } catch (err) {
+    toast('No se pudo iniciar la conexión OAuth: ' + err.message, 'error', 5000);
+    return;
+  }
+
   const oauthPath = authType === 'oauth_tiktok'
-    ? `/auth/tiktok/start`
-    : `/auth/meta/start?provider=${providerKey}`;
+    ? `/auth/tiktok/start?state=${state}`
+    : `/auth/meta/start?state=${state}`;
 
   const w = 620, h = 700;
   const left = Math.round((screen.width - w) / 2);

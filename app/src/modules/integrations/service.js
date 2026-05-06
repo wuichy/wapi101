@@ -250,10 +250,11 @@ function qrStatus(db, tenantId, id) {
 // Guarda una integración que ya fue autenticada por OAuth (el caller provee tokens y metadatos).
 // El caller (auth/routes) puede no tener tenantId todavía si la sesión OAuth se inició
 // sin contexto auth — en ese caso pasa null y se asume tenant 1 (Lucho) por defecto.
-// Cuando se onboarde el 2do tenant, /auth/start guardará el tenant en oauth_states
-// y el callback lo recuperará para pasarlo aquí explícito.
+// El OAuth flow stashea tenant_id en oauth_states (vía POST /api/auth/oauth/prepare)
+// y el callback lo recupera para pasarlo aquí explícito.
 async function connectRaw(db, tenantId, providerKey, creds, { displayName, externalId }) {
-  const t = tenantId || 1; // fallback Lucho mientras OAuth no se reescribe
+  if (!tenantId) throw new Error('connectRaw: tenantId requerido');
+  const t = tenantId;
   const encrypted = encryptJson(creds);
   const existing = externalId
     ? db.prepare('SELECT * FROM integrations WHERE provider = ? AND external_id = ?').get(providerKey, String(externalId))

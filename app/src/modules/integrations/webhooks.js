@@ -55,15 +55,25 @@ module.exports = function createWebhooksRouter(db) {
     return { ...row, credentials: row.credentials_enc ? (decryptJson(row.credentials_enc) || {}) : {} };
   }
 
+  // Fallback usado cuando un payload no incluye external_id (raro en Meta —
+  // siempre debería venir phone_number_id / page_id). En single-tenant es safe;
+  // en multi-tenant solo es safe si hay UNA sola integración del provider.
+  // Si hay múltiples, devolvemos null y loggeamos warning — preferimos no
+  // procesar a procesar al tenant equivocado.
   function findIntegrationByProvider(provider) {
     const providers = provider === 'whatsapp'
       ? ['whatsapp', 'whatsapp-lite']
       : [provider];
     const placeholders = providers.map(() => '?').join(',');
-    const row = db.prepare(
-      `SELECT * FROM integrations WHERE provider IN (${placeholders}) AND status = ? ORDER BY id ASC LIMIT 1`
-    ).get(...providers, 'connected');
-    if (!row) return null;
+    const rows = db.prepare(
+      `SELECT * FROM integrations WHERE provider IN (${placeholders}) AND status = ? ORDER BY id ASC LIMIT 2`
+    ).all(...providers, 'connected');
+    if (rows.length === 0) return null;
+    if (rows.length > 1) {
+      console.warn(`[webhook ${provider}] payload sin external_id y hay múltiples integraciones connected — no se puede resolver tenant, evento ignorado`);
+      return null;
+    }
+    const row = rows[0];
     return { ...row, credentials: row.credentials_enc ? (decryptJson(row.credentials_enc) || {}) : {} };
   }
 

@@ -137,6 +137,27 @@ app.use('/api', authMiddleware(db));
 // API básica (protegida)
 app.get('/api/me', (req, res) => res.json({ advisor: req.advisor }));
 
+// ─── OAuth prepare: stashea tenant_id en oauth_states ANTES de abrir el
+//      popup OAuth. Necesario porque /auth/{meta,tiktok}/start son GETs
+//      que abren popups sin headers Authorization, así que no pueden saber
+//      el tenantId del advisor logueado. El frontend llama este endpoint
+//      con su Bearer token, recibe un state pre-creado, y abre el popup
+//      con ?state=<existing-state>.
+const crypto = require('crypto');
+const VALID_OAUTH_PROVIDERS = ['messenger', 'instagram', 'facebook', 'whatsapp-lite', 'tiktok'];
+app.post('/api/auth/oauth/prepare', (req, res) => {
+  const { provider } = req.body || {};
+  if (!VALID_OAUTH_PROVIDERS.includes(provider)) {
+    return res.status(400).json({ error: 'Provider inválido' });
+  }
+  // Limpieza de states viejos (>1h)
+  db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
+  const state = crypto.randomBytes(20).toString('hex');
+  db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, ?, ?)")
+    .run(state, provider, req.tenantId);
+  res.json({ state });
+});
+
 // Perfil de cuenta — por tenant. La tabla app_settings tiene UNIQUE(key) global,
 // pero como solo Lucho (tenant 1) la usa, el upsert por key+tenant funciona.
 // Cuando se onboarde el 2do tenant se hará UNIQUE(tenant_id, key) en migración.

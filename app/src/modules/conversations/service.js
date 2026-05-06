@@ -90,15 +90,27 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
   if (contactId) { conditions.push('c.contact_id = ?'); params.push(contactId); }
   if (!includeArchived) conditions.push('COALESCE(c.archived, 0) = 0');
   if (search) {
+    // Buscador expandido: nombre, teléfono, email, external_id, último msg,
+    // mensajes históricos (body de la conversación) y etiquetas del contacto
+    // (tags es JSON array, lo buscamos como substring del JSON serializado).
     conditions.push(`(
       LOWER(co.first_name) LIKE ?
       OR LOWER(IFNULL(co.last_name,'')) LIKE ?
       OR LOWER(IFNULL(co.phone,'')) LIKE ?
+      OR LOWER(IFNULL(co.email,'')) LIKE ?
+      OR LOWER(IFNULL(co.tags,'[]')) LIKE ?
       OR LOWER(IFNULL(c.external_id,'')) LIKE ?
       OR LOWER(IFNULL(c.last_message,'')) LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM messages m
+        WHERE m.conversation_id = c.id
+          AND m.tenant_id = c.tenant_id
+          AND LOWER(IFNULL(m.body,'')) LIKE ?
+        LIMIT 1
+      )
     )`);
     const q = `%${search.toLowerCase()}%`;
-    params.push(q, q, q, q, q);
+    params.push(q, q, q, q, q, q, q, q);
   }
 
   const where = 'WHERE ' + conditions.join(' AND ');

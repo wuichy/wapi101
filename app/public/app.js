@@ -12440,3 +12440,167 @@ if (typeof _origRenderExpInfo === 'function') {
     return r;
   };
 }
+
+// ═══════ CHAT INFO PANEL (botón "i" del chat) ═══════
+async function renderChatInfoPanel() {
+  const body = document.getElementById('rhChatInfoBody');
+  if (!body) return;
+  if (!ACTIVE_CONVO_ID) {
+    body.innerHTML = '<p class="ci-empty">Selecciona una conversación.</p>';
+    return;
+  }
+  const convo = CONVERSATIONS.find(c => c.id === ACTIVE_CONVO_ID);
+  if (!convo) {
+    body.innerHTML = '<p class="ci-empty">Conversación no encontrada.</p>';
+    return;
+  }
+
+  body.innerHTML = '<p class="ci-empty">Cargando…</p>';
+
+  try {
+    // Cargar contacto + leads + tareas pendientes en paralelo
+    const [contact, leadsResp, tasksResp] = await Promise.all([
+      convo.contactId ? api('GET', `/api/contacts/${convo.contactId}`).catch(() => null) : Promise.resolve(null),
+      convo.contactId ? api('GET', `/api/expedients?contactId=${convo.contactId}&pageSize=10`).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
+      convo.contactId ? api('GET', `/api/tasks?contactId=${convo.contactId}&filter=pending&limit=10`).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
+    ]);
+
+    const name = contact ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Sin nombre' : (convo.name || convo.externalId || 'Sin nombre');
+    const initials = name.split(/\s+/).slice(0,2).map(s => s.charAt(0).toUpperCase()).join('') || '?';
+    const phone = contact?.phone || convo.externalId || '';
+    const email = contact?.email || '';
+    const tags = Array.isArray(contact?.tags) ? contact.tags : [];
+    const avatarUrl = contact?.avatarUrl || null;
+
+    const avatarHtml = avatarUrl
+      ? `<img class="ci-avatar" src="${escapeHtml(avatarUrl)}" alt="" onerror="this.outerHTML='<div class=&quot;ci-avatar&quot;>${escapeHtml(initials)}</div>'" />`
+      : `<div class="ci-avatar">${escapeHtml(initials)}</div>`;
+
+    const leads = (leadsResp.items || []).filter(e => e.stageKind !== 'won' && e.stageKind !== 'lost');
+    const leadsHtml = leads.length
+      ? leads.map(e => `
+          <div class="ci-lead-card">
+            <div class="ci-lead-name" data-go-to-exp="${e.id}">${escapeHtml(e.name || 'Sin nombre')}</div>
+            <div class="ci-lead-pipeline">
+              <span style="color:${e.pipelineColor || '#64748b'}">${escapeHtml(e.pipelineName || '')}</span>
+              <span>›</span>
+              <span style="color:${e.stageColor || '#64748b'}">${escapeHtml(e.stageName || '')}</span>
+            </div>
+          </div>
+        `).join('')
+      : '<p class="ci-empty">Sin leads abiertos.</p>';
+
+    const tasks = tasksResp.items || [];
+    const now = Math.floor(Date.now() / 1000);
+    const tasksHtml = tasks.length
+      ? tasks.map(t => {
+          const isOverdue = t.dueAt < now;
+          return `
+            <div class="ci-row" style="${isOverdue ? 'color:#dc2626' : ''}" data-task-id="${t.id}" style="cursor:pointer">
+              <span>⏰</span>
+              <span style="flex:1">${escapeHtml(t.title)}</span>
+              <span style="font-size:11px;color:#94a3b8">${fmtTaskDue ? fmtTaskDue(t.dueAt) : ''}</span>
+            </div>
+          `;
+        }).join('')
+      : '<p class="ci-empty">Sin tareas pendientes.</p>';
+
+    body.innerHTML = `
+      <div class="ci-avatar-block">
+        ${avatarHtml}
+        <div class="ci-name">${escapeHtml(name)}</div>
+      </div>
+
+      <div class="ci-section">
+        <h4>Contacto</h4>
+        ${phone ? `<div class="ci-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg><a href="tel:${escapeHtml(phone)}" style="color:#2563eb;text-decoration:none">${escapeHtml(phone)}</a></div>` : ''}
+        ${email ? `<div class="ci-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg><a href="mailto:${escapeHtml(email)}" style="color:#2563eb;text-decoration:none">${escapeHtml(email)}</a></div>` : ''}
+        <div class="ci-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg><span style="text-transform:capitalize">${escapeHtml(convo.provider || '')}</span></div>
+      </div>
+
+      ${tags.length ? `
+        <div class="ci-section">
+          <h4>Etiquetas</h4>
+          <div class="ci-tag-list">${tags.map(t => `<span class="ci-tag">${escapeHtml(t)}</span>`).join('')}</div>
+        </div>
+      ` : ''}
+
+      <div class="ci-section">
+        <h4>Leads abiertos</h4>
+        ${leadsHtml}
+      </div>
+
+      <div class="ci-section">
+        <h4>Tareas pendientes</h4>
+        ${tasksHtml}
+      </div>
+
+      ${contact ? `
+        <div class="ci-actions">
+          <button class="btn btn--ghost" id="ciEditContactBtn">Editar contacto</button>
+        </div>
+      ` : ''}
+    `;
+
+    // Wire eventos
+    body.querySelectorAll('[data-go-to-exp]').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = Number(el.dataset.goToExp);
+        if (typeof openExpDetail === 'function') openExpDetail(id);
+        toggleChatInfoPanel(false);
+      });
+    });
+    document.getElementById('ciEditContactBtn')?.addEventListener('click', () => {
+      if (contact && typeof openContactModal === 'function') openContactModal(contact.id);
+    });
+  } catch (err) {
+    body.innerHTML = `<p class="ci-empty" style="color:#ef4444">Error: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function toggleChatInfoPanel(forceState = null) {
+  const panel = document.getElementById('rhChatInfoPanel');
+  if (!panel) return;
+  const willShow = forceState !== null ? forceState : panel.hidden;
+  panel.hidden = !willShow;
+  if (willShow) renderChatInfoPanel();
+}
+
+function setupChatInfoPanel() {
+  document.getElementById('rhChatInfoBtn')?.addEventListener('click', () => toggleChatInfoPanel());
+  document.getElementById('rhChatInfoClose')?.addEventListener('click', () => toggleChatInfoPanel(false));
+}
+
+// ═══════ MOBILE: toggle inbox vs conversation ═══════
+function setMobileChatView(view) {
+  // view: 'inbox' | 'conversation'
+  document.body.dataset.chatMobileView = view;
+}
+
+function setupMobileChatToggle() {
+  // Solo aplica si pantalla es mobile (≤720px). Default: ver inbox al entrar a chats.
+  setMobileChatView('inbox');
+
+  document.getElementById('rhMobileBackBtn')?.addEventListener('click', () => {
+    setMobileChatView('inbox');
+    toggleChatInfoPanel(false);
+  });
+
+  // Cuando seleccionas un chat (click en lista), ir a conversation view
+  // Lo hacemos con event delegation porque la lista se rendea dinámicamente.
+  document.getElementById('rhChatList')?.addEventListener('click', (e) => {
+    if (e.target.closest('[data-chat-id]')) {
+      setMobileChatView('conversation');
+    }
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    setupChatInfoPanel();
+    setupMobileChatToggle();
+  });
+} else {
+  setupChatInfoPanel();
+  setupMobileChatToggle();
+}

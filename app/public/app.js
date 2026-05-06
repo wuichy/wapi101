@@ -26,7 +26,7 @@ const I18N_TRANSLATIONS = {
     'settings.tab.ia': 'IA',
     'settings.tab.notificaciones': 'Notificaciones',
     'settings.tab.papelera': 'Papelera',
-    'settings.tab.configuraciones': 'Configuraciones',
+    'settings.tab.configuraciones': 'Ajustes',
     'settings.tab.reportes': 'Reportes',
     'settings.tab.tokens': 'Tokens de máquina',
     // Configuraciones
@@ -99,7 +99,7 @@ const I18N_TRANSLATIONS = {
     'settings.tab.ia': 'AI',
     'settings.tab.notificaciones': 'Notifications',
     'settings.tab.papelera': 'Trash',
-    'settings.tab.configuraciones': 'Preferences',
+    'settings.tab.configuraciones': 'Settings',
     'settings.tab.reportes': 'Reports',
     'settings.tab.tokens': 'Machine tokens',
     // Preferences

@@ -396,7 +396,9 @@ app.get('/',         _sendFile('landing.html'));
 app.get('/login',    _sendFile('login.html'));
 app.get('/signup',   _sendFile('signup.html'));
 app.get('/app',      _sendFile('index.html'));
-app.get('/app/*',    _sendFile('index.html')); // SPA routing — cualquier ruta interna del CRM
+// Express 5 requiere wildcards con nombre (no '*' suelto). '*splat' captura
+// cualquier subpath bajo /app y lo manda al index.html del SPA.
+app.get('/app/*splat', _sendFile('index.html'));
 
 // Estáticos — HTML/CSS/JS sin caché agresivo (always revalidate via ETag).
 // Imágenes/fonts mantienen el comportamiento default de express.static.

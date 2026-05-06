@@ -2055,9 +2055,12 @@ function setupAdvisors() {
   // Abrir modal nuevo
   document.getElementById('advisorNewBtn')?.addEventListener('click', () => openAdvisorModal());
 
-  // Cerrar modal
+  // Cerrar modal (X o backdrop). Usamos closest porque el click puede caer en
+  // el <svg> o <line> dentro del botón, no en el botón mismo.
   document.getElementById('advisorModal')?.addEventListener('click', e => {
-    if (e.target.dataset.closeAdvisor !== undefined) document.getElementById('advisorModal').hidden = true;
+    if (e.target.closest('[data-close-advisor]')) {
+      document.getElementById('advisorModal').hidden = true;
+    }
   });
 
   // Cambio de rol → mostrar/ocultar permisos

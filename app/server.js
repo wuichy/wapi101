@@ -349,6 +349,7 @@ mountSafe('/api/billing',            require('./src/modules/billing/routes'));
 mountSafe('/api/tasks',              require('./src/modules/tasks/routes'));
 mountSafe('/api/ai-knowledge',       require('./src/modules/ai-knowledge/routes'));
 mountSafe('/api/analytics',          require('./src/modules/analytics/routes'));
+mountSafe('/api/business',           require('./src/modules/business/routes'));
 
 // Manejador global de errores
 app.use((err, _req, res, _next) => {

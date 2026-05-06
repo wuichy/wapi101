@@ -64,7 +64,15 @@ module.exports = function createExpedientsRouter(db) {
   router.post('/', (req, res, next) => {
     let item;
     try {
-      item = service.create(db, req.tenantId, req.body || {});
+      // Auto-asignación: si no viene assignedAdvisorId en el body, asignar
+      // al advisor que está creando el lead (autogestión: "lo creé yo, es mío").
+      // Bots y webhooks pueden pasar assignedAdvisorId=null explícito si no
+      // quieren auto-asignar.
+      const body = req.body || {};
+      if (body.assignedAdvisorId === undefined && req.advisor?.id) {
+        body.assignedAdvisorId = req.advisor.id;
+      }
+      item = service.create(db, req.tenantId, body);
       activity.log(db, {
         expedientId: item.id,
         contactId:   item.contactId,
@@ -153,6 +161,12 @@ module.exports = function createExpedientsRouter(db) {
           activity.log(db, { ...base, type: 'phone_change',
             description: `Teléfono: "${prevPhone || ''}" → "${req.body.phone || ''}"` });
         }
+      }
+
+      // Cambio de asesor asignado
+      if (prev.assignedAdvisorId !== item.assignedAdvisorId) {
+        activity.log(db, { ...base, type: 'assignee_change',
+          description: `Asesor asignado: "${prev.assignedAdvisorName || 'Sin asignar'}" → "${item.assignedAdvisorName || 'Sin asignar'}"` });
       }
 
       // Cambio de etiquetas

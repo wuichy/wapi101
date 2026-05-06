@@ -46,6 +46,8 @@ function hydrate(db, tenantId, row) {
     contactEmail: row.contact_email || null,
     contactPhone: row.contact_phone || null,
     contactAvatarUrl: row.contact_avatar_url || null,
+    assignedAdvisorId:   row.assigned_advisor_id || null,
+    assignedAdvisorName: row.assigned_advisor_name || null,
     pipelineId:   row.pipeline_id,
     pipelineName: row.pipeline_name || null,
     pipelineColor: row.pipeline_color || null,
@@ -103,6 +105,8 @@ const BASE_SELECT = `
     c.email AS contact_email,
     c.phone AS contact_phone,
     c.avatar_url AS contact_avatar_url,
+    aa.name AS assigned_advisor_name,
+    aa.username AS assigned_advisor_username,
     p.name AS pipeline_name,
     p.color AS pipeline_color,
     s.name AS stage_name,
@@ -116,6 +120,7 @@ const BASE_SELECT = `
   JOIN contacts c ON c.id = e.contact_id
   JOIN pipelines p ON p.id = e.pipeline_id
   JOIN stages s ON s.id = e.stage_id
+  LEFT JOIN advisors aa ON aa.id = e.assigned_advisor_id
   LEFT JOIN (
     SELECT contact_id, tenant_id,
            MAX(last_incoming_at) AS last_incoming_at,
@@ -178,7 +183,7 @@ function getById(db, tenantId, id) {
   return hydrate(db, t, row);
 }
 
-function create(db, tenantId, { contactId, pipelineId, stageId, name, value = 0, tags = [], fieldValues = {} }) {
+function create(db, tenantId, { contactId, pipelineId, stageId, name, value = 0, tags = [], fieldValues = {}, assignedAdvisorId = null }) {
   if (!contactId) throw new Error('El contacto es obligatorio');
   if (!pipelineId) throw new Error('El pipeline es obligatorio');
   if (!stageId) throw new Error('La etapa es obligatoria');
@@ -194,9 +199,9 @@ function create(db, tenantId, { contactId, pipelineId, stageId, name, value = 0,
 
   const trimmedName = name?.trim() || null;
   const r = db.prepare(`
-    INSERT INTO expedients (tenant_id, contact_id, pipeline_id, stage_id, name, value, name_is_auto, stage_entered_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch())
-  `).run(t, contactId, pipelineId, stageId, trimmedName, Number(value) || 0, trimmedName ? 0 : 1);
+    INSERT INTO expedients (tenant_id, contact_id, pipeline_id, stage_id, name, value, name_is_auto, stage_entered_at, assigned_advisor_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), ?)
+  `).run(t, contactId, pipelineId, stageId, trimmedName, Number(value) || 0, trimmedName ? 0 : 1, assignedAdvisorId || null);
 
   const id = r.lastInsertRowid;
 
@@ -209,7 +214,7 @@ function create(db, tenantId, { contactId, pipelineId, stageId, name, value = 0,
   return getById(db, t, id);
 }
 
-function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fieldValues, contactId, contactName }) {
+function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fieldValues, contactId, contactName, assignedAdvisorId }) {
   const t = tenantId ?? _tenantFromExpedient(db, id);
   if (!t) return null;
   const row = db.prepare('SELECT * FROM expedients WHERE id = ? AND tenant_id = ?').get(id, t);
@@ -239,6 +244,15 @@ function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fiel
     fields.push('stage_entered_at = unixepoch()');
   } else if (stageId !== undefined) {
     fields.push('stage_id = ?'); params.push(stageId);
+  }
+  if (assignedAdvisorId !== undefined) {
+    if (assignedAdvisorId === null) {
+      fields.push('assigned_advisor_id = NULL');
+    } else {
+      const adv = db.prepare('SELECT id FROM advisors WHERE id = ? AND tenant_id = ?').get(assignedAdvisorId, t);
+      if (!adv) throw new Error('Asesor no encontrado');
+      fields.push('assigned_advisor_id = ?'); params.push(assignedAdvisorId);
+    }
   }
   if (fields.length) {
     fields.push('updated_at = unixepoch()');

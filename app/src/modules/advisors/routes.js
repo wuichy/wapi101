@@ -11,6 +11,18 @@ module.exports = function createAdvisorsRouter(db) {
     res.json(svc.list(db, req.tenantId));
   });
 
+  // Lista mínima de asesores (id + nombre) accesible a cualquier asesor autenticado.
+  // Útil para selectores como "Asignar lead a..." que no necesitan datos sensibles.
+  router.get('/list-min', (req, res) => {
+    const items = db.prepare(`
+      SELECT id, name, username, role
+        FROM advisors
+       WHERE tenant_id = ? AND active = 1
+       ORDER BY name COLLATE NOCASE ASC
+    `).all(req.tenantId);
+    res.json({ items });
+  });
+
   router.post('/', (req, res) => {
     if (req.advisor.role !== 'admin') return res.status(403).json({ error: 'Solo admin puede crear asesores' });
     const { name, username, email, password, role, permissions } = req.body;

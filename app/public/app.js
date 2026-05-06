@@ -2498,6 +2498,7 @@ function setupSettingsTabs() {
       if (target === 'papelera') loadTrash();
       if (target === 'tokens-maquina') { loadMachineTokens(); loadDeployVersion(); }
       if (target === 'reportes') loadReports();
+      if (target === 'negocio') loadBusinessHours();
     });
   });
   document.querySelectorAll(".ai-provider input").forEach((input) => {
@@ -3274,6 +3275,7 @@ function renderExpedientRows(items) {
             </span>
           </span>
         </td>
+        <td>${exp.assignedAdvisorName ? `<span class="exp-assignee">👤 ${escapeHtml(exp.assignedAdvisorName)}</span>` : '<span class="exp-assignee is-empty">Sin asignar</span>'}</td>
         <td>${tagsHtml}</td>
         <td><span class="exp-date">${fmtDate(exp.createdAt)}</span></td>
         <td>
@@ -3436,6 +3438,16 @@ function renderExpDetailInfo() {
             </span>
           </span>
           <select class="edf-input edf-select edf-stage-sel" id="edfStageSel" data-original="${exp.stageId}">${stageOptionsHtml}</select>
+        </div>
+      </div>
+      <div class="exp-detail-field editable-field" data-field-id="assignedAdvisor" data-field-type="builtin">
+        <span class="exp-detail-field-label">Asesor asignado</span>
+        <div class="edf-cell">
+          <span class="exp-detail-field-value edf-display">${exp.assignedAdvisorName ? `<span class="exp-assignee">👤 ${escapeHtml(exp.assignedAdvisorName)}</span>` : '<span class="exp-assignee is-empty">Sin asignar</span>'}</span>
+          <select class="edf-input edf-select" id="edfAssigneeSel" data-original="${exp.assignedAdvisorId || ''}">
+            <option value="">— Sin asignar —</option>
+            ${(window._minAdvisorsCache || []).map(a => `<option value="${a.id}" ${a.id === exp.assignedAdvisorId ? 'selected' : ''}>${escapeHtml(a.name || a.username || ('#' + a.id))}</option>`).join('')}
+          </select>
         </div>
       </div>
     </div>
@@ -3770,6 +3782,7 @@ async function saveExpDetailEdits() {
     else if (fieldId === 'pipeline') patch.pipelineId = Number(input.value);
     else if (fieldId === 'stage') patch.stageId = Number(input.value);
     else if (fieldId === 'contactName') patch.contactName = val;
+    else if (fieldId === 'assignedAdvisor') patch.assignedAdvisorId = input.value ? Number(input.value) : null;
   });
 
   // Custom fields — only changed ones
@@ -9084,6 +9097,207 @@ async function openReportDetail(id) {
   }
 }
 
+// ════════ Negocio: horarios maestros + por asesor ════════
+const BIZ_DAYS = [
+  { dow: 1, label: 'Lunes' },
+  { dow: 2, label: 'Martes' },
+  { dow: 3, label: 'Miércoles' },
+  { dow: 4, label: 'Jueves' },
+  { dow: 5, label: 'Viernes' },
+  { dow: 6, label: 'Sábado' },
+  { dow: 0, label: 'Domingo' },
+];
+
+let _bizMasterItems  = [];   // [{ dayOfWeek, openTime, closeTime, isClosed }]
+let _bizAdvisorItems = [];   // [{ dayOfWeek, effectiveOpen, effectiveClose, effectiveClosed, isOff }]
+let _bizAdvisorId    = null;
+
+function bizRowHTML(day, row, scope) {
+  // scope: 'master' | 'advisor'
+  let closed, open, close;
+  if (scope === 'master') {
+    closed = !!(row && row.isClosed);
+    open   = (row && row.openTime)  || '09:00';
+    close  = (row && row.closeTime) || '18:00';
+  } else {
+    closed = !!(row && (row.effectiveClosed || row.isOff));
+    open   = (row && (row.effectiveOpen  || row.openTime))  || '09:00';
+    close  = (row && (row.effectiveClose || row.closeTime)) || '18:00';
+  }
+  return `
+    <div class="biz-row ${closed ? 'is-closed' : ''}" data-dow="${day.dow}">
+      <label class="biz-row-day">
+        <input type="checkbox" ${closed ? '' : 'checked'} data-biz-open>
+        <span>${day.label}</span>
+      </label>
+      <div class="biz-row-times">
+        ${closed
+          ? '<span class="biz-row-closed-tag">Cerrado</span>'
+          : `<input type="time" value="${open}" data-biz-time="open">
+             <span>—</span>
+             <input type="time" value="${close}" data-biz-time="close">`
+        }
+      </div>
+    </div>
+  `;
+}
+
+function renderBizMaster() {
+  const root = document.getElementById('bizMaster');
+  if (!root) return;
+  const byDow = {};
+  (_bizMasterItems || []).forEach(h => { byDow[h.dayOfWeek] = h; });
+  root.innerHTML = BIZ_DAYS.map(d => bizRowHTML(d, byDow[d.dow], 'master')).join('');
+}
+
+function renderBizAdvisor() {
+  const root = document.getElementById('bizAdvisor');
+  if (!root) return;
+  if (!_bizAdvisorId) {
+    root.hidden = true;
+    document.getElementById('bizAdvisorActions').hidden = true;
+    return;
+  }
+  root.hidden = false;
+  document.getElementById('bizAdvisorActions').hidden = false;
+  const byDow = {};
+  (_bizAdvisorItems || []).forEach(h => { byDow[h.dayOfWeek] = h; });
+  root.innerHTML = BIZ_DAYS.map(d => bizRowHTML(d, byDow[d.dow], 'advisor')).join('');
+}
+
+function readBizRows(rootId, scope) {
+  const root = document.getElementById(rootId);
+  if (!root) return [];
+  const out = [];
+  root.querySelectorAll('.biz-row').forEach(el => {
+    const dow = Number(el.dataset.dow);
+    const isOpen = el.querySelector('[data-biz-open]')?.checked;
+    if (!isOpen) {
+      if (scope === 'master') out.push({ dayOfWeek: dow, isClosed: true, openTime: null, closeTime: null });
+      else                    out.push({ dayOfWeek: dow, isOff: true, openTime: null, closeTime: null });
+    } else {
+      const openTime  = el.querySelector('[data-biz-time="open"]')?.value  || '09:00';
+      const closeTime = el.querySelector('[data-biz-time="close"]')?.value || '18:00';
+      if (scope === 'master') out.push({ dayOfWeek: dow, isClosed: false, openTime, closeTime });
+      else                    out.push({ dayOfWeek: dow, isOff: false, openTime, closeTime });
+    }
+  });
+  return out;
+}
+
+async function loadBusinessAdvisors() {
+  const sel = document.getElementById('bizAdvisorSelect');
+  if (!sel) return;
+  try {
+    const data = await api('GET', '/api/advisors/list-min');
+    const items = data.items || [];
+    sel.innerHTML = '<option value="">— Selecciona un asesor —</option>'
+      + items.map(a => `<option value="${a.id}">${escapeHtml(a.name || a.username || ('#' + a.id))}</option>`).join('');
+  } catch (err) {
+    console.error('loadBusinessAdvisors', err);
+  }
+}
+
+async function loadBusinessHours() {
+  try {
+    const data = await api('GET', '/api/business/hours');
+    _bizMasterItems = data.items || [];
+    renderBizMaster();
+    await loadBusinessAdvisors();
+    // limpiar override si ya estaba abierto
+    _bizAdvisorId = null;
+    _bizAdvisorItems = [];
+    const sel = document.getElementById('bizAdvisorSelect');
+    if (sel) sel.value = '';
+    renderBizAdvisor();
+  } catch (err) {
+    console.error('loadBusinessHours', err);
+    toast(err.message, 'error');
+  }
+}
+
+async function saveBizMaster() {
+  try {
+    const hours = readBizRows('bizMaster', 'master');
+    const data = await api('PUT', '/api/business/hours', { hours });
+    _bizMasterItems = data.items || hours;
+    toast('Horario del negocio guardado', 'success');
+    renderBizMaster();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function loadAdvisorBizHours(advisorId) {
+  try {
+    const data = await api('GET', `/api/business/advisors/${advisorId}/hours`);
+    _bizAdvisorItems = data.items || [];
+    _bizAdvisorId = advisorId;
+    renderBizAdvisor();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function saveBizAdvisor() {
+  if (!_bizAdvisorId) return;
+  try {
+    const hours = readBizRows('bizAdvisor', 'advisor');
+    const data = await api('PUT', `/api/business/advisors/${_bizAdvisorId}/hours`, { hours });
+    _bizAdvisorItems = data.items || _bizAdvisorItems;
+    toast('Horario del asesor guardado', 'success');
+    renderBizAdvisor();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+function setupBusinessUI() {
+  const masterRoot = document.getElementById('bizMaster');
+  if (masterRoot) {
+    // toggle abierto/cerrado en master → re-render row
+    masterRoot.addEventListener('change', (e) => {
+      if (e.target.matches('[data-biz-open]')) {
+        // capturar estado actual del DOM y re-renderizar
+        _bizMasterItems = readBizRows('bizMaster', 'master');
+        renderBizMaster();
+      }
+    });
+  }
+  document.getElementById('bizMasterSaveBtn')?.addEventListener('click', saveBizMaster);
+
+  const sel = document.getElementById('bizAdvisorSelect');
+  sel?.addEventListener('change', () => {
+    const id = Number(sel.value);
+    if (!id) {
+      _bizAdvisorId = null;
+      _bizAdvisorItems = [];
+      renderBizAdvisor();
+      return;
+    }
+    loadAdvisorBizHours(id);
+  });
+
+  const advRoot = document.getElementById('bizAdvisor');
+  if (advRoot) {
+    advRoot.addEventListener('change', (e) => {
+      if (e.target.matches('[data-biz-open]')) {
+        const cur = readBizRows('bizAdvisor', 'advisor');
+        // re-mapear a forma effective* para mantener render consistente
+        _bizAdvisorItems = cur.map(r => ({
+          dayOfWeek: r.dayOfWeek,
+          effectiveOpen: r.openTime,
+          effectiveClose: r.closeTime,
+          effectiveClosed: !!r.isOff,
+          isOff: !!r.isOff,
+        }));
+        renderBizAdvisor();
+      }
+    });
+  }
+  document.getElementById('bizAdvisorSaveBtn')?.addEventListener('click', saveBizAdvisor);
+}
+
 // ════════ Menú contextual (click derecho) en chat list ════════
 let _ctxConvoId = null;
 
@@ -10091,6 +10305,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupPersonalTagsUI();
   setupChatContextMenu();
   setupReportsUI();
+  setupBusinessUI();
   if (window.PERSONAL_MODE) loadPersonalTags();
 
   // Bot toggle handler (usa conversación cuando está disponible)
@@ -10142,9 +10357,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadProfile(),
     loadAdvisors(),
     loadTemplates(),
+    loadMinAdvisors(),
   ]);
   startChatPolling();
 });
+
+// Cache mínimo de asesores (id+name) para selectores de asignación.
+// Accesible por cualquier asesor autenticado (vs /api/advisors que requiere admin).
+async function loadMinAdvisors() {
+  try {
+    const data = await api('GET', '/api/advisors/list-min');
+    window._minAdvisorsCache = data.items || [];
+  } catch (e) {
+    window._minAdvisorsCache = [];
+  }
+}
 
 // Traduce códigos de wa_rejected_reason de Meta a texto entendible.
 const _META_REJECTED_LABELS = {

@@ -1668,7 +1668,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <span>Reportes</span>
             </button>
             <button class="settings-tab" data-settings="negocio" data-admin-only hidden>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9v11a1 1 0 001 1h16a1 1 0 001-1V9"/><path d="M3 9h18"/><path d="M9 21v-7h6v7"/><path d="M3 9a3 3 0 006 0 3 3 0 006 0 3 3 0 006 0"/></svg>
               <span>Negocio</span>
             </button>
             <button class="settings-tab" data-settings="suscripcion" data-admin-only hidden>
@@ -2159,9 +2159,58 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </div>
             </div>
 
-            <!-- ─── Negocio: horarios maestros y por asesor (solo admin) ─── -->
+            <!-- ─── Negocio: perfil + horarios maestros y por asesor (solo admin) ─── -->
             <div class="settings-pane" data-settings="negocio" data-admin-only hidden>
               <div class="biz-shell">
+                <div class="biz-card biz-card--full">
+                  <h3>Perfil del negocio</h3>
+                  <p class="settings-note">Datos generales que se muestran dentro del CRM y se usan para auto-completar plantillas, citas y firmas.</p>
+
+                  <div class="biz-profile-grid">
+                    <label class="biz-field">
+                      <span>Logo</span>
+                      <div class="biz-logo-row">
+                        <div class="biz-logo-preview" id="bizLogoPreview" aria-label="Vista previa del logo"></div>
+                        <input type="url" id="bizProfileLogo" placeholder="https://midominio.com/logo.png" autocomplete="off">
+                      </div>
+                      <small>Pega la URL pública de tu logo (PNG/JPG/SVG).</small>
+                    </label>
+
+                    <label class="biz-field">
+                      <span>Nombre del negocio</span>
+                      <input type="text" id="bizProfileName" placeholder="Acme Inc." autocomplete="off">
+                    </label>
+
+                    <label class="biz-field">
+                      <span>URL del CRM (slug)</span>
+                      <div class="biz-slug-row">
+                        <span class="biz-slug-prefix" id="bizSlugPrefix">wapi101.com/</span>
+                        <input type="text" id="bizProfileSlug" placeholder="acme" pattern="[a-z0-9][a-z0-9-]{1,40}" autocomplete="off">
+                      </div>
+                      <small>Solo letras, números y guiones. Cambiarlo afecta cómo accede tu equipo al CRM.</small>
+                    </label>
+
+                    <label class="biz-field">
+                      <span>Sitio web</span>
+                      <input type="url" id="bizProfileUrl" placeholder="https://acme.com" autocomplete="off">
+                    </label>
+
+                    <label class="biz-field">
+                      <span>Teléfono</span>
+                      <input type="tel" id="bizProfilePhone" placeholder="+52 55 1234 5678" autocomplete="off">
+                    </label>
+
+                    <label class="biz-field biz-field--full">
+                      <span>Domicilio</span>
+                      <textarea id="bizProfileAddress" rows="2" placeholder="Av. Siempre Viva 742, Col. Centro, CDMX, México"></textarea>
+                    </label>
+                  </div>
+
+                  <div class="biz-actions">
+                    <button class="btn btn--primary" id="bizProfileSaveBtn">Guardar perfil del negocio</button>
+                  </div>
+                </div>
+
                 <div class="biz-card">
                   <h3>Horario del negocio</h3>
                   <p class="settings-note">Define los días y horas de apertura general. Las citas agendadas por el bot solo se permitirán dentro de este horario.</p>

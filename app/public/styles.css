@@ -8685,6 +8685,107 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   margin-top: 6px;
 }
 
+/* Perfil del negocio (card que ocupa el ancho completo arriba del grid) */
+.biz-card--full { grid-column: 1 / -1; }
+
+.biz-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+  margin-bottom: 14px;
+}
+@media (max-width: 720px) {
+  .biz-profile-grid { grid-template-columns: 1fr; }
+}
+.biz-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.biz-field--full { grid-column: 1 / -1; }
+.biz-field > span {
+  font-weight: 600;
+  color: var(--text, #0f172a);
+  font-size: 12px;
+}
+.biz-field input,
+.biz-field textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text, #0f172a);
+  background: #fff;
+  resize: vertical;
+}
+.biz-field input:focus,
+.biz-field textarea:focus {
+  outline: none;
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+}
+.biz-field small {
+  color: var(--text-muted, #64748b);
+  font-size: 11px;
+}
+
+.biz-slug-row {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+.biz-slug-row:focus-within {
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+}
+.biz-slug-prefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  border-right: 1px solid var(--border, #e5e7eb);
+  white-space: nowrap;
+}
+.biz-slug-row input {
+  border: none;
+  outline: none;
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: transparent;
+}
+.biz-slug-row input:focus { box-shadow: none; }
+
+.biz-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.biz-logo-row input { flex: 1; }
+.biz-logo-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: #f8fafc center/contain no-repeat;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #94a3b8;
+  overflow: hidden;
+}
+.biz-logo-preview.is-empty::after { content: 'Logo'; }
+
+
 /* Modal borrado de contacto en cascada */
 .modal-card--danger { border-top: 4px solid #ef4444; }
 .cdel-warning {

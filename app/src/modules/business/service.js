@@ -119,4 +119,74 @@ function isWithinHours(db, tenantId, dateMs, advisorId = null) {
   return hhmm >= (row.open_time || '00:00') && hhmm < (row.close_time || '24:00');
 }
 
-module.exports = { getMasterHours, setMasterHours, getAdvisorHours, setAdvisorHours, isWithinHours };
+// ─── Perfil del negocio (datos del tenant que el cliente edita) ─────────
+function getProfile(db, tenantId) {
+  const row = db.prepare(`
+    SELECT id, slug, display_name, business_url, business_address,
+           business_logo_url, business_phone
+      FROM tenants
+     WHERE id = ?
+  `).get(tenantId);
+  if (!row) return null;
+  return {
+    id:           row.id,
+    slug:         row.slug,
+    displayName:  row.display_name,
+    url:          row.business_url     || '',
+    address:      row.business_address || '',
+    logoUrl:      row.business_logo_url|| '',
+    phone:        row.business_phone   || '',
+  };
+}
+
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,40}$/;
+
+function setProfile(db, tenantId, payload = {}) {
+  const fields = [];
+  const params = [];
+
+  if (payload.displayName !== undefined) {
+    const v = String(payload.displayName).trim();
+    if (!v) throw new Error('El nombre del negocio es obligatorio');
+    fields.push('display_name = ?'); params.push(v);
+  }
+  if (payload.slug !== undefined) {
+    const v = String(payload.slug).trim().toLowerCase();
+    if (!SLUG_RE.test(v)) throw new Error('El slug solo permite letras, números y guiones (3 a 40 caracteres). Debe empezar con letra o número.');
+    // Verificar unicidad (excluyendo el propio tenant)
+    const dupe = db.prepare('SELECT id FROM tenants WHERE slug = ? AND id != ?').get(v, tenantId);
+    if (dupe) throw new Error(`El slug "${v}" ya está en uso por otro negocio`);
+    fields.push('slug = ?'); params.push(v);
+  }
+  if (payload.url !== undefined) {
+    const v = String(payload.url).trim();
+    if (v && !/^https?:\/\//i.test(v)) throw new Error('La URL debe empezar con http:// o https://');
+    fields.push('business_url = ?'); params.push(v || null);
+  }
+  if (payload.address !== undefined) {
+    const v = String(payload.address).trim();
+    fields.push('business_address = ?'); params.push(v || null);
+  }
+  if (payload.logoUrl !== undefined) {
+    const v = String(payload.logoUrl).trim();
+    fields.push('business_logo_url = ?'); params.push(v || null);
+  }
+  if (payload.phone !== undefined) {
+    const v = String(payload.phone).trim();
+    fields.push('business_phone = ?'); params.push(v || null);
+  }
+
+  if (!fields.length) return getProfile(db, tenantId);
+
+  fields.push('updated_at = unixepoch()');
+  params.push(tenantId);
+  db.prepare(`UPDATE tenants SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+  return getProfile(db, tenantId);
+}
+
+module.exports = {
+  getMasterHours, setMasterHours,
+  getAdvisorHours, setAdvisorHours,
+  isWithinHours,
+  getProfile, setProfile,
+};

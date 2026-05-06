@@ -47,5 +47,24 @@ module.exports = function createBusinessRouter(db) {
     } catch (err) { res.status(400).json({ error: err.message }); }
   });
 
+  // ─── Perfil del negocio ───
+  router.get('/profile', (req, res) => {
+    try {
+      const profile = service.getProfile(db, req.tenantId);
+      if (!profile) return res.status(404).json({ error: 'Tenant no encontrado' });
+      res.json({ profile });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
+  router.put('/profile', (req, res) => {
+    if (req.advisor?.role !== 'admin') {
+      return res.status(403).json({ error: 'Solo administradores pueden editar el perfil del negocio' });
+    }
+    try {
+      const profile = service.setProfile(db, req.tenantId, req.body || {});
+      res.json({ profile });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
   return router;
 };

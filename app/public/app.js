@@ -9251,7 +9251,7 @@ async function loadBusinessHours() {
     const data = await api('GET', '/api/business/hours');
     _bizMasterItems = data.items || [];
     renderBizMaster();
-    await loadBusinessAdvisors();
+    await Promise.all([loadBusinessAdvisors(), loadBusinessProfile()]);
     // limpiar override si ya estaba abierto
     _bizAdvisorId = null;
     _bizAdvisorItems = [];
@@ -9261,6 +9261,72 @@ async function loadBusinessHours() {
   } catch (err) {
     console.error('loadBusinessHours', err);
     toast(err.message, 'error');
+  }
+}
+
+// ─── Perfil del negocio (nombre, slug, URL, tel, dirección, logo) ───
+let _bizProfileCache = null;
+
+async function loadBusinessProfile() {
+  try {
+    const data = await api('GET', '/api/business/profile');
+    _bizProfileCache = data.profile || null;
+    renderBusinessProfile();
+  } catch (err) {
+    console.error('loadBusinessProfile', err);
+  }
+}
+
+function renderBusinessProfile() {
+  const p = _bizProfileCache;
+  if (!p) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+  set('bizProfileName',    p.displayName);
+  set('bizProfileSlug',    p.slug);
+  set('bizProfileUrl',     p.url);
+  set('bizProfilePhone',   p.phone);
+  set('bizProfileAddress', p.address);
+  set('bizProfileLogo',    p.logoUrl);
+
+  // Prefijo dinámico según el host actual (wapi101.com/, localhost/, etc.)
+  const prefixEl = document.getElementById('bizSlugPrefix');
+  if (prefixEl) prefixEl.textContent = `${location.host}/`;
+
+  updateLogoPreview(p.logoUrl);
+}
+
+function updateLogoPreview(url) {
+  const el = document.getElementById('bizLogoPreview');
+  if (!el) return;
+  if (url) {
+    el.style.backgroundImage = `url("${url.replace(/"/g, '&quot;')}")`;
+    el.classList.remove('is-empty');
+  } else {
+    el.style.backgroundImage = '';
+    el.classList.add('is-empty');
+  }
+}
+
+async function saveBusinessProfile() {
+  const payload = {
+    displayName: document.getElementById('bizProfileName')?.value.trim() || '',
+    slug:        document.getElementById('bizProfileSlug')?.value.trim().toLowerCase() || '',
+    url:         document.getElementById('bizProfileUrl')?.value.trim() || '',
+    phone:       document.getElementById('bizProfilePhone')?.value.trim() || '',
+    address:     document.getElementById('bizProfileAddress')?.value.trim() || '',
+    logoUrl:     document.getElementById('bizProfileLogo')?.value.trim() || '',
+  };
+  const btn = document.getElementById('bizProfileSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const data = await api('PUT', '/api/business/profile', payload);
+    _bizProfileCache = data.profile || null;
+    renderBusinessProfile();
+    toast('Perfil del negocio guardado', 'success');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar perfil del negocio'; }
   }
 }
 
@@ -9344,6 +9410,12 @@ function setupBusinessUI() {
     });
   }
   document.getElementById('bizAdvisorSaveBtn')?.addEventListener('click', saveBizAdvisor);
+
+  // Perfil del negocio
+  document.getElementById('bizProfileSaveBtn')?.addEventListener('click', saveBusinessProfile);
+  document.getElementById('bizProfileLogo')?.addEventListener('input', (e) => {
+    updateLogoPreview(e.target.value.trim());
+  });
 }
 
 // ════════ Menú contextual (click derecho) en chat list ════════

@@ -11735,6 +11735,18 @@ function pushSupported() {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+// Detección de plataforma para guiar al usuario sobre cómo activar push.
+// iOS Safari soporta Web Push desde 16.4 PERO solo en PWA instalada
+// ("Add to Home Screen"). Android Chrome funciona directo.
+function _detectPushPlatform() {
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Mac') && navigator.maxTouchPoints > 1);
+  const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                    || window.navigator.standalone === true;
+  const isAndroid = /Android/.test(ua);
+  return { isIOS, isAndroid, isStandalone };
+}
+
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
@@ -11787,10 +11799,25 @@ async function refreshNotifPaneState() {
   const hint = document.getElementById('notifHint');
   if (!status) return;
 
+  const { isIOS, isAndroid, isStandalone } = _detectPushPlatform();
+
   if (!pushSupported()) {
+    // iOS Safari ANTES de iOS 16.4 o accediendo desde Safari (no PWA) cae aquí
+    if (isIOS && !isStandalone) {
+      status.textContent = '📱 En iPhone/iPad necesitas instalar la app primero';
+      [subBtn, unsBtn, testBtn].forEach(b => b && (b.hidden = true));
+      if (hint) hint.innerHTML = `
+        <strong>Cómo activar en iPhone/iPad:</strong><br>
+        1. Toca el botón <strong>Compartir</strong> ⬆ en Safari<br>
+        2. Selecciona <strong>"Añadir a pantalla de inicio"</strong><br>
+        3. Abre Wapi101 desde el icono que aparece en tu pantalla<br>
+        4. Vuelve a esta pantalla y activa las notificaciones desde la app instalada<br>
+        <em style="color:#94a3b8">Requiere iOS 16.4 o superior</em>`;
+      return;
+    }
     status.textContent = '⚠️ Tu navegador no soporta notificaciones push';
     [subBtn, unsBtn, testBtn].forEach(b => b && (b.hidden = true));
-    if (hint) hint.textContent = 'Usa Chrome, Firefox, Edge o Safari ≥16 con HTTPS.';
+    if (hint) hint.textContent = 'Usa Chrome, Firefox, Edge o Safari ≥16.4 con HTTPS.';
     return;
   }
 
@@ -11801,7 +11828,9 @@ async function refreshNotifPaneState() {
     status.textContent = '⛔ Permiso bloqueado en este navegador';
     [subBtn, unsBtn].forEach(b => b && (b.hidden = true));
     if (testBtn) testBtn.hidden = true;
-    if (hint) hint.textContent = 'Tendrás que reactivar el permiso desde la configuración del navegador (candado en la barra de direcciones).';
+    if (hint) hint.textContent = isIOS
+      ? 'Ajustes del iPhone → Notificaciones → Wapi101 → activar.'
+      : 'Tendrás que reactivar el permiso desde la configuración del navegador (candado en la barra de direcciones).';
     return;
   }
 
@@ -11810,13 +11839,24 @@ async function refreshNotifPaneState() {
     if (subBtn) subBtn.hidden = true;
     if (unsBtn) unsBtn.hidden = false;
     if (testBtn) testBtn.hidden = false;
-    if (hint) hint.textContent = 'Recibirás alertas cuando WhatsApp se desconecte o el servidor tenga problemas.';
+    if (hint) {
+      const platform = isIOS ? 'iPhone' : isAndroid ? 'Android' : 'este dispositivo';
+      hint.textContent = `Recibirás alertas en ${platform} cuando llegue un mensaje, una integración se caiga o el servidor tenga problemas.`;
+    }
   } else {
     status.textContent = 'Notificaciones desactivadas';
     if (subBtn) subBtn.hidden = false;
     if (unsBtn) unsBtn.hidden = true;
     if (testBtn) testBtn.hidden = true;
-    if (hint) hint.textContent = 'Permite notificaciones para enterarte cuando algo pase fuera de la app.';
+    if (hint) {
+      if (isIOS && isStandalone) {
+        hint.textContent = '✅ App instalada. Toca "Activar notificaciones" para empezar a recibir alertas.';
+      } else if (isAndroid) {
+        hint.innerHTML = '<strong>Tip Android:</strong> también puedes <a href="javascript:void(0)" onclick="alert(\'Menú de Chrome → Añadir a pantalla principal\')">instalar Wapi101</a> como app para mejor experiencia.';
+      } else {
+        hint.textContent = 'Permite notificaciones para enterarte de mensajes nuevos cuando no tengas el navegador abierto.';
+      }
+    }
   }
 }
 
@@ -12881,3 +12921,33 @@ if (document.readyState === 'loading') {
 } else {
   setupKnowledgeBase();
 }
+
+// ═══════ PWA Install Prompt (Chrome/Edge desktop + Android) ═══════
+let _pwaInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _pwaInstallPrompt = e;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.hidden = false;
+});
+
+window.addEventListener('appinstalled', () => {
+  _pwaInstallPrompt = null;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.hidden = true;
+  if (typeof toast === 'function') toast('Wapi101 instalada como app ✓', 'success');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('pwaInstallBtn')?.addEventListener('click', async () => {
+    if (!_pwaInstallPrompt) return;
+    _pwaInstallPrompt.prompt();
+    const { outcome } = await _pwaInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+      const btn = document.getElementById('pwaInstallBtn');
+      if (btn) btn.hidden = true;
+    }
+    _pwaInstallPrompt = null;
+  });
+});

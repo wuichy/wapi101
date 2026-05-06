@@ -63,6 +63,25 @@ module.exports = function createCustomersRouter(db) {
     } catch (err) { next(err); }
   });
 
+  // Lista de leads asociados a un contacto. Se usa antes del delete para mostrar
+  // al usuario qué información perderá si confirma la eliminación en cascada.
+  router.get('/:id/leads-preview', (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      const items = db.prepare(`
+        SELECT e.id, e.name, e.created_at AS createdAt,
+               p.name AS pipelineName, p.color AS pipelineColor,
+               s.name AS stageName,    s.color AS stageColor
+          FROM expedients e
+          LEFT JOIN pipelines p ON p.id = e.pipeline_id
+          LEFT JOIN stages    s ON s.id = e.stage_id
+         WHERE e.contact_id = ? AND e.tenant_id = ?
+         ORDER BY e.created_at DESC
+      `).all(id, req.tenantId);
+      res.json({ items, count: items.length });
+    } catch (err) { next(err); }
+  });
+
   // Pausar / reanudar bot para un contacto
   router.patch('/:id/bot-paused', (req, res, next) => {
     try {

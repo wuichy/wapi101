@@ -150,7 +150,7 @@ body.nav-expanded .brand-cache-btn {
 
 /* Badge rojo de no leídos en la nav lateral — visible siempre, incluso colapsado */
 .nav-badge {
-  display: inline-flex !important;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: #dc2626;
@@ -161,24 +161,28 @@ body.nav-expanded .brand-cache-btn {
   height: 18px;
   padding: 0 5px;
   border-radius: 99px;
-  line-height: 1;
+  line-height: 18px;
+  text-align: center;
   letter-spacing: 0.02em;
   margin-left: auto;
   box-shadow: 0 0 0 2px var(--bg-sidebar, #0f172a);
   animation: navBadgePulse 2s ease-in-out infinite;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
 }
 .nav-badge[hidden] { display: none !important; }
 /* Cuando la nav está colapsada (modo icono), el badge se posiciona absoluto en
    la esquina superior-derecha del icono — clásico estilo iOS notificación */
 body.nav-collapsed .nav-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 4px;
+  right: 4px;
   margin: 0;
   min-width: 16px;
   height: 16px;
   font-size: 9px;
   padding: 0 4px;
+  line-height: 16px;
 }
 @keyframes navBadgePulse {
   0%, 100% { box-shadow: 0 0 0 2px var(--bg-sidebar, #0f172a); }
@@ -8680,6 +8684,82 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   justify-content: flex-end;
   margin-top: 6px;
 }
+
+/* Modal borrado de contacto en cascada */
+.modal-card--danger { border-top: 4px solid #ef4444; }
+.cdel-warning {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.cdel-warning svg { color: #dc2626; flex-shrink: 0; }
+.cdel-warning p { margin: 0; font-size: 14px; line-height: 1.5; color: #7f1d1d; }
+.cdel-warning strong { color: #991b1b; }
+.cdel-leads-section { margin-top: 12px; }
+.cdel-leads-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+.cdel-leads-list {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+.cdel-lead-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+.cdel-lead-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+.cdel-lead-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.cdel-lead-pipeline { font-weight: 600; }
+.cdel-lead-arrow { color: #94a3b8; }
+.cdel-lead-stage {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.cdel-lead-date { color: #94a3b8; margin-left: auto; }
+.cdel-leads-empty,
+.cdel-loading,
+.cdel-error {
+  font-size: 13px;
+  color: #64748b;
+  font-style: italic;
+  padding: 8px 4px;
+}
+.cdel-error { color: #b91c1c; font-style: normal; }
+.btn--danger {
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #dc2626;
+}
+.btn--danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
+.btn--danger:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Asignación de leads */
 .exp-assignee {

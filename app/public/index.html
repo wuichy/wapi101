@@ -71,7 +71,7 @@
           <span>Bot</span>
         </a>
         <a href="#recordatorios" class="nav-item" data-view="recordatorios">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><polyline points="8 14 11 17 16 12" stroke-width="1.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="6"  r="2" fill="currentColor"/><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="5" cy="18" r="2" fill="currentColor"/><line x1="10" y1="6"  x2="20" y2="6"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="18" x2="20" y2="18"/></svg>
           <span>Recordatorios</span>
         </a>
         <a href="#calendario" class="nav-item" data-view="calendario">
@@ -85,10 +85,6 @@
         <a href="#ajustes" class="nav-item" data-view="ajustes" data-i18n="nav.ajustes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>
           <span>Configuración</span>
-        </a>
-        <a href="#suscripcion" class="nav-item" data-view="suscripcion" data-admin-only hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          <span>Suscripción</span>
         </a>
       </nav>
 
@@ -1163,6 +1159,35 @@ Ana, , ana@hotmail.com, 5551112222</pre>
           </form>
         </div>
       </div>
+
+      <!-- ─── MODAL: Confirmar borrado de contacto (con leads en cascada) ─── -->
+      <div class="modal" id="contactDeleteModal" hidden>
+        <div class="modal-backdrop" data-close-cdel></div>
+        <div class="modal-card modal-card--danger">
+          <header class="modal-header">
+            <h3>Eliminar contacto</h3>
+            <button class="icon-btn" data-close-cdel aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="modal-body">
+            <div class="cdel-warning">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <p>Vas a eliminar a <strong id="cdelName"></strong>. Se eliminarán <strong>permanentemente todos los leads asociados</strong> a este contacto, junto con sus conversaciones y actividad.</p>
+            </div>
+            <div class="cdel-leads-section">
+              <div class="cdel-leads-title" id="cdelLeadsTitle">Leads asociados</div>
+              <div class="cdel-leads-list" id="cdelLeadsList"></div>
+              <div class="cdel-leads-empty" id="cdelLeadsEmpty" hidden>Este contacto no tiene leads.</div>
+            </div>
+          </div>
+          <footer class="modal-footer">
+            <button type="button" class="btn btn--ghost" data-close-cdel>Cancelar</button>
+            <button type="button" class="btn btn--danger" id="cdelConfirmBtn">Eliminar definitivamente</button>
+          </footer>
+        </div>
+      </div>
+
       <!-- ─── VISTA: PLANTILLAS ─── -->
       <section class="view view-templates" data-view="plantillas" hidden>
         <div class="tpl-layout">
@@ -1645,6 +1670,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <button class="settings-tab" data-settings="negocio" data-admin-only hidden>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span>Negocio</span>
+            </button>
+            <button class="settings-tab" data-settings="suscripcion" data-admin-only hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              <span>Suscripción</span>
             </button>
             <button class="settings-tab" data-settings="tokens-maquina" data-admin-only hidden data-i18n="settings.tab.tokens">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -2159,25 +2188,45 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </div>
             </div>
 
+            <!-- ─── Suscripción (solo admin) ─── -->
+            <div class="settings-pane" data-settings="suscripcion" data-admin-only hidden>
+              <div class="billing-wrap">
+                <header class="billing-header">
+                  <h2>Suscripción</h2>
+                  <p class="billing-sub">Elige el plan que mejor se ajuste a tu negocio. 14 días de prueba gratis en todos los planes.</p>
+                </header>
+
+                <div class="billing-status" id="billingStatus" hidden></div>
+
+                <div class="billing-toggle">
+                  <button class="bt-opt is-active" data-interval="month">Mensual</button>
+                  <button class="bt-opt" data-interval="year">Anual <span class="bt-save">−20%</span></button>
+                </div>
+
+                <div class="billing-plans" id="billingPlans">
+                  <div class="billing-loading">Cargando planes…</div>
+                </div>
+
+                <div class="billing-manage" id="billingManage" hidden>
+                  <button class="btn btn--ghost" id="billingPortalBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                    Administrar suscripción (cambiar tarjeta, ver facturas, cancelar)
+                  </button>
+                </div>
+
+                <p class="billing-footnote">
+                  Pagos procesados por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.
+                  Lee <a href="/terms" target="_blank">Términos</a> y <a href="/privacy" target="_blank">Privacidad</a>.
+                </p>
+              </div>
+            </div>
+
             <!-- ─── Tokens de máquina (solo admin) ─── -->
             <div class="settings-pane" data-settings="tokens-maquina" data-admin-only hidden>
-              <div class="deploy-card" id="deployCard">
-                <div class="deploy-card-info">
-                  <h3>Despliegue de versión</h3>
-                  <p class="deploy-version" id="deployVersion">Cargando versión actual…</p>
-                  <p class="deploy-status" id="deployStatus" hidden></p>
-                </div>
-                <button class="btn btn--primary" id="deployBtn">🚀 Desplegar última versión</button>
-              </div>
-
               <div class="settings-head">
                 <div>
                   <h2>Tokens de máquina</h2>
                   <p>Credenciales para acceso por API desde tus dispositivos. Si pierdes uno, revócalo aquí. El kill switch invalida todos en un click.</p>
-                  <p class="mt-help">
-                    <a href="/docs/IA-CONNECT.md" download="IA-CONNECT.md" class="mt-help-link">📄 Descargar manual para conectar una IA</a>
-                    <span class="mt-help-hint">— ábrelo, sigue los 4 pasos y cualquier IA (Claude, ChatGPT, Gemini) podrá operar tu CRM</span>
-                  </p>
                 </div>
                 <div class="mt-actions">
                   <button class="btn btn--primary" id="mtNewBtn">+ Generar token</button>
@@ -2322,43 +2371,6 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <button class="btn btn--primary" id="accSavePassword">Cambiar contraseña</button>
             </div>
           </div>
-        </div>
-      </section>
-
-      <!-- ═════════ VISTA: SUSCRIPCIÓN ═════════ -->
-      <section class="view view-billing" data-view="suscripcion" hidden>
-        <div class="billing-wrap">
-          <header class="billing-header">
-            <h2>Suscripción</h2>
-            <p class="billing-sub">Elige el plan que mejor se ajuste a tu negocio. 14 días de prueba gratis en todos los planes.</p>
-          </header>
-
-          <!-- Estado actual -->
-          <div class="billing-status" id="billingStatus" hidden></div>
-
-          <!-- Toggle mensual/anual -->
-          <div class="billing-toggle">
-            <button class="bt-opt is-active" data-interval="month">Mensual</button>
-            <button class="bt-opt" data-interval="year">Anual <span class="bt-save">−20%</span></button>
-          </div>
-
-          <!-- Cards de planes -->
-          <div class="billing-plans" id="billingPlans">
-            <div class="billing-loading">Cargando planes…</div>
-          </div>
-
-          <!-- Botón Manage Subscription (solo si ya hay sub activa) -->
-          <div class="billing-manage" id="billingManage" hidden>
-            <button class="btn btn--ghost" id="billingPortalBtn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-              Administrar suscripción (cambiar tarjeta, ver facturas, cancelar)
-            </button>
-          </div>
-
-          <p class="billing-footnote">
-            Pagos procesados por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.
-            Lee <a href="/terms" target="_blank">Términos</a> y <a href="/privacy" target="_blank">Privacidad</a>.
-          </p>
         </div>
       </section>
 

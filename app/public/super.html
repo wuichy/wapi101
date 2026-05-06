@@ -5,256 +5,582 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Wapi101 — Super Admin</title>
   <style>
+    /* ════════════════════════════════════════════════════════════════════════
+       Super Admin · estilo inspirado en WP-Admin
+       Sidebar oscura + topbar gris + content area blanco con tabla densa.
+       ════════════════════════════════════════════════════════════════════════ */
     * { box-sizing: border-box; }
-    /* El atributo HTML hidden debe ganar SIEMPRE sobre el display: flex/grid
-       de las clases. Sin esto, .modal-bg con display:flex se mostraba aunque
-       tuviera hidden=true, y por z-index 100 tapaba el resto. */
     [hidden] { display: none !important; }
+    :root {
+      --sa-bg:        #f0f0f1;
+      --sa-content:   #fff;
+      --sa-text:      #1d2327;
+      --sa-muted:     #646970;
+      --sa-border:    #c3c4c7;
+      --sa-border-l:  #e0e0e0;
+      --sa-sidebar:   #1d2327;
+      --sa-sidebar-2: #2c3338;
+      --sa-sidebar-h: #2271b1;
+      --sa-sidebar-t: #c3c4c7;
+      --sa-sidebar-tw:#fff;
+      --sa-accent:    #2271b1;
+      --sa-accent-h:  #135e96;
+      --sa-danger:    #b32d2e;
+      --sa-warn:      #dba617;
+      --sa-ok:        #00a32a;
+      --sa-shadow:    0 1px 1px rgba(0,0,0,.04);
+    }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      margin: 0; padding: 0;
-      background: #0f1923; color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0; background: var(--sa-bg); color: var(--sa-text);
       min-height: 100vh;
+      font-size: 13px; line-height: 1.4;
     }
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
-    header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 24px; background: #1a2535;
-      border-bottom: 2px solid #ef4444;
-    }
-    header h1 {
-      margin: 0; font-size: 18px; font-weight: 600;
-      display: flex; align-items: center; gap: 10px;
-    }
-    header h1::before {
-      content: '⚡'; color: #ef4444;
-    }
-    header .me { font-size: 13px; color: #94a3b8; display: flex; align-items: center; gap: 12px; }
-    header button {
-      background: transparent; border: 1px solid #475569; color: #cbd5e1;
-      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
-    }
-    header button:hover { background: #334155; }
+    a { color: var(--sa-accent); text-decoration: none; }
+    a:hover { color: var(--sa-accent-h); text-decoration: underline; }
 
-    /* Login screen */
+    /* ───────── Login ───────── */
     .login-wrap {
       display: flex; align-items: center; justify-content: center;
-      min-height: 100vh; padding: 24px;
+      min-height: 100vh; padding: 24px; background: #f6f7f7;
     }
     .login-box {
-      background: #1a2535; padding: 32px; border-radius: 12px;
+      background: #fff; padding: 28px;
+      border: 1px solid var(--sa-border-l);
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      border-radius: 4px;
       width: 100%; max-width: 360px;
-      border: 1px solid #334155;
     }
-    .login-box h2 {
-      margin: 0 0 6px; font-size: 22px;
-      display: flex; align-items: center; gap: 10px;
+    .login-brand {
+      text-align: center; margin-bottom: 18px;
+      font-size: 20px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
     }
-    .login-box h2::before { content: '⚡'; color: #ef4444; }
-    .login-box p { color: #94a3b8; font-size: 13px; margin: 0 0 24px; }
+    .login-brand-mark {
+      width: 32px; height: 32px; background: var(--sa-sidebar);
+      color: #fff; border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 700;
+    }
+    .login-box p {
+      color: var(--sa-muted); font-size: 13px; margin: 0 0 20px;
+      text-align: center;
+    }
     .login-box label {
-      display: block; font-size: 12px; color: #94a3b8;
-      margin-bottom: 4px; margin-top: 12px;
+      display: block; font-size: 13px; color: var(--sa-text);
+      margin-bottom: 4px; margin-top: 14px; font-weight: 500;
     }
     .login-box input {
-      width: 100%; padding: 10px 12px;
-      background: #0f1923; border: 1px solid #334155;
-      border-radius: 6px; color: #e2e8f0; font-size: 14px;
+      width: 100%; padding: 8px 10px; font-size: 14px;
+      border: 1px solid var(--sa-border); border-radius: 3px;
+      background: #fff; color: var(--sa-text);
     }
-    .login-box input:focus { outline: 2px solid #ef4444; border-color: transparent; }
-    .login-box button {
-      width: 100%; margin-top: 20px;
-      padding: 11px; background: #ef4444; color: #fff; border: none;
-      border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+    .login-box input:focus { outline: none; border-color: var(--sa-accent); box-shadow: 0 0 0 1px var(--sa-accent); }
+    .login-box button[type="submit"] {
+      width: 100%; margin-top: 22px;
+      padding: 9px; background: var(--sa-accent); color: #fff;
+      border: 1px solid var(--sa-accent); border-radius: 3px;
+      cursor: pointer; font-size: 14px; font-weight: 500;
     }
-    .login-box button:hover { background: #dc2626; }
-    .login-box .err {
-      color: #fca5a5; font-size: 13px; margin-top: 12px;
-      background: rgba(239,68,68,.1); padding: 8px 10px; border-radius: 6px;
-      display: none;
+    .login-box button[type="submit"]:hover { background: var(--sa-accent-h); border-color: var(--sa-accent-h); }
+    .err {
+      color: var(--sa-danger); font-size: 13px; margin-top: 12px;
+      background: #fcf0f1; border-left: 4px solid var(--sa-danger);
+      padding: 8px 12px; display: none;
     }
 
-    /* Tenant table */
-    .toolbar {
+    /* ───────── Layout WP-Admin ───────── */
+    .sa-shell {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      grid-template-rows: 46px 1fr;
+      grid-template-areas:
+        "sidebar topbar"
+        "sidebar main";
+      min-height: 100vh;
+    }
+    .sa-sidebar {
+      grid-area: sidebar;
+      background: var(--sa-sidebar);
+      color: var(--sa-sidebar-t);
+      display: flex; flex-direction: column;
+    }
+    .sa-brand {
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--sa-sidebar-2);
+      color: #fff; font-weight: 600; font-size: 15px;
+    }
+    .sa-brand-mark {
+      width: 28px; height: 28px;
+      background: var(--sa-accent); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 4px; font-weight: 700;
+    }
+    .sa-nav { padding: 6px 0; flex: 1; }
+    .sa-nav-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px;
+      color: var(--sa-sidebar-tw);
+      cursor: pointer; user-select: none;
+      border-left: 3px solid transparent;
+      font-size: 13px;
+      transition: background .12s, border-color .12s;
+    }
+    .sa-nav-item:hover {
+      background: var(--sa-sidebar-2);
+      color: #fff;
+    }
+    .sa-nav-item.is-active {
+      background: var(--sa-sidebar-2);
+      color: #fff;
+      border-left-color: var(--sa-accent);
+    }
+    .sa-nav-item svg {
+      width: 16px; height: 16px;
+      stroke: currentColor; fill: none; stroke-width: 2;
+    }
+    .sa-nav-section {
+      padding: 6px 16px; margin-top: 6px;
+      font-size: 11px; text-transform: uppercase;
+      color: #8c8f94; letter-spacing: .04em;
+    }
+    .sa-sidebar-foot {
+      padding: 10px 16px;
+      font-size: 11px; color: #8c8f94;
+      border-top: 1px solid var(--sa-sidebar-2);
+    }
+
+    /* ───────── Topbar ───────── */
+    .sa-topbar {
+      grid-area: topbar;
+      background: #fff;
+      border-bottom: 1px solid var(--sa-border-l);
       display: flex; align-items: center; justify-content: space-between;
-      margin: 24px 0 16px;
+      padding: 0 20px;
     }
-    .toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
-    .btn-primary {
-      background: #ef4444; color: #fff; border: none;
-      padding: 9px 16px; border-radius: 6px; cursor: pointer;
-      font-size: 13px; font-weight: 500;
+    .sa-topbar-title {
+      font-size: 14px; font-weight: 500; color: var(--sa-text);
     }
-    .btn-primary:hover { background: #dc2626; }
-    .btn-ghost {
-      background: transparent; border: 1px solid #475569; color: #cbd5e1;
-      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    .sa-topbar-user {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13px; color: var(--sa-muted);
     }
-    .btn-ghost:hover { background: #334155; }
-    .btn-danger {
-      background: #7f1d1d; color: #fecaca; border: 1px solid #991b1b;
-      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    .sa-topbar-user strong { color: var(--sa-text); font-weight: 500; }
+    .sa-topbar-user button {
+      background: transparent; border: 1px solid var(--sa-border);
+      color: var(--sa-text); font-size: 12px;
+      padding: 5px 10px; border-radius: 3px; cursor: pointer;
     }
-    .btn-danger:hover { background: #991b1b; }
+    .sa-topbar-user button:hover { background: #f6f7f7; }
 
-    .tenant-grid {
+    /* ───────── Main content ───────── */
+    .sa-main {
+      grid-area: main;
+      padding: 24px 28px;
+      overflow-y: auto;
+      background: var(--sa-bg);
+    }
+    .sa-page-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .sa-page-title {
+      font-size: 22px; font-weight: 400; margin: 0;
+      color: var(--sa-text);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .sa-page-add {
+      background: #fff; color: var(--sa-accent);
+      border: 1px solid var(--sa-accent); border-radius: 3px;
+      padding: 4px 12px; font-size: 13px; cursor: pointer;
+      transition: background .12s;
+    }
+    .sa-page-add:hover { background: var(--sa-accent); color: #fff; }
+    .sa-page-sub {
+      color: var(--sa-muted); margin: -10px 0 18px;
+    }
+
+    /* ───────── Dashboard cards (welcome) ───────── */
+    .sa-welcome {
+      background: #fff;
+      border: 1px solid var(--sa-border-l);
+      border-radius: 4px;
+      padding: 20px 22px; margin-bottom: 20px;
+      box-shadow: var(--sa-shadow);
+    }
+    .sa-welcome h2 {
+      margin: 0 0 6px; font-size: 18px; font-weight: 400;
+    }
+    .sa-welcome p {
+      color: var(--sa-muted); margin: 0;
+    }
+    .sa-stats-grid {
       display: grid; gap: 16px;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      margin-bottom: 22px;
     }
-    .tenant-card {
-      background: #1a2535; border: 1px solid #334155;
-      border-radius: 10px; padding: 18px;
+    .sa-stat-card {
+      background: #fff;
+      border: 1px solid var(--sa-border-l);
+      border-radius: 4px;
+      padding: 16px 18px;
+      box-shadow: var(--sa-shadow);
     }
-    .tenant-card h3 {
-      margin: 0 0 4px; font-size: 16px; font-weight: 600;
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    .sa-stat-label {
+      font-size: 12px; color: var(--sa-muted);
+      text-transform: uppercase; letter-spacing: .04em;
+      font-weight: 500;
     }
-    .tenant-slug { font-size: 12px; color: #94a3b8; font-family: ui-monospace, monospace; }
-    .status-badge {
-      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
-      text-transform: uppercase; letter-spacing: .5px;
+    .sa-stat-value {
+      font-size: 28px; font-weight: 300; color: var(--sa-text);
+      margin-top: 4px;
     }
-    .status-active    { background: rgba(34,197,94,.15);   color: #86efac; }
-    .status-trial     { background: rgba(59,130,246,.15);  color: #93c5fd; }
-    .status-suspended { background: rgba(245,158,11,.15);  color: #fcd34d; }
-    .status-cancelled { background: rgba(239,68,68,.15);   color: #fca5a5; }
-
-    .stats {
-      margin: 14px 0 12px; padding: 12px;
-      background: #0f1923; border-radius: 6px;
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
-      font-size: 12px;
-    }
-    .stat-label { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
-    .stat-value { color: #e2e8f0; font-size: 16px; font-weight: 600; }
-
-    .actions {
-      display: flex; flex-wrap: wrap; gap: 6px;
+    .sa-stat-foot {
+      font-size: 11px; color: var(--sa-muted); margin-top: 4px;
     }
 
-    /* Modal */
-    .modal-bg {
-      position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    /* ───────── Tabla densa estilo WP ───────── */
+    .sa-card {
+      background: #fff;
+      border: 1px solid var(--sa-border-l);
+      border-radius: 4px;
+      box-shadow: var(--sa-shadow);
+      overflow: hidden;
+    }
+    .sa-table {
+      width: 100%; border-collapse: collapse;
+      background: #fff;
+    }
+    .sa-table thead th {
+      background: #f6f7f7;
+      border-bottom: 1px solid var(--sa-border);
+      font-weight: 500;
+      text-align: left; padding: 8px 10px;
+      font-size: 12px; color: var(--sa-text);
+    }
+    .sa-table tbody td {
+      padding: 10px 10px;
+      border-bottom: 1px solid var(--sa-border-l);
+      vertical-align: middle;
+    }
+    .sa-table tbody tr:hover { background: #f6f7f7; }
+    .sa-table tbody tr:hover .sa-row-actions { visibility: visible; }
+    .sa-tenant-name {
+      font-weight: 600; color: var(--sa-accent);
+      cursor: default;
+    }
+    .sa-tenant-slug {
+      display: block; font-size: 11px; color: var(--sa-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .sa-row-actions {
+      visibility: hidden;
+      display: flex; gap: 0; flex-wrap: wrap;
+      margin-top: 4px; font-size: 12px;
+    }
+    .sa-row-actions a, .sa-row-actions button {
+      color: var(--sa-accent);
+      background: transparent; border: none;
+      font-size: 12px; cursor: pointer;
+      padding: 0 4px 0 0;
+      text-decoration: none;
+      font-family: inherit;
+    }
+    .sa-row-actions a + a::before,
+    .sa-row-actions button + button::before,
+    .sa-row-actions a + button::before,
+    .sa-row-actions button + a::before {
+      content: '|';
+      color: var(--sa-border);
+      margin-right: 4px;
+    }
+    .sa-row-actions a:hover, .sa-row-actions button:hover {
+      color: var(--sa-accent-h); text-decoration: underline;
+    }
+    .sa-row-actions .is-danger { color: var(--sa-danger); }
+    .sa-row-actions .is-danger:hover { color: #771d1d; }
+
+    .sa-status {
+      display: inline-block;
+      font-size: 11px; font-weight: 500;
+      padding: 2px 8px; border-radius: 3px;
+      text-transform: capitalize;
+    }
+    .sa-status-active    { background: #edfaef; color: #00702c; border: 1px solid #b8e6c1; }
+    .sa-status-trial     { background: #f0f6fc; color: #1d4d8c; border: 1px solid #b6d3ec; }
+    .sa-status-suspended { background: #fcf9e8; color: #8a6d00; border: 1px solid #ecd97a; }
+    .sa-status-cancelled { background: #fcf0f1; color: #6b1d1d; border: 1px solid #ecbcbc; }
+
+    .sa-mini-stats {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      font-size: 11px; color: var(--sa-muted);
+    }
+    .sa-mini-stats span strong { color: var(--sa-text); font-weight: 600; }
+
+    /* ───────── Modal ───────── */
+    .sa-modal-bg {
+      position: fixed; inset: 0; background: rgba(0,0,0,.5);
       display: flex; align-items: center; justify-content: center;
       z-index: 100; padding: 20px;
     }
-    .modal {
-      background: #1a2535; border: 1px solid #334155;
-      border-radius: 12px; padding: 24px;
+    .sa-modal {
+      background: #fff; border-radius: 4px;
       width: 100%; max-width: 480px;
       max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
     }
-    .modal h3 { margin: 0 0 16px; font-size: 18px; }
-    .modal label {
-      display: block; font-size: 12px; color: #94a3b8;
-      margin-bottom: 4px; margin-top: 12px;
+    .sa-modal-head {
+      padding: 14px 18px; border-bottom: 1px solid var(--sa-border-l);
+      font-size: 15px; font-weight: 500;
     }
-    .modal input, .modal select {
-      width: 100%; padding: 8px 10px; font-size: 13px;
-      background: #0f1923; border: 1px solid #334155;
-      border-radius: 6px; color: #e2e8f0;
+    .sa-modal-body { padding: 18px; }
+    .sa-modal-body label {
+      display: block; font-size: 13px; color: var(--sa-text);
+      margin-bottom: 4px; margin-top: 12px; font-weight: 500;
     }
-    .modal input:focus, .modal select:focus { outline: 2px solid #ef4444; border-color: transparent; }
-    .modal-actions {
+    .sa-modal-body input,
+    .sa-modal-body select {
+      width: 100%; padding: 7px 9px; font-size: 13px;
+      background: #fff; border: 1px solid var(--sa-border);
+      border-radius: 3px; color: var(--sa-text);
+    }
+    .sa-modal-body input:focus,
+    .sa-modal-body select:focus {
+      outline: none; border-color: var(--sa-accent);
+      box-shadow: 0 0 0 1px var(--sa-accent);
+    }
+    .sa-modal-foot {
       display: flex; justify-content: flex-end; gap: 8px;
-      margin-top: 20px; padding-top: 16px; border-top: 1px solid #334155;
+      padding: 12px 18px;
+      border-top: 1px solid var(--sa-border-l);
+      background: #f6f7f7;
+    }
+    .sa-modal-section {
+      margin-top: 16px; padding-top: 16px;
+      border-top: 1px solid var(--sa-border-l);
+      font-size: 12px; color: var(--sa-muted);
     }
     .modal-err {
-      color: #fca5a5; font-size: 13px; margin-top: 12px;
-      background: rgba(239,68,68,.1); padding: 8px 10px; border-radius: 6px;
+      color: var(--sa-danger); font-size: 13px; margin-top: 12px;
+      background: #fcf0f1; border-left: 4px solid var(--sa-danger);
+      padding: 8px 12px;
     }
-
     .creds-box {
-      background: rgba(34,197,94,.08); border: 1px dashed #22c55e;
-      padding: 14px; border-radius: 8px; margin-top: 12px;
-      font-family: ui-monospace, monospace; font-size: 13px;
+      background: #f0f9f1; border-left: 4px solid var(--sa-ok);
+      padding: 12px 14px; margin-top: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+      line-height: 1.6;
     }
-    .creds-box strong { color: #86efac; display: block; margin-bottom: 8px; font-size: 12px; }
+    .creds-box strong {
+      color: #00702c; display: block; margin-bottom: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+    }
     .creds-box .copy-btn {
-      float: right; background: #22c55e; color: #0f1923;
-      border: none; padding: 2px 8px; border-radius: 4px;
+      float: right; background: var(--sa-ok); color: #fff;
+      border: none; padding: 3px 9px; border-radius: 3px;
       font-size: 11px; cursor: pointer; font-family: inherit;
     }
 
-    .empty-state { text-align: center; padding: 60px 20px; color: #64748b; }
+    /* ───────── Botones genéricos ───────── */
+    .btn-primary {
+      background: var(--sa-accent); color: #fff;
+      border: 1px solid var(--sa-accent); border-radius: 3px;
+      padding: 6px 14px; font-size: 13px; cursor: pointer;
+    }
+    .btn-primary:hover { background: var(--sa-accent-h); border-color: var(--sa-accent-h); }
+    .btn-ghost {
+      background: #fff; color: var(--sa-text);
+      border: 1px solid var(--sa-border); border-radius: 3px;
+      padding: 6px 12px; font-size: 13px; cursor: pointer;
+    }
+    .btn-ghost:hover { background: #f6f7f7; }
+
+    .empty-state {
+      text-align: center; padding: 50px 20px; color: var(--sa-muted);
+      background: #fff;
+    }
+
+    /* ───────── Notice (mensajes WP-style) ───────── */
+    .sa-notice {
+      background: #fff; border-left: 4px solid var(--sa-accent);
+      padding: 10px 14px; margin-bottom: 16px;
+      box-shadow: var(--sa-shadow);
+      font-size: 13px;
+    }
+    .sa-notice-warn { border-left-color: var(--sa-warn); }
+    .sa-notice-ok   { border-left-color: var(--sa-ok); }
+
+    @media (max-width: 768px) {
+      .sa-shell { grid-template-columns: 56px 1fr; }
+      .sa-brand { padding: 14px 12px; justify-content: center; }
+      .sa-brand-text { display: none; }
+      .sa-nav-item { padding: 10px 14px; justify-content: center; }
+      .sa-nav-item span { display: none; }
+      .sa-nav-section { display: none; }
+      .sa-main { padding: 16px; }
+    }
   </style>
 </head>
 <body>
 
-<!-- LOGIN VIEW -->
+<!-- ────────── LOGIN ────────── -->
 <div id="loginView" class="login-wrap" hidden>
   <div class="login-box">
-    <h2>Super Admin</h2>
-    <p>Solo Lucho. Aquí se administran los tenants del CRM.</p>
+    <div class="login-brand">
+      <span class="login-brand-mark">W</span>
+      <span>Super Admin</span>
+    </div>
+    <p>Acceso restringido. Solo administradores raíz de Wapi101.</p>
     <form id="loginForm">
       <label>Usuario</label>
       <input id="loginUser" type="text" autocomplete="username" autofocus required>
       <label>Contraseña</label>
       <input id="loginPass" type="password" autocomplete="current-password" required>
-      <button type="submit">Entrar</button>
+      <button type="submit">Iniciar sesión</button>
       <div id="loginErr" class="err"></div>
     </form>
   </div>
 </div>
 
-<!-- DASHBOARD VIEW -->
-<div id="dashboard" hidden>
-  <header>
-    <h1>Wapi101 · Super Admin</h1>
-    <div class="me">
-      <span id="meName"></span>
+<!-- ────────── DASHBOARD (panel WP-Admin) ────────── -->
+<div id="dashboard" class="sa-shell" hidden>
+  <!-- Sidebar -->
+  <aside class="sa-sidebar">
+    <div class="sa-brand">
+      <span class="sa-brand-mark">W</span>
+      <span class="sa-brand-text">Wapi101 Super</span>
+    </div>
+    <nav class="sa-nav" id="saNav">
+      <div class="sa-nav-section">Panel</div>
+      <a class="sa-nav-item is-active" data-section="dashboard">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+        <span>Dashboard</span>
+      </a>
+      <a class="sa-nav-item" data-section="tenants">
+        <svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M3 10h18"/><path d="M5 6l7-3 7 3"/><path d="M4 10v11"/><path d="M20 10v11"/><path d="M8 14v3"/><path d="M12 14v3"/><path d="M16 14v3"/></svg>
+        <span>Tenants</span>
+      </a>
+      <div class="sa-nav-section">Sistema</div>
+      <a class="sa-nav-item" data-section="health">
+        <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span>Salud</span>
+      </a>
+    </nav>
+    <div class="sa-sidebar-foot">v1 · Wapi101</div>
+  </aside>
+
+  <!-- Topbar -->
+  <header class="sa-topbar">
+    <div class="sa-topbar-title" id="saTopbarTitle">Dashboard</div>
+    <div class="sa-topbar-user">
+      <span>Sesión: <strong id="meName">—</strong></span>
       <button id="logoutBtn">Salir</button>
     </div>
   </header>
 
-  <div class="container">
-    <div class="toolbar">
-      <h2>Tenants</h2>
-      <button class="btn-primary" id="newTenantBtn">+ Crear tenant</button>
-    </div>
-    <div id="tenantList" class="tenant-grid"></div>
-  </div>
+  <!-- Main -->
+  <main class="sa-main">
+    <!-- Section: Dashboard -->
+    <section data-section-pane="dashboard">
+      <div class="sa-page-head">
+        <h1 class="sa-page-title">Bienvenido</h1>
+      </div>
+      <div class="sa-welcome">
+        <h2>Panel raíz de Wapi101</h2>
+        <p>Administra los tenants del CRM, monitorea uso y entra como cualquier cliente con un click. Equivalente al <em>wp-admin</em> del SaaS.</p>
+      </div>
+      <div class="sa-stats-grid" id="saStats">
+        <div class="sa-stat-card"><div class="sa-stat-label">Tenants</div><div class="sa-stat-value" id="kTenants">—</div><div class="sa-stat-foot">activos + trial</div></div>
+        <div class="sa-stat-card"><div class="sa-stat-label">Contactos</div><div class="sa-stat-value" id="kContacts">—</div><div class="sa-stat-foot">total en plataforma</div></div>
+        <div class="sa-stat-card"><div class="sa-stat-label">Conversaciones</div><div class="sa-stat-value" id="kConvos">—</div><div class="sa-stat-foot">total en plataforma</div></div>
+        <div class="sa-stat-card"><div class="sa-stat-label">Mensajes</div><div class="sa-stat-value" id="kMsgs">—</div><div class="sa-stat-foot">total en plataforma</div></div>
+      </div>
+    </section>
+
+    <!-- Section: Tenants -->
+    <section data-section-pane="tenants" hidden>
+      <div class="sa-page-head">
+        <h1 class="sa-page-title">
+          Tenants
+          <button class="sa-page-add" id="newTenantBtn">Añadir nuevo</button>
+        </h1>
+      </div>
+      <p class="sa-page-sub">Lista de organizaciones con acceso al CRM. Usa <em>"Entrar como"</em> para iniciar sesión como administrador del tenant durante 1&nbsp;hora.</p>
+      <div class="sa-card">
+        <table class="sa-table">
+          <thead>
+            <tr>
+              <th style="width:30%">Nombre</th>
+              <th style="width:12%">Plan</th>
+              <th style="width:12%">Estado</th>
+              <th style="width:30%">Uso</th>
+              <th style="width:16%">Creado</th>
+            </tr>
+          </thead>
+          <tbody id="tenantTbody"></tbody>
+        </table>
+        <div class="empty-state" id="tenantEmpty" hidden>No hay tenants. Crea el primero con el botón <strong>Añadir nuevo</strong>.</div>
+      </div>
+    </section>
+
+    <!-- Section: Salud -->
+    <section data-section-pane="health" hidden>
+      <div class="sa-page-head">
+        <h1 class="sa-page-title">Salud del sistema</h1>
+      </div>
+      <div class="sa-notice">
+        Esta vista es informativa. Para diagnóstico avanzado conéctate por SSH al droplet.
+      </div>
+      <div class="sa-card" style="padding: 18px 22px">
+        <p style="margin:0 0 6px">Endpoint <code>/healthz</code>: <strong id="healthOk">—</strong></p>
+        <p style="margin:0 0 6px">Servidor: <code>wapi101.com</code></p>
+        <p style="margin:0;color:var(--sa-muted);font-size:12px">El estado se reconsulta cada 30 segundos.</p>
+      </div>
+    </section>
+  </main>
 </div>
 
-<!-- CREATE TENANT MODAL -->
-<div id="createModal" class="modal-bg" hidden>
-  <div class="modal">
-    <h3>Crear nuevo tenant</h3>
+<!-- ────────── MODAL: Crear tenant ────────── -->
+<div id="createModal" class="sa-modal-bg" hidden>
+  <div class="sa-modal">
+    <div class="sa-modal-head">Crear nuevo tenant</div>
     <form id="createForm">
-      <label>Slug (subdominio futuro)</label>
-      <input id="cSlug" type="text" placeholder="ej. acme" pattern="[a-z0-9][a-z0-9-]{1,40}" required>
+      <div class="sa-modal-body">
+        <label>Slug (subdominio futuro)</label>
+        <input id="cSlug" type="text" placeholder="ej. acme" pattern="[a-z0-9][a-z0-9-]{1,40}" required>
 
-      <label>Nombre del tenant (mostrar)</label>
-      <input id="cDisplayName" type="text" placeholder="ej. Acme Inc." required>
+        <label>Nombre del tenant</label>
+        <input id="cDisplayName" type="text" placeholder="ej. Acme Inc." required>
 
-      <label>Plan</label>
-      <select id="cPlan">
-        <option value="free">Free / Trial</option>
-        <option value="starter">Starter</option>
-        <option value="pro">Pro</option>
-      </select>
+        <label>Plan</label>
+        <select id="cPlan">
+          <option value="free">Free / Trial</option>
+          <option value="starter">Starter</option>
+          <option value="pro">Pro</option>
+        </select>
 
-      <hr style="border: none; border-top: 1px solid #334155; margin: 20px 0 0">
-      <p style="font-size:11px;color:#64748b;margin:8px 0 4px">Admin inicial del tenant:</p>
+        <div class="sa-modal-section">Administrador inicial del tenant</div>
 
-      <label>Nombre del admin</label>
-      <input id="cAdminName" type="text" placeholder="ej. Pepe Pérez">
+        <label>Nombre</label>
+        <input id="cAdminName" type="text" placeholder="ej. Pepe Pérez">
 
-      <label>Username del admin</label>
-      <input id="cAdminUser" type="text" placeholder="ej. pepe" required>
+        <label>Username</label>
+        <input id="cAdminUser" type="text" placeholder="ej. pepe" required>
 
-      <label>Email (opcional)</label>
-      <input id="cAdminEmail" type="email" placeholder="pepe@acme.com">
+        <label>Email (opcional)</label>
+        <input id="cAdminEmail" type="email" placeholder="pepe@acme.com">
 
-      <label>Password (déjalo vacío para auto-generar)</label>
-      <input id="cAdminPass" type="text" placeholder="(auto)">
+        <label>Contraseña <span style="color:var(--sa-muted);font-weight:400">(vacío = autogenerar)</span></label>
+        <input id="cAdminPass" type="text" placeholder="(auto)">
 
-      <div id="createErr" class="modal-err" style="display:none"></div>
-      <div id="createCreds" class="creds-box" style="display:none"></div>
-
-      <div class="modal-actions">
+        <div id="createErr" class="modal-err" style="display:none"></div>
+        <div id="createCreds" class="creds-box" style="display:none"></div>
+      </div>
+      <div class="sa-modal-foot">
         <button type="button" class="btn-ghost" id="createCancel">Cancelar</button>
-        <button type="submit" class="btn-primary">Crear</button>
+        <button type="submit" class="btn-primary">Crear tenant</button>
       </div>
     </form>
   </div>
@@ -301,7 +627,10 @@ function showDashboard(sa) {
   $('loginView').hidden = true;
   $('dashboard').hidden = false;
   $('meName').textContent = sa.name || sa.username;
+  switchSection('dashboard');
   loadTenants();
+  pingHealth();
+  setInterval(pingHealth, 30000);
 }
 
 // ── Login form ──
@@ -327,13 +656,46 @@ $('logoutBtn').addEventListener('click', async () => {
   showLogin();
 });
 
+// ── Navegación entre secciones ──
+const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', health: 'Salud del sistema' };
+$('saNav').addEventListener('click', (e) => {
+  const item = e.target.closest('[data-section]');
+  if (!item) return;
+  switchSection(item.dataset.section);
+});
+
+function switchSection(name) {
+  document.querySelectorAll('[data-section]').forEach(el => {
+    el.classList.toggle('is-active', el.dataset.section === name);
+  });
+  document.querySelectorAll('[data-section-pane]').forEach(el => {
+    el.hidden = el.dataset.sectionPane !== name;
+  });
+  $('saTopbarTitle').textContent = SECTION_TITLES[name] || name;
+}
+
+// ── Ping de salud ──
+async function pingHealth() {
+  const el = $('healthOk');
+  if (!el) return;
+  try {
+    const r = await fetch('/healthz', { cache: 'no-store' });
+    el.textContent = r.ok ? 'OK' : `Error ${r.status}`;
+    el.style.color = r.ok ? 'var(--sa-ok)' : 'var(--sa-danger)';
+  } catch {
+    el.textContent = 'Sin respuesta';
+    el.style.color = 'var(--sa-danger)';
+  }
+}
+
 // ── Tenant list ──
 async function loadTenants() {
   try {
     const { items } = await api('GET', '/tenants');
     renderTenants(items);
+    updateKpis(items);
   } catch (err) {
-    $('tenantList').innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+    $('tenantTbody').innerHTML = `<tr><td colspan="5" class="empty-state">Error: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -348,60 +710,79 @@ function fmtDate(ts) {
   return new Date(ts * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function renderTenants(items) {
-  const list = $('tenantList');
-  if (!items.length) {
-    list.innerHTML = '<div class="empty-state">No hay tenants. Crea el primero.</div>';
-    return;
-  }
-  list.innerHTML = items.map(t => `
-    <div class="tenant-card" data-id="${t.id}">
-      <h3>
-        <span>${escapeHtml(t.displayName)}</span>
-        <span class="status-badge status-${t.status}">${t.status}</span>
-      </h3>
-      <div class="tenant-slug">${escapeHtml(t.slug)} · ${escapeHtml(t.plan)}</div>
-      <div class="stats">
-        <div><div class="stat-label">Contactos</div><div class="stat-value">${fmtCount(t.stats.contacts)}</div></div>
-        <div><div class="stat-label">Convos</div><div class="stat-value">${fmtCount(t.stats.conversations)}</div></div>
-        <div><div class="stat-label">Mensajes</div><div class="stat-value">${fmtCount(t.stats.messages)}</div></div>
-        <div><div class="stat-label">Bots</div><div class="stat-value">${fmtCount(t.stats.bots)}</div></div>
-        <div><div class="stat-label">Asesores</div><div class="stat-value">${fmtCount(t.stats.advisors)}</div></div>
-        <div><div class="stat-label">Integraciones</div><div class="stat-value">${fmtCount(t.stats.integrations)}</div></div>
-      </div>
-      <div style="font-size:11px;color:#64748b;margin-bottom:10px">Último msg: ${fmtDate(t.stats.lastMessageAt)} · Creado: ${fmtDate(t.createdAt)}</div>
-      <div class="actions">
-        <button class="btn-ghost" data-action="impersonate" data-id="${t.id}">↪ Entrar como</button>
-        ${t.status === 'active' || t.status === 'trial'
-          ? `<button class="btn-ghost" data-action="suspend" data-id="${t.id}">⏸ Suspender</button>`
-          : t.status === 'suspended'
-          ? `<button class="btn-ghost" data-action="activate" data-id="${t.id}">▶ Reactivar</button>`
-          : ''}
-        ${t.status !== 'cancelled'
-          ? `<button class="btn-danger" data-action="cancel" data-id="${t.id}">✕ Cancelar</button>`
-          : ''}
-      </div>
-    </div>
-  `).join('');
-}
-
 function escapeHtml(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function updateKpis(items) {
+  const totalTenants = items.filter(t => t.status === 'active' || t.status === 'trial').length;
+  let contacts = 0, convos = 0, msgs = 0;
+  for (const t of items) {
+    contacts += Number(t.stats?.contacts || 0);
+    convos   += Number(t.stats?.conversations || 0);
+    msgs     += Number(t.stats?.messages || 0);
+  }
+  $('kTenants').textContent  = fmtCount(totalTenants);
+  $('kContacts').textContent = fmtCount(contacts);
+  $('kConvos').textContent   = fmtCount(convos);
+  $('kMsgs').textContent     = fmtCount(msgs);
+}
+
+function renderTenants(items) {
+  const tbody = $('tenantTbody');
+  const empty = $('tenantEmpty');
+  if (!items.length) {
+    tbody.innerHTML = '';
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  tbody.innerHTML = items.map(t => {
+    const actions = [
+      `<button data-action="impersonate" data-id="${t.id}">Entrar como</button>`,
+    ];
+    if (t.status === 'active' || t.status === 'trial') {
+      actions.push(`<button data-action="suspend" data-id="${t.id}">Suspender</button>`);
+    } else if (t.status === 'suspended') {
+      actions.push(`<button data-action="activate" data-id="${t.id}">Reactivar</button>`);
+    }
+    if (t.status !== 'cancelled') {
+      actions.push(`<button class="is-danger" data-action="cancel" data-id="${t.id}">Cancelar</button>`);
+    }
+    return `
+      <tr data-id="${t.id}">
+        <td>
+          <div class="sa-tenant-name">${escapeHtml(t.displayName)}</div>
+          <span class="sa-tenant-slug">${escapeHtml(t.slug)}</span>
+          <div class="sa-row-actions">${actions.join('')}</div>
+        </td>
+        <td>${escapeHtml(t.plan)}</td>
+        <td><span class="sa-status sa-status-${t.status}">${t.status}</span></td>
+        <td>
+          <div class="sa-mini-stats">
+            <span><strong>${fmtCount(t.stats.contacts)}</strong> contactos</span>
+            <span><strong>${fmtCount(t.stats.conversations)}</strong> chats</span>
+            <span><strong>${fmtCount(t.stats.messages)}</strong> mensajes</span>
+            <span><strong>${fmtCount(t.stats.bots)}</strong> bots</span>
+            <span><strong>${fmtCount(t.stats.advisors)}</strong> asesores</span>
+          </div>
+        </td>
+        <td>${fmtDate(t.createdAt)}</td>
+      </tr>`;
+  }).join('');
+}
+
 // Action handlers (delegated)
-$('tenantList').addEventListener('click', async (e) => {
+$('tenantTbody').addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
   const id = Number(btn.dataset.id);
   const action = btn.dataset.action;
 
   if (action === 'impersonate') {
-    if (!confirm('Vas a entrar como ese tenant. Cerrarás sesión actual de super-admin durante 1 hora. ¿Continuar?')) return;
+    if (!confirm('Vas a entrar como ese tenant. Tu sesión actual de super-admin queda activa, pero abrirás la app como ese cliente. ¿Continuar?')) return;
     try {
       const r = await api('POST', `/tenants/${id}/impersonate`);
-      // Guardar el token de advisor en el storage que usa la app principal,
-      // luego redirigir a la SPA. La app verá el token y entrará como ese advisor.
       localStorage.setItem('wapi101_token', r.token);
       window.location.href = '/';
     } catch (err) { alert(err.message); }
@@ -480,7 +861,6 @@ $('createForm').addEventListener('submit', async (e) => {
   }
 });
 
-// Click fuera del modal cierra
 $('createModal').addEventListener('click', (e) => {
   if (e.target.id === 'createModal') $('createModal').hidden = true;
 });

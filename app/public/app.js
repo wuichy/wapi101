@@ -445,11 +445,27 @@ function decrementUnreadBadge(convoId) {
   updateChatsNavBadge(totalUnread);
 }
 
+// Hash mínimo de la lista de mensajes para detectar si cambió algo entre polls.
+// Sin esto, el poll de 5s re-renderiza idénticamente y resetea el scroll cuando
+// hay imágenes cargando (scrollHeight crece al cargar la imagen → "salto").
+function _msgsSignature(arr) {
+  if (!arr?.length) return '0';
+  const last = arr[arr.length - 1];
+  return `${arr.length}:${last.id}:${last.status || ''}:${last.body?.length || 0}`;
+}
+let _lastMsgsSignature = null;
+
 async function loadMessages(convoId) {
   try {
     const data = await api('GET', `/api/conversations/${convoId}/messages`);
-    CHAT_MESSAGES = data.items || [];
-    renderMessages();
+    const next = data.items || [];
+    const sig = _msgsSignature(next);
+    const same = sig === _lastMsgsSignature;
+    CHAT_MESSAGES = next;
+    if (!same) {
+      _lastMsgsSignature = sig;
+      renderMessages();
+    }
   } catch (err) {
     console.error('loadMessages', err);
   }
@@ -537,6 +553,7 @@ async function handlePersonalChatAction(convoId, kind) {
 
 async function openConversation(convoId) {
   ACTIVE_CONVO_ID = convoId;
+  _lastMsgsSignature = null; // forzar render al cambiar de chat
   const convo = CONVERSATIONS.find((c) => c.id === convoId);
 
   // Marcar activa en la lista
@@ -822,9 +839,23 @@ function msgStatusHtml(m) {
 // Cache para detectar transiciones a failed y avisar al usuario una sola vez.
 let _lastSeenFailedIds = new Set();
 
+// Margen (px) para considerar que el usuario está "al fondo" del chat. Si no,
+// preservamos su scroll en lugar de saltar hacia abajo cada vez que renderizamos.
+const _CHAT_BOTTOM_THRESHOLD = 120;
+
+function _isChatAtBottom(root) {
+  if (!root) return true;
+  return (root.scrollHeight - root.scrollTop - root.clientHeight) < _CHAT_BOTTOM_THRESHOLD;
+}
+
 function renderMessages() {
   const root = document.getElementById("rhMessages");
   if (!root) return;
+
+  // Capturar posición de scroll antes de renderizar.
+  const wasAtBottom = _isChatAtBottom(root);
+  const prevTop     = root.scrollTop;
+  const prevHeight  = root.scrollHeight;
 
   if (!CHAT_MESSAGES.length) {
     root.innerHTML = '<p class="rh-messages-empty">No hay mensajes todavía.</p>';
@@ -887,7 +918,22 @@ function renderMessages() {
         <div class="rh-message-foot${dir === 'outgoing' ? ' rh-foot-out' : ''}">${footContent}</div>
       </article>`;
   }).join("");
-  root.scrollTop = root.scrollHeight;
+
+  if (wasAtBottom) {
+    // Si estaba al fondo, mantenerlo al fondo. Re-anclar también cuando cada
+    // imagen termine de cargar (su altura cambia el scrollHeight).
+    root.scrollTop = root.scrollHeight;
+    root.querySelectorAll('img').forEach(img => {
+      if (img.complete) return;
+      img.addEventListener('load',  () => { if (_isChatAtBottom(root)) root.scrollTop = root.scrollHeight; }, { once: true });
+      img.addEventListener('error', () => { /* no-op */ }, { once: true });
+    });
+  } else {
+    // Preservar la posición visual del usuario: ajustar scroll por la diferencia
+    // de altura del contenido (mensajes nuevos arriba o adjuntos cargados).
+    const newHeight = root.scrollHeight;
+    root.scrollTop = prevTop + (newHeight - prevHeight);
+  }
 }
 
 // ═══════ Contactos (conectado al backend) ═══════
@@ -1131,17 +1177,84 @@ function renderCustomers() {
       const id = Number(e.currentTarget.closest(".customers-row").dataset.id);
       const c = CUSTOMERS.find((x) => x.id === id);
       if (!c) return;
-      if (!confirm(`¿Eliminar a ${c.firstName} ${c.lastName || ""}?`)) return;
-      try {
-        await api("DELETE", `/api/contacts/${id}`);
-        await loadCustomers();
-        toast(`Contacto eliminado`, "success");
-      } catch (err) {
-        toast(`Error: ${err.message}`, "error");
-      }
+      openContactDeleteModal(c);
     });
   });
 }
+
+// ─── Modal de borrado de contacto con preview de leads ───
+let _contactDeletePending = null;
+
+async function openContactDeleteModal(contact) {
+  const modal = document.getElementById('contactDeleteModal');
+  if (!modal) return;
+  _contactDeletePending = contact;
+  document.getElementById('cdelName').textContent = `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || `#${contact.id}`;
+  const list = document.getElementById('cdelLeadsList');
+  const empty = document.getElementById('cdelLeadsEmpty');
+  const title = document.getElementById('cdelLeadsTitle');
+  list.innerHTML = '<div class="cdel-loading">Cargando leads asociados…</div>';
+  empty.hidden = true;
+  modal.hidden = false;
+
+  try {
+    const data = await api('GET', `/api/contacts/${contact.id}/leads-preview`);
+    const items = data.items || [];
+    title.textContent = items.length ? `Leads asociados (${items.length})` : 'Leads asociados';
+    if (!items.length) {
+      list.innerHTML = '';
+      empty.hidden = false;
+    } else {
+      list.innerHTML = items.map(l => {
+        const sColor = l.stageColor || '#94a3b8';
+        const pColor = l.pipelineColor || '#64748b';
+        const dt = l.createdAt ? new Date(l.createdAt * 1000).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+        return `
+          <div class="cdel-lead-row">
+            <div class="cdel-lead-name">${escapeHtml(l.name || 'Sin nombre')}</div>
+            <div class="cdel-lead-meta">
+              <span class="cdel-lead-pipeline" style="color:${pColor}">${escapeHtml(l.pipelineName || '')}</span>
+              <span class="cdel-lead-arrow">→</span>
+              <span class="cdel-lead-stage" style="background:${sColor}1a;color:${sColor};border:1px solid ${sColor}66">${escapeHtml(l.stageName || '')}</span>
+              ${dt ? `<span class="cdel-lead-date">${dt}</span>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+    }
+  } catch (err) {
+    list.innerHTML = `<div class="cdel-error">No se pudo cargar la lista de leads: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function closeContactDeleteModal() {
+  const modal = document.getElementById('contactDeleteModal');
+  if (modal) modal.hidden = true;
+  _contactDeletePending = null;
+}
+
+async function confirmContactDelete() {
+  const c = _contactDeletePending;
+  if (!c) return;
+  const btn = document.getElementById('cdelConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Eliminando…'; }
+  try {
+    await api('DELETE', `/api/contacts/${c.id}`);
+    closeContactDeleteModal();
+    await loadCustomers();
+    toast('Contacto eliminado', 'success');
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Eliminar definitivamente'; }
+  }
+}
+
+(function setupContactDeleteModal() {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-close-cdel]').forEach(el => el.addEventListener('click', closeContactDeleteModal));
+    document.getElementById('cdelConfirmBtn')?.addEventListener('click', confirmContactDelete);
+  });
+})();
 
 // ─── Modal de contacto ───
 function renderTagChips() {
@@ -2033,70 +2146,6 @@ async function loadMachineTokens() {
   }
 }
 
-async function loadDeployVersion() {
-  const el = document.getElementById('deployVersion');
-  if (!el) return;
-  try {
-    const v = await api('GET', '/api/admin/version');
-    const date = v.date ? new Date(v.date).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-    el.innerHTML = `Versión actual: <code>${escHtml(v.commit || '?')}</code> · ${escHtml(v.subject || '')} <span class="deploy-date">${escHtml(date)}</span>`;
-  } catch (err) {
-    el.textContent = 'No se pudo leer la versión actual';
-  }
-}
-
-async function runDeploy() {
-  const btn = document.getElementById('deployBtn');
-  const status = document.getElementById('deployStatus');
-  if (!btn || !status) return;
-  if (!confirm('¿Desplegar última versión? El server se reinicia ~3 segundos.')) return;
-  btn.disabled = true;
-  btn.textContent = '⏳ Desplegando…';
-  status.hidden = false;
-  status.className = 'deploy-status deploy-status--info';
-  status.textContent = 'Bajando cambios desde GitHub…';
-  let result;
-  try {
-    result = await api('POST', '/api/admin/deploy', {});
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = '🚀 Desplegar última versión';
-    status.className = 'deploy-status deploy-status--error';
-    status.textContent = '❌ ' + (err.message || 'Falló el deploy');
-    return;
-  }
-  if (result.noChanges) {
-    btn.disabled = false;
-    btn.textContent = '🚀 Desplegar última versión';
-    status.className = 'deploy-status deploy-status--ok';
-    status.textContent = `✓ Ya estás en la última versión (${result.after}). Sin cambios que aplicar.`;
-    return;
-  }
-  status.textContent = `✓ Cambios bajados: ${result.before} → ${result.after} "${result.subject}". Reiniciando server…`;
-  await waitForServerHealth(status);
-  status.className = 'deploy-status deploy-status--ok';
-  status.textContent = '✓ Deploy completado. Recargando…';
-  await new Promise(r => setTimeout(r, 800));
-  if ('caches' in window) {
-    try { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); } catch (_) {}
-  }
-  const url = new URL(window.location.href);
-  url.searchParams.set('_cb', Date.now().toString(36));
-  window.location.replace(url.toString());
-}
-
-async function waitForServerHealth(status) {
-  for (let i = 0; i < 30; i++) {
-    await new Promise(r => setTimeout(r, 1000));
-    try {
-      const r = await fetch('/healthz', { cache: 'no-store' });
-      if (r.ok) return true;
-    } catch (_) {}
-    if (status) status.textContent = `Reiniciando server… (${i + 1}s)`;
-  }
-  return false;
-}
-
 function renderMachineTokens() {
   const table = document.getElementById('mtTable');
   const empty = document.getElementById('mtEmpty');
@@ -2139,8 +2188,6 @@ function escapeHtml(s) {
 }
 
 function setupMachineTokens() {
-  document.getElementById('deployBtn')?.addEventListener('click', runDeploy);
-
   const newBtn       = document.getElementById('mtNewBtn');
   const newModal     = document.getElementById('mtNewModal');
   const newName      = document.getElementById('mtNewName');
@@ -2496,9 +2543,10 @@ function setupSettingsTabs() {
       tabs.forEach((t) => t.classList.toggle("is-active", t === tab));
       panes.forEach((p) => p.classList.toggle("is-active", p.dataset.settings === target));
       if (target === 'papelera') loadTrash();
-      if (target === 'tokens-maquina') { loadMachineTokens(); loadDeployVersion(); }
+      if (target === 'tokens-maquina') loadMachineTokens();
       if (target === 'reportes') loadReports();
       if (target === 'negocio') loadBusinessHours();
+      if (target === 'suscripcion') loadBilling();
     });
   });
   document.querySelectorAll(".ai-provider input").forEach((input) => {
@@ -12413,21 +12461,13 @@ function setupBillingView() {
   // Portal button
   document.getElementById('billingPortalBtn')?.addEventListener('click', onOpenPortal);
 
-  // Cargar al entrar a la vista
-  document.querySelectorAll('.nav-item[data-view="suscripcion"]').forEach(n => {
-    n.addEventListener('click', () => {
-      // showView ya se ejecutó por el handler general; cargar data
-      setTimeout(loadBilling, 50);
-    });
-  });
-
-  // Si la URL trae ?billing=success al regresar de Stripe, mostrar la vista
-  // y un toast.
+  // Si la URL trae ?billing=success al regresar de Stripe, ir a Configuración →
+  // tab Suscripción y mostrar toast.
   const params = new URLSearchParams(location.search);
   if (params.get('billing') === 'success') {
     setTimeout(() => {
-      showView('suscripcion');
-      loadBilling();
+      showView('ajustes');
+      document.querySelector('.settings-tab[data-settings="suscripcion"]')?.click();
       toast('¡Suscripción activada! Bienvenido a Wapi101.', 'success', 6000);
       // Limpiar query string
       history.replaceState({}, '', location.pathname);

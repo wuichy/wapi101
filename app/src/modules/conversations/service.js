@@ -91,16 +91,21 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
   if (!includeArchived) conditions.push('COALESCE(c.archived, 0) = 0');
   if (search) {
     // Buscador expandido: nombre, teléfono, email, external_id, último msg,
-    // mensajes históricos (body de la conversación) y etiquetas del contacto
-    // (tags es JSON array, lo buscamos como substring del JSON serializado).
+    // mensajes históricos (body de cualquier mensaje de la conversación) y
+    // etiquetas del contacto (vía tabla contact_tags).
     conditions.push(`(
       LOWER(co.first_name) LIKE ?
       OR LOWER(IFNULL(co.last_name,'')) LIKE ?
       OR LOWER(IFNULL(co.phone,'')) LIKE ?
       OR LOWER(IFNULL(co.email,'')) LIKE ?
-      OR LOWER(IFNULL(co.tags,'[]')) LIKE ?
       OR LOWER(IFNULL(c.external_id,'')) LIKE ?
       OR LOWER(IFNULL(c.last_message,'')) LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM contact_tags ct
+        WHERE ct.contact_id = co.id
+          AND LOWER(ct.tag) LIKE ?
+        LIMIT 1
+      )
       OR EXISTS (
         SELECT 1 FROM messages m
         WHERE m.conversation_id = c.id

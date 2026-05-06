@@ -315,6 +315,7 @@ let ACTIVE_CONVO_ID = null;
 let CHAT_MESSAGES = [];
 let CHAT_FILTER_PROVIDER = '';
 let CHAT_FILTER_UNREAD = false;
+let CHAT_FILTER_PINNED = false;
 let CHAT_SEARCH = '';
 let _chatPollTimer = null;
 
@@ -481,12 +482,31 @@ function renderChatList() {
   const root = document.getElementById("rhChatList");
   if (!root) return;
 
-  if (!CONVERSATIONS.length) {
-    root.innerHTML = '<p class="rh-chat-empty">No hay conversaciones aún.<br>Los mensajes entrantes aparecerán aquí.</p>';
+  // Filtros aplicados localmente. Los filtros de servidor (search, unread,
+  // provider) ya vienen pre-filtrados en CONVERSATIONS; pinned se filtra acá
+  // porque el backend no expone ?pinned=1 todavía.
+  const list = CHAT_FILTER_PINNED ? CONVERSATIONS.filter(c => c.pinned) : CONVERSATIONS;
+
+  // Actualizar contador de pill "Fijados"
+  const pillPinned = document.getElementById('pillCountPinned');
+  if (pillPinned) {
+    const n = CONVERSATIONS.filter(c => c.pinned).length;
+    pillPinned.textContent = n || '';
+    pillPinned.style.display = n ? '' : 'none';
+  }
+
+  if (!list.length) {
+    const msg = CHAT_FILTER_PINNED
+      ? 'No tienes chats fijados.<br>Click derecho sobre un chat → Fijar.'
+      : (CHAT_FILTER_UNREAD ? 'No hay chats sin leer 🎉' :
+         CHAT_FILTER_PROVIDER ? `Sin chats de ${CHAT_FILTER_PROVIDER}.` :
+         CHAT_SEARCH ? `Sin resultados para "${escapeHtml(CHAT_SEARCH)}".` :
+         'No hay conversaciones aún.<br>Los mensajes entrantes aparecerán aquí.');
+    root.innerHTML = `<p class="rh-chat-empty">${msg}</p>`;
     return;
   }
 
-  root.innerHTML = CONVERSATIONS.map((c) => {
+  root.innerHTML = list.map((c) => {
     const personalAction = window.PERSONAL_MODE
       ? (c._personalHidden
           ? `<button class="rh-chat-hide-btn rh-chat-hide-btn--unhide" data-personal-action="unhide" data-id="${c.id}" title="Desocultar">↩</button>`
@@ -561,6 +581,9 @@ async function openConversation(convoId) {
   ACTIVE_CONVO_ID = convoId;
   _lastMsgsSignature = null; // forzar render al cambiar de chat
   const convo = CONVERSATIONS.find((c) => c.id === convoId);
+
+  // Salir del empty state
+  document.getElementById('rhConvPanel')?.classList.remove('rh-empty');
 
   // Marcar activa en la lista
   document.querySelectorAll(".rh-chat-item").forEach((x) => {
@@ -8865,19 +8888,124 @@ function setupChatSearch() {
   });
 }
 
+// Empty state del panel de conversación cuando no hay chat abierto.
+function renderChatEmptyState() {
+  document.getElementById('rhConvPanel')?.classList.add('rh-empty');
+  const root = document.getElementById('rhMessages');
+  if (!root) return;
+  root.innerHTML = `
+    <div class="rh-empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="56" height="56"><path d="M21 15a4 4 0 01-4 4H8l-5 4V7a4 4 0 014-4h10a4 4 0 014 4z"/></svg>
+      <h3>Selecciona una conversación</h3>
+      <p>Elige un chat del inbox para ver los mensajes y responder.</p>
+    </div>`;
+}
+
+// ─── Banner de activación de notificaciones push en /chats ───
+// Aparece dentro del inbox cuando: el navegador soporta push, no hay subscripción
+// activa, el permiso no fue denegado, y el usuario no descartó el banner.
+async function setupChatPushCta() {
+  const cta = document.getElementById('rhPushCta');
+  if (!cta) return;
+  const btn        = document.getElementById('rhPushCtaBtn');
+  const dismissBtn = document.getElementById('rhPushCtaDismiss');
+  const titleEl    = document.getElementById('rhPushCtaTitle');
+  const textEl     = document.getElementById('rhPushCtaText');
+
+  dismissBtn?.addEventListener('click', () => {
+    try { localStorage.setItem('pushCtaDismissed', String(Date.now())); } catch {}
+    cta.hidden = true;
+  });
+
+  btn?.addEventListener('click', async () => {
+    btn.disabled = true; btn.textContent = 'Activando…';
+    try {
+      const { isIOS, isStandalone } = _detectPushPlatform();
+      if (isIOS && !isStandalone) {
+        // iOS Safari requiere PWA instalada — no se puede pedir permiso desde el navegador
+        toast('Primero instala Wapi101: Compartir → "Añadir a pantalla de inicio". Luego abre la app desde el icono.', 'info', 8000);
+        // Mandarlos a la pestaña de Notificaciones para ver instrucciones detalladas
+        showView('ajustes');
+        document.querySelector('.settings-tab[data-settings="notificaciones"]')?.click();
+        return;
+      }
+      await subscribeToPush();
+      toast('Notificaciones activadas ✓', 'success');
+      cta.hidden = true;
+    } catch (err) {
+      toast('Error: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Activar';
+      refreshChatPushCta();
+    }
+  });
+
+  refreshChatPushCta();
+}
+
+async function refreshChatPushCta() {
+  const cta = document.getElementById('rhPushCta');
+  if (!cta) return;
+
+  // Si el usuario lo descartó hace menos de 7 días, no lo mostramos.
+  try {
+    const dismissed = Number(localStorage.getItem('pushCtaDismissed') || 0);
+    if (dismissed && (Date.now() - dismissed) < 7 * 24 * 60 * 60 * 1000) {
+      cta.hidden = true;
+      return;
+    }
+  } catch {}
+
+  const titleEl = document.getElementById('rhPushCtaTitle');
+  const textEl  = document.getElementById('rhPushCtaText');
+  const btn     = document.getElementById('rhPushCtaBtn');
+
+  if (!pushSupported || typeof pushSupported !== 'function' || !pushSupported()) {
+    // Si es iOS Safari sin PWA, mostrar guía
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone;
+    if (isIOS && !isStandalone) {
+      titleEl.textContent = '📱 Instala Wapi101 en tu iPhone';
+      textEl.innerHTML = 'Toca <strong>Compartir</strong> ⬆ → <strong>"Añadir a pantalla de inicio"</strong>, luego abre desde el icono y vuelve aquí.';
+      if (btn) btn.textContent = 'Cómo instalar';
+      cta.hidden = false;
+      return;
+    }
+    cta.hidden = true;
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    cta.hidden = true;
+    return;
+  }
+
+  const sub = await getCurrentPushSubscription();
+  if (sub) {
+    cta.hidden = true;
+    return;
+  }
+
+  // Default: invitar a activar
+  titleEl.textContent = '🔔 Activa las notificaciones';
+  textEl.textContent  = 'Te avisaremos cuando lleguen mensajes nuevos aunque tengas la app cerrada.';
+  if (btn) btn.textContent = 'Activar';
+  cta.hidden = false;
+}
+
 // ─── Chat filter pills ───
+// Usa data-filter en cada pill para evitar matching frágil por texto.
+// Valores: all | unread | pinned | whatsapp | instagram | messenger
 function setupChatFilters() {
   document.querySelector('.rh-filter-pills')?.addEventListener('click', (e) => {
     const pill = e.target.closest('.rh-filter-pill');
     if (!pill) return;
     document.querySelectorAll('.rh-filter-pill').forEach((p) => p.classList.remove('rh-active'));
     pill.classList.add('rh-active');
-    const text = pill.textContent.trim().toLowerCase();
-    CHAT_FILTER_UNREAD = text.startsWith('no leídos');
-    CHAT_FILTER_PROVIDER = text.startsWith('whatsapp') ? 'whatsapp'
-                         : text.startsWith('instagram') ? 'instagram'
-                         : text.startsWith('messenger') ? 'messenger'
-                         : '';
+    const f = pill.dataset.filter || 'all';
+    CHAT_FILTER_UNREAD   = f === 'unread';
+    CHAT_FILTER_PINNED   = f === 'pinned';
+    CHAT_FILTER_PROVIDER = ['whatsapp','instagram','messenger'].includes(f) ? f : '';
     loadConversations();
   });
 }
@@ -10451,6 +10579,9 @@ function applyAppointmentsVisibility() {
   setupAccount();
   setupChatSearch();
   setupChatFilters();
+  setupChatPushCta();
+  // Iniciar el panel de conversación en empty state hasta que abran un chat.
+  if (!ACTIVE_CONVO_ID) renderChatEmptyState();
   setupReplyForm();
   setupAttachMenu();
   setupPersonalTagsUI();

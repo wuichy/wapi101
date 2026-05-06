@@ -215,16 +215,30 @@
               </div>
 
               <div class="rh-search-wrap">
-                <input type="search" placeholder="Buscar nombre, teléfono, mensaje, etiqueta…" />
+                <svg class="rh-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="search" id="rhChatSearchInput" placeholder="Buscar nombre, teléfono, mensaje, etiqueta…" autocomplete="off" />
               </div>
 
               <div class="rh-filter-pills">
-                <button class="rh-filter-pill rh-active">Todos <span class="rh-filter-pill-count" id="pillCountAll"></span></button>
-                <button class="rh-filter-pill">No leídos <span class="rh-filter-pill-count" id="pillCountUnread"></span></button>
-                <button class="rh-filter-pill">Fijados</button>
-                <button class="rh-filter-pill">WhatsApp</button>
-                <button class="rh-filter-pill">Instagram</button>
-                <button class="rh-filter-pill">Messenger</button>
+                <button class="rh-filter-pill rh-active" data-filter="all">Todos <span class="rh-filter-pill-count" id="pillCountAll"></span></button>
+                <button class="rh-filter-pill" data-filter="unread">No leídos <span class="rh-filter-pill-count" id="pillCountUnread"></span></button>
+                <button class="rh-filter-pill" data-filter="pinned">📌 Fijados <span class="rh-filter-pill-count" id="pillCountPinned"></span></button>
+                <button class="rh-filter-pill" data-filter="whatsapp">WhatsApp</button>
+                <button class="rh-filter-pill" data-filter="instagram">Instagram</button>
+                <button class="rh-filter-pill" data-filter="messenger">Messenger</button>
+              </div>
+
+              <!-- Banner CTA: activar notificaciones push (auto-oculto si ya están activas o el usuario lo descartó) -->
+              <div class="rh-push-cta" id="rhPushCta" hidden>
+                <div class="rh-push-cta-icon">🔔</div>
+                <div class="rh-push-cta-body">
+                  <strong id="rhPushCtaTitle">Activa las notificaciones</strong>
+                  <span id="rhPushCtaText">Te avisaremos cuando lleguen mensajes nuevos aunque tengas la app cerrada.</span>
+                </div>
+                <div class="rh-push-cta-actions">
+                  <button type="button" class="rh-push-cta-btn" id="rhPushCtaBtn">Activar</button>
+                  <button type="button" class="rh-push-cta-close" id="rhPushCtaDismiss" aria-label="Descartar">×</button>
+                </div>
               </div>
 
               <div class="rh-sidebar-actions">
@@ -256,20 +270,11 @@
             </aside>
 
             <!-- Panel de conversación -->
-            <main class="rh-conversation-panel">
+            <main class="rh-conversation-panel" id="rhConvPanel">
               <header class="rh-conversation-header">
                 <div class="rh-conversation-heading">
-                  <p class="rh-conversation-title" id="rhChatTitle">María González</p>
-                  <div class="rh-conversation-meta">
-                    <span>+52 123 456 7890</span>
-                    <span class="rh-conversation-origin">
-                      <span class="rh-channel-badge">
-                        <span class="rh-channel-dot rh-channel-whatsapp"></span>
-                        WhatsApp
-                      </span>
-                    </span>
-                    <span class="rh-pipeline-stage">Ventas · Interesado</span>
-                  </div>
+                  <p class="rh-conversation-title" id="rhChatTitle"></p>
+                  <div class="rh-conversation-meta" id="rhChatMeta"></div>
                 </div>
                 <div class="rh-conversation-actions">
                   <!-- Botón "🏷 Mis etiquetas" — solo visible en modo personal (/chat) -->
@@ -299,7 +304,7 @@
                 </div>
               </header>
 
-              <section class="rh-messages" id="rhMessages"><!-- JS --></section>
+              <section class="rh-messages" id="rhMessages"><!-- JS: empty state o mensajes --></section>
 
               <!-- Panel lateral de info (toggle con botón "i") -->
               <aside class="rh-chat-info-panel" id="rhChatInfoPanel" hidden>

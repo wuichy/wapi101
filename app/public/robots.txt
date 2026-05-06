@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /signup
+Allow: /login
+Allow: /privacy
+Allow: /terms
+
+# El CRM y APIs son privadas, no las indexes
+Disallow: /app
+Disallow: /api/
+Disallow: /webhooks/
+Disallow: /super
+Disallow: /auth/
+Disallow: /uploads/
+
+Sitemap: https://wapi101.com/sitemap.xml

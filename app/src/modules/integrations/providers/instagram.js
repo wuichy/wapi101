@@ -8,16 +8,9 @@ module.exports = {
     description: 'Recibe y responde DMs de tu cuenta Business o Creator de Instagram.',
     color: '#e1306c',
     initial: 'I',
+    authType: 'oauth_meta',
     docsUrl: 'https://developers.facebook.com/docs/instagram-platform',
-    setupSteps: [
-      'Asegúrate de tener una cuenta <b>Business o Creator</b> en Instagram',
-      'Vincula tu cuenta IG a una <b>Página de Facebook</b>',
-      'Ve a <b>developers.facebook.com</b> → crea o usa tu App → añade "Instagram" como producto',
-      'En Instagram → Configuración de API → selecciona tu cuenta de IG',
-      'Genera un <b>Access Token</b> con scopes: <code>instagram_basic</code>, <code>instagram_manage_messages</code>',
-      'Copia el <b>Instagram Business Account ID</b> y el <b>App Secret</b>',
-      'Agrega el Webhook URL de abajo, suscribe el evento <code>messages</code>',
-    ],
+    setupSteps: [],
   },
   fields: [
     {

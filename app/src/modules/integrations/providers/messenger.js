@@ -8,15 +8,9 @@ module.exports = {
     description: 'Recibe y responde mensajes de tu Página de Facebook.',
     color: '#0084ff',
     initial: 'M',
+    authType: 'oauth_meta',
     docsUrl: 'https://developers.facebook.com/docs/messenger-platform',
-    setupSteps: [
-      'Ve a <b>developers.facebook.com</b> y crea una App (tipo "Business")',
-      'En tu App → Messenger → Configuración → selecciona tu Página',
-      'Genera un <b>Page Access Token</b> (recomendado: long-lived)',
-      'Copia el <b>App Secret</b> desde Configuración básica de la App',
-      'Agrega el Webhook URL de abajo y el Verify Token que elijas',
-      'Suscribe los eventos: <code>messages</code>, <code>messaging_postbacks</code>',
-    ],
+    setupSteps: [],
   },
   fields: [
     {

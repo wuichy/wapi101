@@ -10472,6 +10472,18 @@ function applyAntiAutofill(root = document) {
   root.querySelectorAll('form').forEach(f => f.setAttribute('autocomplete', 'off'));
 }
 
+// Citas: feature flag local. Default OFF (la Fase B aún no está construida).
+function isAppointmentsEnabled() {
+  try { return localStorage.getItem('appointmentsEnabled') === '1'; }
+  catch { return false; }
+}
+function applyAppointmentsVisibility() {
+  const enabled = isAppointmentsEnabled();
+  document.querySelectorAll('[data-feature="appointments"]').forEach(el => {
+    el.hidden = !enabled;
+  });
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   try {
   // Redirigir a login si no hay token
@@ -10517,17 +10529,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyAppointmentsVisibility();
   }
 
-// Citas: feature flag local. Default OFF (la Fase B aún no está construida).
-function isAppointmentsEnabled() {
-  try { return localStorage.getItem('appointmentsEnabled') === '1'; }
-  catch { return false; }
-}
-function applyAppointmentsVisibility() {
-  const enabled = isAppointmentsEnabled();
-  document.querySelectorAll('[data-feature="appointments"]').forEach(el => {
-    el.hidden = !enabled;
-  });
-}
   document.getElementById('navLogoutBtn')?.addEventListener('click', () => {
     if (confirm('¿Cerrar sesión?')) logout();
   });

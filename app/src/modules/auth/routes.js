@@ -87,8 +87,8 @@ module.exports = function createAuthRouter(db) {
     // Instagram usa Instagram Business Login (endpoint separado de Facebook, app ID distinto)
     if (provider === 'instagram') {
       const igAppId = process.env.META_IG_APP_ID || appId;
-      const igScope = encodeURIComponent('instagram_business_basic,instagram_business_manage_messages');
-      const igUrl = `https://www.instagram.com/oauth/authorize?client_id=${igAppId}&redirect_uri=${redirectUri}&scope=${igScope}&response_type=code&state=${state}`;
+      const igScope = encodeURIComponent('instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights');
+      const igUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${igAppId}&redirect_uri=${redirectUri}&response_type=code&scope=${igScope}&state=${state}`;
       return res.redirect(igUrl);
     }
 

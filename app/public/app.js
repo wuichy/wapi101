@@ -2916,7 +2916,7 @@ function renderIntegrations() {
     }).join("");
 
     const connectBtn = isOAuth
-      ? `<button class="btn btn--ghost" data-action="oauth" data-provider="${p.key}" data-auth="${p.authType}">${oauthIcon(p.key, connected.length > 0)}</button>`
+      ? `<button class="btn btn--ghost" data-action="oauth" data-provider="${p.key}" data-auth="${p.authType}">${connected.length ? '+ Conectar otra' : 'Conectar'}</button>`
       : `<button class="btn btn--ghost" data-action="manual" data-provider="${p.key}">${connected.length ? '+ Conectar otra' : 'Conectar'}</button>`;
 
     let badgeHtml;

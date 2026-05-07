@@ -2692,9 +2692,9 @@ function showView(viewName) {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
   }
-  const cleanTopbar = (viewName === 'contactos' || viewName === 'expedientes');
+  const cleanTopbar = (viewName === 'contactos');
   if (title) title.hidden = cleanTopbar;
-  const hideActions = cleanTopbar || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas' || viewName === 'bot';
+  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas' || viewName === 'bot';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
   if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta');

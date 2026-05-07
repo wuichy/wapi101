@@ -240,9 +240,14 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
     const nowSec = Math.floor(Date.now() / 1000);
 
     for (const msg of messages) {
+      const remoteJid = msg.key?.remoteJid || '';
+      const isFromMe = !!msg.key?.fromMe;
+      const hasMsg = !!msg?.message;
+      const msgKeys = hasMsg ? Object.keys(msg.message) : [];
+      console.log(`[wa-web ${integrationId}] msg jid=${remoteJid} fromMe=${isFromMe} hasMsg=${hasMsg} keys=${msgKeys.join(',')}`);
+
       if (!msg?.message) continue;
       if (msg.key?.fromMe) continue;
-      const remoteJid = msg.key?.remoteJid || '';
       // Ignorar grupos / broadcasts por ahora (solo 1-a-1)
       if (!remoteJid.endsWith('@s.whatsapp.net')) continue;
 
@@ -254,6 +259,7 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
 
       const phone = remoteJid.replace('@s.whatsapp.net', '');
       const { body, messageType } = extractIncomingBody(msg.message);
+      console.log(`[wa-web ${integrationId}] body="${body}" type=${messageType}`);
 
       // Saltar mensajes de sistema (revokes, key changes, etc.) que no deben
       // mostrarse como burbujas en el chat.

@@ -139,7 +139,7 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'silent' }),
+    logger: pino({ level: 'warn' }),
     printQRInTerminal: false,
     browser: ['Wapi101 CRM', 'Chrome', '1.0.0'],
     markOnlineOnConnect: false,

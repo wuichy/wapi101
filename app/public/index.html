@@ -200,6 +200,10 @@
             <button class="cal-sub-btn cal-sub-btn--cta" id="taskNewBtn" data-i18n="cal.new.task">+ Nueva tarea</button>
           </div>
         </div>
+        <!-- Extras: Bots -->
+        <div class="topbar-bot-extras" id="topbarBotExtras" hidden>
+          <button class="btn btn--primary" id="botCreateBtn">+ Crear bot</button>
+        </div>
         <!-- Extras: Plantillas -->
         <div class="topbar-tpl-extras" id="topbarTplExtras" hidden>
           <button class="btn btn--primary" id="tplNewBtn">+ Nueva plantilla</button>
@@ -1528,13 +1532,6 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
         <!-- Lista de bots -->
         <div id="botListView">
-          <div class="view-toolbar">
-            <div class="toolbar-left">
-              <h1 class="view-title">Bots</h1>
-              <p class="view-subtitle">Crea flujos automáticos de mensajes para tus contactos.</p>
-            </div>
-            <button class="btn btn--primary" id="botCreateBtn">+ Crear bot</button>
-          </div>
           <div id="botTagFilters" class="bot-tag-filter-row"></div>
           <div id="botList"></div>
           <div id="botEmpty" class="empty-state" hidden>

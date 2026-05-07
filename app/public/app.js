@@ -2692,9 +2692,9 @@ function showView(viewName) {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
   }
-  const cleanTopbar = (viewName === 'integraciones' || viewName === 'bot' || viewName === 'contactos' || viewName === 'expedientes');
+  const cleanTopbar = (viewName === 'integraciones' || viewName === 'contactos' || viewName === 'expedientes');
   if (title) title.hidden = cleanTopbar;
-  const hideActions = cleanTopbar || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas';
+  const hideActions = cleanTopbar || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas' || viewName === 'bot';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
   if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta');
@@ -2708,6 +2708,8 @@ function showView(viewName) {
   if (appsExtras) appsExtras.hidden = (viewName !== 'aplicaciones');
   const tplExtras = document.getElementById('topbarTplExtras');
   if (tplExtras) tplExtras.hidden = (viewName !== 'plantillas');
+  const botExtras = document.getElementById('topbarBotExtras');
+  if (botExtras) botExtras.hidden = (viewName !== 'bot');
 
   if (viewName === 'calendario') {
     if (searchInput) { searchInput.placeholder = t('cal.search.placeholder'); searchInput.value = _tasksSearch; }
@@ -5440,6 +5442,7 @@ function openBotBuilder(bot, returnTo = null) {
 
   document.getElementById('botListView').hidden = true;
   document.getElementById('botBuilder').hidden = false;
+  const _bce = document.getElementById('topbarBotExtras'); if (_bce) _bce.hidden = true;
   renderBotBuilderTags();
 
   // Mostrar botón Eliminar solo cuando se edita un bot existente
@@ -5465,6 +5468,7 @@ function openBotBuilder(bot, returnTo = null) {
 function closeBotBuilder() {
   document.getElementById('botBuilder').hidden = true;
   document.getElementById('botListView').hidden = false;
+  const _bce = document.getElementById('topbarBotExtras'); if (_bce) _bce.hidden = false;
 }
 
 function updateTriggerValueVisibility() {

@@ -52,20 +52,21 @@ module.exports = function createTasksRouter(db) {
         title:              req.body?.title,
         description:        req.body?.description,
         dueAt:              req.body?.dueAt,
+        durationMinutes:    req.body?.durationMinutes || null,
         assignedAdvisorId:  req.body?.assignedAdvisorId || req.advisor?.id,
         expedientId:        req.body?.expedientId,
         contactId:          req.body?.contactId,
         createdByAdvisorId: req.advisor?.id,
       });
       res.json(task);
-    } catch (err) { res.status(400).json({ error: err.message }); }
+    } catch (err) { res.status(err.statusCode || 400).json({ error: err.message }); }
   });
 
   router.patch('/:id', (req, res) => {
     try {
       const task = service.update(db, req.tenantId, Number(req.params.id), req.body || {});
       res.json(task);
-    } catch (err) { res.status(400).json({ error: err.message }); }
+    } catch (err) { res.status(err.statusCode || 400).json({ error: err.message }); }
   });
 
   router.delete('/:id', (req, res) => {

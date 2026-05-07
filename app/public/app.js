@@ -2526,8 +2526,14 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','recordatorios','calendario','aplicaciones']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones']);
 function showView(viewName) {
+  // 'recordatorios' es alias legacy — redirige a calendario en sub-vista lista
+  if (viewName === 'recordatorios') {
+    showView('calendario');
+    switchCalSubView('list');
+    return;
+  }
   const navItems = document.querySelectorAll(".nav-item");
   const views = document.querySelectorAll(".view");
   const title = document.getElementById("topbarTitle");
@@ -13052,6 +13058,13 @@ async function refreshTaskCounts() {
   } catch (_) {}
 }
 
+function fmtDuration(min) {
+  if (!min) return '';
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m ? `${h}h ${m}min` : `${h}h`;
+}
+
 function fmtTaskDue(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
@@ -13097,11 +13110,17 @@ function renderTaskList() {
     const assignedHtml = t.assignedAdvisorName
       ? `<span class="task-meta-item">👤 ${escapeHtml(t.assignedAdvisorName)}</span>`
       : '<span class="task-meta-item" style="color:#94a3b8">Sin asignar</span>';
+    const durHtml = t.durationMinutes
+      ? `<span class="task-duration-badge">${fmtDuration(t.durationMinutes)}</span>`
+      : '';
     return `
       <div class="${itemClass}" data-task-id="${t.id}">
         <div class="task-checkbox" data-task-toggle="${t.id}">${checkSvg}</div>
         <div class="task-body">
-          <div class="task-title" data-task-edit="${t.id}">${escapeHtml(t.title)}</div>
+          <div class="task-title-row">
+            <span class="task-title" data-task-edit="${t.id}">${escapeHtml(t.title)}</span>
+            ${durHtml}
+          </div>
           ${t.description ? `<div class="task-desc">${escapeHtml(t.description)}</div>` : ''}
           <div class="task-meta">
             <span class="task-meta-item task-due ${dueClass}">⏰ ${fmtTaskDue(t.dueAt)}</span>
@@ -13140,6 +13159,48 @@ function renderTaskList() {
   });
 }
 
+let _taskAdvisorHoursCache = {}; // advisorId → hours array
+async function checkTaskAdvisorHours() {
+  const warnEl = document.getElementById('taskHoursWarn');
+  const warnText = document.getElementById('taskHoursWarnText');
+  if (!warnEl || !warnText) return;
+
+  const advisorId = document.getElementById('taskAssignedAdvisorId')?.value;
+  const dueLocal  = document.getElementById('taskDueAt')?.value;
+  if (!advisorId || !dueLocal) { warnEl.setAttribute('hidden', ''); return; }
+
+  // Load hours (cached per session)
+  if (!_taskAdvisorHoursCache[advisorId]) {
+    try {
+      const r = await api('GET', `/api/business/advisors/${advisorId}/hours`);
+      _taskAdvisorHoursCache[advisorId] = r.items || [];
+    } catch { _taskAdvisorHoursCache[advisorId] = []; }
+  }
+  const hours = _taskAdvisorHoursCache[advisorId];
+
+  const d = new Date(dueLocal);
+  const dow = d.getDay(); // 0=Sun…6=Sat
+  const hhmm = d.toTimeString().slice(0, 5); // "HH:MM"
+
+  const slot = hours.find(h => h.dayOfWeek === dow);
+  let warn = null;
+  if (!slot || slot.isClosed || slot.isOff) {
+    const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    warn = `${DAY_NAMES[dow]} está marcado como día no laborable para este asesor`;
+  } else if (slot.openTime && slot.closeTime) {
+    if (hhmm < slot.openTime || hhmm >= slot.closeTime) {
+      warn = `Fuera del horario laboral del asesor (${slot.openTime}–${slot.closeTime})`;
+    }
+  }
+
+  if (warn) {
+    warnText.textContent = warn;
+    warnEl.removeAttribute('hidden');
+  } else {
+    warnEl.setAttribute('hidden', '');
+  }
+}
+
 async function loadAdvisorsForTaskModal() {
   if (_tasksAdvisors.length) return;
   try {
@@ -13170,8 +13231,10 @@ async function openTaskModal(taskId = null, presetExpedientId = null, presetExpe
       `<option value="${a.id}">${escapeHtml(a.name || a.username)}${a.id === me.id ? ' (yo)' : ''}</option>`
     ).join('');
 
+  const durSel = document.getElementById('taskDuration');
+  document.getElementById('taskHoursWarn')?.setAttribute('hidden', '');
+
   if (taskId) {
-    // Editar
     const t = _tasksItems.find(x => x.id === taskId);
     if (!t) return;
     titleEl.textContent = 'Editar tarea';
@@ -13180,20 +13243,20 @@ async function openTaskModal(taskId = null, presetExpedientId = null, presetExpe
     const d = new Date(t.dueAt * 1000);
     const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     dueInput.value = isoLocal;
+    if (durSel) durSel.value = t.durationMinutes || '';
     assignSel.value = t.assignedAdvisorId || '';
     expIdInput.value = t.expedientId || '';
     expLabelInput.value = t.expedientName || (t.contactName ? `Contacto: ${t.contactName}` : '');
     deleteBtn.hidden = false;
   } else {
-    // Nueva
     titleEl.textContent = 'Nueva tarea';
     titleInput.value = '';
     descInput.value = '';
-    // Default: 1 hora desde ahora
     const d = new Date(Date.now() + 60 * 60 * 1000);
     d.setSeconds(0, 0);
     const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     dueInput.value = isoLocal;
+    if (durSel) durSel.value = '';
     assignSel.value = me?.id || '';
     expIdInput.value = presetExpedientId || '';
     expLabelInput.value = presetExpedientName || '';
@@ -13201,6 +13264,8 @@ async function openTaskModal(taskId = null, presetExpedientId = null, presetExpe
   }
 
   modal.hidden = false;
+  // Check hours for pre-selected advisor
+  checkTaskAdvisorHours();
   setTimeout(() => titleInput.focus(), 50);
 }
 
@@ -13216,6 +13281,7 @@ async function saveTask() {
   const dueLocal = document.getElementById('taskDueAt').value;
   const assignedAdvisorId = document.getElementById('taskAssignedAdvisorId').value;
   const expedientId = document.getElementById('taskExpedientId').value;
+  const durationMinutes = document.getElementById('taskDuration')?.value || '';
   if (!title) { toast('El título es requerido', 'warning'); return; }
   if (!dueLocal) { toast('La fecha de vencimiento es requerida', 'warning'); return; }
   const dueAt = Math.floor(new Date(dueLocal).getTime() / 1000);
@@ -13224,6 +13290,7 @@ async function saveTask() {
     title,
     description: description || null,
     dueAt,
+    durationMinutes: durationMinutes ? Number(durationMinutes) : null,
     assignedAdvisorId: assignedAdvisorId ? Number(assignedAdvisorId) : null,
     expedientId: expedientId ? Number(expedientId) : null,
   };
@@ -13236,8 +13303,7 @@ async function saveTask() {
       toast('Tarea creada', 'success');
     }
     closeTaskModal();
-    await loadTasks();
-    // Si estamos viendo lead detail con cards de pipeline, refrescar iconos
+    if (_calSubView === 'calendar') loadCalendar(); else await loadTasks();
     if (typeof refreshPipelineTaskIcons === 'function') refreshPipelineTaskIcons();
   } catch (err) { toast(err.message, 'error'); }
 }
@@ -13254,7 +13320,12 @@ async function deleteCurrentTask() {
 }
 
 function setupTasksView() {
-  // Tabs
+  // Sub-vista toggle (Lista / Mes)
+  document.querySelectorAll('.cal-sub-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchCalSubView(btn.dataset.sub));
+  });
+
+  // Tabs de filtro
   document.querySelectorAll('.tasks-tabs .tt-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       _tasksFilter = btn.dataset.filter;
@@ -13262,21 +13333,25 @@ function setupTasksView() {
       loadTasks();
     });
   });
+
   document.getElementById('taskNewBtn')?.addEventListener('click', () => openTaskModal(null));
   document.getElementById('taskCancelBtn')?.addEventListener('click', closeTaskModal);
   document.getElementById('taskCancelBtnFooter')?.addEventListener('click', closeTaskModal);
   document.getElementById('taskDeleteBtn')?.addEventListener('click', deleteCurrentTask);
-  document.getElementById('taskForm')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    saveTask();
-  });
+  document.getElementById('taskForm')?.addEventListener('submit', (e) => { e.preventDefault(); saveTask(); });
   document.getElementById('taskModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'taskModal') closeTaskModal();
   });
 
-  // Cargar al entrar a la vista
-  document.querySelectorAll('.nav-item[data-view="recordatorios"]').forEach(n => {
-    n.addEventListener('click', () => setTimeout(loadTasks, 50));
+  // Live check: horario del asesor cuando cambia asesor o fecha
+  document.getElementById('taskAssignedAdvisorId')?.addEventListener('change', checkTaskAdvisorHours);
+  document.getElementById('taskDueAt')?.addEventListener('change', checkTaskAdvisorHours);
+
+  // Cargar al entrar a la vista unificada
+  document.querySelectorAll('.nav-item[data-view="calendario"]').forEach(n => {
+    n.addEventListener('click', () => setTimeout(() => {
+      if (_calSubView === 'list') loadTasks(); else loadCalendar();
+    }, 50));
   });
 }
 if (document.readyState === 'loading') {
@@ -13554,6 +13629,25 @@ if (document.readyState === 'loading') {
 // ═══════ VISTA CALENDARIO ═══════
 let _calCurrent = new Date(); // mes actualmente visible
 let _calTasks = [];          // tareas del mes cargadas
+let _calSubView = 'list';    // 'list' | 'calendar'
+
+function switchCalSubView(sub) {
+  _calSubView = sub;
+  document.getElementById('calSubList')?.setAttribute('hidden', sub !== 'list' ? '' : null);
+  document.getElementById('calSubCalendar')?.setAttribute('hidden', sub !== 'calendar' ? '' : null);
+  if (sub === 'list') {
+    document.getElementById('calSubList').removeAttribute('hidden');
+    document.getElementById('calSubCalendar').setAttribute('hidden', '');
+  } else {
+    document.getElementById('calSubList').setAttribute('hidden', '');
+    document.getElementById('calSubCalendar').removeAttribute('hidden');
+  }
+  document.getElementById('calNavBar')?.toggleAttribute('hidden', sub !== 'calendar');
+  document.getElementById('calListTabs')?.toggleAttribute('hidden', sub !== 'list');
+  document.querySelectorAll('.cal-sub-btn').forEach(b => b.classList.toggle('is-active', b.dataset.sub === sub));
+  if (sub === 'list') loadTasks();
+  else loadCalendar();
+}
 
 const MONTH_NAMES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const DAY_HEADERS_ES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -13668,12 +13762,6 @@ function setupCalendarView() {
   document.getElementById('calTodayBtn')?.addEventListener('click', () => {
     _calCurrent = new Date();
     loadCalendar();
-  });
-  document.getElementById('calAddBtn')?.addEventListener('click', () => openTaskModal(null));
-
-  // Cargar al entrar a la vista
-  document.querySelectorAll('.nav-item[data-view="calendario"]').forEach(n => {
-    n.addEventListener('click', () => setTimeout(loadCalendar, 50));
   });
 }
 if (document.readyState === 'loading') {

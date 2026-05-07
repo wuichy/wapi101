@@ -8400,16 +8400,9 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 /* ═══════ Recordatorios / Tasks ═══════ */
 .view-tasks { padding: 32px; overflow-y: auto; }
 .tasks-wrap { max-width: 900px; margin: 0 auto; }
-.tasks-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  margin-bottom: 24px; gap: 16px;
-}
-.tasks-header h2 { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
-.tasks-sub { margin: 0; color: #64748b; font-size: 14px; }
-
 .tasks-tabs {
-  display: flex; gap: 4px; margin-bottom: 20px;
-  border-bottom: 1px solid #e2e8f0;
+  display: flex; gap: 0;
+  border-bottom: none;
 }
 .tt-tab {
   background: transparent; border: 0; padding: 12px 16px;
@@ -8453,7 +8446,23 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .task-item.is-completed .task-checkbox { background: #10b981; border-color: #10b981; color: #fff; }
 
 .task-body { flex: 1; min-width: 0; }
+.task-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .task-title { font-size: 15px; font-weight: 600; color: #0f172a; cursor: pointer; }
+.task-duration-badge {
+  font-size: 10px; font-weight: 700;
+  color: #7c3aed; background: #ede9fe;
+  padding: 1px 7px; border-radius: 99px;
+  white-space: nowrap; flex-shrink: 0;
+}
+/* Warning horario laboral en el modal */
+.task-hours-warn {
+  display: flex; align-items: flex-start; gap: 7px;
+  background: #fef3c7; color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 8px; padding: 8px 12px;
+  font-size: 12px; font-weight: 500;
+}
+.task-hours-warn svg { flex-shrink: 0; margin-top: 1px; color: #d97706; }
 .task-meta {
   display: flex; gap: 12px; flex-wrap: wrap;
   margin-top: 4px; font-size: 12px; color: #64748b;
@@ -8614,16 +8623,40 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 
 /* ═══════ Vista Calendario ═══════ */
 .view-calendar { padding: 32px; overflow-y: auto; }
-.cal-wrap { max-width: 1100px; margin: 0 auto; }
+.cal-wrap { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.cal-sub-pane { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+
+/* Header unificado */
 .cal-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  margin-bottom: 20px; gap: 16px; flex-wrap: wrap;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; gap: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0; flex-wrap: wrap;
 }
-.cal-header h2 { margin: 0 0 4px; font-size: 24px; font-weight: 700; }
-.cal-sub { margin: 0; color: #64748b; font-size: 14px; }
-.cal-nav {
-  display: flex; align-items: center; gap: 8px;
+.cal-header-left { display: flex; align-items: center; gap: 12px; }
+
+/* Toggle Lista / Mes */
+.cal-sub-toggle {
+  display: flex; gap: 2px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 3px;
 }
+.cal-sub-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; cursor: pointer;
+  padding: 5px 12px; border-radius: 6px;
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+  transition: all 0.12s;
+}
+.cal-sub-btn:hover { color: var(--text); }
+.cal-sub-btn.is-active {
+  background: var(--surface); color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+/* Nav mes */
+.cal-nav { display: flex; align-items: center; gap: 8px; }
 .cal-current-label {
   font-size: 16px; font-weight: 600; color: #0f172a;
   min-width: 140px; text-align: center; text-transform: capitalize;

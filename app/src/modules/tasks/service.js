@@ -21,6 +21,7 @@ function _hydrate(row) {
     title:           row.title,
     description:     row.description || null,
     dueAt:           row.due_at,
+    durationMinutes: row.duration_minutes || null,
     assignedAdvisorId:   row.assigned_advisor_id,
     assignedAdvisorName: row.assigned_advisor_name || null,
     expedientId:     row.expedient_id,
@@ -34,6 +35,20 @@ function _hydrate(row) {
     createdAt:       row.created_at,
     updatedAt:       row.updated_at,
   };
+}
+
+// Devuelve la tarea conflictiva si [dueAt, dueAt+dur] se solapa con otra del mismo asesor.
+function _checkConflict(db, tenantId, advisorId, dueAt, durationMinutes, excludeId = 0) {
+  if (!advisorId || !durationMinutes || !dueAt) return null;
+  const endAt = dueAt + durationMinutes * 60;
+  return db.prepare(`
+    SELECT id, title, due_at, duration_minutes FROM tasks
+    WHERE tenant_id = ? AND assigned_advisor_id = ? AND id != ?
+      AND completed = 0
+      AND duration_minutes IS NOT NULL AND duration_minutes > 0
+      AND due_at < ? AND (due_at + duration_minutes * 60) > ?
+    LIMIT 1
+  `).get(tenantId, advisorId, excludeId, endAt, dueAt);
 }
 
 // Lista con filtros opcionales:
@@ -71,13 +86,24 @@ function getById(db, tenantId, id) {
   return _hydrate(row);
 }
 
-function create(db, tenantId, { title, description, dueAt, assignedAdvisorId, expedientId, contactId, createdByAdvisorId }) {
+function create(db, tenantId, { title, description, dueAt, durationMinutes, assignedAdvisorId, expedientId, contactId, createdByAdvisorId }) {
   if (!title || !title.trim()) throw new Error('El título es requerido');
   if (!dueAt) throw new Error('La fecha de vencimiento es requerida');
+  const dur = durationMinutes ? Number(durationMinutes) : null;
+  const conflict = _checkConflict(db, tenantId, assignedAdvisorId, Number(dueAt), dur);
+  if (conflict) {
+    const t = new Date(conflict.due_at * 1000);
+    const fmt = t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const end = new Date((conflict.due_at + conflict.duration_minutes * 60) * 1000);
+    const fmtEnd = end.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const err = new Error(`Conflicto con "${conflict.title}" (${fmt}–${fmtEnd})`);
+    err.statusCode = 409;
+    throw err;
+  }
   const r = db.prepare(`
-    INSERT INTO tasks (tenant_id, title, description, due_at, assigned_advisor_id, expedient_id, contact_id, created_by_advisor_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(tenantId, title.trim(), description?.trim() || null, Number(dueAt), assignedAdvisorId || null, expedientId || null, contactId || null, createdByAdvisorId || null);
+    INSERT INTO tasks (tenant_id, title, description, due_at, duration_minutes, assigned_advisor_id, expedient_id, contact_id, created_by_advisor_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(tenantId, title.trim(), description?.trim() || null, Number(dueAt), dur, assignedAdvisorId || null, expedientId || null, contactId || null, createdByAdvisorId || null);
   return getById(db, tenantId, r.lastInsertRowid);
 }
 
@@ -93,7 +119,23 @@ function update(db, tenantId, id, patch = {}) {
   }
   if (patch.description !== undefined) { fields.push('description = ?'); params.push(patch.description?.trim() || null); }
   if (patch.dueAt !== undefined) { fields.push('due_at = ?'); params.push(Number(patch.dueAt)); }
+  if (patch.durationMinutes !== undefined) { fields.push('duration_minutes = ?'); params.push(patch.durationMinutes ? Number(patch.durationMinutes) : null); }
   if (patch.assignedAdvisorId !== undefined) { fields.push('assigned_advisor_id = ?'); params.push(patch.assignedAdvisorId || null); }
+
+  // Conflict check using patched values
+  const effectiveDueAt       = patch.dueAt !== undefined ? Number(patch.dueAt) : row.due_at;
+  const effectiveDuration    = patch.durationMinutes !== undefined ? (patch.durationMinutes ? Number(patch.durationMinutes) : null) : row.duration_minutes;
+  const effectiveAdvisorId   = patch.assignedAdvisorId !== undefined ? (patch.assignedAdvisorId || null) : row.assigned_advisor_id;
+  const conflict = _checkConflict(db, tenantId, effectiveAdvisorId, effectiveDueAt, effectiveDuration, id);
+  if (conflict) {
+    const t = new Date(conflict.due_at * 1000);
+    const fmt = t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const end = new Date((conflict.due_at + conflict.duration_minutes * 60) * 1000);
+    const fmtEnd = end.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const err = new Error(`Conflicto con "${conflict.title}" (${fmt}–${fmtEnd})`);
+    err.statusCode = 409;
+    throw err;
+  }
   if (patch.expedientId !== undefined) { fields.push('expedient_id = ?'); params.push(patch.expedientId || null); }
   if (patch.contactId !== undefined) { fields.push('contact_id = ?'); params.push(patch.contactId || null); }
   if (patch.completed !== undefined) {

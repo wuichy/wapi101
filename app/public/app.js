@@ -3090,6 +3090,18 @@ function openIntegrationModal(providerKey, instanceId = null) {
         connectOAuth(provider.key, provider.authType);
       });
     }, 0);
+  } else if (isOAuthProvider && !instance) {
+    // OAuth sin cuenta conectada: mostrar botón OAuth, no formulario manual
+    fields.innerHTML = `<div class="int-oauth-new" style="padding:8px 0 4px">
+      <button type="button" class="btn btn--primary" id="intOAuthConnectBtn" style="width:100%;justify-content:center">${oauthIcon(provider.key, false)}</button>
+    </div>`;
+    document.getElementById("intSubmitBtn").hidden = true;
+    setTimeout(() => {
+      document.getElementById('intOAuthConnectBtn')?.addEventListener('click', () => {
+        closeIntegrationModal();
+        connectOAuth(provider.key, provider.authType);
+      });
+    }, 0);
   } else {
     fields.innerHTML = (provider.fields || []).map((f) => {
       const val = values[f.key] || "";

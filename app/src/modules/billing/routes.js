@@ -131,7 +131,7 @@ module.exports = function createBillingRouter(db) {
   // ─── Estado actual de la suscripción ──────────────────────────────────
   router.get('/subscription', (req, res) => {
     const t = db.prepare(`
-      SELECT id, slug, display_name, plan, status,
+      SELECT id, slug, display_name, plan, status, extra_users,
              stripe_customer_id, stripe_subscription_id,
              subscription_status, subscription_period_end, trial_ends_at
       FROM tenants WHERE id = ?
@@ -143,6 +143,7 @@ module.exports = function createBillingRouter(db) {
       displayName: t.display_name,
       plan: t.plan,
       status: t.status,
+      extraUsers: t.extra_users || 0,
       hasStripeCustomer: !!t.stripe_customer_id,
       subscription: t.stripe_subscription_id ? {
         id: t.stripe_subscription_id,
@@ -151,6 +152,20 @@ module.exports = function createBillingRouter(db) {
         trialEndsAt: t.trial_ends_at,
       } : null,
     });
+  });
+
+  // ─── Agregar usuarios extra (con proration) ───────────────────────────
+  router.post('/extra-users', async (req, res) => {
+    if (req.advisor?.role !== 'admin') return res.status(403).json({ error: 'Solo admins' });
+    const qty     = Math.max(1, Math.min(10, Number(req.body?.qty) || 1));
+    const preview = req.body?.preview !== false; // default true
+    try {
+      const result = await billingSvc.addExtraUsers(db, req.tenantId, qty, preview);
+      res.json(result);
+    } catch (err) {
+      console.error('[billing/extra-users]', err.message);
+      res.status(err.statusCode || 500).json({ error: err.message });
+    }
   });
 
   // ─── Iniciar checkout ─────────────────────────────────────────────────

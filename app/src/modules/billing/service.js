@@ -64,6 +64,70 @@ async function createCheckoutSession(db, tenantId, priceId, { successUrl, cancel
   return { url: session.url, id: session.id };
 }
 
+// ─── Agregar usuarios extra (proration) ──────────────────────────────────
+// preview=true → simula con upcoming invoice y devuelve monto a cobrar hoy.
+// preview=false → aplica el cambio en Stripe con proration real.
+async function addExtraUsers(db, tenantId, qty, preview = true) {
+  const priceId = process.env.STRIPE_PRICE_EXTRA_USER_MONTHLY;
+  if (!priceId) {
+    const e = new Error('Opción no disponible aún'); e.statusCode = 503; throw e;
+  }
+  const tenant = db.prepare('SELECT stripe_subscription_id, stripe_customer_id FROM tenants WHERE id = ?').get(tenantId);
+  if (!tenant?.stripe_subscription_id) {
+    const e = new Error('Necesitas una suscripción activa para agregar asesores extra'); e.statusCode = 400; throw e;
+  }
+
+  const stripe = getStripe();
+  const sub = await stripe.subscriptions.retrieve(tenant.stripe_subscription_id, {
+    expand: ['items.data.price'],
+  });
+
+  if (['canceled', 'incomplete_expired'].includes(sub.status)) {
+    const e = new Error('La suscripción no está activa'); e.statusCode = 400; throw e;
+  }
+
+  const existingItem = sub.items.data.find(i => i.price.id === priceId);
+  const currentQty   = existingItem?.quantity || 0;
+  const newQty       = currentQty + qty;
+  const updatedItems = existingItem
+    ? [{ id: existingItem.id, quantity: newQty }]
+    : [{ price: priceId, quantity: qty }];
+
+  const now         = Math.floor(Date.now() / 1000);
+  const daysLeft    = Math.ceil((sub.current_period_end - now) / 86400);
+  const onTrial     = sub.status === 'trialing';
+
+  if (preview) {
+    let chargeAmount = 0;
+    let currency = 'MXN';
+    if (!onTrial) {
+      try {
+        const upcoming = await stripe.invoices.retrieveUpcoming({
+          customer: tenant.stripe_customer_id,
+          subscription: tenant.stripe_subscription_id,
+          subscription_items: updatedItems,
+          subscription_proration_behavior: 'create_prorations',
+          subscription_proration_date: now,
+        });
+        // Suma solo las líneas de proration positivas (cargos nuevos)
+        chargeAmount = upcoming.lines.data
+          .filter(l => l.proration && l.amount > 0)
+          .reduce((s, l) => s + l.amount, 0) / 100;
+        currency = (upcoming.currency || 'mxn').toUpperCase();
+      } catch (_) { /* Si falla el preview, dejamos chargeAmount = 0 */ }
+    }
+    return { preview: true, qty, newTotalSeats: newQty, chargeAmount, currency, daysLeft, renewalDate: sub.current_period_end, onTrial };
+  }
+
+  // Aplicar el cambio con proration real
+  await stripe.subscriptions.update(tenant.stripe_subscription_id, {
+    items: updatedItems,
+    proration_behavior: 'create_prorations',
+  });
+  db.prepare('UPDATE tenants SET extra_users = ?, updated_at = unixepoch() WHERE id = ?').run(newQty, tenantId);
+  return { ok: true, newTotalSeats: newQty };
+}
+
 // ─── Customer Portal ──────────────────────────────────────────────────────
 // Genera un link al portal de Stripe donde el customer puede:
 //   - cambiar plan
@@ -121,4 +185,5 @@ module.exports = {
   createPortalSession,
   syncSubscriptionToTenant,
   constructWebhookEvent,
+  addExtraUsers,
 };

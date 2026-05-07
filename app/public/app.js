@@ -12797,11 +12797,12 @@ function setupNotifications() {
 }
 
 // ═══════ BILLING (Suscripción) ═══════
-let _billingPlans    = null;
-let _billingSub      = null;
-let _billingExtraUser = null;
-let _billingInterval = 'month'; // 'month' | 'semester' | 'year'
-let _extraUserQty    = 1;
+let _billingPlans      = null;
+let _billingSub        = null;
+let _billingExtraUser  = null;
+let _billingInterval   = 'month'; // 'month' | 'semester' | 'year'
+let _extraUserQty      = 1;
+let _extraUserPreview  = null; // resultado del preview pendiente de confirmar
 
 async function loadBilling() {
   const root = document.getElementById('billingPlans');
@@ -12970,9 +12971,29 @@ function renderBillingAddons() {
   const eu = _billingExtraUser;
   if (!eu) { el.hidden = true; return; }
 
-  const hasSub = !!_billingSub?.subscription;
-  const price  = eu.promoPrice || eu.monthlyPrice;
+  const hasSub   = !!_billingSub?.subscription;
   const hasPrice = !!eu.priceIdMonthly;
+  const price    = eu.promoPrice || eu.monthlyPrice;
+  const existingSeats = _billingSub?.extraUsers || 0;
+  const existingNote  = existingSeats > 0 ? `<span style="color:#22c55e;font-size:11px;font-weight:600">✓ Tienes ${existingSeats} asesor${existingSeats > 1 ? 'es' : ''} extra activo${existingSeats > 1 ? 's' : ''}</span>` : '';
+
+  // Estado: confirmación pendiente
+  const pv = _extraUserPreview;
+  const confirmHtml = pv ? `
+    <div class="ba-confirm" id="baConfirm">
+      <div class="ba-confirm-text">
+        ${pv.onTrial
+          ? `Se agregarán <strong>${pv.qty}</strong> asesor${pv.qty > 1 ? 'es' : ''} sin cargo ahora. Se cobrarán cuando termine el trial.`
+          : pv.chargeAmount > 0
+            ? `Se cobrarán <strong>$${pv.chargeAmount.toFixed(2)} ${pv.currency}</strong> hoy por los <strong>${pv.daysLeft} días</strong> restantes. Luego <strong>$${price * pv.qty} ${eu.currency}/mes</strong>.`
+            : `Se agregarán <strong>${pv.qty}</strong> asesor${pv.qty > 1 ? 'es' : ''} a tu suscripción sin cargo adicional hoy.`
+        }
+      </div>
+      <div class="ba-confirm-actions">
+        <button class="ba-btn" id="baConfirmOk">Confirmar</button>
+        <button class="ba-btn ba-btn--ghost" id="baConfirmCancel">Cancelar</button>
+      </div>
+    </div>` : '';
 
   el.innerHTML = `
     <p class="billing-addons-title">Complementos</p>
@@ -12981,45 +13002,63 @@ function renderBillingAddons() {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
       </div>
       <div class="ba-info">
-        <div class="ba-name">Usuario adicional</div>
-        <div class="ba-desc">Cada plan incluye 2 asesores. Agrega más cuando tu equipo crezca.</div>
+        <div class="ba-name">Asesor adicional</div>
+        <div class="ba-desc">Cada plan incluye 2 asesores. Agrega más cuando tu equipo crezca.${existingNote ? '<br>' + existingNote : ''}</div>
       </div>
       <div class="ba-price">$${price} <span>${eu.currency}/asesor/mes</span></div>
-      <div class="ba-controls">
+      ${pv ? '' : `<div class="ba-controls">
         <div class="ba-qty">
           <button class="ba-qty-btn" id="baQtyMinus" ${_extraUserQty <= 1 ? 'disabled' : ''}>−</button>
-          <span class="ba-qty-val" id="baQtyVal">${_extraUserQty}</span>
+          <span class="ba-qty-val">${_extraUserQty}</span>
           <button class="ba-qty-btn" id="baQtyPlus" ${_extraUserQty >= 10 ? 'disabled' : ''}>+</button>
         </div>
         <button class="ba-btn" id="baAddBtn" ${!hasPrice || !hasSub ? 'disabled' : ''}>
-          ${!hasPrice ? 'Próximamente' : !hasSub ? 'Requiere suscripción' : `Agregar ${_extraUserQty === 1 ? '1 asesor' : _extraUserQty + ' asesores'} · $${price * _extraUserQty}/${eu.currency}`}
+          ${!hasPrice ? 'Próximamente' : !hasSub ? 'Requiere suscripción activa' : `Agregar ${_extraUserQty === 1 ? '1 asesor' : _extraUserQty + ' asesores'}`}
         </button>
-      </div>
+      </div>`}
+      ${confirmHtml}
     </div>`;
 
   el.hidden = false;
 
   el.querySelector('#baQtyMinus')?.addEventListener('click', () => {
-    if (_extraUserQty > 1) { _extraUserQty--; renderBillingAddons(); }
+    if (_extraUserQty > 1) { _extraUserQty--; _extraUserPreview = null; renderBillingAddons(); }
   });
   el.querySelector('#baQtyPlus')?.addEventListener('click', () => {
-    if (_extraUserQty < 10) { _extraUserQty++; renderBillingAddons(); }
+    if (_extraUserQty < 10) { _extraUserQty++; _extraUserPreview = null; renderBillingAddons(); }
   });
-  el.querySelector('#baAddBtn')?.addEventListener('click', () => onBuyExtraUser(_extraUserQty));
+  el.querySelector('#baAddBtn')?.addEventListener('click', () => onExtraUserPreview(_extraUserQty));
+  el.querySelector('#baConfirmOk')?.addEventListener('click', () => onExtraUserApply(_extraUserPreview?.qty || _extraUserQty));
+  el.querySelector('#baConfirmCancel')?.addEventListener('click', () => { _extraUserPreview = null; renderBillingAddons(); });
 }
 
-async function onBuyExtraUser(qty) {
-  const eu = _billingExtraUser;
-  if (!eu?.priceIdMonthly) { toast('Opción no disponible aún', 'warning'); return; }
+async function onExtraUserPreview(qty) {
+  const btn = document.getElementById('baAddBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Calculando…'; }
   try {
-    const r = await api('POST', '/api/billing/checkout', {
-      priceId:  eu.priceIdMonthly,
-      quantity: qty,
-    });
-    if (r.url) window.location.href = r.url;
-    else toast('No se pudo iniciar el checkout', 'error');
+    const r = await api('POST', '/api/billing/extra-users', { qty, preview: true });
+    _extraUserPreview = r;
+    renderBillingAddons();
   } catch (err) {
-    toast(err.message || 'Error iniciando checkout', 'error');
+    toast(err.message || 'Error al calcular', 'error');
+    renderBillingAddons();
+  }
+}
+
+async function onExtraUserApply(qty) {
+  const btn = document.getElementById('baConfirmOk');
+  if (btn) { btn.disabled = true; btn.textContent = 'Aplicando…'; }
+  try {
+    await api('POST', '/api/billing/extra-users', { qty, preview: false });
+    _extraUserPreview = null;
+    _extraUserQty = 1;
+    toast(`${qty === 1 ? '1 asesor agregado' : qty + ' asesores agregados'} correctamente`, 'success');
+    // Recargar estado para reflejar el cambio
+    loadBilling();
+  } catch (err) {
+    toast(err.message || 'Error aplicando cambio', 'error');
+    _extraUserPreview = null;
+    renderBillingAddons();
   }
 }
 

@@ -8429,6 +8429,31 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .ba-btn:hover { background: #1d4ed8; }
 .ba-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+.ba-btn--ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.ba-btn--ghost:hover { background: var(--surface); }
+.ba-confirm {
+  width: 100%;
+  flex-basis: 100%;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ba-confirm-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.ba-confirm-text strong { color: var(--text-primary); }
+.ba-confirm-actions { display: flex; gap: 8px; }
 
 /* Loading */
 .billing-loading {

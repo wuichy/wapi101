@@ -12830,7 +12830,13 @@ function renderBillingStatus() {
   if (!el) return;
   const sub = _billingSub?.subscription;
   if (!sub) {
-    el.hidden = true;
+    if (_billingSub?.plan === 'free') {
+      el.className = 'billing-status is-free';
+      el.innerHTML = `<span class="bs-icon">🎁</span><div class="bs-text"><strong>Plan Gratis activo</strong>1 usuario, 500 contactos. Actualiza cuando quieras para crecer sin límites.</div>`;
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+    }
     if (manageEl) manageEl.hidden = true;
     return;
   }
@@ -12869,11 +12875,7 @@ function renderBillingStatus() {
 }
 
 function _detectCurrentPlanKey() {
-  // Heurística: compara priceIds de _billingSub con los de _billingPlans
-  // (necesitaríamos exponer el priceId de la sub actual desde el backend para
-  // un match perfecto. Por ahora detectamos por status; si está suscrito,
-  // ningún card sale como "actual" hasta que mejoremos el endpoint).
-  return null;
+  return _billingSub?.plan || null;
 }
 
 function renderBillingPlans() {
@@ -12885,6 +12887,29 @@ function renderBillingPlans() {
     const isCurrent  = currentKey === p.key;
     const featuredClass = p.featured ? ' is-featured' : '';
     const currentClass  = isCurrent  ? ' is-current'  : '';
+
+    // Plan Gratis — card informativa
+    if (p.free) {
+      const isCurrentFree = currentKey === 'free';
+      const features = (p.features || []).map(f => `<li>${escHtml(f)}</li>`).join('');
+      return `
+        <div class="bp-card bp-card--free${isCurrentFree ? ' is-current' : ''}">
+          <div>
+            <h3 class="bp-name">${escHtml(p.name)}</h3>
+            <p class="bp-tagline">${escHtml(p.tagline)}</p>
+          </div>
+          <div>
+            <div class="bp-price">
+              <span class="amount">$0</span>
+              <span class="currency">MXN</span>
+              <span class="period">/siempre</span>
+            </div>
+            <p class="bp-limits">500 contactos · 1 usuario</p>
+          </div>
+          <ul class="bp-features">${features}</ul>
+          <button class="bp-cta" disabled>${isCurrentFree ? 'Plan actual' : 'Plan base incluido'}</button>
+        </div>`;
+    }
 
     // Plan Ejecutivo — card especial sin precio
     if (p.custom) {
@@ -12929,7 +12954,7 @@ function renderBillingPlans() {
       ? `<span class="bp-real-price">$${p.monthlyPrice}</span>`
       : '';
 
-    const ctaText = isCurrent ? 'Plan actual' : (_billingSub?.subscription ? 'Cambiar a ' + p.name : 'Empezar 14 días gratis');
+    const ctaText = isCurrent ? 'Plan actual' : (_billingSub?.subscription ? 'Cambiar a ' + p.name : 'Probar ' + p.name + ' gratis 14 días');
     const limits  = p.limits || {};
     const limitsHtml = limits.leads
       ? `<p class="bp-limits">${Number(limits.leads).toLocaleString('es-MX')} leads · ${Number(limits.contacts).toLocaleString('es-MX')} contactos · ${limits.users} usuarios</p>`

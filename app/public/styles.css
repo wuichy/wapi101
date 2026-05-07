@@ -8092,6 +8092,8 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   align-items: center;
   gap: 12px;
 }
+.billing-status.is-free { background: #f0fdf4; border-color: #86efac; }
+.billing-status.is-free .bs-text strong { color: #14532d; }
 .billing-status.is-trial { background: #fef3c7; border-color: #fcd34d; }
 .billing-status.is-past_due, .billing-status.is-canceled { background: #fee2e2; border-color: #fca5a5; }
 .billing-status .bs-icon { font-size: 20px; }
@@ -8301,6 +8303,15 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   color: #64748b;
   margin: 4px 0 0;
 }
+
+/* Plan Gratis */
+.bp-card--free {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+.bp-card--free .bp-name { color: #15803d; }
+.bp-card--free .bp-cta:disabled { background: #86efac; color: #14532d; cursor: default; }
+.bp-card--free.is-current .bp-cta:disabled { background: #22c55e; color: #fff; }
 
 /* Ejecutivo / custom plan card */
 .bp-card--custom {

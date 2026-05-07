@@ -2978,7 +2978,9 @@ async function connectOAuth(providerKey, authType) {
   // Multi-tenant: pre-creamos el state en backend (con auth) ANTES de abrir
   // el popup para que el callback sepa a qué tenant pertenece la integración.
   // El popup es un GET sin headers Auth, por eso el state debe venir pre-creado.
-  const provider = authType === 'oauth_tiktok' ? 'tiktok' : providerKey;
+  const provider = authType === 'oauth_tiktok' ? 'tiktok'
+                 : authType === 'oauth_threads' ? 'threads'
+                 : providerKey;
   let state;
   try {
     const r = await api('POST', '/api/auth/oauth/prepare', { provider });
@@ -2990,6 +2992,8 @@ async function connectOAuth(providerKey, authType) {
 
   const oauthPath = authType === 'oauth_tiktok'
     ? `/auth/tiktok/start?state=${state}`
+    : authType === 'oauth_threads'
+    ? `/auth/threads/start?state=${state}`
     : `/auth/meta/start?state=${state}`;
 
   const w = 620, h = 700;

@@ -17,6 +17,7 @@ loadSafe('messenger',   './messenger');
 loadSafe('instagram',   './instagram');
 loadSafe('telegram',    './telegram');
 loadSafe('tiktok',      './tiktok');
+loadSafe('threads',     './threads');
 loadSafe('woocommerce', './woocommerce');
 loadSafe('shopify',     './shopify');
 loadSafe('square',      './square');

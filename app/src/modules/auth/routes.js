@@ -285,6 +285,78 @@ module.exports = function createAuthRouter(db) {
     }
   });
 
+  // ─── Threads ───
+  router.get('/threads/start', (req, res) => {
+    const appId = process.env.META_IG_APP_ID || process.env.META_APP_ID;
+    const appSecret = process.env.META_IG_APP_SECRET || process.env.META_APP_SECRET;
+    if (!appId || !appSecret) {
+      return oauthError(res, 'No están configuradas las credenciales de Meta para Threads (META_IG_APP_ID / META_IG_APP_SECRET en .env).');
+    }
+
+    let state;
+    if (req.query.state) {
+      const stateRow = db.prepare("SELECT * FROM oauth_states WHERE state = ?").get(req.query.state);
+      if (!stateRow) return oauthError(res, 'Sesión OAuth inválida o expirada. Inténtalo de nuevo desde el CRM.');
+      state = stateRow.state;
+    } else {
+      state = makeState();
+      db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
+      db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, 'threads', 1)").run(state);
+    }
+
+    const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
+    const redirectUri = encodeURIComponent(`${baseUrl}/auth/threads/callback`);
+    const scope = encodeURIComponent('threads_basic,threads_manage_replies');
+    const url = `https://www.threads.net/oauth/authorize?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code&state=${state}`;
+    res.redirect(url);
+  });
+
+  router.get('/threads/callback', async (req, res) => {
+    const { code, state, error, error_description } = req.query;
+    if (error) return oauthError(res, error_description || error);
+    if (!code || !state) return oauthError(res, 'Respuesta inválida de Threads.');
+
+    const stateRow = db.prepare("SELECT * FROM oauth_states WHERE state = ?").get(state);
+    if (!stateRow) return oauthError(res, 'Estado OAuth inválido o expirado.');
+    db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
+
+    const tenantId = stateRow.tenant_id || 1;
+    const appId = process.env.META_IG_APP_ID || process.env.META_APP_ID;
+    const appSecret = process.env.META_IG_APP_SECRET || process.env.META_APP_SECRET;
+    const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
+    const redirectUri = `${baseUrl}/auth/threads/callback`;
+
+    try {
+      // 1. Short-lived token
+      const tokenRes = await fetch('https://graph.threads.net/oauth/access_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: appId, client_secret: appSecret, grant_type: 'authorization_code', redirect_uri: redirectUri, code }),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || tokenData.error) throw new Error(tokenData.error?.message || 'Error obteniendo token de Threads');
+
+      // 2. Long-lived token (60 días)
+      const llRes = await fetch(`https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret=${appSecret}&access_token=${tokenData.access_token}`);
+      const llData = await llRes.json();
+      const accessToken = llData.access_token || tokenData.access_token;
+
+      // 3. Info del usuario
+      const meRes = await fetch(`https://graph.threads.net/me?fields=id,username,name&access_token=${accessToken}`);
+      const meData = await meRes.json();
+      const userId = String(meData.id || tokenData.user_id || '');
+
+      const integration = await integrationService.connectRaw(db, tenantId, 'threads', { accessToken, appSecret, appId, threadsUserId: userId }, {
+        displayName: meData.username ? `@${meData.username}` : meData.name || `Threads ${userId}`,
+        externalId: userId,
+      });
+      return oauthSuccess(res, integration.id, integration.displayName);
+    } catch (err) {
+      console.error('[auth threads]', err.message);
+      return oauthError(res, err.message);
+    }
+  });
+
   // Listado de eventos disponibles para outgoing webhooks
   router.get('/events', (_req, res) => {
     res.json({ events: AVAILABLE_EVENTS });

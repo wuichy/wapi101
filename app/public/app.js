@@ -2692,9 +2692,9 @@ function showView(viewName) {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
   }
-  const cleanTopbar = (viewName === 'integraciones' || viewName === 'bot' || viewName === 'contactos' || viewName === 'expedientes' || viewName === 'plantillas');
+  const cleanTopbar = (viewName === 'integraciones' || viewName === 'bot' || viewName === 'contactos' || viewName === 'expedientes');
   if (title) title.hidden = cleanTopbar;
-  const hideActions = cleanTopbar || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones';
+  const hideActions = cleanTopbar || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
   if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta');
@@ -2706,6 +2706,8 @@ function showView(viewName) {
   if (calExtras) calExtras.hidden = (viewName !== 'calendario');
   const appsExtras = document.getElementById('topbarAppsExtras');
   if (appsExtras) appsExtras.hidden = (viewName !== 'aplicaciones');
+  const tplExtras = document.getElementById('topbarTplExtras');
+  if (tplExtras) tplExtras.hidden = (viewName !== 'plantillas');
 
   if (viewName === 'calendario') {
     if (searchInput) { searchInput.placeholder = t('cal.search.placeholder'); searchInput.value = _tasksSearch; }

@@ -9239,9 +9239,16 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .biz-logo-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
-.biz-logo-row input { flex: 1; }
+.biz-logo-upload-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.biz-logo-file-label {
+  cursor: pointer;
+}
 .biz-logo-preview {
   width: 48px;
   height: 48px;

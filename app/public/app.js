@@ -9768,7 +9768,8 @@ function renderBusinessProfile() {
   set('bizProfileUrl',     p.url);
   set('bizProfilePhone',   p.phone);
   set('bizProfileAddress', p.address);
-  set('bizProfileLogo',    p.logoUrl);
+  const hiddenLogo = document.getElementById('bizProfileLogo');
+  if (hiddenLogo) hiddenLogo.value = p.logoUrl || '';
 
   // Prefijo dinámico según el host actual (wapi101.com/, localhost/, etc.)
   const prefixEl = document.getElementById('bizSlugPrefix');
@@ -9787,6 +9788,49 @@ function updateLogoPreview(url) {
     el.style.backgroundImage = '';
     el.classList.add('is-empty');
   }
+  const removeBtn = document.getElementById('bizLogoRemoveBtn');
+  if (removeBtn) removeBtn.hidden = !url;
+  applyBrandLogo(url);
+}
+
+function applyBrandLogo(url) {
+  const mark = document.querySelector('.brand-mark');
+  if (!mark) return;
+  if (url) {
+    mark.style.backgroundImage = `url("${url.replace(/"/g, '&quot;')}")`;
+    mark.style.backgroundSize = 'cover';
+    mark.style.backgroundPosition = 'center';
+    mark.textContent = '';
+  } else {
+    mark.style.backgroundImage = '';
+    mark.style.backgroundSize = '';
+    mark.style.backgroundPosition = '';
+    mark.textContent = 'W';
+  }
+}
+
+async function uploadBusinessLogo(file) {
+  const MAX = 2 * 1024 * 1024;
+  if (file.size > MAX) { toast('El logo no puede superar 2 MB', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const label = document.querySelector('.biz-logo-file-label');
+    if (label) { label.textContent = '⏳ Subiendo…'; label.style.pointerEvents = 'none'; }
+    try {
+      const data = await api('POST', '/api/business/logo', { data: e.target.result, mimetype: file.type });
+      const url = data.logoUrl;
+      const hidden = document.getElementById('bizProfileLogo');
+      if (hidden) hidden.value = url;
+      updateLogoPreview(url);
+      _bizProfileCache = data.profile || _bizProfileCache;
+      toast('Logo guardado', 'success');
+    } catch (err) {
+      toast(err.message || 'Error al subir logo', 'error');
+    } finally {
+      if (label) { label.textContent = '📁 Subir imagen'; label.style.pointerEvents = ''; }
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 async function saveBusinessProfile() {
@@ -9895,8 +9939,20 @@ function setupBusinessUI() {
 
   // Perfil del negocio
   document.getElementById('bizProfileSaveBtn')?.addEventListener('click', saveBusinessProfile);
-  document.getElementById('bizProfileLogo')?.addEventListener('input', (e) => {
-    updateLogoPreview(e.target.value.trim());
+  document.getElementById('bizLogoFile')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) uploadBusinessLogo(file);
+    e.target.value = '';
+  });
+  document.getElementById('bizLogoRemoveBtn')?.addEventListener('click', async () => {
+    try {
+      const data = await api('PUT', '/api/business/profile', { ...(_bizProfileCache || {}), logoUrl: '' });
+      _bizProfileCache = data.profile || null;
+      const hidden = document.getElementById('bizProfileLogo');
+      if (hidden) hidden.value = '';
+      updateLogoPreview('');
+      toast('Logo eliminado', 'success');
+    } catch (err) { toast(err.message, 'error'); }
   });
 }
 

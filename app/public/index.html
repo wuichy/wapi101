@@ -2227,9 +2227,14 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                       <span>Logo</span>
                       <div class="biz-logo-row">
                         <div class="biz-logo-preview" id="bizLogoPreview" aria-label="Vista previa del logo"></div>
-                        <input type="url" id="bizProfileLogo" placeholder="https://midominio.com/logo.png" autocomplete="off">
+                        <div class="biz-logo-upload-col">
+                          <label class="btn btn--ghost btn--sm biz-logo-file-label" for="bizLogoFile">📁 Subir imagen</label>
+                          <input type="file" id="bizLogoFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" style="display:none">
+                          <button type="button" class="btn btn--ghost btn--sm" id="bizLogoRemoveBtn" hidden>Quitar logo</button>
+                        </div>
                       </div>
-                      <small>Pega la URL pública de tu logo (PNG/JPG/SVG).</small>
+                      <input type="hidden" id="bizProfileLogo">
+                      <small>PNG, JPG, SVG o WebP · máx. 2 MB. Aparece en el menú de navegación.</small>
                     </label>
 
                     <label class="biz-field">

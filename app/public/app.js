@@ -1,28 +1,3 @@
-// ─── Diagnóstico de errores JS (temporal) ───
-// Si algo crashea antes de que la app cargue, esto lo muestra visualmente
-// para poder identificar el bug. Remover después de resolver.
-window.onerror = (msg, src, line, col, err) => {
-  const box = document.getElementById('_jsErrBox') || (() => {
-    const el = document.createElement('div');
-    el.id = '_jsErrBox';
-    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;padding:12px 16px;font:13px/1.5 monospace;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
-    document.body ? document.body.prepend(el) : document.addEventListener('DOMContentLoaded', () => document.body.prepend(el));
-    return el;
-  })();
-  box.textContent += `[JS ERROR] ${msg}\n  at ${src}:${line}:${col}\n${err?.stack || ''}\n\n`;
-  return false;
-};
-window.addEventListener('unhandledrejection', (e) => {
-  const box = document.getElementById('_jsErrBox') || (() => {
-    const el = document.createElement('div');
-    el.id = '_jsErrBox';
-    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;padding:12px 16px;font:13px/1.5 monospace;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
-    document.body.prepend(el);
-    return el;
-  })();
-  box.textContent += `[UNHANDLED PROMISE] ${e.reason?.stack || e.reason}\n\n`;
-});
-
 // ═══════ Helpers ═══════
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -2637,6 +2612,38 @@ function setupDashboard() {
 
 // ═══════ Navegación ═══════
 const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones']);
+
+// Filtro de búsqueda de la vista Aplicaciones (topbar)
+let _appsSearch = '';
+function filterAppsList(q) {
+  const term = (q || '').trim().toLowerCase();
+  const panes = document.querySelectorAll('.apps-tab-pane');
+  panes.forEach(pane => {
+    const cards = pane.querySelectorAll('[data-app-name]');
+    let visibles = 0;
+    cards.forEach(card => {
+      const name = (card.dataset.appName || '').toLowerCase();
+      const tags = (card.dataset.appTags || '').toLowerCase();
+      const match = !term || name.includes(term) || tags.includes(term);
+      card.hidden = !match;
+      if (match) visibles++;
+    });
+    const noResults = pane.querySelector('.apps-no-results');
+    if (cards.length && term && visibles === 0) {
+      if (!noResults) {
+        const div = document.createElement('div');
+        div.className = 'apps-no-results';
+        div.style.cssText = 'padding:24px;text-align:center;color:var(--muted,#64748b);font-size:13px';
+        div.textContent = 'Sin resultados para tu búsqueda.';
+        pane.appendChild(div);
+      } else {
+        noResults.hidden = false;
+      }
+    } else if (noResults) {
+      noResults.hidden = true;
+    }
+  });
+}
 function showView(viewName) {
   // 'recordatorios' es alias legacy — redirige a calendario en sub-vista lista
   if (viewName === 'recordatorios') {
@@ -2681,6 +2688,10 @@ function showView(viewName) {
   } else if (viewName === 'plantillas') {
     if (searchInput) { searchInput.placeholder = 'Buscar plantilla…'; searchInput.value = (typeof _tplFilter !== 'undefined' ? _tplFilter : '') || ''; }
     if (plExtras) plExtras.hidden = true;
+  } else if (viewName === 'aplicaciones') {
+    if (searchInput) { searchInput.placeholder = 'Buscar aplicación…'; searchInput.value = _appsSearch || ''; }
+    if (plExtras) plExtras.hidden = true;
+    filterAppsList(_appsSearch || '');
   } else {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
@@ -13647,6 +13658,14 @@ function setupTasksView() {
     const tab = btn.dataset.appsTab;
     document.getElementById('appsTabInstalled').hidden = (tab !== 'installed');
     document.getElementById('appsTabAvailable').hidden  = (tab !== 'available');
+    filterAppsList(_appsSearch || '');
+  });
+
+  // Búsqueda de aplicaciones desde topbar (cuando estamos en aplicaciones)
+  document.getElementById('topbarSearchInput')?.addEventListener('input', (e) => {
+    if (document.body.dataset.viewActive !== 'aplicaciones') return;
+    _appsSearch = e.target.value;
+    filterAppsList(_appsSearch);
   });
 
   // Cargar al entrar a la vista unificada

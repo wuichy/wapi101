@@ -42,13 +42,13 @@ async function ensureCustomer(db, tenantId) {
 // ─── Checkout Session ─────────────────────────────────────────────────────
 // Crea una Stripe Checkout Session para que el tenant inicie/cambie su
 // suscripción. priceId es el ID del Price en Stripe (price_...).
-async function createCheckoutSession(db, tenantId, priceId, { successUrl, cancelUrl }) {
+async function createCheckoutSession(db, tenantId, priceId, { successUrl, cancelUrl, quantity = 1 }) {
   if (!priceId) throw new Error('priceId requerido');
   const customerId = await ensureCustomer(db, tenantId);
   const session = await getStripe().checkout.sessions.create({
     mode: 'subscription',
     customer: customerId,
-    line_items: [{ price: priceId, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: Math.max(1, Math.min(10, Number(quantity) || 1)) }],
     subscription_data: {
       metadata: { tenant_id: String(tenantId) },
       // Trial 14 días si el tenant nunca ha tenido suscripción.

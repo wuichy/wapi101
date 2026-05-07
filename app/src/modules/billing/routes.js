@@ -158,13 +158,14 @@ module.exports = function createBillingRouter(db) {
     if (req.advisor?.role !== 'admin') {
       return res.status(403).json({ error: 'Solo admins pueden iniciar checkout' });
     }
-    const { priceId, successUrl, cancelUrl } = req.body || {};
+    const { priceId, successUrl, cancelUrl, quantity } = req.body || {};
     if (!priceId) return res.status(400).json({ error: 'priceId requerido' });
     const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
     try {
       const session = await billingSvc.createCheckoutSession(db, req.tenantId, priceId, {
         successUrl: successUrl || `${baseUrl}/?billing=success`,
         cancelUrl: cancelUrl || `${baseUrl}/?billing=cancelled`,
+        quantity,
       });
       res.json(session);
     } catch (err) {

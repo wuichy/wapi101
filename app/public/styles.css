@@ -8337,6 +8337,99 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   margin-bottom: 24px;
 }
 
+/* ─── Add-ons / Usuarios extra ─── */
+.billing-addons {
+  margin-bottom: 28px;
+}
+.billing-addons-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.ba-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--bg-card, #1e293b);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  flex-wrap: wrap;
+}
+.ba-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: rgba(37,99,235,.12);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent, #2563eb);
+}
+.ba-icon svg { width: 20px; height: 20px; }
+.ba-info { flex: 1; min-width: 140px; }
+.ba-name { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+.ba-desc { font-size: 12px; color: var(--text-muted); }
+.ba-price {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.ba-price span { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+.ba-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ba-qty {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ba-qty-btn {
+  width: 34px; height: 34px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.ba-qty-btn:hover:not(:disabled) { background: var(--surface); }
+.ba-qty-btn:disabled { opacity: .35; cursor: not-allowed; }
+.ba-qty-val {
+  min-width: 30px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 0 6px;
+  line-height: 34px;
+}
+.ba-btn {
+  padding: 0 18px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--accent, #2563eb);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+.ba-btn:hover { background: #1d4ed8; }
+.ba-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
 /* Loading */
 .billing-loading {
   text-align: center;

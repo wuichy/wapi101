@@ -12797,9 +12797,11 @@ function setupNotifications() {
 }
 
 // ═══════ BILLING (Suscripción) ═══════
-let _billingPlans = null;
-let _billingSub = null;
-let _billingInterval = 'month'; // 'month' | 'year'
+let _billingPlans    = null;
+let _billingSub      = null;
+let _billingExtraUser = null;
+let _billingInterval = 'month'; // 'month' | 'semester' | 'year'
+let _extraUserQty    = 1;
 
 async function loadBilling() {
   const root = document.getElementById('billingPlans');
@@ -12810,10 +12812,12 @@ async function loadBilling() {
       api('GET', '/api/billing/plans'),
       api('GET', '/api/billing/subscription'),
     ]);
-    _billingPlans = plansResp.plans || [];
-    _billingSub = subResp;
+    _billingPlans     = plansResp.plans     || [];
+    _billingExtraUser = plansResp.extraUser || null;
+    _billingSub       = subResp;
     renderBillingStatus();
     renderBillingPlans();
+    renderBillingAddons();
   } catch (err) {
     root.innerHTML = `<div class="billing-loading" style="color:#ef4444">Error: ${escHtml(err.message)}</div>`;
   }
@@ -12958,6 +12962,65 @@ function renderBillingPlans() {
   root.querySelectorAll('.bp-cta:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => onSubscribe(btn.dataset.planKey));
   });
+}
+
+function renderBillingAddons() {
+  const el = document.getElementById('billingAddons');
+  if (!el) return;
+  const eu = _billingExtraUser;
+  if (!eu) { el.hidden = true; return; }
+
+  const hasSub = !!_billingSub?.subscription;
+  const price  = eu.promoPrice || eu.monthlyPrice;
+  const hasPrice = !!eu.priceIdMonthly;
+
+  el.innerHTML = `
+    <p class="billing-addons-title">Complementos</p>
+    <div class="ba-card">
+      <div class="ba-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      </div>
+      <div class="ba-info">
+        <div class="ba-name">Usuario adicional</div>
+        <div class="ba-desc">Cada plan incluye 2 asesores. Agrega más cuando tu equipo crezca.</div>
+      </div>
+      <div class="ba-price">$${price} <span>${eu.currency}/asesor/mes</span></div>
+      <div class="ba-controls">
+        <div class="ba-qty">
+          <button class="ba-qty-btn" id="baQtyMinus" ${_extraUserQty <= 1 ? 'disabled' : ''}>−</button>
+          <span class="ba-qty-val" id="baQtyVal">${_extraUserQty}</span>
+          <button class="ba-qty-btn" id="baQtyPlus" ${_extraUserQty >= 10 ? 'disabled' : ''}>+</button>
+        </div>
+        <button class="ba-btn" id="baAddBtn" ${!hasPrice || !hasSub ? 'disabled' : ''}>
+          ${!hasPrice ? 'Próximamente' : !hasSub ? 'Requiere suscripción' : `Agregar ${_extraUserQty === 1 ? '1 asesor' : _extraUserQty + ' asesores'} · $${price * _extraUserQty}/${eu.currency}`}
+        </button>
+      </div>
+    </div>`;
+
+  el.hidden = false;
+
+  el.querySelector('#baQtyMinus')?.addEventListener('click', () => {
+    if (_extraUserQty > 1) { _extraUserQty--; renderBillingAddons(); }
+  });
+  el.querySelector('#baQtyPlus')?.addEventListener('click', () => {
+    if (_extraUserQty < 10) { _extraUserQty++; renderBillingAddons(); }
+  });
+  el.querySelector('#baAddBtn')?.addEventListener('click', () => onBuyExtraUser(_extraUserQty));
+}
+
+async function onBuyExtraUser(qty) {
+  const eu = _billingExtraUser;
+  if (!eu?.priceIdMonthly) { toast('Opción no disponible aún', 'warning'); return; }
+  try {
+    const r = await api('POST', '/api/billing/checkout', {
+      priceId:  eu.priceIdMonthly,
+      quantity: qty,
+    });
+    if (r.url) window.location.href = r.url;
+    else toast('No se pudo iniciar el checkout', 'error');
+  } catch (err) {
+    toast(err.message || 'Error iniciando checkout', 'error');
+  }
 }
 
 async function onSubscribe(planKey) {

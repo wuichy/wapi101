@@ -2577,15 +2577,24 @@ function showView(viewName) {
   }
   const cleanTopbar = (viewName === 'integraciones' || viewName === 'bot' || viewName === 'contactos' || viewName === 'expedientes' || viewName === 'plantillas');
   if (title) title.hidden = cleanTopbar;
-  if (topbarActions) topbarActions.hidden = cleanTopbar || viewName === 'pipelines' || viewName === 'inicio';
-  // En Ajustes y Mi cuenta el topbar entero (search, campana, ayuda, dropdown)
-  // no aporta nada — la vista trae sus propios controles. Lo ocultamos completo.
+  const hideActions = cleanTopbar || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones';
+  if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
   if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta');
   const customersExtras = document.getElementById('topbarCustomersExtras');
   if (customersExtras) customersExtras.hidden = (viewName !== 'contactos');
   const expExtras = document.getElementById('topbarExpExtras');
   if (expExtras) expExtras.hidden = (viewName !== 'expedientes');
+  const calExtras = document.getElementById('topbarCalExtras');
+  if (calExtras) calExtras.hidden = (viewName !== 'calendario');
+  const appsExtras = document.getElementById('topbarAppsExtras');
+  if (appsExtras) appsExtras.hidden = (viewName !== 'aplicaciones');
+
+  if (viewName === 'calendario') {
+    if (searchInput) { searchInput.placeholder = 'Buscar tareas…'; searchInput.value = _tasksSearch; }
+  } else {
+    _tasksSearch = '';
+  }
   if (viewName === 'chats') loadConversations();
   if (viewName === 'inicio') loadDashboard();
 }
@@ -13156,6 +13165,7 @@ let _tasksFilter = 'overdue';
 let _tasksItems = [];
 let _tasksEditId = null;     // null = crear nueva, número = editar existente
 let _tasksAdvisors = [];     // cache para dropdown del modal
+let _tasksSearch   = '';     // filtro de búsqueda por keyword
 
 async function loadTasks() {
   const root = document.getElementById('tasksList');
@@ -13209,13 +13219,24 @@ function fmtTaskDue(ts) {
 function renderTaskList() {
   const root = document.getElementById('tasksList');
   if (!root) return;
-  if (!_tasksItems.length) {
-    const emptyMsg = {
+
+  const q = _tasksSearch.trim().toLowerCase();
+  const items = q
+    ? _tasksItems.filter(t =>
+        (t.title || '').toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.assignedAdvisorName || '').toLowerCase().includes(q) ||
+        fmtTaskDue(t.dueAt).toLowerCase().includes(q)
+      )
+    : _tasksItems;
+
+  if (!items.length) {
+    const emptyMsg = q ? `Sin resultados para "${q}"` : ({
       overdue:   '🎉 ¡Sin tareas vencidas!',
       today:     'No hay tareas para hoy',
       upcoming:  'No hay tareas próximas',
       completed: 'No hay tareas completadas',
-    }[_tasksFilter] || 'No hay tareas';
+    }[_tasksFilter] || 'No hay tareas');
     root.innerHTML = `<div class="tasks-empty">${emptyMsg}</div>`;
     return;
   }
@@ -13223,7 +13244,7 @@ function renderTaskList() {
   const startOfToday = Math.floor(new Date(new Date().setHours(0,0,0,0)).getTime() / 1000);
   const endOfToday   = Math.floor(new Date(new Date().setHours(23,59,59,999)).getTime() / 1000);
 
-  root.innerHTML = _tasksItems.map(t => {
+  root.innerHTML = items.map(t => {
     const isOverdue  = !t.completed && t.dueAt < now;
     const isToday    = !t.completed && t.dueAt >= startOfToday && t.dueAt <= endOfToday;
     const dueClass   = isOverdue ? 'is-overdue' : isToday ? 'is-today' : '';
@@ -13331,7 +13352,7 @@ async function checkTaskAdvisorHours() {
 async function loadAdvisorsForTaskModal() {
   if (_tasksAdvisors.length) return;
   try {
-    const r = await api('GET', '/api/advisors');
+    const r = await api('GET', '/api/advisors/list-min');
     _tasksAdvisors = r.items || [];
   } catch (_) { _tasksAdvisors = []; }
 }
@@ -13410,7 +13431,7 @@ async function saveTask() {
   const expedientId = document.getElementById('taskExpedientId').value;
   const durationMinutes = document.getElementById('taskDuration')?.value || '';
   if (!title) { toast('El título es requerido', 'warning'); return; }
-  if (!dueLocal) { toast('La fecha de vencimiento es requerida', 'warning'); return; }
+  if (!dueLocal) { toast('La fecha y hora son requeridas', 'warning'); return; }
   const dueAt = Math.floor(new Date(dueLocal).getTime() / 1000);
 
   const body = {
@@ -13474,9 +13495,29 @@ function setupTasksView() {
   document.getElementById('taskAssignedAdvisorId')?.addEventListener('change', checkTaskAdvisorHours);
   document.getElementById('taskDueAt')?.addEventListener('change', checkTaskAdvisorHours);
 
+  // Búsqueda de tareas desde topbar (cuando estamos en calendario)
+  document.getElementById('topbarSearchInput')?.addEventListener('input', (e) => {
+    if (document.body.dataset.viewActive !== 'calendario') return;
+    _tasksSearch = e.target.value;
+    renderTaskList();
+  });
+
+  // Tabs de aplicaciones
+  document.getElementById('topbarAppsExtras')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.apps-tab-btn');
+    if (!btn) return;
+    document.querySelectorAll('.apps-tab-btn').forEach(b => b.classList.toggle('is-active', b === btn));
+    const tab = btn.dataset.appsTab;
+    document.getElementById('appsTabInstalled').hidden = (tab !== 'installed');
+    document.getElementById('appsTabAvailable').hidden  = (tab !== 'available');
+  });
+
   // Cargar al entrar a la vista unificada
   document.querySelectorAll('.nav-item[data-view="calendario"]').forEach(n => {
     n.addEventListener('click', () => setTimeout(() => {
+      _tasksSearch = '';
+      const si = document.getElementById('topbarSearchInput');
+      if (si) si.value = '';
       if (_calSubView === 'list') loadTasks(); else loadCalendar();
     }, 50));
   });

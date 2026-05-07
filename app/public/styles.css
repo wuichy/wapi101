@@ -8765,6 +8765,30 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .cal-header-left { display: flex; align-items: center; gap: 12px; }
 
+/* Extras topbar: calendario */
+.topbar-cal-extras {
+  display: flex; align-items: center; gap: 10px; margin-left: auto;
+}
+
+/* Tabs aplicaciones */
+.topbar-apps-extras { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.apps-tab-btn {
+  padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; font-size: 13px; font-weight: 500;
+  color: var(--text-muted); cursor: pointer; transition: all 0.12s;
+}
+.apps-tab-btn:hover { color: var(--text); background: var(--bg); }
+.apps-tab-btn.is-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* Apps tab panes */
+.apps-tab-pane { padding: 32px 24px; }
+.apps-empty-state {
+  text-align: center; padding: 64px 24px; color: var(--text-muted);
+}
+.apps-empty-state .apps-emoji { font-size: 48px; margin-bottom: 16px; }
+.apps-empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.apps-empty-state p { font-size: 14px; max-width: 400px; margin: 0 auto; }
+
 /* Toggle Lista / Mes */
 .cal-sub-toggle {
   display: flex; gap: 2px;

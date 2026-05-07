@@ -146,10 +146,19 @@ module.exports = function createAuthRouter(db) {
 
       } else if (provider === 'instagram') {
         // 3b. Buscar cuenta de Instagram Business
-        const pagesRes = await fetch(`https://graph.facebook.com/${META_VERSION}/me/accounts?access_token=${userToken}&fields=id,name,access_token,instagram_business_account`);
+        const pagesRes = await fetch(`https://graph.facebook.com/${META_VERSION}/me/accounts?access_token=${userToken}&fields=id,name,access_token`);
         const pagesData = await pagesRes.json();
-        console.log('[auth instagram] pages response:', JSON.stringify(pagesData));
-        const pages = (pagesData.data || []).filter(p => p.instagram_business_account);
+        const allPages = pagesData.data || [];
+        if (!allPages.length) throw new Error('No se encontraron Páginas de Facebook en esta cuenta.');
+
+        // Consultar instagram_business_account con el token de cada página
+        for (const p of allPages) {
+          const igRes2 = await fetch(`https://graph.facebook.com/${META_VERSION}/${p.id}?fields=instagram_business_account&access_token=${p.access_token}`);
+          const igData2 = await igRes2.json();
+          console.log('[auth instagram] page', p.id, 'ig check:', JSON.stringify(igData2));
+          if (igData2.instagram_business_account) p.instagram_business_account = igData2.instagram_business_account;
+        }
+        const pages = allPages.filter(p => p.instagram_business_account);
         if (!pages.length) throw new Error('No se encontró una cuenta de Instagram Business vinculada a esta cuenta de Facebook.');
 
         const page = pages[0];

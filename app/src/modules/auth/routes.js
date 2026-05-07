@@ -86,7 +86,7 @@ module.exports = function createAuthRouter(db) {
 
     const scopeMap = {
       messenger:      'pages_show_list,pages_messaging,pages_read_engagement,pages_manage_metadata',
-      instagram:      'instagram_business_basic,instagram_business_manage_messages,pages_show_list,pages_read_engagement',
+      instagram:      'pages_show_list,pages_read_engagement,pages_manage_metadata,instagram_manage_messages',
       facebook:       'pages_show_list,pages_read_engagement',
       'whatsapp-lite':'whatsapp_business_management,whatsapp_business_messaging',
     };

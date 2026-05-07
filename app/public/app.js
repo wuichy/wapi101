@@ -10473,6 +10473,7 @@ function applyAntiAutofill(root = document) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  try {
   // Redirigir a login si no hay token
   if (!getToken()) {
     const redir = window.PERSONAL_MODE ? '?redirect=/chat' : '';
@@ -10668,6 +10669,16 @@ function applyAppointmentsVisibility() {
   ]);
   startChatPolling();
   startVersionCheck();
+  } catch (_bootErr) {
+    const box = document.getElementById('_jsErrBox') || (() => {
+      const el = document.createElement('div');
+      el.id = '_jsErrBox';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;padding:12px 16px;font:13px/1.5 monospace;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
+      document.body.prepend(el);
+      return el;
+    })();
+    box.textContent += `[BOOT ERROR] ${_bootErr?.stack || _bootErr}\n\n`;
+  }
 });
 
 // ─── Detección de nueva versión del server (anti-blanco-tras-deploy) ───

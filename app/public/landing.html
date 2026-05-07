@@ -345,6 +345,23 @@
     .price-card ul li { display: flex; gap: 8px; align-items: flex-start; }
     .price-card ul li::before { content: '✓'; color: var(--accent); font-weight: 700; }
     .price-card .btn { margin-top: auto; }
+    /* Promo styles */
+    .lp-promo-ribbon {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #fef3c7; color: #92400e;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+      padding: 4px 10px; border-radius: 6px; margin-bottom: 4px;
+    }
+    .lp-price-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .lp-original {
+      font-size: 18px; font-weight: 500; color: var(--text-soft);
+      text-decoration: line-through;
+    }
+    .lp-discount {
+      font-size: 12px; font-weight: 700; padding: 2px 7px;
+      background: #dcfce7; color: #14532d; border-radius: 5px;
+    }
+    .lp-price-note { font-size: 12px; color: var(--text-soft); margin-top: 4px; }
     @media (max-width: 900px) {
       .pricing-grid { grid-template-columns: 1fr; max-width: 380px; }
     }
@@ -518,8 +535,8 @@
 <!-- Pricing -->
 <section class="section" id="pricing">
   <div class="container">
-    <h2 class="section-title">Precios simples y transparentes</h2>
-    <p class="section-sub">Empieza gratis 14 días. Sin tarjeta. Cancela cuando quieras.</p>
+    <h2 class="section-title">Precios de lanzamiento</h2>
+    <p class="section-sub">Somos nuevos y queremos que lo pruebes. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa. Empieza gratis 14 días, sin tarjeta.</p>
 
     <div class="pricing-toggle" style="display:flex;justify-content:center;margin:0 auto 32px;">
       <button class="pt-opt is-active" data-interval="month">Mensual</button>
@@ -656,28 +673,45 @@ function renderPlans() {
         </div>`;
     }
 
-    let displayPrice, subNote, strikeHtml = '';
+    let displayPrice, subNote, promoHtml = '';
+    const pct = Math.round((1 - p.promoPrice / p.monthlyPrice) * 100);
+
     if (_interval === 'year') {
       displayPrice = p.annualMonthly;
-      subNote = `$${p.annualTotal} ${p.currency}/año`;
-      strikeHtml = `<span style="text-decoration:line-through;color:var(--text-soft);font-size:18px;margin-right:6px">$${p.monthlyPrice}</span>`;
+      subNote = `$${p.annualTotal} ${p.currency} al año (3 meses gratis)`;
+      promoHtml = `
+        <div class="lp-price-row">
+          <span class="lp-original">$${p.monthlyPrice}</span>
+          <span class="amount">$${displayPrice}</span>
+          <span class="lp-discount">−${pct + 25}%</span>
+        </div>`;
     } else if (_interval === 'semester') {
       displayPrice = p.semestralMonthly;
-      subNote = `$${p.semestralTotal} ${p.currency} cada 6 meses`;
-      strikeHtml = `<span style="text-decoration:line-through;color:var(--text-soft);font-size:18px;margin-right:6px">$${p.monthlyPrice}</span>`;
+      subNote = `$${p.semestralTotal} ${p.currency} cada 6 meses (1 mes gratis)`;
+      promoHtml = `
+        <div class="lp-price-row">
+          <span class="lp-original">$${p.monthlyPrice}</span>
+          <span class="amount">$${displayPrice}</span>
+          <span class="lp-discount">−${pct + 17}%</span>
+        </div>`;
     } else {
       displayPrice = p.promoPrice;
-      subNote = `precio de lanzamiento (antes $${p.monthlyPrice})`;
-      strikeHtml = '';
+      subNote = `${p.currency} / mes`;
+      promoHtml = `
+        <div class="lp-promo-ribbon">🎉 Precio lanzamiento — plazas limitadas</div>
+        <div class="lp-price-row">
+          <span class="lp-original">$${p.monthlyPrice}</span>
+          <span class="amount">$${displayPrice}</span>
+          <span class="lp-discount">−${pct}%</span>
+        </div>`;
     }
 
     return `
       <div class="price-card${featured}">
         <div><h3>${p.name}</h3><p class="tagline">${p.tagline}</p></div>
         <div>
-          ${strikeHtml}<span class="amount">$${displayPrice}</span>
-          <span class="period">${p.currency} / mes</span>
-          <p style="font-size:12px;color:var(--text-soft);margin-top:4px">${subNote}</p>
+          ${promoHtml}
+          <p class="lp-price-note">${subNote}</p>
         </div>
         <ul>${features}</ul>
         <a href="/signup" class="btn btn-primary">Empezar gratis 14 días</a>

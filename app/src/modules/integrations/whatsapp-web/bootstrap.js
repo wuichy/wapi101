@@ -9,6 +9,7 @@ const convoSvc = require('../../conversations/service');
 const expedientSvc = require('../../expedients/service');
 const botEngine = require('../../bot/engine');
 const pushSvc = require('../../notifications/service');
+const customerSvc = require('../../customers/service');
 
 function getIntegrationContext(db, integrationId) {
   if (!integrationId) return { tenantId: null, routing: null };
@@ -61,6 +62,18 @@ function init(db) {
           contactPhone:  `+${payload.externalId}`,
           contactName:   payload.pushName,
         });
+
+        // Fire-and-forget: jala la foto de perfil de WhatsApp si el contacto
+        // no tiene una o lleva más de 7 días sin actualizarse.
+        if (convo.contact_id) {
+          const c = db.prepare('SELECT avatar_url, avatar_updated_at FROM contacts WHERE id = ?').get(convo.contact_id);
+          const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+          if (!c?.avatar_url || (c.avatar_updated_at && c.avatar_updated_at < sevenDaysAgo)) {
+            manager.getProfilePicUrl(integrationId, payload.externalId)
+              .then(url => { if (url) customerSvc.setAvatar(db, tenantId, convo.contact_id, url); })
+              .catch(() => {});
+          }
+        }
 
         convoSvc.addMessage(db, tenantId, convo.id, {
           externalId: payload.messageId,

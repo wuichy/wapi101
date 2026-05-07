@@ -65,6 +65,7 @@ function hydrate(db, tenantId, row) {
     lastName: row.last_name || '',
     phone: row.phone || '',
     email: row.email || '',
+    avatarUrl: row.avatar_url || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     tags,

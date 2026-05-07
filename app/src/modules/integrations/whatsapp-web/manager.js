@@ -342,6 +342,19 @@ async function restoreAll(integrationIds) {
   }
 }
 
+// Intenta obtener la foto de perfil de un contacto por su número.
+// Devuelve la URL o null si no tiene foto / está bloqueado por privacidad.
+async function getProfilePicUrl(integrationId, phone) {
+  const s = sessions.get(integrationId);
+  if (!s?.sock || s.status !== 'connected') return null;
+  const jid = `${String(phone).replace(/\D/g, '')}@s.whatsapp.net`;
+  try {
+    return await s.sock.profilePictureUrl(jid, 'image') || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 module.exports = {
   setHandlers,
   startSession,
@@ -351,4 +364,5 @@ module.exports = {
   stopSession,
   listSessions,
   restoreAll,
+  getProfilePicUrl,
 };

@@ -65,6 +65,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span>Calendario</span>
         </a>
+        <a href="#mail" class="nav-item" data-view="mail" id="navMail" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+          <span>Mail</span>
+        </a>
         <a href="#integraciones" class="nav-item" data-view="integraciones" data-i18n="nav.integraciones">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11h-1V9a3 3 0 00-3-3h-2V5a3 3 0 00-6 0v1H5a3 3 0 00-3 3v3h1a2 2 0 010 4H2v3a3 3 0 003 3h3v-1a2 2 0 014 0v1h3a3 3 0 003-3v-2h1a3 3 0 000-6z"/></svg>
           <span>Integraciones</span>
@@ -2570,6 +2577,80 @@ Ana, , ana@hotmail.com, 5551112222</pre>
           </div>
         </div>
       </section>
+
+      <!-- ─── VISTA: MAIL ─── -->
+<section class="view view-mail" data-view="mail" hidden>
+  <div class="mail-layout">
+    <div class="mail-sidebar">
+      <button class="mail-compose-btn" id="mailComposeBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Redactar
+      </button>
+      <nav class="mail-folders" id="mailFolders">
+        <a class="mail-folder mail-folder--active" data-folder="inbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+          Recibidos <span class="mail-unread-badge" id="mailInboxBadge" hidden></span>
+        </a>
+        <a class="mail-folder" data-folder="sent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Enviados
+        </a>
+        <a class="mail-folder" data-folder="all">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Todo
+        </a>
+      </nav>
+      <div class="mail-accounts-section">
+        <p class="mail-accounts-label">Cuentas</p>
+        <div id="mailAccountsList"></div>
+      </div>
+    </div>
+    <div class="mail-list-col">
+      <div class="mail-list-header">
+        <input type="text" id="mailSearchInput" placeholder="Buscar correos..." class="mail-search-input">
+      </div>
+      <div class="mail-list-items" id="mailListItems">
+        <div class="mail-empty-list">Cargando...</div>
+      </div>
+    </div>
+    <div class="mail-detail-col" id="mailDetailCol">
+      <div class="mail-no-selection">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" style="opacity:.3"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        <p>Selecciona un correo</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compose modal -->
+  <div class="mail-compose-panel" id="mailComposePanel" hidden>
+    <div class="mail-compose-header">
+      <span class="mail-compose-title">Nuevo mensaje</span>
+      <button class="mail-compose-close" id="mailComposeClose">✕</button>
+    </div>
+    <div class="mail-compose-fields">
+      <div class="mail-compose-row">
+        <label>Para</label>
+        <input type="email" id="mailComposeTo" placeholder="destinatario@ejemplo.com" class="mail-compose-input">
+      </div>
+      <div class="mail-compose-row">
+        <label>Asunto</label>
+        <input type="text" id="mailComposeSubject" placeholder="Asunto" class="mail-compose-input">
+      </div>
+      <div class="mail-compose-row mail-compose-row--account">
+        <label>Desde</label>
+        <select id="mailComposeFrom" class="mail-compose-input"></select>
+      </div>
+    </div>
+    <textarea id="mailComposeBody" placeholder="Escribe tu mensaje aquí..." class="mail-compose-body"></textarea>
+    <div class="mail-compose-footer">
+      <button class="btn btn--primary" id="mailComposeSendBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Enviar
+      </button>
+      <button class="btn btn--ghost" id="mailComposeDiscard">Descartar</button>
+    </div>
+  </div>
+</section>
 
       <!-- ═════════ MODAL: Nueva/Editar tarea ═════════ -->
       <div class="modal-backdrop" id="taskModal" hidden>

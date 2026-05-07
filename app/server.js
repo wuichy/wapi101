@@ -475,6 +475,43 @@ app.use(express.static(path.join(__dirname, 'public'), {
   },
 }));
 
+// POST /api/mail/compose — enviar nuevo correo
+app.post('/api/mail/compose', async (req, res) => {
+  const { to, subject, body, integrationId } = req.body || {};
+  if (!to || !body) return res.status(400).json({ error: 'Faltan campos' });
+  try {
+    const { decryptJson } = require('./src/security/crypto');
+    const nodemailer = require('nodemailer');
+    const row = db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ? AND provider = ?')
+      .get(integrationId, req.tenantId, 'email');
+    if (!row) return res.status(404).json({ error: 'Integración no encontrada' });
+    const creds = decryptJson(row.credentials_enc);
+    const port = Number(creds.smtpPort) || 587;
+    const transporter = nodemailer.createTransport({
+      host: creds.smtpHost, port, secure: port === 465,
+      auth: { user: creds.username, pass: creds.password },
+    });
+    await transporter.sendMail({
+      from: `"${creds.fromName || 'Wapi101'}" <${creds.fromEmail || creds.username}>`,
+      to, subject: subject || '(Sin asunto)', text: body,
+    });
+    // Crear conversación + mensaje saliente
+    const convoSvc = require('./src/modules/conversations/service');
+    const convo = convoSvc.findOrCreate(db, req.tenantId, {
+      provider: 'email', externalId: to,
+      integrationId, contactPhone: null, contactName: to,
+    });
+    convoSvc.addMessage(db, req.tenantId, convo.id, {
+      direction: 'outgoing', provider: 'email',
+      body: `📧 ${subject}\n\n${body}`, status: 'sent',
+    });
+    res.json({ ok: true, convoId: convo.id });
+  } catch(e) {
+    console.error('[mail/compose]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(config.port, config.host, () => {
   console.log(`Wapi101 App → http://${config.host}:${config.port}  (env: ${config.env})`);
   console.log(`DB          → ${config.dbPath}`);

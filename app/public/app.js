@@ -2607,7 +2607,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones','mail']);
 
 // Filtro de búsqueda de la vista Aplicaciones (topbar)
 let _appsSearch = '';
@@ -2694,7 +2694,7 @@ function showView(viewName) {
   }
   const cleanTopbar = (viewName === 'contactos');
   if (title) title.hidden = cleanTopbar;
-  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas' || viewName === 'bot';
+  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
   if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta');
@@ -2718,6 +2718,7 @@ function showView(viewName) {
   }
   if (viewName === 'chats') loadConversations();
   if (viewName === 'inicio') loadDashboard();
+  if (viewName === 'mail') { loadMailView(); initMailView(); }
 }
 
 function setupNav() {
@@ -2854,6 +2855,7 @@ async function loadIntegrations() {
     const data = await api("GET", "/api/integrations");
     INTEGRATIONS = data.items;
     renderIntegrations();
+    updateMailNavVisibility();
   } catch (err) {
     console.error("Error cargando integraciones:", err);
   }
@@ -14479,6 +14481,267 @@ window.addEventListener('appinstalled', () => {
   if (btn) btn.hidden = true;
   if (typeof toast === 'function') toast('Wapi101 instalada como app ✓', 'success');
 });
+
+// ─── Vista Mail ───
+let MAIL_FOLDER = 'inbox';
+let MAIL_CONVOS = [];
+let MAIL_SELECTED_ID = null;
+let MAIL_EMAIL_INTEGRATIONS = [];
+let MAIL_SEARCH = '';
+
+function updateMailNavVisibility() {
+  const hasEmail = (INTEGRATIONS || []).some(p => p.key === 'email' && (p.integrations || []).some(i => i.status === 'connected'));
+  const nav = document.getElementById('navMail');
+  if (nav) nav.hidden = !hasEmail;
+  MAIL_EMAIL_INTEGRATIONS = hasEmail
+    ? (INTEGRATIONS.find(p => p.key === 'email')?.integrations || []).filter(i => i.status === 'connected')
+    : [];
+}
+
+async function loadMailView() {
+  updateMailNavVisibility();
+  if (!MAIL_EMAIL_INTEGRATIONS.length) return;
+  try {
+    const data = await api('GET', '/api/conversations?provider=email&pageSize=100');
+    MAIL_CONVOS = data.items || [];
+    renderMailList();
+    renderMailAccounts();
+    renderMailComposePicker();
+    updateMailUnreadBadge();
+  } catch(e) { console.error('[mail]', e); }
+}
+
+function updateMailUnreadBadge() {
+  const badge = document.getElementById('mailInboxBadge');
+  if (!badge) return;
+  const unread = MAIL_CONVOS.filter(c => c.unread_count > 0).length;
+  badge.textContent = unread || '';
+  badge.hidden = !unread;
+}
+
+function mailFilteredConvos() {
+  let convos = MAIL_CONVOS;
+  if (MAIL_FOLDER === 'sent') {
+    convos = convos.filter(c => c.last_message_direction === 'outgoing');
+  }
+  if (MAIL_SEARCH) {
+    const q = MAIL_SEARCH.toLowerCase();
+    convos = convos.filter(c =>
+      (c.contact_name || '').toLowerCase().includes(q) ||
+      (c.external_id || '').toLowerCase().includes(q) ||
+      (c.last_message_body || '').toLowerCase().includes(q)
+    );
+  }
+  return convos;
+}
+
+function parseEmailSubject(body) {
+  if (!body) return '(Sin asunto)';
+  const m = body.match(/^📧\s*(.+)/);
+  if (m) return m[1].split('\n')[0].trim();
+  return body.split('\n')[0].slice(0, 60) || '(Sin asunto)';
+}
+
+function parseEmailPreview(body) {
+  if (!body) return '';
+  const lines = body.split('\n').filter(l => l.trim());
+  const start = lines[0]?.startsWith('📧') ? 1 : 0;
+  return lines.slice(start).join(' ').slice(0, 100);
+}
+
+function mailFmtDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+}
+
+function renderMailList() {
+  const el = document.getElementById('mailListItems');
+  if (!el) return;
+  const convos = mailFilteredConvos();
+  if (!convos.length) {
+    el.innerHTML = `<div class="mail-empty-list">${MAIL_SEARCH ? 'Sin resultados' : 'Sin correos'}</div>`;
+    return;
+  }
+  el.innerHTML = convos.map(c => {
+    const isUnread = c.unread_count > 0;
+    const isSelected = c.id === MAIL_SELECTED_ID;
+    const subject = parseEmailSubject(c.last_message_body);
+    const preview = parseEmailPreview(c.last_message_body);
+    const senderName = c.contact_name || c.external_id || 'Desconocido';
+    const avatar = senderName.slice(0, 2).toUpperCase();
+    return `<div class="mail-item${isSelected ? ' mail-item--selected' : ''}${isUnread ? ' mail-item--unread' : ''}" data-id="${c.id}">
+      <div class="mail-item-avatar">${escapeHtml(avatar)}</div>
+      <div class="mail-item-body">
+        <div class="mail-item-top">
+          <span class="mail-item-from">${escapeHtml(senderName)}</span>
+          <span class="mail-item-date">${mailFmtDate(c.last_message_at)}</span>
+        </div>
+        <div class="mail-item-subject">${escapeHtml(subject)}</div>
+        <div class="mail-item-preview">${escapeHtml(preview)}</div>
+      </div>
+      ${isUnread ? '<div class="mail-item-dot"></div>' : ''}
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.mail-item').forEach(item => {
+    item.addEventListener('click', () => openMailConvo(Number(item.dataset.id)));
+  });
+}
+
+async function openMailConvo(convoId) {
+  MAIL_SELECTED_ID = convoId;
+  renderMailList();
+  const detail = document.getElementById('mailDetailCol');
+  if (!detail) return;
+  detail.innerHTML = '<div class="mail-loading">Cargando...</div>';
+  try {
+    const [convo, msgData] = await Promise.all([
+      api('GET', `/api/conversations/${convoId}`),
+      api('GET', `/api/conversations/${convoId}/messages?pageSize=50`),
+    ]);
+    const msgs = (msgData.items || []).slice().reverse();
+    const subject = parseEmailSubject(msgs[0]?.body || '');
+    const fromEmail = convo.external_id || '';
+    const fromName = convo.contact_name || fromEmail;
+
+    detail.innerHTML = `
+      <div class="mail-detail-inner">
+        <div class="mail-detail-header">
+          <h2 class="mail-detail-subject">${escapeHtml(subject)}</h2>
+          <div class="mail-detail-meta">
+            <span class="mail-detail-from">${escapeHtml(fromName)} &lt;${escapeHtml(fromEmail)}&gt;</span>
+          </div>
+        </div>
+        <div class="mail-thread" id="mailThread">
+          ${msgs.map(m => {
+            const isOut = m.direction === 'outgoing';
+            const body = m.body || '';
+            const bodyClean = isOut ? body : (body.includes('\n\n') ? body.split('\n\n').slice(1).join('\n\n') : body);
+            return `<div class="mail-message${isOut ? ' mail-message--out' : ''}">
+              <div class="mail-message-meta">
+                <span class="mail-message-who">${isOut ? 'Tú' : escapeHtml(fromName)}</span>
+                <span class="mail-message-time">${mailFmtDate(m.created_at)}</span>
+              </div>
+              <div class="mail-message-body">${escapeHtml(bodyClean).replace(/\n/g, '<br>')}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="mail-reply-box">
+          <div class="mail-reply-label">Responder a ${escapeHtml(fromName)}</div>
+          <textarea class="mail-reply-textarea" id="mailReplyText" placeholder="Escribe tu respuesta..." rows="4"></textarea>
+          <div class="mail-reply-actions">
+            <button class="btn btn--primary btn--sm" id="mailReplySendBtn" data-id="${convoId}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              Enviar respuesta
+            </button>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('mailReplySendBtn')?.addEventListener('click', async () => {
+      const text = document.getElementById('mailReplyText')?.value?.trim();
+      if (!text) return;
+      const btn = document.getElementById('mailReplySendBtn');
+      btn.disabled = true;
+      try {
+        await api('POST', `/api/conversations/${convoId}/messages`, { body: text });
+        await openMailConvo(convoId);
+        await loadMailView();
+        toast('Correo enviado', 'success');
+      } catch(e) {
+        toast('Error al enviar: ' + e.message, 'error');
+        btn.disabled = false;
+      }
+    });
+
+    // Marcar como leído
+    if (convo.unread_count > 0) {
+      api('POST', `/api/conversations/${convoId}/read`).catch(() => {});
+      const c = MAIL_CONVOS.find(x => x.id === convoId);
+      if (c) c.unread_count = 0;
+      updateMailUnreadBadge();
+    }
+  } catch(e) {
+    detail.innerHTML = `<div class="mail-error">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderMailAccounts() {
+  const el = document.getElementById('mailAccountsList');
+  if (!el) return;
+  el.innerHTML = MAIL_EMAIL_INTEGRATIONS.map(i =>
+    `<div class="mail-account-item">
+      <div class="mail-account-dot" style="background:#6366f1"></div>
+      <span>${escapeHtml(i.displayName || i.credentials?.fromEmail || 'Email')}</span>
+    </div>`
+  ).join('');
+}
+
+function renderMailComposePicker() {
+  const sel = document.getElementById('mailComposeFrom');
+  if (!sel) return;
+  sel.innerHTML = MAIL_EMAIL_INTEGRATIONS.map(i =>
+    `<option value="${i.id}">${escapeHtml(i.displayName || i.credentials?.fromEmail || 'Email')}</option>`
+  ).join('');
+}
+
+function initMailView() {
+  // Folders
+  document.querySelectorAll('.mail-folder').forEach(f => {
+    f.addEventListener('click', () => {
+      document.querySelectorAll('.mail-folder').forEach(x => x.classList.remove('mail-folder--active'));
+      f.classList.add('mail-folder--active');
+      MAIL_FOLDER = f.dataset.folder;
+      renderMailList();
+    });
+  });
+
+  // Search
+  document.getElementById('mailSearchInput')?.addEventListener('input', e => {
+    MAIL_SEARCH = e.target.value;
+    renderMailList();
+  });
+
+  // Compose
+  document.getElementById('mailComposeBtn')?.addEventListener('click', () => {
+    document.getElementById('mailComposePanel').hidden = false;
+    document.getElementById('mailComposeTo')?.focus();
+  });
+  document.getElementById('mailComposeClose')?.addEventListener('click', () => {
+    document.getElementById('mailComposePanel').hidden = true;
+  });
+  document.getElementById('mailComposeDiscard')?.addEventListener('click', () => {
+    document.getElementById('mailComposePanel').hidden = true;
+  });
+  document.getElementById('mailComposeSendBtn')?.addEventListener('click', mailComposeSend);
+}
+
+async function mailComposeSend() {
+  const to      = document.getElementById('mailComposeTo')?.value?.trim();
+  const subject = document.getElementById('mailComposeSubject')?.value?.trim();
+  const body    = document.getElementById('mailComposeBody')?.value?.trim();
+  const integId = document.getElementById('mailComposeFrom')?.value;
+  if (!to || !body) { toast('Escribe el destinatario y el mensaje', 'error'); return; }
+  const btn = document.getElementById('mailComposeSendBtn');
+  btn.disabled = true;
+  try {
+    await api('POST', '/api/mail/compose', { to, subject: subject || '(Sin asunto)', body, integrationId: Number(integId) });
+    document.getElementById('mailComposePanel').hidden = true;
+    document.getElementById('mailComposeTo').value = '';
+    document.getElementById('mailComposeSubject').value = '';
+    document.getElementById('mailComposeBody').value = '';
+    await loadMailView();
+    toast('Correo enviado', 'success');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   // ─── Tabs de integraciones ───

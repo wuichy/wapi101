@@ -9,6 +9,9 @@
 const express = require('express');
 const billingSvc = require('./service');
 
+const USD_RATE = 17.26;
+function toUSD(mxn) { return Math.ceil(mxn / USD_RATE); }
+
 // Definición de planes.
 // promoPrice = precio promoción de lanzamiento.
 // monthlyPrice = precio real (se muestra tachado mientras haya promo).
@@ -47,6 +50,12 @@ function getPlans() {
       // Anual: paga 9 meses, usa 12 (−25%)
       annualTotal:   1341,  // 149 × 9
       annualMonthly: 112,   // equivalente mensual
+      usdPromoPrice:        toUSD(149),
+      usdMonthlyPrice:      toUSD(349),
+      usdSemestralTotal:    toUSD(745),
+      usdSemestralMonthly:  toUSD(124),
+      usdAnnualTotal:       toUSD(1341),
+      usdAnnualMonthly:     toUSD(112),
       limits: { leads: 4000, contacts: 8000, users: 2 },
       features: [
         '2 usuarios incluidos',
@@ -74,6 +83,12 @@ function getPlans() {
       semestralMonthly: 249,
       annualTotal:   2691,
       annualMonthly: 224,
+      usdPromoPrice:        toUSD(299),
+      usdMonthlyPrice:      toUSD(699),
+      usdSemestralTotal:    toUSD(1495),
+      usdSemestralMonthly:  toUSD(249),
+      usdAnnualTotal:       toUSD(2691),
+      usdAnnualMonthly:     toUSD(224),
       featured:     true,
       limits: { leads: 15000, contacts: 30000, users: 2 },
       features: [
@@ -99,6 +114,12 @@ function getPlans() {
       semestralMonthly: 416,
       annualTotal:   4491,
       annualMonthly: 374,
+      usdPromoPrice:        toUSD(499),
+      usdMonthlyPrice:      toUSD(1199),
+      usdSemestralTotal:    toUSD(2495),
+      usdSemestralMonthly:  toUSD(416),
+      usdAnnualTotal:       toUSD(4491),
+      usdAnnualMonthly:     toUSD(374),
       limits: { leads: 50000, contacts: 100000, users: 2 },
       features: [
         '2 usuarios incluidos',
@@ -133,9 +154,11 @@ function getPlans() {
 }
 
 const EXTRA_USER = {
-  promoPrice:   99,
-  monthlyPrice: 199,
-  currency:     'MXN',
+  promoPrice:    99,
+  monthlyPrice:  199,
+  currency:      'MXN',
+  usdPromoPrice:   toUSD(99),
+  usdMonthlyPrice: toUSD(199),
   priceIdMonthly: process.env.STRIPE_PRICE_EXTRA_USER_MONTHLY || null,
 };
 

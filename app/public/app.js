@@ -108,6 +108,58 @@ const I18N_TRANSLATIONS = {
     'toast.error': 'Error',
     'toast.copied': 'Copiado al portapapeles',
     'toast.window.closed': '⏰ Ventana 24h cerrada — solo puedes enviar plantillas aprobadas',
+    // Calendario / Tareas — topbar
+    'cal.view.list': 'Lista',
+    'cal.view.month': 'Mes',
+    'cal.new.task': '+ Nueva tarea',
+    'cal.search.placeholder': 'Buscar tareas…',
+    // Apps tabs
+    'apps.tab.installed': 'Instaladas',
+    'apps.tab.available': 'Disponibles',
+    'apps.empty.title': 'Sin integraciones instaladas',
+    'apps.empty.desc': 'Aún no tienes ninguna integración activa. Explora las disponibles en la pestaña Disponibles.',
+    'apps.market.title': 'Marketplace próximamente',
+    'apps.market.desc': 'Estamos preparando integraciones con Zapier, Google Sheets, HubSpot y más.',
+    'apps.market.cta': '¿Necesitas una integración específica? Escríbenos a',
+    // Tareas — modal
+    'task.new': 'Nueva tarea',
+    'task.edit': 'Editar tarea',
+    'task.field.title': 'Título',
+    'task.field.title.ph': 'Ej. Llamar a María a las 3pm',
+    'task.field.desc': 'Descripción',
+    'task.field.optional': '(opcional)',
+    'task.field.due': 'Fecha y hora',
+    'task.field.duration': 'Duración',
+    'task.field.assign': 'Asignar a',
+    'task.field.assign.none': '— Ninguno (sin asignar) —',
+    'task.field.lead': 'Lead vinculado',
+    'task.duration.none': 'Sin duración',
+    'task.duration.15': '15 minutos',
+    'task.duration.30': '30 minutos',
+    'task.duration.45': '45 minutos',
+    'task.duration.60': '1 hora',
+    'task.duration.90': '1 hora 30 min',
+    'task.duration.120': '2 horas',
+    'task.duration.180': '3 horas',
+    'task.duration.480': 'Día completo (8 h)',
+    // OAuth
+    'oauth.connect.facebook': 'Conectar con Facebook',
+    'oauth.connect.instagram': 'Conectar con Instagram',
+    'oauth.connect.tiktok': 'Conectar con TikTok',
+    'oauth.connect.more': '+ Conectar otra cuenta',
+    'oauth.connected.ok': 'Cuenta conectada correctamente',
+    // Billing — plan gratuito
+    'billing.free.active.title': 'Plan Gratis activo',
+    'billing.free.active.desc': '1 usuario, 500 contactos. Actualiza cuando quieras para crecer sin límites.',
+    'billing.plan.try': 'Probar {n} gratis 14 días',
+    'billing.plan.current': 'Plan actual',
+    'billing.plan.base': 'Plan base incluido',
+    // Signup
+    'signup.free.title': 'Crea tu cuenta gratis',
+    'signup.free.subtitle': 'Plan Gratis para siempre · Sin tarjeta de crédito.',
+    'signup.free.banner.title': '🎁 Plan Gratis para siempre',
+    'signup.free.banner.desc': '1 usuario, 500 contactos, todas las funciones. Sin tarjeta.',
+    'signup.free.btn': 'Crear cuenta gratis',
   },
   'en': {
     // Nav sidebar
@@ -184,11 +236,69 @@ const I18N_TRANSLATIONS = {
     'toast.error': 'Error',
     'toast.copied': 'Copied to clipboard',
     'toast.window.closed': '⏰ 24h window closed — you can only send approved templates',
+    // Calendar / Tasks — topbar
+    'cal.view.list': 'List',
+    'cal.view.month': 'Month',
+    'cal.new.task': '+ New task',
+    'cal.search.placeholder': 'Search tasks…',
+    // Apps tabs
+    'apps.tab.installed': 'Installed',
+    'apps.tab.available': 'Available',
+    'apps.empty.title': 'No installed integrations',
+    'apps.empty.desc': 'You have no active integrations yet. Browse the Available tab.',
+    'apps.market.title': 'Marketplace coming soon',
+    'apps.market.desc': 'We\'re preparing integrations with Zapier, Google Sheets, HubSpot and more.',
+    'apps.market.cta': 'Need a specific integration? Write to us at',
+    // Tasks — modal
+    'task.new': 'New task',
+    'task.edit': 'Edit task',
+    'task.field.title': 'Title',
+    'task.field.title.ph': 'e.g. Call Maria at 3pm',
+    'task.field.desc': 'Description',
+    'task.field.optional': '(optional)',
+    'task.field.due': 'Date & time',
+    'task.field.duration': 'Duration',
+    'task.field.assign': 'Assign to',
+    'task.field.assign.none': '— None (unassigned) —',
+    'task.field.lead': 'Linked lead',
+    'task.duration.none': 'No duration',
+    'task.duration.15': '15 minutes',
+    'task.duration.30': '30 minutes',
+    'task.duration.45': '45 minutes',
+    'task.duration.60': '1 hour',
+    'task.duration.90': '1h 30 min',
+    'task.duration.120': '2 hours',
+    'task.duration.180': '3 hours',
+    'task.duration.480': 'Full day (8 h)',
+    // OAuth
+    'oauth.connect.facebook': 'Connect with Facebook',
+    'oauth.connect.instagram': 'Connect with Instagram',
+    'oauth.connect.tiktok': 'Connect with TikTok',
+    'oauth.connect.more': '+ Connect another account',
+    'oauth.connected.ok': 'Account connected',
+    // Billing — free plan
+    'billing.free.active.title': 'Free Plan active',
+    'billing.free.active.desc': '1 user, 500 contacts. Upgrade any time to grow without limits.',
+    'billing.plan.try': 'Try {n} free for 14 days',
+    'billing.plan.current': 'Current plan',
+    'billing.plan.base': 'Base plan included',
+    // Signup
+    'signup.free.title': 'Create your free account',
+    'signup.free.subtitle': 'Free forever · No credit card required.',
+    'signup.free.banner.title': '🎁 Free plan forever',
+    'signup.free.banner.desc': '1 user, 500 contacts, all features. No credit card.',
+    'signup.free.btn': 'Create free account',
   },
 };
 
 let _locale = (() => {
-  try { return localStorage.getItem('locale') || 'es-MX'; } catch { return 'es-MX'; }
+  try {
+    const stored = localStorage.getItem('locale');
+    if (stored && I18N_TRANSLATIONS[stored]) return stored;
+    // Auto-detect from browser language — Spanish → es-MX, everything else → en
+    const nav = (navigator.language || navigator.userLanguage || 'es').toLowerCase();
+    return nav.startsWith('es') ? 'es-MX' : 'en';
+  } catch { return 'es-MX'; }
 })();
 
 // Devuelve el string traducido para la clave en el locale actual.
@@ -2591,7 +2701,7 @@ function showView(viewName) {
   if (appsExtras) appsExtras.hidden = (viewName !== 'aplicaciones');
 
   if (viewName === 'calendario') {
-    if (searchInput) { searchInput.placeholder = 'Buscar tareas…'; searchInput.value = _tasksSearch; }
+    if (searchInput) { searchInput.placeholder = t('cal.search.placeholder'); searchInput.value = _tasksSearch; }
   } else {
     _tasksSearch = '';
   }
@@ -2748,9 +2858,11 @@ async function loadOutgoingWebhooks() {
   }
 }
 
-function oauthIcon(providerKey) {
-  if (providerKey === 'tiktok') return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.2 8.2 0 0 0 4.78 1.5V6.73a4.85 4.85 0 0 1-1-.04z"/></svg> Conectar con TikTok`;
-  return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0C5.373 0 0 4.973 0 11.111c0 3.497 1.745 6.616 4.472 8.652V24l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111C24 4.973 18.627 0 12 0zm1.194 14.963-3.055-3.26-5.963 3.26 6.559-6.963 3.13 3.26 5.957-3.26-6.628 6.963z"/></svg> Conectar con Facebook`;
+function oauthIcon(providerKey, hasExisting) {
+  if (hasExisting) return t('oauth.connect.more');
+  if (providerKey === 'tiktok')    return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.2 8.2 0 0 0 4.78 1.5V6.73a4.85 4.85 0 0 1-1-.04z"/></svg> ${t('oauth.connect.tiktok')}`;
+  if (providerKey === 'instagram') return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg> ${t('oauth.connect.instagram')}`;
+  return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0C5.373 0 0 4.973 0 11.111c0 3.497 1.745 6.616 4.472 8.652V24l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111C24 4.973 18.627 0 12 0zm1.194 14.963-3.055-3.26-5.963 3.26 6.559-6.963 3.13 3.26 5.957-3.26-6.628 6.963z"/></svg> ${t('oauth.connect.facebook')}`;
 }
 
 function renderIntegrations() {
@@ -2792,7 +2904,9 @@ function renderIntegrations() {
         </div>`;
     }).join("");
 
-    const connectBtn = `<button class="btn btn--ghost" data-action="manual" data-provider="${p.key}">${connected.length ? '+ Conectar otra' : 'Conectar'}</button>`;
+    const connectBtn = isOAuth
+      ? `<button class="btn btn--ghost" data-action="oauth" data-provider="${p.key}" data-auth="${p.authType}">${oauthIcon(p.key, connected.length > 0)}</button>`
+      : `<button class="btn btn--ghost" data-action="manual" data-provider="${p.key}">${connected.length ? '+ Conectar otra' : 'Conectar'}</button>`;
 
     let badgeHtml;
     if (connected.length) badgeHtml = '<span class="int-badge-connected">Conectado</span>';
@@ -2948,16 +3062,33 @@ function openIntegrationModal(providerKey, instanceId = null) {
     }
   }
 
+  const isOAuthProvider = provider.authType && provider.authType.startsWith('oauth_');
   const fields = document.getElementById("intFormFields");
   const values = instance?.credentials || {};
-  fields.innerHTML = (provider.fields || []).map((f) => {
-    const val = values[f.key] || "";
-    const inputType = f.type === "textarea" ? "textarea" : (f.type === "password" ? "password" : "text");
-    const req = f.required ? '<span class="int-field-required">*</span>' : '';
-    const help = f.help ? `<div class="int-field-help">${escapeHtml(f.help)}</div>` : "";
-    if (inputType === "textarea") return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><textarea name="${f.key}" rows="3">${escapeHtml(val)}</textarea>${help}</div>`;
-    return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><input type="${inputType}" name="${f.key}" value="${escapeHtml(val)}" autocomplete="off" />${help}</div>`;
-  }).join("");
+
+  if (isOAuthProvider && instance) {
+    // OAuth con cuenta ya conectada: mostrar info de cuenta, sin form manual
+    fields.innerHTML = `<div class="int-oauth-connected">
+      <div class="int-oauth-connected-name">✓ ${escapeHtml(instance.displayName || provider.name)}</div>
+      <div class="int-oauth-connected-sub">${t('oauth.connected.ok')}</div>
+      <button type="button" class="btn btn--ghost" id="intReconnectOAuthBtn" style="margin-top:10px">${oauthIcon(provider.key, false)}</button>
+    </div>`;
+    setTimeout(() => {
+      document.getElementById('intReconnectOAuthBtn')?.addEventListener('click', () => {
+        closeIntegrationModal();
+        connectOAuth(provider.key, provider.authType);
+      });
+    }, 0);
+  } else {
+    fields.innerHTML = (provider.fields || []).map((f) => {
+      const val = values[f.key] || "";
+      const inputType = f.type === "textarea" ? "textarea" : (f.type === "password" ? "password" : "text");
+      const req = f.required ? '<span class="int-field-required">*</span>' : '';
+      const help = f.help ? `<div class="int-field-help">${escapeHtml(f.help)}</div>` : "";
+      if (inputType === "textarea") return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><textarea name="${f.key}" rows="3">${escapeHtml(val)}</textarea>${help}</div>`;
+      return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><input type="${inputType}" name="${f.key}" value="${escapeHtml(val)}" autocomplete="off" />${help}</div>`;
+    }).join("");
+  }
 
   // Webhook URL — mostrar siempre (al conectar usa la URL del provider, al editar usa la de la instancia)
   const webhookBox = document.getElementById("intWebhookBox");
@@ -2978,6 +3109,8 @@ function openIntegrationModal(providerKey, instanceId = null) {
   document.getElementById("intDocsLink").hidden = !provider.docsUrl;
   document.getElementById("intDisconnectBtn").hidden = !instance;
   document.getElementById("intSubmitBtn").textContent = instance ? "Guardar cambios" : "Conectar";
+  // OAuth providers con cuenta ya conectada: ocultar botón submit (no hay form que enviar)
+  if (isOAuthProvider && instance) document.getElementById("intSubmitBtn").hidden = true;
 
   // ─── Modo QR (whatsapp-lite): oculta form y webhook box ───
   const qrBox = document.getElementById("intQrBox");
@@ -3010,7 +3143,7 @@ function openIntegrationModal(providerKey, instanceId = null) {
       }
     } else {
       document.getElementById("intFormFields").hidden = false;
-      document.getElementById("intSubmitBtn").hidden = false;
+      if (!(isOAuthProvider && instance)) document.getElementById("intSubmitBtn").hidden = false;
     }
   }
 
@@ -12841,7 +12974,7 @@ function renderBillingStatus() {
   if (!sub) {
     if (_billingSub?.plan === 'free') {
       el.className = 'billing-status is-free';
-      el.innerHTML = `<span class="bs-icon">🎁</span><div class="bs-text"><strong>Plan Gratis activo</strong>1 usuario, 500 contactos. Actualiza cuando quieras para crecer sin límites.</div>`;
+      el.innerHTML = `<span class="bs-icon">🎁</span><div class="bs-text"><strong>${t('billing.free.active.title')}</strong>${t('billing.free.active.desc')}</div>`;
       el.hidden = false;
     } else {
       el.hidden = true;
@@ -12916,7 +13049,7 @@ function renderBillingPlans() {
             <p class="bp-limits">500 contactos · 1 usuario</p>
           </div>
           <ul class="bp-features">${features}</ul>
-          <button class="bp-cta" disabled>${isCurrentFree ? 'Plan actual' : 'Plan base incluido'}</button>
+          <button class="bp-cta" disabled>${isCurrentFree ? t('billing.plan.current') : t('billing.plan.base')}</button>
         </div>`;
     }
 
@@ -12938,19 +13071,22 @@ function renderBillingPlans() {
     }
 
     // Precio según intervalo
-    let price, priceId, periodLabel, totalNote;
+    let price, usdPrice, priceId, periodLabel, totalNote;
     if (_billingInterval === 'semester') {
       price       = p.semestralMonthly;
+      usdPrice    = p.usdSemestralMonthly;
       priceId     = p.priceIdSemestral;
       periodLabel = 'mes';
       totalNote   = `<p class="bp-price-note">$${p.semestralTotal} ${p.currency} total · 6 meses (1 mes gratis)</p>`;
     } else if (_billingInterval === 'year') {
       price       = p.annualMonthly;
+      usdPrice    = p.usdAnnualMonthly;
       priceId     = p.priceIdYearly;
       periodLabel = 'mes';
       totalNote   = `<p class="bp-price-note">$${p.annualTotal} ${p.currency} total · 12 meses (3 meses gratis)</p>`;
     } else {
       price       = p.promoPrice;
+      usdPrice    = p.usdPromoPrice;
       priceId     = p.priceIdMonthly;
       periodLabel = 'mes';
       totalNote   = '';
@@ -12963,7 +13099,7 @@ function renderBillingPlans() {
       ? `<span class="bp-real-price">$${p.monthlyPrice}</span>`
       : '';
 
-    const ctaText = isCurrent ? 'Plan actual' : (_billingSub?.subscription ? 'Cambiar a ' + p.name : 'Probar ' + p.name + ' gratis 14 días');
+    const ctaText = isCurrent ? t('billing.plan.current') : (_billingSub?.subscription ? 'Cambiar a ' + p.name : t('billing.plan.try').replace('{n}', p.name));
     const limits  = p.limits || {};
     const limitsHtml = limits.leads
       ? `<p class="bp-limits">${Number(limits.leads).toLocaleString('es-MX')} leads · ${Number(limits.contacts).toLocaleString('es-MX')} contactos · ${limits.users} usuarios</p>`
@@ -12983,6 +13119,7 @@ function renderBillingPlans() {
             <span class="amount">$${price}</span>
             <span class="currency">${p.currency}</span>
             <span class="period">/${periodLabel}</span>
+            ${usdPrice ? `<span class="bp-usd">~$${usdPrice} USD</span>` : ''}
           </div>
           ${totalNote}
           ${limitsHtml}
@@ -13374,7 +13511,7 @@ async function openTaskModal(taskId = null, presetExpedientId = null, presetExpe
 
   // Llenar dropdown asignados
   const me = _profile;
-  assignSel.innerHTML = '<option value="">— Ninguno (sin asignar) —</option>'
+  assignSel.innerHTML = `<option value="">${t('task.field.assign.none')}</option>`
     + _tasksAdvisors.filter(a => a.active).map(a =>
       `<option value="${a.id}">${escapeHtml(a.name || a.username)}${a.id === me.id ? ' (yo)' : ''}</option>`
     ).join('');
@@ -13383,21 +13520,21 @@ async function openTaskModal(taskId = null, presetExpedientId = null, presetExpe
   document.getElementById('taskHoursWarn')?.setAttribute('hidden', '');
 
   if (taskId) {
-    const t = _tasksItems.find(x => x.id === taskId);
-    if (!t) return;
-    titleEl.textContent = 'Editar tarea';
-    titleInput.value = t.title || '';
-    descInput.value = t.description || '';
-    const d = new Date(t.dueAt * 1000);
+    const task = _tasksItems.find(x => x.id === taskId);
+    if (!task) return;
+    titleEl.textContent = t('task.edit');
+    titleInput.value = task.title || '';
+    descInput.value = task.description || '';
+    const d = new Date(task.dueAt * 1000);
     const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     dueInput.value = isoLocal;
-    if (durSel) durSel.value = t.durationMinutes || '';
-    assignSel.value = t.assignedAdvisorId || '';
-    expIdInput.value = t.expedientId || '';
-    expLabelInput.value = t.expedientName || (t.contactName ? `Contacto: ${t.contactName}` : '');
+    if (durSel) durSel.value = task.durationMinutes || '';
+    assignSel.value = task.assignedAdvisorId || '';
+    expIdInput.value = task.expedientId || '';
+    expLabelInput.value = task.expedientName || (task.contactName ? `Contacto: ${task.contactName}` : '');
     deleteBtn.hidden = false;
   } else {
-    titleEl.textContent = 'Nueva tarea';
+    titleEl.textContent = t('task.new');
     titleInput.value = '';
     descInput.value = '';
     const d = new Date(Date.now() + 60 * 60 * 1000);

@@ -219,7 +219,13 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
   });
 
   sock.ev.on('messages.upsert', ({ messages, type }) => {
-    if (type !== 'notify') return;
+    // 'notify' = mensaje en tiempo real.
+    // 'append' = mensajes que llegaron mientras el socket estaba reconectando
+    //            (típico en el "Stream Errored" del primer auth). Los aceptamos
+    //            solo si tienen timestamp < 10 min para no reenviar historial viejo.
+    if (type !== 'notify' && type !== 'append') return;
+    const nowSec = Math.floor(Date.now() / 1000);
+
     for (const msg of messages) {
       if (!msg?.message) continue;
       if (msg.key?.fromMe) continue;
@@ -227,12 +233,20 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
       // Ignorar grupos / broadcasts por ahora (solo 1-a-1)
       if (!remoteJid.endsWith('@s.whatsapp.net')) continue;
 
+      // Para 'append', solo procesar mensajes de los últimos 10 minutos
+      if (type === 'append') {
+        const msgTime = Number(msg.messageTimestamp) || 0;
+        if (nowSec - msgTime > 600) continue;
+      }
+
       const phone = remoteJid.replace('@s.whatsapp.net', '');
       const { body, messageType } = extractIncomingBody(msg.message);
 
       // Saltar mensajes de sistema (revokes, key changes, etc.) que no deben
       // mostrarse como burbujas en el chat.
       if (messageType === 'protocol' || messageType === 'system_keys') continue;
+      // Saltar recibos/status de entrega (IDs con prefijo 3A) que llegan sin cuerpo.
+      if (!body) continue;
 
       try {
         onMessageCallback?.(integrationId, {

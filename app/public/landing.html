@@ -365,6 +365,7 @@
       background: #dcfce7; color: #14532d; border-radius: 5px;
     }
     .lp-price-note { font-size: 12px; color: var(--text-soft); margin-top: 4px; }
+    .lp-usd { font-size: 11px; color: var(--text-soft); font-weight: 500; }
     .lp-card-trial-note { font-size: 11px; color: var(--text-soft); text-align: center; margin-top: -8px; }
     .price-card--free { border-color: #22c55e; background: #f0fdf4; }
     .price-card--free h3 { color: #15803d; }
@@ -546,7 +547,7 @@
 </section>
 
 <!-- Pricing -->
-<section class="section" id="pricing">
+<section class="section" id="pricingSection">
   <div class="container">
     <h2 class="section-title">Precios de lanzamiento</h2>
     <p class="section-sub">Empieza gratis para siempre con el plan básico, o prueba cualquier plan de pago <strong>14 días gratis con tarjeta</strong>. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa.</p>
@@ -560,7 +561,7 @@
     <div class="pricing-grid" id="pricingGrid">
       <p style="grid-column: 1 / -1; text-align:center; color: var(--text-soft);">Cargando planes…</p>
     </div>
-    <p style="text-align:center;margin-top:24px;font-size:13px;color:var(--text-soft);">
+    <p id="stripeNote" style="text-align:center;margin-top:24px;font-size:13px;color:var(--text-soft);">
       Pagos procesados de forma segura por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.
     </p>
   </div>
@@ -649,10 +650,79 @@
 // ─── Auto-detect: si ya estás logueado, redirige al app ───
 (function() {
   const token = localStorage.getItem('rh_session') || localStorage.getItem('wapi101_token');
-  if (token) {
-    // Tiene sesión activa, llevarlo directo al CRM
-    location.replace('/app');
-  }
+  if (token) { location.replace('/app'); }
+})();
+
+// ─── Detección de idioma ─────────────────────────────────────────────────────
+const _stored = (() => { try { return localStorage.getItem('locale'); } catch { return null; } })();
+const _navLang = (navigator.language || 'es').toLowerCase();
+const _isEn    = _stored ? _stored === 'en' : !_navLang.startsWith('es');
+document.documentElement.lang = _isEn ? 'en' : 'es-MX';
+
+const _LP = {
+  es: {
+    pricingTitle:   'Precios de lanzamiento',
+    pricingSub:     'Empieza gratis para siempre con el plan básico, o prueba cualquier plan de pago <strong>14 días gratis con tarjeta</strong>. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa.',
+    toggleMonth:    'Mensual',
+    toggleSem:      'Semestral',
+    toggleYear:     'Anual',
+    loading:        'Cargando planes…',
+    stripe:         'Pagos procesados de forma segura por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.',
+    freePriceNote:  'MXN · para siempre',
+    freeCta:        'Empezar gratis — sin tarjeta',
+    custom:         'A medida',
+    contactSales:   'Contactar ventas',
+    tryCta:         (n) => `Probar ${n} gratis 14 días`,
+    trialNote:      'Se requiere tarjeta · Cancela antes del día 14 sin costo',
+    yearNote:       (tot, cur) => `$${tot} ${cur} al año (3 meses gratis)`,
+    semNote:        (tot, cur) => `$${tot} ${cur} cada 6 meses (1 mes gratis)`,
+    monthNote:      (cur) => `${cur} / mes`,
+    launchRibbon:   '🎉 Precio lanzamiento — plazas limitadas',
+    heroTitle:      'El CRM de WhatsApp para PyMEs LATAM',
+    featuresTitle:  'Todo lo que necesitas para vender',
+    stepsTitle:     'Empieza en 5 minutos',
+  },
+  en: {
+    pricingTitle:   'Launch pricing',
+    pricingSub:     'Start free forever with the basic plan, or try any paid plan <strong>free for 14 days with a card</strong>. Early customers get up to <strong>57% permanent discount</strong> as long as their subscription stays active.',
+    toggleMonth:    'Monthly',
+    toggleSem:      'Semester',
+    toggleYear:     'Annual',
+    loading:        'Loading plans…',
+    stripe:         'Payments securely processed by <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Card details never touch our servers.',
+    freePriceNote:  'MXN · forever',
+    freeCta:        'Start free — no card needed',
+    custom:         'Custom',
+    contactSales:   'Contact sales',
+    tryCta:         (n) => `Try ${n} free for 14 days`,
+    trialNote:      'Card required · Cancel before day 14 at no charge',
+    yearNote:       (tot, cur) => `$${tot} ${cur}/year (3 months free)`,
+    semNote:        (tot, cur) => `$${tot} ${cur} / 6 months (1 month free)`,
+    monthNote:      (cur) => `${cur} / month`,
+    launchRibbon:   '🎉 Launch price — limited spots',
+    heroTitle:      'The WhatsApp CRM for LATAM SMBs',
+    featuresTitle:  'Everything you need to sell',
+    stepsTitle:     'Up and running in 5 minutes',
+  },
+};
+const _lp = _isEn ? _LP.en : _LP.es;
+
+// Aplicar traducciones a elementos estáticos identificables
+(function applyLandingLang() {
+  const qs = (sel) => document.querySelector(sel);
+  const set = (sel, html, useHtml) => { const el = qs(sel); if (el) { if (useHtml) el.innerHTML = html; else el.textContent = html; } };
+  set('#pricingSection h2.section-title', _lp.pricingTitle);
+  set('#pricingSection .section-sub', _lp.pricingSub, true);
+  set('#pricingGrid', _lp.loading);
+  set('#stripeNote', _lp.stripe, true);
+  const opts = document.querySelectorAll('.pt-opt');
+  const labels = [_lp.toggleMonth, _lp.toggleSem, _lp.toggleYear];
+  opts.forEach((b, i) => {
+    const save = b.querySelector('.pt-save');
+    const savedText = save ? save.outerHTML : '';
+    b.textContent = labels[i] || b.textContent;
+    if (save) b.innerHTML = labels[i] + ' ' + savedText;
+  });
 })();
 
 // ─── Toggle mensual/semestral/anual + render de planes ───
@@ -685,10 +755,10 @@ function renderPlans() {
             <div class="lp-price-row">
               <span class="amount">$0</span>
             </div>
-            <p class="lp-price-note">MXN · para siempre</p>
+            <p class="lp-price-note">${_lp.freePriceNote}</p>
           </div>
           <ul>${features}</ul>
-          <a href="/signup" class="btn-outline">Empezar gratis — sin tarjeta</a>
+          <a href="/signup" class="btn-outline">${_lp.freeCta}</a>
         </div>`;
     }
 
@@ -697,43 +767,49 @@ function renderPlans() {
       return `
         <div class="price-card${featured}">
           <div><h3>${p.name}</h3><p class="tagline">${p.tagline}</p></div>
-          <div><span class="amount" style="font-size:28px">A medida</span></div>
+          <div><span class="amount" style="font-size:28px">${_lp.custom}</span></div>
           <ul>${features}</ul>
-          <a href="mailto:hola@wapi101.com" class="btn btn-primary">Contactar ventas</a>
+          <a href="mailto:hola@wapi101.com" class="btn btn-primary">${_lp.contactSales}</a>
         </div>`;
     }
 
     // ── Planes de pago ──
-    let displayPrice, subNote, promoHtml = '';
+    let displayPrice, displayUSD, subNote, promoHtml = '';
     const pct = Math.round((1 - p.promoPrice / p.monthlyPrice) * 100);
 
     if (_interval === 'year') {
       displayPrice = p.annualMonthly;
-      subNote = `$${p.annualTotal} ${p.currency} al año (3 meses gratis)`;
+      displayUSD   = p.usdAnnualMonthly;
+      subNote = _lp.yearNote(p.annualTotal, p.currency);
       promoHtml = `
         <div class="lp-price-row">
           <span class="lp-original">$${p.monthlyPrice}</span>
           <span class="amount">$${displayPrice}</span>
           <span class="lp-discount">−${pct + 25}%</span>
+          <span class="lp-usd">~$${displayUSD} USD</span>
         </div>`;
     } else if (_interval === 'semester') {
       displayPrice = p.semestralMonthly;
-      subNote = `$${p.semestralTotal} ${p.currency} cada 6 meses (1 mes gratis)`;
+      displayUSD   = p.usdSemestralMonthly;
+      subNote = _lp.semNote(p.semestralTotal, p.currency);
       promoHtml = `
         <div class="lp-price-row">
           <span class="lp-original">$${p.monthlyPrice}</span>
           <span class="amount">$${displayPrice}</span>
           <span class="lp-discount">−${pct + 17}%</span>
+          <span class="lp-usd">~$${displayUSD} USD</span>
         </div>`;
     } else {
       displayPrice = p.promoPrice;
-      subNote = `${p.currency} / mes`;
+      displayUSD   = p.usdPromoPrice;
+      subNote = _lp.monthNote(p.currency);
       promoHtml = `
-        <div class="lp-promo-ribbon">🎉 Precio lanzamiento — plazas limitadas</div>
+        <div class="lp-promo-ribbon">${_lp.launchRibbon}</div>
         <div class="lp-price-row">
           <span class="lp-original">$${p.monthlyPrice}</span>
           <span class="amount">$${displayPrice}</span>
           <span class="lp-discount">−${pct}%</span>
+          <span class="lp-usd">~$${displayUSD} USD</span>
         </div>`;
     }
 
@@ -745,8 +821,8 @@ function renderPlans() {
           <p class="lp-price-note">${subNote}</p>
         </div>
         <ul>${features}</ul>
-        <a href="/signup?plan=${p.key}" class="btn btn-primary">Probar ${p.name} gratis 14 días</a>
-        <p class="lp-card-trial-note">Se requiere tarjeta · Cancela antes del día 14 sin costo</p>
+        <a href="/signup?plan=${p.key}" class="btn btn-primary">${_lp.tryCta(p.name)}</a>
+        <p class="lp-card-trial-note">${_lp.trialNote}</p>
       </div>`;
   }).join('');
 }

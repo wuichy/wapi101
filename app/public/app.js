@@ -10606,7 +10606,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAccount();
   setupChatSearch();
   setupChatFilters();
-  setupChatPushCta();
+  if (window.PERSONAL_MODE) setupChatPushCta();
   // Iniciar el panel de conversación en empty state hasta que abran un chat.
   if (!ACTIVE_CONVO_ID) renderChatEmptyState();
   setupReplyForm();

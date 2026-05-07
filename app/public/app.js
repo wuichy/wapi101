@@ -617,11 +617,7 @@ function renderChatList() {
   }
 
   root.innerHTML = list.map((c) => {
-    const personalAction = window.PERSONAL_MODE
-      ? (c._personalHidden
-          ? `<button class="rh-chat-hide-btn rh-chat-hide-btn--unhide" data-personal-action="unhide" data-id="${c.id}" title="Desocultar">↩</button>`
-          : `<button class="rh-chat-hide-btn" data-personal-action="hide" data-id="${c.id}" title="Ocultar (solo de tu vista)">×</button>`)
-      : '';
+    const personalAction = '';
     const unread = c.unreadCount > 0;
     const unreadBadge = unread
       ? (c.unreadCount > 1
@@ -13934,7 +13930,7 @@ function setupMobileChatToggle() {
   // Cuando seleccionas un chat (click en lista), ir a conversation view
   // Lo hacemos con event delegation porque la lista se rendea dinámicamente.
   document.getElementById('rhChatList')?.addEventListener('click', (e) => {
-    if (e.target.closest('[data-chat-id]')) {
+    if (e.target.closest('.rh-chat-item')) {
       setMobileChatView('conversation');
     }
   });

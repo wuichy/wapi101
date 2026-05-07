@@ -8990,9 +8990,7 @@ async function refreshChatPushCta() {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const isStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone;
     if (isIOS && !isStandalone) {
-      titleEl.textContent = '📱 Instala Wapi101 en tu iPhone';
-      textEl.innerHTML = 'Toca <strong>Compartir</strong> ⬆ → <strong>"Añadir a pantalla de inicio"</strong>, luego abre desde el icono y vuelve aquí.';
-      if (btn) btn.textContent = 'Cómo instalar';
+      if (btn) btn.textContent = '📱 Instalar para activar notificaciones';
       cta.hidden = false;
       return;
     }
@@ -9012,9 +9010,7 @@ async function refreshChatPushCta() {
   }
 
   // Default: invitar a activar
-  titleEl.textContent = '🔔 Activa las notificaciones';
-  textEl.textContent  = 'Te avisaremos cuando lleguen mensajes nuevos aunque tengas la app cerrada.';
-  if (btn) btn.textContent = 'Activar';
+  if (btn) btn.textContent = '🔔 Activar notificaciones';
   cta.hidden = false;
 }
 

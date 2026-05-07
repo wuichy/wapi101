@@ -1,3 +1,28 @@
+// ─── Diagnóstico de errores JS (temporal) ───
+// Si algo crashea antes de que la app cargue, esto lo muestra visualmente
+// para poder identificar el bug. Remover después de resolver.
+window.onerror = (msg, src, line, col, err) => {
+  const box = document.getElementById('_jsErrBox') || (() => {
+    const el = document.createElement('div');
+    el.id = '_jsErrBox';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;padding:12px 16px;font:13px/1.5 monospace;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
+    document.body ? document.body.prepend(el) : document.addEventListener('DOMContentLoaded', () => document.body.prepend(el));
+    return el;
+  })();
+  box.textContent += `[JS ERROR] ${msg}\n  at ${src}:${line}:${col}\n${err?.stack || ''}\n\n`;
+  return false;
+};
+window.addEventListener('unhandledrejection', (e) => {
+  const box = document.getElementById('_jsErrBox') || (() => {
+    const el = document.createElement('div');
+    el.id = '_jsErrBox';
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b91c1c;color:#fff;padding:12px 16px;font:13px/1.5 monospace;white-space:pre-wrap;max-height:40vh;overflow-y:auto';
+    document.body.prepend(el);
+    return el;
+  })();
+  box.textContent += `[UNHANDLED PROMISE] ${e.reason?.stack || e.reason}\n\n`;
+});
+
 // ═══════ Helpers ═══════
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

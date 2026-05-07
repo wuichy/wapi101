@@ -44,13 +44,13 @@
     "offers": [
       {
         "@type": "Offer",
-        "name": "Starter",
-        "price": "29",
-        "priceCurrency": "USD",
+        "name": "Básico",
+        "price": "149",
+        "priceCurrency": "MXN",
         "priceSpecification": {
           "@type": "UnitPriceSpecification",
-          "price": "29",
-          "priceCurrency": "USD",
+          "price": "149",
+          "priceCurrency": "MXN",
           "billingDuration": "P1M",
           "unitText": "MONTH"
         }
@@ -58,25 +58,25 @@
       {
         "@type": "Offer",
         "name": "Pro",
-        "price": "79",
-        "priceCurrency": "USD",
+        "price": "299",
+        "priceCurrency": "MXN",
         "priceSpecification": {
           "@type": "UnitPriceSpecification",
-          "price": "79",
-          "priceCurrency": "USD",
+          "price": "299",
+          "priceCurrency": "MXN",
           "billingDuration": "P1M",
           "unitText": "MONTH"
         }
       },
       {
         "@type": "Offer",
-        "name": "Business",
-        "price": "199",
-        "priceCurrency": "USD",
+        "name": "Ultra",
+        "price": "499",
+        "priceCurrency": "MXN",
         "priceSpecification": {
           "@type": "UnitPriceSpecification",
-          "price": "199",
-          "priceCurrency": "USD",
+          "price": "499",
+          "priceCurrency": "MXN",
           "billingDuration": "P1M",
           "unitText": "MONTH"
         }
@@ -523,7 +523,8 @@
 
     <div class="pricing-toggle" style="display:flex;justify-content:center;margin:0 auto 32px;">
       <button class="pt-opt is-active" data-interval="month">Mensual</button>
-      <button class="pt-opt" data-interval="year">Anual <span class="pt-save">−20%</span></button>
+      <button class="pt-opt" data-interval="semester">Semestral <span class="pt-save">−17%</span></button>
+      <button class="pt-opt" data-interval="year">Anual <span class="pt-save">−25%</span></button>
     </div>
 
     <div class="pricing-grid" id="pricingGrid">
@@ -558,7 +559,7 @@
       </details>
       <details class="faq-item">
         <summary>¿Cobran en pesos mexicanos o dólares?</summary>
-        <p>Actualmente cobramos en USD para mantener consistencia internacional. Tu banco hace la conversión automática a tu moneda local. Pronto agregaremos cobro directo en MXN para clientes mexicanos.</p>
+        <p>Cobramos en MXN (pesos mexicanos). Pagos procesados de forma segura por Stripe. Si estás fuera de México, Stripe hace la conversión automática desde tu moneda local.</p>
       </details>
       <details class="faq-item">
         <summary>¿Tienen versión para Mac/Windows/iOS/Android?</summary>
@@ -624,7 +625,7 @@
   }
 })();
 
-// ─── Toggle mensual/anual + render de planes ───
+// ─── Toggle mensual/semestral/anual + render de planes ───
 let _interval = 'month';
 let _plans = [];
 
@@ -642,25 +643,45 @@ async function loadPlans() {
 function renderPlans() {
   const grid = document.getElementById('pricingGrid');
   grid.innerHTML = _plans.map(p => {
-    const price = _interval === 'year' ? p.yearlyPrice : p.monthlyPrice;
-    const period = _interval === 'year' ? 'mes (cobrado anual)' : 'mes';
-    const yearlyNote = _interval === 'year' ? `<p style="font-size:12px;color:var(--text-soft);">$${(p.yearlyPrice * 12).toFixed(2)} ${p.currency}/año</p>` : '';
     const featured = p.featured ? ' featured' : '';
     const features = (p.features || []).slice(0, 6).map(f => `<li>${f}</li>`).join('');
+
+    if (p.custom) {
+      return `
+        <div class="price-card${featured}">
+          <div><h3>${p.name}</h3><p class="tagline">${p.tagline}</p></div>
+          <div><span class="amount" style="font-size:28px">A medida</span></div>
+          <ul>${features}</ul>
+          <a href="mailto:hola@wapi101.com" class="btn btn-primary">Contactar ventas</a>
+        </div>`;
+    }
+
+    let displayPrice, subNote, strikeHtml = '';
+    if (_interval === 'year') {
+      displayPrice = p.annualMonthly;
+      subNote = `$${p.annualTotal} ${p.currency}/año`;
+      strikeHtml = `<span style="text-decoration:line-through;color:var(--text-soft);font-size:18px;margin-right:6px">$${p.monthlyPrice}</span>`;
+    } else if (_interval === 'semester') {
+      displayPrice = p.semestralMonthly;
+      subNote = `$${p.semestralTotal} ${p.currency} cada 6 meses`;
+      strikeHtml = `<span style="text-decoration:line-through;color:var(--text-soft);font-size:18px;margin-right:6px">$${p.monthlyPrice}</span>`;
+    } else {
+      displayPrice = p.promoPrice;
+      subNote = `precio de lanzamiento (antes $${p.monthlyPrice})`;
+      strikeHtml = '';
+    }
+
     return `
       <div class="price-card${featured}">
+        <div><h3>${p.name}</h3><p class="tagline">${p.tagline}</p></div>
         <div>
-          <h3>${p.name}</h3>
-          <p class="tagline">${p.tagline}</p>
-        </div>
-        <div>
-          <span class="amount">$${price}</span> <span class="period">${p.currency} / ${period}</span>
-          ${yearlyNote}
+          ${strikeHtml}<span class="amount">$${displayPrice}</span>
+          <span class="period">${p.currency} / mes</span>
+          <p style="font-size:12px;color:var(--text-soft);margin-top:4px">${subNote}</p>
         </div>
         <ul>${features}</ul>
         <a href="/signup" class="btn btn-primary">Empezar gratis 14 días</a>
-      </div>
-    `;
+      </div>`;
   }).join('');
 }
 

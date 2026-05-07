@@ -123,17 +123,10 @@ app.get('/privacy', (_req, res) => res.sendFile(path.join(__dirname, 'public', '
 app.get('/terms',   (_req, res) => res.sendFile(path.join(__dirname, 'public', 'terms.html')));
 
 // Catálogo público de planes (lo necesita la landing y la página /pricing).
-// Se monta ANTES del authMiddleware. Reusa la lógica del módulo billing.
+// Se monta ANTES del authMiddleware. Delega a billing/routes para mantener una sola fuente de verdad.
 app.get('/api/public/plans', (_req, res) => {
-  const billingRoutes = require('./src/modules/billing/routes');
-  // El módulo solo exporta el factory del router; reproducimos la lógica
-  // local para no duplicar — getPlans() está en routes pero no exportado.
-  // Mejor: definir aquí la misma forma de obtener plans.
-  res.json({ plans: [
-    { key:'starter',  name:'Starter',  tagline:'Para emprendedores solos', monthlyPrice:29,  yearlyPrice:23.20,  currency:'USD', features:['1 usuario','500 contactos','1 número WhatsApp','1,000 conversaciones/mes','3 pipelines','Plantillas básicas (5)','Adjuntos en chat','Alarmas multi-condición'], missingFeatures:['Bots con flujos','Webhooks salientes','API pública','IA auto-respuesta'], priceIdMonthly: process.env.STRIPE_PRICE_STARTER_MONTHLY || null, priceIdYearly: process.env.STRIPE_PRICE_STARTER_YEARLY || null },
-    { key:'pro',      name:'Pro',      tagline:'Para PyMEs 2-10 personas', monthlyPrice:79,  yearlyPrice:63.20,  currency:'USD', featured:true, features:['5 usuarios','Contactos ilimitados','3 números WhatsApp','Conversaciones ilimitadas','Pipelines ilimitados','Bots con flujos visuales','50 plantillas WA aprobadas','Webhooks salientes','API pública','Reportes completos'], missingFeatures:['IA auto-respuesta','White-label'], priceIdMonthly: process.env.STRIPE_PRICE_PRO_MONTHLY || null, priceIdYearly: process.env.STRIPE_PRICE_PRO_YEARLY || null },
-    { key:'business', name:'Business', tagline:'Para equipos 20+ personas', monthlyPrice:199, yearlyPrice:159.20, currency:'USD', features:['20 usuarios','Todo de Pro','Números WhatsApp ilimitados','Plantillas ilimitadas','IA auto-respuesta (Anthropic)','White-label (logo propio)','Reportes avanzados con export','Onboarding dedicado','Soporte chat 4h SLA'], missingFeatures:[], priceIdMonthly: process.env.STRIPE_PRICE_BUSINESS_MONTHLY || null, priceIdYearly: process.env.STRIPE_PRICE_BUSINESS_YEARLY || null },
-  ]});
+  const { getPlans } = require('./src/modules/billing/routes');
+  res.json({ plans: getPlans() });
 });
 
 // ─── Super-admin API: monta ANTES del authMiddleware (/api). Tiene su propio

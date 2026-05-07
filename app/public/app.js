@@ -439,8 +439,8 @@ async function loadConversations() {
     if (elAll)    elAll.textContent    = data.totalAll    ?? '';
     if (elUnread) elUnread.textContent = data.totalUnread || '';
     if (elUnread) elUnread.style.display = data.totalUnread ? '' : 'none';
-    // Badge en la nav lateral con el total de no leídos
-    updateChatsNavBadge(data.totalUnread || 0);
+    // Badge en la nav lateral — suma de las convos cargadas (lo que el usuario realmente ve)
+    updateChatsNavBadge(CONVERSATIONS.reduce((s, c) => s + (c.unreadCount || 0), 0));
   } catch (err) {
     console.error('loadConversations', err);
   }

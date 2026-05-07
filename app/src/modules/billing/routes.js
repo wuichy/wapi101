@@ -191,3 +191,5 @@ module.exports = function createBillingRouter(db) {
 
   return router;
 };
+
+module.exports.getPlans = getPlans;

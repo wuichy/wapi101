@@ -7168,10 +7168,10 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .adv-perm-name { font-size: 13px; font-weight: 600; }
 .adv-perm-desc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
 
-/* Toggle switch */
+/* Toggle switch — permisos (usa input:checked) */
 .adv-perm-toggle { position: relative; flex-shrink: 0; }
 .adv-toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
-.adv-toggle-track {
+.adv-perm-toggle .adv-toggle-track {
   display: block;
   width: 36px; height: 20px;
   border-radius: 999px;
@@ -7179,7 +7179,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   transition: background .2s;
   position: relative;
 }
-.adv-toggle-track::after {
+.adv-perm-toggle .adv-toggle-track::after {
   content: '';
   position: absolute;
   left: 2px; top: 2px;
@@ -7189,8 +7189,8 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   box-shadow: 0 1px 3px rgba(0,0,0,.2);
   transition: transform .2s;
 }
-.adv-toggle-input:checked ~ .adv-toggle-track { background: var(--accent); }
-.adv-toggle-input:checked ~ .adv-toggle-track::after { transform: translateX(16px); }
+.adv-perm-toggle .adv-toggle-input:checked ~ .adv-toggle-track { background: var(--accent); }
+.adv-perm-toggle .adv-toggle-input:checked ~ .adv-toggle-track::after { transform: translateX(16px); }
 
 /* ─── Papelera ─── */
 .trash-filters { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }

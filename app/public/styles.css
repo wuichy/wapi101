@@ -1476,6 +1476,55 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
   color: var(--danger);
   margin-left: 2px;
 }
+.int-field-optional {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 11px;
+  margin-left: 4px;
+}
+/* Input de valor del lead en modal */
+.exp-value-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+.exp-value-wrap:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+.exp-value-prefix, .exp-value-suffix {
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: none;
+  white-space: nowrap;
+  line-height: 36px;
+}
+.exp-value-suffix { border-left: 1px solid var(--border); }
+.exp-value-prefix { border-right: 1px solid var(--border); }
+.exp-value-wrap input {
+  flex: 1;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  min-width: 0;
+  height: 36px;
+}
+/* Badge de valor en el detail panel */
+.edf-value-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: #059669;
+}
 .int-error {
   margin-top: 14px;
   padding: 10px 14px;
@@ -5139,8 +5188,41 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .pl-card-name.is-auto-name { color: var(--text-muted); font-weight: 500; }
 .pl-card-contact { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
 .pl-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.pl-card-date { font-size: 10px; color: var(--text-muted); white-space: nowrap; margin-left: auto; }
+.pl-card-footer-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.pl-card-date { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
 .pl-card-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+/* Valor del lead en tarjeta kanban */
+.pl-card-value {
+  font-size: 10px;
+  font-weight: 700;
+  color: #059669;
+  background: #d1fae5;
+  padding: 1px 6px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+/* Total por columna en header */
+.pl-col-value {
+  font-size: 10px;
+  font-weight: 700;
+  color: #059669;
+  background: #d1fae5;
+  padding: 2px 7px;
+  border-radius: 99px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+/* Total del pipeline completo en topbar */
+.pl-pipeline-total {
+  font-size: 12px;
+  font-weight: 700;
+  color: #059669;
+  background: #d1fae5;
+  padding: 4px 10px;
+  border-radius: 99px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .pl-card-tag {
   font-size: 10px;
   padding: 1px 6px;

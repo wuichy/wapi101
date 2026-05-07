@@ -1446,10 +1446,10 @@ function renderEditExpedients() {
             </select>
           </div>
         </label>
-        <label>
+        ${isLeadValueEnabled() ? `<label>
           <span>Valor (MXN) <span class="edit-exp-optional">opcional</span></span>
-          <input type="number" data-field="value" value="${exp.value || 0}" step="0.01" />
-        </label>
+          <input type="number" data-field="value" value="${exp.value || ''}" step="1" min="0" placeholder="0" />
+        </label>` : ''}
         ${customFieldsHtml}
         <div class="edit-exp-actions">
           ${!exp._isNew && exp.id ? `
@@ -2651,6 +2651,16 @@ function setupSettingsTabs() {
     });
   }
 
+  // Switch: habilitar valor de lead
+  const lvToggle = document.getElementById('cfgLeadValueEnabled');
+  if (lvToggle) {
+    lvToggle.checked = isLeadValueEnabled();
+    lvToggle.addEventListener('change', () => {
+      try { localStorage.setItem('leadValueEnabled', lvToggle.checked ? '1' : '0'); } catch {}
+      applyLeadValueVisibility();
+    });
+  }
+
   // Selector de idioma
   const localeSelect = document.getElementById('cfgLocaleSelect');
   if (localeSelect) {
@@ -3581,6 +3591,14 @@ function renderExpDetailInfo() {
           </select>
         </div>
       </div>
+      ${isLeadValueEnabled() ? `
+      <div class="exp-detail-field editable-field" data-field-id="value" data-field-type="builtin">
+        <span class="exp-detail-field-label">Valor</span>
+        <div class="edf-cell">
+          <span class="exp-detail-field-value edf-display">${exp.value > 0 ? `<span class="edf-value-badge">$${Number(exp.value).toLocaleString('es-MX')} MXN</span>` : '<span class="edf-empty">—</span>'}</span>
+          <input class="edf-input" type="number" min="0" step="1" value="${exp.value || ''}" placeholder="0" data-original="${exp.value || ''}" />
+        </div>
+      </div>` : ''}
     </div>
 
     <div class="exp-detail-section">
@@ -3914,6 +3932,7 @@ async function saveExpDetailEdits() {
     else if (fieldId === 'stage') patch.stageId = Number(input.value);
     else if (fieldId === 'contactName') patch.contactName = val;
     else if (fieldId === 'assignedAdvisor') patch.assignedAdvisorId = input.value ? Number(input.value) : null;
+    else if (fieldId === 'value') patch.value = input.value !== '' ? (Number(input.value) || 0) : 0;
   });
 
   // Custom fields — only changed ones
@@ -4323,6 +4342,14 @@ async function openExpModal(idOrNull = null) {
   EXP_TAGS = exp?.tags ? [...exp.tags] : [];
   renderExpTags();
 
+  // Valor del lead
+  const expValueRow = document.getElementById('expValueRow');
+  if (expValueRow) {
+    expValueRow.hidden = !isLeadValueEnabled();
+    const expValueInput = document.getElementById('expValue');
+    if (expValueInput) expValueInput.value = (exp?.value && exp.value > 0) ? exp.value : '';
+  }
+
   // Campos personalizados
   renderCustomFieldInputs(exp);
 
@@ -4468,6 +4495,8 @@ async function saveExpedient(e) {
   const pipelineId = Number(document.getElementById('expPipeline').value) || null;
   const stageId = Number(document.getElementById('expStage').value) || null;
   const name = document.getElementById('expName').value.trim();
+  const rawValue = document.getElementById('expValue')?.value;
+  const value = isLeadValueEnabled() && rawValue !== '' ? (Number(rawValue) || 0) : undefined;
   const fieldValues = collectCustomFieldValues();
 
   if (!contactId) { errBox.textContent = 'Selecciona un contacto'; errBox.hidden = false; return; }
@@ -4478,10 +4507,10 @@ async function saveExpedient(e) {
   saveBtn.textContent = 'Guardando…';
   try {
     if (EXP_EDIT) {
-      await api('PATCH', `/api/expedients/${EXP_EDIT.id}`, { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues });
+      await api('PATCH', `/api/expedients/${EXP_EDIT.id}`, { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues, ...(value !== undefined ? { value } : {}) });
       toast('Lead actualizado', 'success');
     } else {
-      await api('POST', '/api/expedients', { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues });
+      await api('POST', '/api/expedients', { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues, ...(value !== undefined ? { value } : {}) });
       toast('Lead creado', 'success');
     }
     closeExpModal();
@@ -7197,13 +7226,31 @@ function renderPipelinesBoard() {
     if (expByStage[e.stageId]) expByStage[e.stageId].push(e);
   }
 
-  const showAlarms = (() => { try { return localStorage.getItem('plAlarmsEnabled') !== '0'; } catch { return true; } })();
+  const showAlarms    = (() => { try { return localStorage.getItem('plAlarmsEnabled') !== '0'; } catch { return true; } })();
+  const showLeadValue = isLeadValueEnabled();
   const nowSec = Math.floor(Date.now() / 1000);
+
+  // Total value del pipeline completo (visible en topbar)
+  if (showLeadValue) {
+    const pipelineTotal = filtered.reduce((s, e) => s + (e.value || 0), 0);
+    const totalEl = document.getElementById('plPipelineTotal');
+    if (totalEl) {
+      totalEl.hidden = false;
+      totalEl.textContent = `$${pipelineTotal.toLocaleString('es-MX')} MXN`;
+    }
+  } else {
+    const totalEl = document.getElementById('plPipelineTotal');
+    if (totalEl) totalEl.hidden = true;
+  }
 
   board.innerHTML = pipeline.stages.map(stage => {
     const cards = expByStage[stage.id] || [];
     // alarmActive considera el array nuevo y el legacy (vía _stageAlarms helper)
     const alarmActive = _stageAlarms(stage).length > 0;
+    const colValue = showLeadValue ? cards.reduce((s, e) => s + (e.value || 0), 0) : 0;
+    const colValueHtml = (showLeadValue && colValue > 0)
+      ? `<span class="pl-col-value">$${colValue.toLocaleString('es-MX')}</span>`
+      : '';
     return `
       <div class="pl-column" data-stage-id="${stage.id}" data-drop-stage="${stage.id}">
         <div class="pl-col-header">
@@ -7213,6 +7260,7 @@ function renderPipelinesBoard() {
           <span class="pl-col-dot" style="background:${stage.color}"></span>
           <span class="pl-col-name">${escHtml(stage.name)}</span>
           <span class="pl-col-count">${cards.length}</span>
+          ${colValueHtml}
         </div>
         <div class="pl-col-body">
           ${cards.length ? cards.map(e => {
@@ -7236,6 +7284,9 @@ function renderPipelinesBoard() {
             const avatarHtml = e.contactAvatarUrl
               ? `<img class="pl-card-avatar" src="${escHtml(e.contactAvatarUrl)}" alt="" onerror="this.outerHTML='<span class=&quot;pl-card-avatar pl-card-avatar--initials&quot;>${escHtml(initials)}</span>'" />`
               : `<span class="pl-card-avatar pl-card-avatar--initials">${escHtml(initials)}</span>`;
+            const cardValueHtml = (showLeadValue && e.value > 0)
+              ? `<span class="pl-card-value">$${Number(e.value).toLocaleString('es-MX')}</span>`
+              : '';
             return `
             <div class="pl-card ${isStale ? 'is-stale' : ''} ${failure ? 'has-delivery-error' : ''}" data-exp-id="${e.id}" draggable="true">
               <div class="pl-card-name ${e.nameIsAuto ? 'is-auto-name' : ''}">${escHtml(e.name || 'Sin nombre')}${deliveryIcon}</div>
@@ -7245,7 +7296,7 @@ function renderPipelinesBoard() {
               </div>
               <div class="pl-card-footer">
                 <div class="pl-card-tags">${overdueLabel}${(e.tags || []).slice(0,2).map(t => `<span class="pl-card-tag">${escHtml(t)}</span>`).join('')}</div>
-                <span class="pl-card-date">${fmtDate(e.createdAt)}</span>
+                <div class="pl-card-footer-right">${cardValueHtml}<span class="pl-card-date">${fmtDate(e.createdAt)}</span></div>
               </div>
             </div>`;
           }).join('') : `<div class="pl-col-empty">Sin leads</div>`}
@@ -10580,6 +10631,15 @@ function applyAppointmentsVisibility() {
   document.querySelectorAll('[data-feature="appointments"]').forEach(el => {
     el.hidden = !enabled;
   });
+}
+
+function isLeadValueEnabled() {
+  try { return localStorage.getItem('leadValueEnabled') === '1'; } catch { return false; }
+}
+function applyLeadValueVisibility() {
+  const on = isLeadValueEnabled();
+  document.querySelectorAll('[data-feature="lead-value"]').forEach(el => { el.hidden = !on; });
+  if (document.body.dataset.viewActive === 'pipelines') renderPipelinesBoard();
 }
 
 document.addEventListener("DOMContentLoaded", async () => {

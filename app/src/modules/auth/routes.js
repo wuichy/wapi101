@@ -148,6 +148,7 @@ module.exports = function createAuthRouter(db) {
         // 3b. Buscar cuenta de Instagram Business
         const pagesRes = await fetch(`https://graph.facebook.com/${META_VERSION}/me/accounts?access_token=${userToken}&fields=id,name,access_token,instagram_business_account`);
         const pagesData = await pagesRes.json();
+        console.log('[auth instagram] pages response:', JSON.stringify(pagesData));
         const pages = (pagesData.data || []).filter(p => p.instagram_business_account);
         if (!pages.length) throw new Error('No se encontró una cuenta de Instagram Business vinculada a esta cuenta de Facebook.');
 

@@ -122,7 +122,7 @@ svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; 
   line-height: 18px;
   text-align: center;
   letter-spacing: 0.02em;
-  margin-left: auto;
+  margin-left: 6px;
   box-shadow: 0 0 0 2px var(--bg-sidebar, #0f172a);
   animation: navBadgePulse 2s ease-in-out infinite;
   font-variant-numeric: tabular-nums;
@@ -6892,7 +6892,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .advisors-row {
   display: grid;
-  grid-template-columns: 2fr 1.5fr 100px 1fr 90px 56px;
+  grid-template-columns: 2fr 1.5fr 100px 1fr 140px;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
@@ -6971,7 +6971,44 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .adv-perm-tag--none { background: #f1f5f9; color: #94a3b8; }
 
 /* Actions */
-.adv-actions { display: flex; justify-content: flex-end; }
+.adv-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+
+/* Pause/activate toggle */
+.adv-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+.adv-toggle-btn:hover { color: var(--text); }
+.adv-toggle-track {
+  width: 32px; height: 18px;
+  border-radius: 99px;
+  background: #cbd5e1;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.adv-toggle-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  transition: transform 0.2s;
+}
+.adv-toggle-btn.is-active .adv-toggle-track { background: #22c55e; }
+.adv-toggle-btn.is-active .adv-toggle-thumb { transform: translateX(14px); }
+.adv-toggle-btn.is-active { color: #15803d; }
 
 /* ── Modal de asesor ── */
 .adv-form { display: flex; flex-direction: column; gap: 0; }

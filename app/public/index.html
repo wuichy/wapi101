@@ -1705,7 +1705,6 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   <div>Acceso</div>
                   <div>Rol</div>
                   <div>Permisos</div>
-                  <div>Estado</div>
                   <div></div>
                 </div>
                 <!-- JS render -->
@@ -2508,38 +2507,44 @@ Ana, , ana@hotmail.com, 5551112222</pre>
       </section>
 
       <!-- ═════════ MODAL: Nueva/Editar tarea ═════════ -->
-      <div class="modal-bg" id="taskModal" hidden>
-        <div class="modal" style="max-width:520px">
-          <h3 id="taskModalTitle">Nueva tarea</h3>
+      <div class="modal-backdrop" id="taskModal" hidden>
+        <div class="modal-card" style="max-width:480px;width:100%">
+          <header class="modal-header">
+            <h3 id="taskModalTitle">Nueva tarea</h3>
+            <button type="button" class="modal-close" id="taskCancelBtn" aria-label="Cerrar">✕</button>
+          </header>
           <form id="taskForm">
-            <div class="form-row">
-              <label>Título <span style="color:#ef4444">*</span></label>
-              <input type="text" id="taskTitle" placeholder="Ej. Llamar a María a las 3pm" required maxlength="200">
+            <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
+              <div class="form-row" style="margin:0">
+                <label>Título <span style="color:#ef4444">*</span></label>
+                <input type="text" id="taskTitle" placeholder="Ej. Llamar a María a las 3pm" required maxlength="200">
+              </div>
+              <div class="form-row" style="margin:0">
+                <label>Descripción <span style="color:#94a3b8;font-weight:400">(opcional)</span></label>
+                <textarea id="taskDescription" rows="3" placeholder="Detalles, contexto, links…"></textarea>
+              </div>
+              <div class="form-row" style="margin:0">
+                <label>Vencimiento <span style="color:#ef4444">*</span></label>
+                <input type="datetime-local" id="taskDueAt" required>
+              </div>
+              <div class="form-row" style="margin:0">
+                <label>Asignar a</label>
+                <select id="taskAssignedAdvisorId">
+                  <option value="">— Ninguno (sin asignar) —</option>
+                </select>
+              </div>
+              <div class="form-row" id="taskExpedientRow" style="margin:0">
+                <label>Lead vinculado <span style="color:#94a3b8;font-weight:400">(opcional)</span></label>
+                <input type="text" id="taskExpedientLabel" placeholder="—" readonly style="background:#f1f5f9;color:#64748b;cursor:default">
+                <input type="hidden" id="taskExpedientId">
+              </div>
             </div>
-            <div class="form-row">
-              <label>Descripción (opcional)</label>
-              <textarea id="taskDescription" rows="3" placeholder="Detalles, contexto, links…"></textarea>
-            </div>
-            <div class="form-row">
-              <label>Vencimiento <span style="color:#ef4444">*</span></label>
-              <input type="datetime-local" id="taskDueAt" required>
-            </div>
-            <div class="form-row">
-              <label>Asignar a</label>
-              <select id="taskAssignedAdvisorId">
-                <option value="">— Ninguno (sin asignar) —</option>
-              </select>
-            </div>
-            <div class="form-row" id="taskExpedientRow">
-              <label>Lead vinculado (opcional)</label>
-              <input type="text" id="taskExpedientLabel" placeholder="—" readonly style="background:#f1f5f9;color:#64748b;">
-              <input type="hidden" id="taskExpedientId">
-            </div>
-            <div class="modal-actions">
+            <footer class="modal-footer">
               <button type="button" class="btn btn--danger-ghost" id="taskDeleteBtn" hidden>Eliminar</button>
-              <button type="button" class="btn btn--ghost" id="taskCancelBtn">Cancelar</button>
+              <div style="flex:1"></div>
+              <button type="button" class="btn btn--ghost" id="taskCancelBtnFooter">Cancelar</button>
               <button type="submit" class="btn btn--primary" id="taskSaveBtn">Guardar</button>
-            </div>
+            </footer>
           </form>
         </div>
       </div>

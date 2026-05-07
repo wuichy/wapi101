@@ -2046,8 +2046,11 @@ function renderAdvisors() {
       <div class="adv-cell-email">${escapeHtml(a.email || '—')}</div>
       <div><span class="chip ${isAdmin ? 'chip--admin' : 'chip--asesor'}">${isAdmin ? 'Admin' : 'Asesor'}</span></div>
       <div class="adv-perms-row">${perms}</div>
-      <div><span class="adv-status ${statusClass}">${statusLabel}</span></div>
       <div class="adv-actions">
+        ${!isMe ? `<button class="adv-toggle-btn ${a.active ? 'is-active' : 'is-paused'}" data-id="${a.id}" data-active="${a.active ? '1' : '0'}" title="${a.active ? 'Pausar asesor' : 'Activar asesor'}">
+          <span class="adv-toggle-track"><span class="adv-toggle-thumb"></span></span>
+          <span class="adv-toggle-label">${a.active ? 'Activo' : 'Pausado'}</span>
+        </button>` : ''}
         <button class="icon-btn icon-btn--ghost adv-edit-btn" data-id="${a.id}" title="Editar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
@@ -2057,6 +2060,19 @@ function renderAdvisors() {
 
   table.querySelectorAll('.adv-edit-btn').forEach(btn => {
     btn.addEventListener('click', () => openAdvisorModal(Number(btn.dataset.id)));
+  });
+
+  table.querySelectorAll('.adv-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.id);
+      const newActive = btn.dataset.active !== '1';
+      try {
+        await api('PATCH', `/api/advisors/${id}`, { active: newActive ? 1 : 0 });
+        const adv = _advisors.find(a => a.id === id);
+        if (adv) adv.active = newActive ? 1 : 0;
+        renderAdvisors();
+      } catch (e) { toast('Error al actualizar asesor', 'error'); }
+    });
   });
 }
 
@@ -13188,6 +13204,7 @@ function setupTasksView() {
   });
   document.getElementById('taskNewBtn')?.addEventListener('click', () => openTaskModal(null));
   document.getElementById('taskCancelBtn')?.addEventListener('click', closeTaskModal);
+  document.getElementById('taskCancelBtnFooter')?.addEventListener('click', closeTaskModal);
   document.getElementById('taskDeleteBtn')?.addEventListener('click', deleteCurrentTask);
   document.getElementById('taskForm')?.addEventListener('submit', (e) => {
     e.preventDefault();

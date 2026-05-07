@@ -139,7 +139,7 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
   const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: 'warn' }),
+    logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
     browser: ['Wapi101 CRM', 'Chrome', '1.0.0'],
     markOnlineOnConnect: false,
@@ -160,18 +160,6 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
   sessions.set(integrationId, session);
 
   sock.ev.on('creds.update', saveCreds);
-
-  // DEBUG TEMP: log every event type so we can see if socket is alive
-  sock.ev.process((events) => {
-    for (const [key, val] of Object.entries(events)) {
-      if (key === 'creds.update') continue;
-      if (key === 'connection.update') {
-        console.log(`[wa-web ${integrationId}] ev: connection.update`, JSON.stringify(val));
-      } else {
-        console.log(`[wa-web ${integrationId}] ev: ${key}`);
-      }
-    }
-  });
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -231,25 +219,22 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
   });
 
   sock.ev.on('messages.upsert', ({ messages, type }) => {
-    console.log(`[wa-web ${integrationId}] upsert type=${type} count=${messages?.length}`);
     // 'notify' = mensaje en tiempo real.
-    // 'append' = mensajes que llegaron mientras el socket estaba reconectando
-    //            (típico en el "Stream Errored" del primer auth). Los aceptamos
-    //            solo si tienen timestamp < 10 min para no reenviar historial viejo.
+    // 'append' = mensajes que llegaron mientras el socket estaba reconectando.
+    //            Solo aceptamos los de los últimos 10 minutos para no reenviar historial viejo.
     if (type !== 'notify' && type !== 'append') return;
     const nowSec = Math.floor(Date.now() / 1000);
 
     for (const msg of messages) {
-      const remoteJid = msg.key?.remoteJid || '';
-      const isFromMe = !!msg.key?.fromMe;
-      const hasMsg = !!msg?.message;
-      const msgKeys = hasMsg ? Object.keys(msg.message) : [];
-      console.log(`[wa-web ${integrationId}] msg jid=${remoteJid} fromMe=${isFromMe} hasMsg=${hasMsg} keys=${msgKeys.join(',')}`);
-
       if (!msg?.message) continue;
       if (msg.key?.fromMe) continue;
-      // Ignorar grupos / broadcasts por ahora (solo 1-a-1)
-      if (!remoteJid.endsWith('@s.whatsapp.net')) continue;
+
+      const remoteJid = msg.key?.remoteJid || '';
+      // Aceptar @s.whatsapp.net (normal) y @lid (cuentas WA nuevas con LID addressing).
+      // Ignorar grupos (@g.us), broadcasts, etc.
+      const isPhone = remoteJid.endsWith('@s.whatsapp.net');
+      const isLid   = remoteJid.endsWith('@lid');
+      if (!isPhone && !isLid) continue;
 
       // Para 'append', solo procesar mensajes de los últimos 10 minutos
       if (type === 'append') {
@@ -257,14 +242,26 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
         if (nowSec - msgTime > 600) continue;
       }
 
-      const phone = remoteJid.replace('@s.whatsapp.net', '');
-      const { body, messageType } = extractIncomingBody(msg.message);
-      console.log(`[wa-web ${integrationId}] body="${body}" type=${messageType}`);
+      // Resolver número de teléfono: @lid requiere lookup en archivo de mapping inverso
+      // que Baileys escribe como lid-mapping-{lid}_reverse.json en el auth state dir.
+      let phone;
+      if (isPhone) {
+        phone = remoteJid.replace('@s.whatsapp.net', '');
+      } else {
+        const lid = remoteJid.replace('@lid', '');
+        const reverseFile = path.join(sessionDir(integrationId), `lid-mapping-${lid}_reverse.json`);
+        try {
+          phone = JSON.parse(fs.readFileSync(reverseFile, 'utf8'));
+        } catch (_) {
+          phone = lid; // sin mapping conocido, usar LID como identificador
+        }
+      }
 
-      // Saltar mensajes de sistema (revokes, key changes, etc.) que no deben
-      // mostrarse como burbujas en el chat.
+      const { body, messageType } = extractIncomingBody(msg.message);
+
+      // Saltar mensajes de sistema (revokes, key changes, etc.)
       if (messageType === 'protocol' || messageType === 'system_keys') continue;
-      // Saltar recibos/status de entrega (IDs con prefijo 3A) que llegan sin cuerpo.
+      // Saltar recibos/status de entrega que llegan sin cuerpo
       if (!body) continue;
 
       try {

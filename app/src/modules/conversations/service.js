@@ -157,7 +157,13 @@ function findOrCreate(db, tenantId, { provider, externalId, integrationId, conta
   if (!t) throw new Error('No se pudo determinar tenant para la conversación');
 
   let row = db.prepare('SELECT * FROM conversations WHERE provider = ? AND external_id = ? AND tenant_id = ?').get(provider, String(externalId), t);
-  if (row) return row;
+  if (row) {
+    if (!row.integration_id && integrationId) {
+      db.prepare('UPDATE conversations SET integration_id = ? WHERE id = ?').run(integrationId, row.id);
+      row = db.prepare('SELECT * FROM conversations WHERE id = ?').get(row.id);
+    }
+    return row;
+  }
 
   // Buscar contacto existente del MISMO tenant por teléfono normalizado.
   let contact = null;

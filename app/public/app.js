@@ -2973,6 +2973,136 @@ function bindIntegrationListeners(root) {
   });
 }
 
+// ─── Solicitar integración (votación) ───
+const VOTE_CATALOG = [
+  { key:'mailchimp',      name:'Mailchimp',        category:'Email',          color:'#FFE01B', textColor:'#222' },
+  { key:'sendgrid',       name:'SendGrid',          category:'Email',          color:'#1A82E2', textColor:'#fff' },
+  { key:'brevo',          name:'Brevo',             category:'Email',          color:'#0B996E', textColor:'#fff' },
+  { key:'resend',         name:'Resend',            category:'Email',          color:'#000000', textColor:'#fff' },
+  { key:'mandrill',       name:'Mandrill',          category:'Email',          color:'#F7C948', textColor:'#222' },
+  { key:'postmark',       name:'Postmark',          category:'Email',          color:'#FFCC00', textColor:'#222' },
+  { key:'mailjet',        name:'Mailjet',           category:'Email',          color:'#FF6600', textColor:'#fff' },
+  { key:'mercadopago',    name:'MercadoPago',       category:'Pagos',          color:'#009EE3', textColor:'#fff' },
+  { key:'paypal',         name:'PayPal',            category:'Pagos',          color:'#003087', textColor:'#fff' },
+  { key:'conekta',        name:'Conekta',           category:'Pagos',          color:'#0066CC', textColor:'#fff' },
+  { key:'clip',           name:'Clip',              category:'Pagos',          color:'#00B4F0', textColor:'#fff' },
+  { key:'openpay',        name:'OpenPay',           category:'Pagos',          color:'#FF5A00', textColor:'#fff' },
+  { key:'kueskipay',      name:'Kueski Pay',        category:'Pagos',          color:'#5B2D8E', textColor:'#fff' },
+  { key:'twilio',         name:'Twilio',            category:'SMS',            color:'#F22F46', textColor:'#fff' },
+  { key:'vonage',         name:'Vonage',            category:'SMS',            color:'#7B00D4', textColor:'#fff' },
+  { key:'telnyx',         name:'Telnyx',            category:'SMS',            color:'#00C389', textColor:'#fff' },
+  { key:'n8n',            name:'n8n',               category:'Automatización', color:'#EA4B71', textColor:'#fff' },
+  { key:'make',           name:'Make',              category:'Automatización', color:'#6D00CC', textColor:'#fff' },
+  { key:'zapier',         name:'Zapier',            category:'Automatización', color:'#FF4A00', textColor:'#fff' },
+  { key:'activepieces',   name:'ActivePieces',      category:'Automatización', color:'#6E41E2', textColor:'#fff' },
+  { key:'hubspot',        name:'HubSpot',           category:'CRM',            color:'#FF7A59', textColor:'#fff' },
+  { key:'pipedrive',      name:'Pipedrive',         category:'CRM',            color:'#007BFF', textColor:'#fff' },
+  { key:'zoho',           name:'Zoho CRM',          category:'CRM',            color:'#C8202F', textColor:'#fff' },
+  { key:'salesforce',     name:'Salesforce',        category:'CRM',            color:'#00A1E0', textColor:'#fff' },
+  { key:'tiendanube',     name:'Tiendanube',        category:'Ecommerce',      color:'#00C4CC', textColor:'#fff' },
+  { key:'prestashop',     name:'PrestaShop',        category:'Ecommerce',      color:'#CB2027', textColor:'#fff' },
+  { key:'vtex',           name:'VTEX',              category:'Ecommerce',      color:'#F71963', textColor:'#fff' },
+  { key:'magento',        name:'Magento',           category:'Ecommerce',      color:'#F26322', textColor:'#fff' },
+  { key:'google_sheets',  name:'Google Sheets',     category:'Productividad',  color:'#0F9D58', textColor:'#fff' },
+  { key:'airtable',       name:'Airtable',          category:'Productividad',  color:'#18BFFF', textColor:'#fff' },
+  { key:'notion',         name:'Notion',            category:'Productividad',  color:'#000000', textColor:'#fff' },
+  { key:'trello',         name:'Trello',            category:'Productividad',  color:'#0052CC', textColor:'#fff' },
+  { key:'google_calendar',name:'Google Calendar',   category:'Calendario',     color:'#4285F4', textColor:'#fff' },
+  { key:'calendly',       name:'Calendly',          category:'Calendario',     color:'#006BFF', textColor:'#fff' },
+  { key:'cal',            name:'Cal.com',           category:'Calendario',     color:'#111827', textColor:'#fff' },
+  { key:'slack',          name:'Slack',             category:'Chat',           color:'#4A154B', textColor:'#fff' },
+  { key:'discord',        name:'Discord',           category:'Chat',           color:'#5865F2', textColor:'#fff' },
+];
+
+let VOTE_STATE = null; // { votes, myLast, canVote, nextVoteAt }
+
+async function loadVotes() {
+  try {
+    VOTE_STATE = await api('GET', '/api/integration-votes');
+    renderVotes();
+  } catch(e) { console.error('votes', e); }
+}
+
+function renderVotes() {
+  if (!VOTE_STATE) return;
+  const { votes, canVote, nextVoteAt, myLast } = VOTE_STATE;
+  const voteMap = {};
+  for (const v of votes) voteMap[v.integration_key] = (voteMap[v.integration_key] || 0) + v.total;
+
+  // Status banner
+  const statusEl = document.getElementById('voteStatus');
+  if (statusEl) {
+    if (canVote) {
+      statusEl.innerHTML = `<span class="vote-badge vote-badge--ok">✓ Puedes votar ahora</span>`;
+    } else {
+      const d = new Date(nextVoteAt * 1000).toLocaleDateString('es-MX', { day:'numeric', month:'long' });
+      const myName = myLast?.custom_name || VOTE_CATALOG.find(c => c.key === myLast?.integration_key)?.name || myLast?.integration_key || '';
+      statusEl.innerHTML = `<span class="vote-badge vote-badge--wait">Votaste por <b>${escapeHtml(myName)}</b> — siguiente voto el ${d}</span>`;
+    }
+  }
+
+  const query = (document.getElementById('voteSearch')?.value || '').toLowerCase();
+  const sorted = [...VOTE_CATALOG]
+    .map(c => ({ ...c, votes: voteMap[c.key] || 0 }))
+    .filter(c => !query || c.name.toLowerCase().includes(query) || c.category.toLowerCase().includes(query))
+    .sort((a, b) => b.votes - a.votes);
+
+  const grid = document.getElementById('voteGrid');
+  if (!grid) return;
+
+  const maxVotes = sorted[0]?.votes || 0;
+  grid.innerHTML = sorted.map((item, idx) => {
+    const isTop = idx === 0 && item.votes > 0;
+    const isMyVote = myLast?.integration_key === item.key;
+    const initial = item.name.slice(0,2).toUpperCase();
+    return `<div class="vote-card${isTop ? ' vote-card--top' : ''}${isMyVote ? ' vote-card--mine' : ''}">
+      ${isTop ? '<div class="vote-card-crown">🏆 #1</div>' : ''}
+      <div class="vote-icon" style="background:${item.color};color:${item.textColor}">${initial}</div>
+      <div class="vote-info">
+        <div class="vote-name">${escapeHtml(item.name)}</div>
+        <div class="vote-cat">${escapeHtml(item.category)}</div>
+      </div>
+      <div class="vote-count-wrap">
+        <div class="vote-bar-bg"><div class="vote-bar-fill" style="width:${maxVotes ? Math.round(item.votes/maxVotes*100) : 0}%"></div></div>
+        <span class="vote-count">${item.votes} voto${item.votes !== 1 ? 's' : ''}</span>
+      </div>
+      ${canVote
+        ? `<button class="btn btn--ghost btn--sm vote-btn" data-key="${item.key}">Votar</button>`
+        : isMyVote
+        ? `<span class="vote-badge vote-badge--mine">Mi voto</span>`
+        : `<button class="btn btn--ghost btn--sm vote-btn" data-key="${item.key}" disabled>Votar</button>`
+      }
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.vote-btn:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => castVote(btn.dataset.key));
+  });
+
+  // Custom vote button
+  const customBtn = document.getElementById('voteCustomBtn');
+  if (customBtn) customBtn.disabled = !canVote;
+}
+
+async function castVote(key, customName) {
+  try {
+    await api('POST', '/api/integration-votes', { key, customName });
+    await loadVotes();
+    toast('¡Voto registrado!', 'success');
+  } catch(err) {
+    toast(err.message || 'Error al votar', 'error');
+  }
+}
+
+function initVoteTab() {
+  document.getElementById('voteSearch')?.addEventListener('input', renderVotes);
+  document.getElementById('voteCustomBtn')?.addEventListener('click', () => {
+    const name = document.getElementById('voteCustomName')?.value?.trim();
+    if (!name || name.length < 2) { toast('Escribe el nombre de la integración', 'error'); return; }
+    castVote('custom', name);
+  });
+}
+
 // ─── OAuth popup ───
 async function connectOAuth(providerKey, authType) {
   // Multi-tenant: pre-creamos el state en backend (con auth) ANTES de abrir
@@ -11047,6 +11177,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadPipelines(),
     loadIntegrations(),
     loadOutgoingWebhooks(),
+    loadVotes(),
     loadExpedients(),
     loadSalsbots(),
     loadPipelinesKanban(),
@@ -14325,6 +14456,20 @@ window.addEventListener('appinstalled', () => {
   const btn = document.getElementById('pwaInstallBtn');
   if (btn) btn.hidden = true;
   if (typeof toast === 'function') toast('Wapi101 instalada como app ✓', 'success');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  // ─── Tabs de integraciones ───
+  document.querySelectorAll('.int-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.int-tab').forEach(t => t.classList.remove('int-tab--active'));
+      tab.classList.add('int-tab--active');
+      const isVote = tab.dataset.tab === 'vote';
+      document.getElementById('intTabConnected').hidden = isVote;
+      document.getElementById('intTabVote').hidden = !isVote;
+      if (isVote) { initVoteTab(); renderVotes(); }
+    });
+  });
 });
 
 document.addEventListener('DOMContentLoaded', () => {

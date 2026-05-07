@@ -1396,10 +1396,37 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
       <!-- ─── VISTA: INTEGRACIONES ─── -->
       <section class="view view-integrations" data-view="integraciones" hidden>
-        <div class="integrations-intro">
-          <p>Conecta tus canales de mensajería para recibir y responder desde Wapi101. Las credenciales se guardan cifradas (AES-256-GCM) y nunca se exponen al navegador después de guardarlas.</p>
+        <div class="int-tabs">
+          <button class="int-tab int-tab--active" data-tab="connected">Mis integraciones</button>
+          <button class="int-tab" data-tab="vote">Solicitar integración</button>
         </div>
-        <div class="integrations-grid" id="integrationsGrid"><!-- JS render --></div>
+
+        <!-- Tab: Mis integraciones -->
+        <div id="intTabConnected">
+          <div class="integrations-intro">
+            <p>Conecta tus canales de mensajería para recibir y responder desde Wapi101. Las credenciales se guardan cifradas (AES-256-GCM) y nunca se exponen al navegador después de guardarlas.</p>
+          </div>
+          <div class="integrations-grid" id="integrationsGrid"><!-- JS render --></div>
+        </div>
+
+        <!-- Tab: Solicitar integración -->
+        <div id="intTabVote" hidden>
+          <div class="vote-header">
+            <p class="vote-desc">¿Qué integración quieres que agreguemos? Vota por tu favorita — la más pedida se construye primero. Puedes votar una vez cada 15 días.</p>
+            <div id="voteStatus"></div>
+          </div>
+          <div class="vote-search-wrap">
+            <input type="text" id="voteSearch" placeholder="Buscar integración..." class="form-input" autocomplete="off">
+          </div>
+          <div class="vote-grid" id="voteGrid"><!-- JS render --></div>
+          <div class="vote-custom-wrap">
+            <p class="vote-custom-label">¿No encuentras la que buscas?</p>
+            <div class="vote-custom-row">
+              <input type="text" id="voteCustomName" placeholder="Escribe el nombre (ej: Zendesk, Freshdesk...)" class="form-input" maxlength="80">
+              <button class="btn btn--primary" id="voteCustomBtn">Sugerir y votar</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ─── MODAL: Configurar integración manual ─── -->

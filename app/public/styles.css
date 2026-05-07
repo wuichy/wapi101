@@ -8835,14 +8835,14 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
 
-/* Wrapper "+ Nueva tarea" — gemelo del toggle Lista/Mes (mismo borde, padding, radius) */
-.cal-sub-toggle--cta .cal-sub-btn--cta,
+/* Botón "+ Nueva tarea" — mismo alto y tipografía que el toggle Lista/Mes */
 #taskNewBtn.cal-sub-btn--cta {
   background: #2563eb !important;
   color: #fff !important;
+  border-radius: 8px;
+  padding: 8px 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
-.cal-sub-toggle--cta .cal-sub-btn--cta:hover,
 #taskNewBtn.cal-sub-btn--cta:hover {
   background: #1d4ed8 !important;
   color: #fff !important;

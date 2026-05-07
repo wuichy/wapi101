@@ -103,7 +103,14 @@ function list(db, tenantId) {
     .map(r => ({ ...r, permissions: JSON.parse(r.permissions || '{}') }));
 }
 
-function create(db, tenantId, { name, username, email, password, role = 'asesor', permissions = {} }) {
+function create(db, tenantId, { name, username, email, password, role = 'asesor', permissions = {}, _skipPlanCheck = false }) {
+  if (!_skipPlanCheck) {
+    const tenant = db.prepare('SELECT plan FROM tenants WHERE id = ?').get(tenantId);
+    if (tenant?.plan === 'free') {
+      const count = db.prepare('SELECT COUNT(*) AS n FROM advisors WHERE tenant_id = ? AND active = 1').get(tenantId).n;
+      if (count >= 1) throw Object.assign(new Error('El plan Gratis solo permite 1 usuario. Actualiza tu plan para agregar más asesores.'), { code: 'PLAN_LIMIT' });
+    }
+  }
   const defaultPerms = { write: true, delete: false, view_reports: false, manage_advisors: false };
   const perms = JSON.stringify({ ...defaultPerms, ...permissions });
   const hash = hashPassword(password);

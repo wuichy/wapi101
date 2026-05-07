@@ -81,12 +81,12 @@
       <span class="logo-text">Wapi101</span>
     </a>
 
-    <h1>Crea tu cuenta</h1>
-    <p class="subtitle">Empieza tu prueba gratuita de 14 días. Sin tarjeta.</p>
+    <h1 id="signupTitle">Crea tu cuenta gratis</h1>
+    <p class="subtitle" id="signupSubtitle">Plan Gratis para siempre · Sin tarjeta de crédito.</p>
 
-    <div class="trial-banner">
-      <strong>🎁 Trial completo del plan Pro</strong>
-      Acceso a bots, pipelines ilimitados y todas las funciones por 14 días.
+    <div class="trial-banner" id="trialBanner">
+      <strong>🎁 Plan Gratis para siempre</strong>
+      1 usuario, 500 contactos, todas las funciones. Sin tarjeta.
     </div>
 
     <div class="err" id="signupError"></div>
@@ -126,18 +126,33 @@
   </div>
 
   <script>
-    const form = document.getElementById('signupForm');
+    // Detectar plan desde URL ?plan=basico|pro|ultra
+    const _urlPlan = new URLSearchParams(location.search).get('plan') || 'free';
+    const _isPaid  = ['basico', 'pro', 'ultra'].includes(_urlPlan);
+    const _planNames = { basico: 'Básico', pro: 'Pro', ultra: 'Ultra' };
+
+    if (_isPaid) {
+      const n = _planNames[_urlPlan];
+      document.getElementById('signupTitle').textContent    = `Empieza tu trial del plan ${n}`;
+      document.getElementById('signupSubtitle').textContent = '14 días gratis · Se requiere tarjeta · Cancela cuando quieras.';
+      document.getElementById('trialBanner').innerHTML      = `<strong>🎉 Trial 14 días del plan ${n}</strong>
+        Acceso completo. Cancela antes del día 14 sin ningún cargo.`;
+      document.getElementById('signupBtn').textContent      = `Crear cuenta y activar trial ${n}`;
+    }
+
+    const form  = document.getElementById('signupForm');
     const errEl = document.getElementById('signupError');
-    const btn = document.getElementById('signupBtn');
+    const btn   = document.getElementById('signupBtn');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errEl.style.display = 'none';
       const data = {
         companyName: document.getElementById('companyName').value.trim(),
-        adminName: document.getElementById('adminName').value.trim(),
-        email: document.getElementById('email').value.trim(),
-        password: document.getElementById('password').value,
+        adminName:   document.getElementById('adminName').value.trim(),
+        email:       document.getElementById('email').value.trim(),
+        password:    document.getElementById('password').value,
+        plan:        _urlPlan,
       };
       btn.disabled = true;
       btn.textContent = 'Creando tu cuenta…';
@@ -149,16 +164,15 @@
         });
         const out = await r.json();
         if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
-        // Guardar token en localStorage usando la clave que la SPA del CRM espera
         localStorage.setItem('rh_session', out.token);
-        localStorage.setItem('wapi101_token', out.token); // compat
-        // Redirigir al CRM
-        location.href = '/app';
+        localStorage.setItem('wapi101_token', out.token);
+        // Si hay checkout Stripe (plan de pago), redirigir ahí primero
+        location.href = out.checkoutUrl || '/app';
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = 'Crear cuenta y empezar trial';
+        btn.textContent = _isPaid ? `Crear cuenta y activar trial ${_planNames[_urlPlan]}` : 'Crear cuenta gratis';
       }
     });
   </script>

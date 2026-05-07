@@ -16,6 +16,25 @@ const billingSvc = require('./service');
 function getPlans() {
   return [
     {
+      key:      'free',
+      name:     'Gratis',
+      tagline:  'Para empezar sin compromisos',
+      currency: 'MXN',
+      monthlyPrice: 0,
+      promoPrice:   0,
+      free:         true,
+      limits: { leads: null, contacts: 500, users: 1 },
+      features: [
+        '1 usuario (solo admin)',
+        '500 contactos',
+        'WhatsApp, Instagram y más',
+        'Bots con flujos visuales',
+        'Pipelines y Leads ilimitados',
+        'Recordatorios',
+        'Sin tarjeta de crédito',
+      ],
+    },
+    {
       key:          'basico',
       name:         'Básico',
       tagline:      'Para negocios que empiezan',

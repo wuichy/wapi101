@@ -148,10 +148,12 @@ function createTenant(db, { slug, displayName, plan = 'free', adminName, adminUs
 
   let createdTenantId, createdAdvisor;
   const trx = db.transaction(() => {
+    const tenantStatus = plan === 'free' ? 'active' : 'trial';
+    const trialEndsAt  = plan !== 'free' ? Math.floor(Date.now() / 1000) + 14 * 86400 : null;
     const r = db.prepare(`
-      INSERT INTO tenants (slug, display_name, status, plan)
-      VALUES (?, ?, 'trial', ?)
-    `).run(cleanSlug, displayName.trim(), plan);
+      INSERT INTO tenants (slug, display_name, status, plan, trial_ends_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(cleanSlug, displayName.trim(), tenantStatus, plan, trialEndsAt);
     createdTenantId = r.lastInsertRowid;
 
     // Crear advisor admin para el nuevo tenant
@@ -162,6 +164,7 @@ function createTenant(db, { slug, displayName, plan = 'free', adminName, adminUs
       password: finalPassword,
       role: 'admin',
       permissions: { write: true, delete: true, view_reports: true, manage_advisors: true },
+      _skipPlanCheck: true,
     });
   });
   trx();

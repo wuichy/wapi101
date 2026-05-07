@@ -205,11 +205,13 @@ app.post('/api/auth/signup', async (req, res) => {
     return res.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' });
   }
 
-  const { companyName, adminName, email, password } = req.body || {};
+  const { companyName, adminName, email, password, plan: planParam } = req.body || {};
   if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Nombre de la empresa requerido' });
   if (!adminName || !adminName.trim())     return res.status(400).json({ error: 'Tu nombre es requerido' });
   if (!email || !email.includes('@'))      return res.status(400).json({ error: 'Email inválido' });
   if (!password || password.length < 8)    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+  const VALID_PAID = ['basico', 'pro', 'ultra'];
+  const plan = VALID_PAID.includes(planParam) ? planParam : 'free';
 
   // Auto-generar slug y username
   let slug = _slugify(companyName);
@@ -228,7 +230,7 @@ app.post('/api/auth/signup', async (req, res) => {
     const result = superSvc.createTenant(db, {
       slug: finalSlug,
       displayName: companyName.trim(),
-      plan: 'free',
+      plan,
       adminName: adminName.trim(),
       adminUsername: username,
       adminEmail: email.trim(),
@@ -242,8 +244,30 @@ app.post('/api/auth/signup', async (req, res) => {
     if (!advisor) throw new Error('No se pudo crear el admin');
     const token = advisorSvc.createSession(db, advisor.id);
 
+    // Para planes de pago: crear checkout Stripe con trial 14 días
+    let checkoutUrl = null;
+    if (VALID_PAID.includes(plan)) {
+      try {
+        const { getPlans } = require('./src/modules/billing/routes');
+        const planObj = getPlans().find(p => p.key === plan);
+        const priceId = planObj?.priceIdMonthly;
+        if (priceId) {
+          const billingSvc = require('./src/modules/billing/service');
+          const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
+          const sess = await billingSvc.createCheckoutSession(db, result.tenant.id, priceId, {
+            successUrl: `${baseUrl}/app?billing=success`,
+            cancelUrl:  `${baseUrl}/app?billing=cancelled`,
+          });
+          checkoutUrl = sess.url;
+        }
+      } catch (err) {
+        console.warn('[signup] no se pudo crear checkout session:', err.message);
+      }
+    }
+
     res.json({
       token,
+      checkoutUrl,
       advisor: {
         id: advisor.id,
         name: advisor.name,

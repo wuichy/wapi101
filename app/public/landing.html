@@ -321,8 +321,11 @@
       font-size: 11px; font-weight: 700;
     }
     .pricing-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
-      max-width: 980px; margin: 0 auto;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      max-width: 1240px; margin: 0 auto;
+    }
+    @media (max-width: 1100px) {
+      .pricing-grid { grid-template-columns: repeat(2, 1fr); }
     }
     .price-card {
       padding: 32px 24px; background: #fff;
@@ -362,8 +365,18 @@
       background: #dcfce7; color: #14532d; border-radius: 5px;
     }
     .lp-price-note { font-size: 12px; color: var(--text-soft); margin-top: 4px; }
+    .lp-card-trial-note { font-size: 11px; color: var(--text-soft); text-align: center; margin-top: -8px; }
+    .price-card--free { border-color: #22c55e; background: #f0fdf4; }
+    .price-card--free h3 { color: #15803d; }
+    .btn-outline {
+      display: block; width: 100%; padding: 12px; text-align: center;
+      border: 2px solid var(--primary); color: var(--primary); background: transparent;
+      border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none;
+      transition: all 0.15s;
+    }
+    .btn-outline:hover { background: var(--primary); color: #fff; }
     @media (max-width: 900px) {
-      .pricing-grid { grid-template-columns: 1fr; max-width: 380px; }
+      .pricing-grid { grid-template-columns: 1fr; max-width: 420px; }
     }
 
     /* FAQ */
@@ -536,7 +549,7 @@
 <section class="section" id="pricing">
   <div class="container">
     <h2 class="section-title">Precios de lanzamiento</h2>
-    <p class="section-sub">Somos nuevos y queremos que lo pruebes. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa. Empieza gratis 14 días, sin tarjeta.</p>
+    <p class="section-sub">Empieza gratis para siempre con el plan básico, o prueba cualquier plan de pago <strong>14 días gratis con tarjeta</strong>. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa.</p>
 
     <div class="pricing-toggle" style="display:flex;justify-content:center;margin:0 auto 32px;">
       <button class="pt-opt is-active" data-interval="month">Mensual</button>
@@ -560,7 +573,7 @@
     <div class="faq">
       <details class="faq-item">
         <summary>¿Qué pasa cuando termina el trial de 14 días?</summary>
-        <p>Si no agregas un método de pago, tu cuenta se degrada al plan gratuito (con 50 contactos, 1 conversación activa, branding visible). Puedes seguir usando Wapi101 sin tarjeta, solo con esos límites. Para volver al plan completo, suscríbete cuando quieras.</p>
+        <p>Si no continúas con tu plan de pago, tu cuenta se queda en el <strong>plan Gratis</strong>: 1 usuario, 500 contactos y todas las funciones activas. No pierdes tu trabajo ni tus integraciones. Cuando quieras crecer, suscríbete desde tu panel.</p>
       </details>
       <details class="faq-item">
         <summary>¿Necesito tener una cuenta de WhatsApp Business API ya configurada?</summary>
@@ -594,8 +607,8 @@
 <section class="container">
   <div class="final-cta">
     <h2>¿Listo para vender más por WhatsApp?</h2>
-    <p>14 días gratis. Sin tarjeta. Cancela cuando quieras.</p>
-    <a href="/signup" class="btn btn-primary btn-lg">Empieza gratis ahora →</a>
+    <p>Empieza gratis hoy. Sin tarjeta. Sin límite de tiempo.</p>
+    <a href="/signup" class="btn btn-primary btn-lg">Crear cuenta gratis →</a>
   </div>
 </section>
 
@@ -661,8 +674,25 @@ function renderPlans() {
   const grid = document.getElementById('pricingGrid');
   grid.innerHTML = _plans.map(p => {
     const featured = p.featured ? ' featured' : '';
-    const features = (p.features || []).slice(0, 6).map(f => `<li>${f}</li>`).join('');
+    const features = (p.features || []).slice(0, 7).map(f => `<li>${f}</li>`).join('');
 
+    // ── Plan Gratis ──
+    if (p.free) {
+      return `
+        <div class="price-card price-card--free">
+          <div><h3>${p.name}</h3><p class="tagline">${p.tagline}</p></div>
+          <div>
+            <div class="lp-price-row">
+              <span class="amount">$0</span>
+            </div>
+            <p class="lp-price-note">MXN · para siempre</p>
+          </div>
+          <ul>${features}</ul>
+          <a href="/signup" class="btn-outline">Empezar gratis — sin tarjeta</a>
+        </div>`;
+    }
+
+    // ── Plan Ejecutivo (ventas) ──
     if (p.custom) {
       return `
         <div class="price-card${featured}">
@@ -673,6 +703,7 @@ function renderPlans() {
         </div>`;
     }
 
+    // ── Planes de pago ──
     let displayPrice, subNote, promoHtml = '';
     const pct = Math.round((1 - p.promoPrice / p.monthlyPrice) * 100);
 
@@ -714,7 +745,8 @@ function renderPlans() {
           <p class="lp-price-note">${subNote}</p>
         </div>
         <ul>${features}</ul>
-        <a href="/signup" class="btn btn-primary">Empezar gratis 14 días</a>
+        <a href="/signup?plan=${p.key}" class="btn btn-primary">Probar ${p.name} gratis 14 días</a>
+        <p class="lp-card-trial-note">Se requiere tarjeta · Cancela antes del día 14 sin costo</p>
       </div>`;
   }).join('');
 }

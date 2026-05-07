@@ -303,7 +303,7 @@ app.get('/api/me', (req, res) => res.json({ advisor: req.advisor }));
 //      con su Bearer token, recibe un state pre-creado, y abre el popup
 //      con ?state=<existing-state>.
 const crypto = require('crypto');
-const VALID_OAUTH_PROVIDERS = ['messenger', 'instagram', 'facebook', 'whatsapp-lite', 'tiktok'];
+const VALID_OAUTH_PROVIDERS = ['messenger', 'instagram', 'facebook', 'whatsapp-lite', 'tiktok', 'threads'];
 app.post('/api/auth/oauth/prepare', (req, res) => {
   const { provider } = req.body || {};
   if (!VALID_OAUTH_PROVIDERS.includes(provider)) {

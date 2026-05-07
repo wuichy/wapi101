@@ -8155,6 +8155,63 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   border: 2px solid #10b981;
 }
 
+/* Promo badge & real price strikethrough */
+.bp-promo-tag {
+  display: inline-block;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-bottom: -4px;
+}
+.bp-real-price {
+  font-size: 16px;
+  color: #94a3b8;
+  text-decoration: line-through;
+  margin-right: 2px;
+  font-weight: 500;
+}
+
+/* Limits line under price */
+.bp-limits {
+  font-size: 12px;
+  color: #64748b;
+  margin: 4px 0 0;
+}
+
+/* Ejecutivo / custom plan card */
+.bp-card--custom {
+  border-color: #7c3aed;
+  background: linear-gradient(135deg, #faf5ff 0%, #ede9fe 100%);
+}
+.bp-price--custom .amount {
+  font-size: 28px;
+  color: #7c3aed;
+}
+.bp-cta--contact {
+  margin-top: auto;
+  display: block;
+  text-align: center;
+  padding: 12px 16px;
+  border: 2px solid #7c3aed;
+  border-radius: 8px;
+  background: transparent;
+  color: #7c3aed;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.bp-cta--contact:hover {
+  background: #7c3aed;
+  color: #fff;
+}
+
 /* Manage subscription */
 .billing-manage {
   text-align: center;

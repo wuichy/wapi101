@@ -69,6 +69,8 @@ module.exports = function createExpedientsRouter(db) {
       // Bots y webhooks pueden pasar assignedAdvisorId=null explícito si no
       // quieren auto-asignar.
       const body = req.body || {};
+      const limitErr = require('../billing/limits').checkLimit(db, req.tenantId, req.tenant?.plan, 'leads', req.tenant?.extra_users);
+      if (limitErr) return res.status(402).json({ error: limitErr, limitExceeded: 'leads' });
       if (body.assignedAdvisorId === undefined && req.advisor?.id) {
         body.assignedAdvisorId = req.advisor.id;
       }

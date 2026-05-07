@@ -9,87 +9,123 @@
 const express = require('express');
 const billingSvc = require('./service');
 
-// Definición de planes — debe matchear con scripts/seed-stripe-products.js.
-// Las priceId vienen del .env (cargado en el seed). Si una está vacía, ese
-// plan no aparece como comprable hasta que se configure.
+// Definición de planes.
+// promoPrice = precio promoción de lanzamiento.
+// monthlyPrice = precio real (se muestra tachado mientras haya promo).
+// Las priceId vienen del .env. Si están vacías el plan no es comprable hasta configurarlas.
 function getPlans() {
   return [
     {
-      key: 'starter',
-      name: 'Starter',
-      tagline: 'Para emprendedores solos',
-      monthlyPrice: 29,
-      yearlyPrice: 23.20, // mensual equivalente del anual con 20% off
-      currency: 'USD',
+      key:          'basico',
+      name:         'Básico',
+      tagline:      'Para negocios que empiezan',
+      currency:     'MXN',
+      monthlyPrice: 349,
+      promoPrice:   149,
+      // Semestral: paga 5 meses, usa 6 (−16.7%)
+      semestralTotal: 745,   // 149 × 5
+      semestralMonthly: 124, // equivalente mensual
+      // Anual: paga 9 meses, usa 12 (−25%)
+      annualTotal:   1341,  // 149 × 9
+      annualMonthly: 112,   // equivalente mensual
+      limits: { leads: 4000, contacts: 8000, users: 2 },
       features: [
-        '1 usuario',
-        '500 contactos',
-        '1 número WhatsApp',
-        '1,000 conversaciones/mes',
-        '3 pipelines',
-        'Plantillas básicas (5)',
-        'Adjuntos en chat',
-        'Alarmas multi-condición',
-      ],
-      missingFeatures: ['Bots con flujos', 'Webhooks salientes', 'API pública', 'IA auto-respuesta'],
-      priceIdMonthly: process.env.STRIPE_PRICE_STARTER_MONTHLY || null,
-      priceIdYearly:  process.env.STRIPE_PRICE_STARTER_YEARLY  || null,
-    },
-    {
-      key: 'pro',
-      name: 'Pro',
-      tagline: 'Para PyMEs 2-10 personas',
-      monthlyPrice: 79,
-      yearlyPrice: 63.20,
-      currency: 'USD',
-      featured: true, // destacado por default
-      features: [
-        '5 usuarios',
-        'Contactos ilimitados',
-        '3 números WhatsApp',
-        'Conversaciones ilimitadas',
-        'Pipelines ilimitados',
+        '2 usuarios incluidos',
+        '4,000 leads',
+        '8,000 contactos',
         'Bots con flujos visuales',
-        '50 plantillas WA aprobadas',
+        'Pipelines ilimitados',
+        'Plantillas WhatsApp',
         'Webhooks salientes',
         'API pública',
         'Reportes completos',
       ],
-      missingFeatures: ['IA auto-respuesta', 'White-label'],
-      priceIdMonthly: process.env.STRIPE_PRICE_PRO_MONTHLY || null,
-      priceIdYearly:  process.env.STRIPE_PRICE_PRO_YEARLY  || null,
+      priceIdMonthly:   process.env.STRIPE_PRICE_BASICO_MONTHLY   || null,
+      priceIdSemestral: process.env.STRIPE_PRICE_BASICO_SEMESTRAL || null,
+      priceIdYearly:    process.env.STRIPE_PRICE_BASICO_YEARLY    || null,
     },
     {
-      key: 'business',
-      name: 'Business',
-      tagline: 'Para equipos 20+ personas',
-      monthlyPrice: 199,
-      yearlyPrice: 159.20,
-      currency: 'USD',
+      key:          'pro',
+      name:         'Pro',
+      tagline:      'Para equipos en crecimiento',
+      currency:     'MXN',
+      monthlyPrice: 699,
+      promoPrice:   299,
+      semestralTotal: 1495,
+      semestralMonthly: 249,
+      annualTotal:   2691,
+      annualMonthly: 224,
+      featured:     true,
+      limits: { leads: 15000, contacts: 30000, users: 2 },
       features: [
-        '20 usuarios',
-        'Todo de Pro',
-        'Números WhatsApp ilimitados',
-        'Plantillas ilimitadas',
+        '2 usuarios incluidos',
+        '15,000 leads',
+        '30,000 contactos',
+        'Todo lo del plan Básico',
         'IA auto-respuesta (Anthropic)',
+        'Soporte prioritario',
+      ],
+      priceIdMonthly:   process.env.STRIPE_PRICE_PRO_MONTHLY   || null,
+      priceIdSemestral: process.env.STRIPE_PRICE_PRO_SEMESTRAL || null,
+      priceIdYearly:    process.env.STRIPE_PRICE_PRO_YEARLY    || null,
+    },
+    {
+      key:          'ultra',
+      name:         'Ultra',
+      tagline:      'Para operaciones a gran escala',
+      currency:     'MXN',
+      monthlyPrice: 1199,
+      promoPrice:   499,
+      semestralTotal: 2495,
+      semestralMonthly: 416,
+      annualTotal:   4491,
+      annualMonthly: 374,
+      limits: { leads: 50000, contacts: 100000, users: 2 },
+      features: [
+        '2 usuarios incluidos',
+        '50,000 leads',
+        '100,000 contactos',
+        'Todo lo del plan Pro',
         'White-label (logo propio)',
-        'Reportes avanzados con export',
         'Onboarding dedicado',
         'Soporte chat 4h SLA',
       ],
-      missingFeatures: [],
-      priceIdMonthly: process.env.STRIPE_PRICE_BUSINESS_MONTHLY || null,
-      priceIdYearly:  process.env.STRIPE_PRICE_BUSINESS_YEARLY  || null,
+      priceIdMonthly:   process.env.STRIPE_PRICE_ULTRA_MONTHLY   || null,
+      priceIdSemestral: process.env.STRIPE_PRICE_ULTRA_SEMESTRAL || null,
+      priceIdYearly:    process.env.STRIPE_PRICE_ULTRA_YEARLY    || null,
+    },
+    {
+      key:      'ejecutivo',
+      name:     'Ejecutivo',
+      tagline:  'Plan a tu medida',
+      currency: 'MXN',
+      custom:   true,
+      limits:   { leads: null, contacts: null, users: null },
+      features: [
+        'Leads y contactos ilimitados',
+        'Usuarios ilimitados',
+        'Todo lo del plan Ultra',
+        'Integraciones personalizadas',
+        'SLA dedicado',
+        'Precio según necesidades',
+      ],
     },
   ];
 }
 
+const EXTRA_USER = {
+  promoPrice:   99,
+  monthlyPrice: 199,
+  currency:     'MXN',
+  priceIdMonthly: process.env.STRIPE_PRICE_EXTRA_USER_MONTHLY || null,
+};
+
 module.exports = function createBillingRouter(db) {
   const router = express.Router();
 
-  // ─── Catálogo de planes (para que el frontend renderice cards) ────────
+  // ─── Catálogo de planes ───────────────────────────────────────────────
   router.get('/plans', (_req, res) => {
-    res.json({ plans: getPlans() });
+    res.json({ plans: getPlans(), extraUser: EXTRA_USER });
   });
 
   // ─── Estado actual de la suscripción ──────────────────────────────────

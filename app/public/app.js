@@ -12795,39 +12795,84 @@ function renderBillingPlans() {
   const currentKey = _detectCurrentPlanKey();
 
   root.innerHTML = _billingPlans.map((p) => {
-    const price = _billingInterval === 'year' ? p.yearlyPrice : p.monthlyPrice;
-    const priceId = _billingInterval === 'year' ? p.priceIdYearly : p.priceIdMonthly;
-    const period = _billingInterval === 'year' ? 'mes (cobrado anual)' : 'mes';
-    const yearlyNote = _billingInterval === 'year' ? `<p class="bp-price-note">$${(p.yearlyPrice * 12).toFixed(2)} ${p.currency}/año (ahorras 20%)</p>` : '';
-    const isCurrent = currentKey === p.key;
+    const isCurrent  = currentKey === p.key;
     const featuredClass = p.featured ? ' is-featured' : '';
-    const currentClass = isCurrent ? ' is-current' : '';
-    const ctaText = isCurrent ? 'Plan actual' : (_billingSub?.subscription ? 'Cambiar a ' + p.name : 'Empezar trial');
+    const currentClass  = isCurrent  ? ' is-current'  : '';
+
+    // Plan Ejecutivo — card especial sin precio
+    if (p.custom) {
+      const features = (p.features || []).map(f => `<li>${escHtml(f)}</li>`).join('');
+      return `
+        <div class="bp-card bp-card--custom${currentClass}">
+          <div>
+            <h3 class="bp-name">${escHtml(p.name)}</h3>
+            <p class="bp-tagline">${escHtml(p.tagline)}</p>
+          </div>
+          <div class="bp-price bp-price--custom">
+            <span class="amount">Hablemos</span>
+          </div>
+          <ul class="bp-features">${features}</ul>
+          <a class="bp-cta bp-cta--contact" href="mailto:hola@wapi101.com?subject=Plan%20Ejecutivo">Contactar ventas</a>
+        </div>`;
+    }
+
+    // Precio según intervalo
+    let price, priceId, periodLabel, totalNote;
+    if (_billingInterval === 'semester') {
+      price       = p.semestralMonthly;
+      priceId     = p.priceIdSemestral;
+      periodLabel = 'mes';
+      totalNote   = `<p class="bp-price-note">$${p.semestralTotal} ${p.currency} total · 6 meses (1 mes gratis)</p>`;
+    } else if (_billingInterval === 'year') {
+      price       = p.annualMonthly;
+      priceId     = p.priceIdYearly;
+      periodLabel = 'mes';
+      totalNote   = `<p class="bp-price-note">$${p.annualTotal} ${p.currency} total · 12 meses (3 meses gratis)</p>`;
+    } else {
+      price       = p.promoPrice;
+      priceId     = p.priceIdMonthly;
+      periodLabel = 'mes';
+      totalNote   = '';
+    }
+
+    const promoTag = (p.promoPrice && p.promoPrice < p.monthlyPrice && _billingInterval === 'month')
+      ? `<span class="bp-promo-tag">Precio lanzamiento</span>`
+      : '';
+    const realPrice = (p.promoPrice && p.promoPrice < p.monthlyPrice && _billingInterval === 'month')
+      ? `<span class="bp-real-price">$${p.monthlyPrice}</span>`
+      : '';
+
+    const ctaText = isCurrent ? 'Plan actual' : (_billingSub?.subscription ? 'Cambiar a ' + p.name : 'Empezar 14 días gratis');
+    const limits  = p.limits || {};
+    const limitsHtml = limits.leads
+      ? `<p class="bp-limits">${Number(limits.leads).toLocaleString('es-MX')} leads · ${Number(limits.contacts).toLocaleString('es-MX')} contactos · ${limits.users} usuarios</p>`
+      : '';
     const features = (p.features || []).map(f => `<li>${escHtml(f)}</li>`).join('');
-    const missing = (p.missingFeatures || []).map(f => `<li class="is-missing">${escHtml(f)}</li>`).join('');
+
     return `
       <div class="bp-card${featuredClass}${currentClass}">
+        ${promoTag}
         <div>
           <h3 class="bp-name">${escHtml(p.name)}</h3>
           <p class="bp-tagline">${escHtml(p.tagline)}</p>
         </div>
         <div>
           <div class="bp-price">
+            ${realPrice}
             <span class="amount">$${price}</span>
             <span class="currency">${p.currency}</span>
-            <span class="period">/${period}</span>
+            <span class="period">/${periodLabel}</span>
           </div>
-          ${yearlyNote}
+          ${totalNote}
+          ${limitsHtml}
         </div>
-        <ul class="bp-features">${features}${missing}</ul>
+        <ul class="bp-features">${features}</ul>
         <button class="bp-cta" data-plan-key="${p.key}" ${(!priceId || isCurrent) ? 'disabled' : ''}>
           ${escHtml(ctaText)}
         </button>
-      </div>
-    `;
+      </div>`;
   }).join('');
 
-  // Wire up buttons
   root.querySelectorAll('.bp-cta:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => onSubscribe(btn.dataset.planKey));
   });
@@ -12836,7 +12881,9 @@ function renderBillingPlans() {
 async function onSubscribe(planKey) {
   const plan = _billingPlans.find(p => p.key === planKey);
   if (!plan) return;
-  const priceId = _billingInterval === 'year' ? plan.priceIdYearly : plan.priceIdMonthly;
+  const priceId = _billingInterval === 'year' ? plan.priceIdYearly
+    : _billingInterval === 'semester' ? plan.priceIdSemestral
+    : plan.priceIdMonthly;
   if (!priceId) {
     toast('Este plan no está disponible aún', 'warning');
     return;

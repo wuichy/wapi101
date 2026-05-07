@@ -29,6 +29,8 @@ module.exports = function createCustomersRouter(db) {
 
   router.post('/', (req, res, next) => {
     try {
+      const limitErr = require('../billing/limits').checkLimit(db, req.tenantId, req.tenant?.plan, 'contacts', req.tenant?.extra_users);
+      if (limitErr) return res.status(402).json({ error: limitErr, limitExceeded: 'contacts' });
       const item = service.create(db, req.tenantId, req.body || {});
       // Track activity
       try {

@@ -30,6 +30,8 @@ module.exports = function createAdvisorsRouter(db) {
       return res.status(400).json({ error: 'Nombre, usuario y contraseña son requeridos' });
     }
     try {
+      const limitErr = require('../billing/limits').checkLimit(db, req.tenantId, req.tenant?.plan, 'users', req.tenant?.extra_users);
+      if (limitErr) return res.status(402).json({ error: limitErr, limitExceeded: 'users' });
       const created = svc.create(db, req.tenantId, { name: name.trim(), username: username.trim(), email, password, role, permissions });
       res.status(201).json(created);
     } catch (err) {

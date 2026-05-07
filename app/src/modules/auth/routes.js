@@ -84,10 +84,11 @@ module.exports = function createAuthRouter(db) {
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
     const redirectUri = encodeURIComponent(`${baseUrl}/auth/meta/callback`);
 
-    // Instagram usa Instagram Business Login (endpoint separado de Facebook)
+    // Instagram usa Instagram Business Login (endpoint separado de Facebook, app ID distinto)
     if (provider === 'instagram') {
+      const igAppId = process.env.META_IG_APP_ID || appId;
       const igScope = encodeURIComponent('instagram_business_basic,instagram_business_manage_messages');
-      const igUrl = `https://www.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${redirectUri}&scope=${igScope}&response_type=code&state=${state}`;
+      const igUrl = `https://www.instagram.com/oauth/authorize?client_id=${igAppId}&redirect_uri=${redirectUri}&scope=${igScope}&response_type=code&state=${state}`;
       return res.redirect(igUrl);
     }
 
@@ -121,21 +122,22 @@ module.exports = function createAuthRouter(db) {
     try {
       let integration;
 
-      // Instagram Business Login usa endpoint distinto a Facebook
+      // Instagram Business Login usa endpoint distinto a Facebook, con credenciales de app IG separada
       if (provider === 'instagram') {
+        const igAppId = process.env.META_IG_APP_ID || appId;
+        const igAppSecret = process.env.META_IG_APP_SECRET || appSecret;
         const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
-            client_id: appId,
-            client_secret: appSecret,
+            client_id: igAppId,
+            client_secret: igAppSecret,
             grant_type: 'authorization_code',
             redirect_uri: decodeURIComponent(redirectUri),
             code,
           }).toString(),
         });
         const tokenData = await tokenRes.json();
-        console.log('[auth instagram] token response:', JSON.stringify(tokenData));
         if (!tokenRes.ok || tokenData.error_message || tokenData.error) {
           throw new Error(tokenData.error_message || tokenData.error?.message || 'Error obteniendo token de Instagram');
         }
@@ -143,7 +145,7 @@ module.exports = function createAuthRouter(db) {
         const igUserId = String(tokenData.user_id || '');
 
         // Long-lived token (60 días)
-        const llRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${appSecret}&access_token=${shortToken}`);
+        const llRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${igAppSecret}&access_token=${shortToken}`);
         const llData = await llRes.json();
         const accessToken = llData.access_token || shortToken;
 

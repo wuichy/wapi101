@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es-MX">
+<html lang="es-MX" id="htmlRoot">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aviso de Privacidad · Wapi101</title>
+  <title id="pageTitle">Aviso de Privacidad · Wapi101</title>
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
   <style>
     * { box-sizing: border-box; }
@@ -38,7 +38,8 @@
   </style>
 </head>
 <body>
-  <div class="container">
+
+  <div id="content-es" class="container">
     <header>
       <a href="/" class="brand">
         <span class="brand-mark">W</span>
@@ -169,5 +170,154 @@
       <p style="margin-top: 16px; color: #94a3b8;">© 2026 Wapi101. Todos los derechos reservados.</p>
     </footer>
   </div>
+
+  <div id="content-en" class="container" hidden>
+    <header>
+      <a href="/" class="brand">
+        <span class="brand-mark">W</span>
+        <span class="brand-name">Wapi101</span>
+      </a>
+      <h1>Privacy Policy</h1>
+      <p class="updated">Last updated: May 6, 2026</p>
+    </header>
+
+    <div class="disclaimer">
+      <strong>⚠️ This document is an initial version.</strong> We recommend users consult a specialized lawyer for a full legal review before commercial use. Mexican law applies, specifically the Federal Law on Protection of Personal Data Held by Private Parties (LFPDPPP).
+    </div>
+
+    <h2>1. Data Controller Identity</h2>
+    <p>
+      <strong>Wapi101</strong> (hereinafter "Wapi101", "we", "the service") operates the SaaS platform accessible at <a href="https://wapi101.com">https://wapi101.com</a>. For privacy inquiries: <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a>.
+    </p>
+
+    <h2>2. Personal Data We Collect</h2>
+    <p>We collect the following data to provide the service:</p>
+
+    <h3>2.1 Client Account Data (CRM Administrator)</h3>
+    <ul>
+      <li>First name, last name, email address, phone number</li>
+      <li>Username and password (stored as a <em>scrypt/PBKDF2</em> hash, never in plain text)</li>
+      <li>Business name and tax information for invoicing, where applicable</li>
+    </ul>
+
+    <h3>2.2 Data of Your End Contacts (managed by you as a CRM client)</h3>
+    <p>When you use Wapi101 as a tool to manage your own customers, we store on your behalf:</p>
+    <ul>
+      <li>Names, phone numbers, and email addresses of your contacts</li>
+      <li>Messages exchanged via WhatsApp, Messenger, Instagram, Telegram</li>
+      <li>Notes, tags, and sales opportunity data (pipelines)</li>
+      <li>File attachments sent or received in conversations</li>
+    </ul>
+    <p>
+      <strong>Important:</strong> with respect to this data, you act as the <em>data controller</em> and Wapi101 acts as the <em>data processor</em>. You are responsible for obtaining consent from your contacts to process their data.
+    </p>
+
+    <h3>2.3 Payment Data</h3>
+    <p>
+      Payment data (card numbers, expiration dates, CVV) is NOT stored on our servers. It is processed directly by <a href="https://stripe.com">Stripe</a>, our PCI-DSS Level 1 certified payment processor.
+    </p>
+
+    <h3>2.4 Automatic Technical Data</h3>
+    <ul>
+      <li>IP addresses, device identifiers, browser user-agent</li>
+      <li>Activity logs for audit and security purposes</li>
+      <li>Session cookies required to keep you signed in</li>
+    </ul>
+
+    <h2>3. Purposes of Processing</h2>
+    <p>We use your data to:</p>
+    <ol>
+      <li>Create and maintain your account and process your payments</li>
+      <li>Provide the contracted multi-channel CRM service</li>
+      <li>Send operational notifications (account verification, trial expiration, receipts)</li>
+      <li>Handle technical support requests</li>
+      <li>Comply with applicable tax and legal obligations</li>
+      <li>Detect and prevent fraud, abuse, and violations of the Terms</li>
+    </ol>
+
+    <h2>4. Data Transfers to Third Parties</h2>
+    <p>We share data only with the following third parties, exclusively to provide the service:</p>
+    <ul>
+      <li><strong>Stripe Inc.</strong> — payment processing (United States)</li>
+      <li><strong>Meta Platforms, Inc.</strong> — message delivery via WhatsApp Cloud API, Messenger, and Instagram (United States)</li>
+      <li><strong>DigitalOcean LLC</strong> — service hosting (United States)</li>
+      <li><strong>Cloudflare, Inc.</strong> — DDoS protection, CDN, and DNS (United States)</li>
+      <li><strong>Anthropic, PBC</strong> — optional AI model for automated replies, when you enable it (United States)</li>
+    </ul>
+    <p>
+      These third parties have their own privacy policies and are contracted under confidentiality clauses. We do NOT sell your data to advertisers or third parties for commercial purposes unrelated to the service.
+    </p>
+
+    <h2>5. Your ARCO Rights</h2>
+    <p>
+      In accordance with the LFPDPPP (Mexico's Federal Law on Protection of Personal Data Held by Private Parties), you have the right to:
+    </p>
+    <ul>
+      <li><strong>Access</strong> the personal data we hold about you</li>
+      <li><strong>Rectify</strong> incorrect or outdated data</li>
+      <li><strong>Cancel</strong> the use of your data when it is no longer necessary</li>
+      <li><strong>Oppose</strong> specific uses of your data</li>
+    </ul>
+    <p>
+      ARCO stands for <em>Acceso, Rectificación, Cancelación y Oposición</em> (Access, Rectification, Cancellation and Opposition) — the standard data subject rights under the LFPDPPP.
+    </p>
+    <p>
+      To exercise these rights, send an email to <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a> from your registered email address, clearly stating which right you wish to exercise. We will respond within the 20 business days required by law.
+    </p>
+
+    <h2>6. Data Retention</h2>
+    <p>
+      We retain your data for as long as your account is active. After account cancellation, we keep data for <strong>30 days</strong> in backups to allow recovery in the event of accidental cancellation, after which it is permanently deleted. We retain financial records (invoices, receipts) for the period required by Mexican tax law (5 years).
+    </p>
+
+    <h2>7. Security</h2>
+    <p>We apply reasonable technical and organizational measures, including:</p>
+    <ul>
+      <li>Encryption in transit (TLS 1.2+) and at rest for sensitive credentials (AES-256-GCM)</li>
+      <li>Cryptographic password hashing (PBKDF2/scrypt with random per-account salts)</li>
+      <li>Multi-tenant authentication with strict isolation between client accounts</li>
+      <li>System access audit logs</li>
+      <li>Encrypted backups</li>
+    </ul>
+
+    <h2>8. Cookies</h2>
+    <p>
+      We use strictly necessary cookies to keep you signed in to the platform. We do NOT use advertising tracking cookies or third-party cookies for commercial purposes. The only exception is Cloudflare's security and basic analytics cookies, which are essential for operation.
+    </p>
+
+    <h2>9. Minors</h2>
+    <p>
+      Wapi101 is a business tool and is NOT directed at persons under 18 years of age. We do not knowingly collect data from minors. If you believe a minor has provided data, please contact us to have it removed.
+    </p>
+
+    <h2>10. Changes to This Policy</h2>
+    <p>
+      We may update this policy to reflect changes in legislation or our services. Modifications will be published on this page with the updated "Last updated" date. For material changes, we will notify you by email to your registered account at least 15 days before they take effect.
+    </p>
+
+    <h2>11. Acceptance</h2>
+    <p>
+      By using Wapi101 you acknowledge that you have read, understood, and accepted this Privacy Policy and the <a href="/terms">Terms of Service</a>.
+    </p>
+
+    <footer>
+      <a href="/">Home</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="mailto:soporte@wapi101.com">Contact</a>
+      <p style="margin-top: 16px; color: #94a3b8;">© 2026 Wapi101. All rights reserved.</p>
+    </footer>
+  </div>
+
+  <script>
+    const _stored = (() => { try { return localStorage.getItem('locale'); } catch { return null; } })();
+    const _nav = (navigator.language || 'es').toLowerCase();
+    const _isEn = _stored ? _stored === 'en' : !_nav.startsWith('es');
+    document.getElementById('htmlRoot').lang = _isEn ? 'en' : 'es-MX';
+    if (_isEn) {
+      document.getElementById('pageTitle').textContent = 'Privacy Policy · Wapi101';
+      document.getElementById('content-es').hidden = true;
+      document.getElementById('content-en').hidden = false;
+    }
+  </script>
 </body>
 </html>

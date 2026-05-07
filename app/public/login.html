@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" id="htmlRoot">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -117,13 +117,61 @@
   </p>
 
   <script>
+    // ── Detección de idioma ──────────────────────────────────────────────────
+    const _stored = (() => { try { return localStorage.getItem('locale'); } catch { return null; } })();
+    const _nav    = (navigator.language || 'es').toLowerCase();
+    const _isEn   = _stored ? _stored === 'en' : !_nav.startsWith('es');
+
+    const _L = {
+      es: {
+        title:       'Iniciar sesión · Wapi101 CRM',
+        heading:     'Bienvenido',
+        subtitle:    'Ingresa con tu usuario o email y contraseña',
+        lblUser:     'Usuario o email',
+        phUser:      'usuario o correo',
+        lblPass:     'Contraseña',
+        btnLogin:    'Iniciar sesión',
+        btnLoading:  'Verificando...',
+        errGeneric:  'Error al iniciar sesión',
+        linkPrivacy: 'Aviso de Privacidad',
+        linkTerms:   'Términos del Servicio',
+      },
+      en: {
+        title:       'Sign in · Wapi101 CRM',
+        heading:     'Welcome back',
+        subtitle:    'Sign in with your username or email and password',
+        lblUser:     'Username or email',
+        phUser:      'username or email',
+        lblPass:     'Password',
+        btnLogin:    'Sign in',
+        btnLoading:  'Verifying...',
+        errGeneric:  'Failed to sign in',
+        linkPrivacy: 'Privacy Policy',
+        linkTerms:   'Terms of Service',
+      },
+    };
+    const s = _isEn ? _L.en : _L.es;
+
+    document.getElementById('htmlRoot').lang         = _isEn ? 'en' : 'es';
+    document.title                                   = s.title;
+    document.querySelector('h1').textContent         = s.heading;
+    document.querySelector('.subtitle').textContent  = s.subtitle;
+    document.querySelector('label[for="username"]').textContent = s.lblUser;
+    document.getElementById('username').placeholder  = s.phUser;
+    document.querySelector('label[for="password"]').textContent = s.lblPass;
+    document.getElementById('loginBtn').textContent  = s.btnLogin;
+    const links = document.querySelectorAll('p a');
+    if (links[0]) links[0].textContent = s.linkPrivacy;
+    if (links[1]) links[1].textContent = s.linkTerms;
+
+    // ── Submit ───────────────────────────────────────────────────────────────
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const errEl = document.getElementById('loginError');
       const btn   = document.getElementById('loginBtn');
       errEl.style.display = 'none';
       btn.disabled = true;
-      btn.textContent = 'Verificando...';
+      btn.textContent = s.btnLoading;
 
       try {
         const res = await fetch('/api/auth/login', {
@@ -135,7 +183,7 @@
           }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Error al iniciar sesión');
+        if (!res.ok) throw new Error(data.error || s.errGeneric);
         localStorage.setItem('rh_token', data.token);
         localStorage.setItem('rh_advisor', JSON.stringify(data.advisor));
         window.location.href = '/app';
@@ -143,7 +191,7 @@
         errEl.textContent = err.message;
         errEl.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = 'Iniciar sesión';
+        btn.textContent = s.btnLogin;
       }
     });
   </script>

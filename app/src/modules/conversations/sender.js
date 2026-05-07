@@ -8,6 +8,7 @@ async function sendMessage(db, convo, text) {
   if (convo.provider === 'messenger')       return sendMessenger(db, convo, text);
   if (convo.provider === 'instagram')       return sendInstagram(db, convo, text);
   if (convo.provider === 'telegram')        return sendTelegram(db, convo, text);
+  if (convo.provider === 'email')           return sendEmail(db, convo, text);
   console.warn(`[sender] envío para provider ${convo.provider} no implementado`);
   return null;
 }
@@ -330,6 +331,29 @@ async function sendTelegramMedia(db, convo, { buffer, mimetype, filename, captio
   const data = await res.json();
   if (!data.ok) throw new Error(data.description || `HTTP ${res.status}`);
   return String(data.result?.message_id || '') || null;
+}
+
+async function sendEmail(db, convo, text) {
+  const creds = getIntegrationCreds(db, convo.integrationId);
+  if (!creds?.smtpHost || !creds?.username || !creds?.password) {
+    throw new Error('Faltan credenciales SMTP en la integración de email');
+  }
+  const nodemailer = require('nodemailer');
+  const port = Number(creds.smtpPort) || 587;
+  const transporter = nodemailer.createTransport({
+    host: creds.smtpHost,
+    port,
+    secure: port === 465,
+    auth: { user: creds.username, pass: creds.password },
+  });
+  const toEmail = convo.external_id || convo.externalId;
+  const info = await transporter.sendMail({
+    from: `"${creds.fromName || 'Wapi101'}" <${creds.fromEmail || creds.username}>`,
+    to: toEmail,
+    subject: 'Re: tu mensaje',
+    text,
+  });
+  return info.messageId || null;
 }
 
 function getIntegrationCreds(db, integrationId) {

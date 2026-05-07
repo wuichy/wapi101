@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es-MX">
+<html lang="es-MX" id="htmlRoot">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Crear cuenta · Wapi101</title>
+  <title id="pageTitle">Crear cuenta · Wapi101</title>
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#2563eb" />
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
@@ -93,53 +93,128 @@
 
     <form id="signupForm" autocomplete="on">
       <div class="field">
-        <label for="companyName">Nombre de tu empresa</label>
+        <label for="companyName" id="lblCompany">Nombre de tu empresa</label>
         <input type="text" id="companyName" placeholder="ej. Acme Cosméticos" required minlength="2" maxlength="60" />
-        <div class="field-help">Como aparecerá en tu workspace</div>
+        <div class="field-help" id="helpCompany">Como aparecerá en tu workspace</div>
       </div>
 
       <div class="field">
-        <label for="adminName">Tu nombre</label>
+        <label for="adminName" id="lblName">Tu nombre</label>
         <input type="text" id="adminName" placeholder="ej. Pepe Pérez" autocomplete="name" required minlength="2" maxlength="60" />
       </div>
 
       <div class="field">
-        <label for="email">Correo electrónico</label>
+        <label for="email" id="lblEmail">Correo electrónico</label>
         <input type="email" id="email" placeholder="tu@empresa.com" autocomplete="email" required />
       </div>
 
       <div class="field">
-        <label for="password">Contraseña</label>
+        <label for="password" id="lblPassword">Contraseña</label>
         <input type="password" id="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required minlength="8" />
-        <div class="field-help">Mínimo 8 caracteres. Usa mayúsculas, números y símbolos.</div>
+        <div class="field-help" id="helpPassword">Mínimo 8 caracteres. Usa mayúsculas, números y símbolos.</div>
       </div>
 
-      <button class="btn" type="submit" id="signupBtn">Crear cuenta y empezar trial</button>
+      <button class="btn" type="submit" id="signupBtn">Crear cuenta gratis</button>
     </form>
 
-    <p class="footer">
+    <p class="footer" id="footerLogin">
       ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>
     </p>
-    <p class="legal-note">
+    <p class="legal-note" id="legalNote">
       Al crear cuenta aceptas nuestros <a href="/terms" target="_blank">Términos del Servicio</a> y <a href="/privacy" target="_blank">Aviso de Privacidad</a>.
     </p>
   </div>
 
   <script>
-    // Detectar plan desde URL ?plan=basico|pro|ultra
-    const _urlPlan = new URLSearchParams(location.search).get('plan') || 'free';
-    const _isPaid  = ['basico', 'pro', 'ultra'].includes(_urlPlan);
+    // ── Detección de idioma ──────────────────────────────────────────────────
+    const _stored = (() => { try { return localStorage.getItem('locale'); } catch { return null; } })();
+    const _nav    = (navigator.language || 'es').toLowerCase();
+    const _isEn   = _stored ? _stored === 'en' : !_nav.startsWith('es');
+
+    const _STR = {
+      es: {
+        pageTitle:    'Crear cuenta · Wapi101',
+        freeTitle:    'Crea tu cuenta gratis',
+        freeSubtitle: 'Plan Gratis para siempre · Sin tarjeta de crédito.',
+        freeBanner:   '<strong>🎁 Plan Gratis para siempre</strong>\n        1 usuario, 500 contactos, todas las funciones. Sin tarjeta.',
+        trialTitle:   (n) => `Empieza tu trial del plan ${n}`,
+        trialSubtitle:'14 días gratis · Se requiere tarjeta · Cancela cuando quieras.',
+        trialBanner:  (n) => `<strong>🎉 Trial 14 días del plan ${n}</strong>\n        Acceso completo. Cancela antes del día 14 sin ningún cargo.`,
+        trialBtn:     (n) => `Crear cuenta y activar trial ${n}`,
+        freeBtn:      'Crear cuenta gratis',
+        lblCompany:   'Nombre de tu empresa',
+        phCompany:    'ej. Acme Cosméticos',
+        helpCompany:  'Como aparecerá en tu workspace',
+        lblName:      'Tu nombre',
+        phName:       'ej. Pepe Pérez',
+        lblEmail:     'Correo electrónico',
+        lblPassword:  'Contraseña',
+        phPassword:   'Mínimo 8 caracteres',
+        helpPassword: 'Mínimo 8 caracteres. Usa mayúsculas, números y símbolos.',
+        footer:       '¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>',
+        legal:        'Al crear cuenta aceptas nuestros <a href="/terms" target="_blank">Términos del Servicio</a> y <a href="/privacy" target="_blank">Aviso de Privacidad</a>.',
+        creating:     'Creando tu cuenta…',
+      },
+      en: {
+        pageTitle:    'Create account · Wapi101',
+        freeTitle:    'Create your free account',
+        freeSubtitle: 'Free forever · No credit card required.',
+        freeBanner:   '<strong>🎁 Free plan forever</strong>\n        1 user, 500 contacts, all features. No credit card.',
+        trialTitle:   (n) => `Start your ${n} plan trial`,
+        trialSubtitle:'14 days free · Card required · Cancel any time.',
+        trialBanner:  (n) => `<strong>🎉 14-day ${n} trial</strong>\n        Full access. Cancel before day 14 at no charge.`,
+        trialBtn:     (n) => `Create account & start ${n} trial`,
+        freeBtn:      'Create free account',
+        lblCompany:   'Company name',
+        phCompany:    'e.g. Acme Cosmetics',
+        helpCompany:  'How it will appear in your workspace',
+        lblName:      'Your name',
+        phName:       'e.g. Jane Smith',
+        lblEmail:     'Email address',
+        lblPassword:  'Password',
+        phPassword:   'At least 8 characters',
+        helpPassword: 'At least 8 characters. Use uppercase, numbers and symbols.',
+        footer:       'Already have an account? <a href="/login">Sign in</a>',
+        legal:        'By creating an account you agree to our <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Policy</a>.',
+        creating:     'Creating your account…',
+      },
+    };
+    const s = _isEn ? _STR.en : _STR.es;
+
+    // ── Aplicar traducciones al DOM ──────────────────────────────────────────
+    document.getElementById('htmlRoot').lang         = _isEn ? 'en' : 'es-MX';
+    document.getElementById('pageTitle').textContent = s.pageTitle;
+    document.getElementById('lblCompany').textContent   = s.lblCompany;
+    document.getElementById('companyName').placeholder  = s.phCompany;
+    document.getElementById('helpCompany').textContent  = s.helpCompany;
+    document.getElementById('lblName').textContent      = s.lblName;
+    document.getElementById('adminName').placeholder    = s.phName;
+    document.getElementById('lblEmail').textContent     = s.lblEmail;
+    document.getElementById('lblPassword').textContent  = s.lblPassword;
+    document.getElementById('password').placeholder     = s.phPassword;
+    document.getElementById('helpPassword').textContent = s.helpPassword;
+    document.getElementById('footerLogin').innerHTML    = s.footer;
+    document.getElementById('legalNote').innerHTML      = s.legal;
+
+    // ── Plan desde URL ?plan=basico|pro|ultra ────────────────────────────────
+    const _urlPlan   = new URLSearchParams(location.search).get('plan') || 'free';
+    const _isPaid    = ['basico', 'pro', 'ultra'].includes(_urlPlan);
     const _planNames = { basico: 'Básico', pro: 'Pro', ultra: 'Ultra' };
 
     if (_isPaid) {
       const n = _planNames[_urlPlan];
-      document.getElementById('signupTitle').textContent    = `Empieza tu trial del plan ${n}`;
-      document.getElementById('signupSubtitle').textContent = '14 días gratis · Se requiere tarjeta · Cancela cuando quieras.';
-      document.getElementById('trialBanner').innerHTML      = `<strong>🎉 Trial 14 días del plan ${n}</strong>
-        Acceso completo. Cancela antes del día 14 sin ningún cargo.`;
-      document.getElementById('signupBtn').textContent      = `Crear cuenta y activar trial ${n}`;
+      document.getElementById('signupTitle').textContent    = s.trialTitle(n);
+      document.getElementById('signupSubtitle').textContent = s.trialSubtitle;
+      document.getElementById('trialBanner').innerHTML      = s.trialBanner(n);
+      document.getElementById('signupBtn').textContent      = s.trialBtn(n);
+    } else {
+      document.getElementById('signupTitle').textContent    = s.freeTitle;
+      document.getElementById('signupSubtitle').textContent = s.freeSubtitle;
+      document.getElementById('trialBanner').innerHTML      = s.freeBanner;
+      document.getElementById('signupBtn').textContent      = s.freeBtn;
     }
 
+    // ── Submit ───────────────────────────────────────────────────────────────
     const form  = document.getElementById('signupForm');
     const errEl = document.getElementById('signupError');
     const btn   = document.getElementById('signupBtn');
@@ -155,7 +230,7 @@
         plan:        _urlPlan,
       };
       btn.disabled = true;
-      btn.textContent = 'Creando tu cuenta…';
+      btn.textContent = s.creating;
       try {
         const r = await fetch('/api/auth/signup', {
           method: 'POST',
@@ -166,13 +241,12 @@
         if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
         localStorage.setItem('rh_session', out.token);
         localStorage.setItem('wapi101_token', out.token);
-        // Si hay checkout Stripe (plan de pago), redirigir ahí primero
         location.href = out.checkoutUrl || '/app';
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = _isPaid ? `Crear cuenta y activar trial ${_planNames[_urlPlan]}` : 'Crear cuenta gratis';
+        btn.textContent = _isPaid ? s.trialBtn(_planNames[_urlPlan]) : s.freeBtn;
       }
     });
   </script>

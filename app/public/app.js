@@ -3236,6 +3236,28 @@ function openIntegrationModal(providerKey, instanceId = null) {
       if (inputType === "textarea") return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><textarea name="${f.key}" rows="3">${escapeHtml(val)}</textarea>${help}</div>`;
       return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><input type="${inputType}" name="${f.key}" value="${escapeHtml(val)}" autocomplete="off" />${help}</div>`;
     }).join("");
+
+    // Auto-fill presets para email según dominio
+    if (provider.key === 'email' && !instance) {
+      const presets = provider.presets || {};
+      setTimeout(() => {
+        const emailInput = fields.querySelector('[name="fromEmail"]');
+        const userInput  = fields.querySelector('[name="username"]');
+        if (!emailInput) return;
+        emailInput.addEventListener('blur', () => {
+          const domain = (emailInput.value.split('@')[1] || '').toLowerCase();
+          const p = presets[domain];
+          if (!p) return;
+          const set = (name, val) => { const el = fields.querySelector(`[name="${name}"]`); if (el && !el.value) el.value = val; };
+          set('imapHost', p.imapHost); set('imapPort', p.imapPort);
+          set('smtpHost', p.smtpHost); set('smtpPort', p.smtpPort);
+          if (userInput && !userInput.value) userInput.value = emailInput.value;
+        });
+        emailInput.addEventListener('input', () => {
+          if (userInput && !userInput.value) userInput.value = emailInput.value;
+        });
+      }, 0);
+    }
   }
 
   // Webhook URL — mostrar siempre (al conectar usa la URL del provider, al editar usa la de la instancia)

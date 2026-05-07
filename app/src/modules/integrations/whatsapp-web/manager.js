@@ -163,8 +163,14 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
 
   // DEBUG TEMP: log every event type so we can see if socket is alive
   sock.ev.process((events) => {
-    const keys = Object.keys(events).filter(k => k !== 'creds.update');
-    if (keys.length) console.log(`[wa-web ${integrationId}] ev: ${keys.join(', ')}`);
+    for (const [key, val] of Object.entries(events)) {
+      if (key === 'creds.update') continue;
+      if (key === 'connection.update') {
+        console.log(`[wa-web ${integrationId}] ev: connection.update`, JSON.stringify(val));
+      } else {
+        console.log(`[wa-web ${integrationId}] ev: ${key}`);
+      }
+    }
   });
 
   sock.ev.on('connection.update', async (update) => {

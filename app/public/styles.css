@@ -8821,6 +8821,7 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: 8px; padding: 3px;
 }
+.cal-sub-toggle--cta { background: none; border: none; padding: 0; }
 .cal-sub-btn {
   display: flex; align-items: center; gap: 6px;
   background: none; border: none; cursor: pointer;

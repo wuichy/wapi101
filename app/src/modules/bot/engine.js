@@ -7,6 +7,7 @@ const convoSvc     = require('../conversations/service');
 const expedientSvc = require('../expedients/service');
 const activitySvc  = require('../expedients/activity');
 const { sendMessage, sendWhatsAppTemplate } = require('../conversations/sender');
+const apptSvc      = require('../appointments/service');
 
 const MS = { segundos: 1000, minutos: 60_000, horas: 3_600_000, 'días': 86_400_000 };
 
@@ -601,6 +602,104 @@ async function executeStep(db, step, ctx) {
       );
       _log('info', `wait_response: run ${runId} suspendido hasta ${new Date(expiresAt*1000).toISOString()} (timeout ${timeoutMin}min)`);
       return 'suspend';
+    }
+
+    case 'book_appointment': {
+      if (!ctx.contactId) return false;
+      try {
+        const appt = apptSvc.book(db, ctx.tenantId, {
+          contactId:   ctx.contactId,
+          expedientId: ctx.expedientId || null,
+          convoId:     ctx.convoId     || null,
+          advisorId:   c.advisorId     || null,
+          offsetDays:  c.offsetDays,
+          time:        c.time,
+          durationMin: c.durationMin,
+          notes:       replaceVars(c.notes || '', ctx),
+          createdVia:  'bot',
+        });
+
+        // Agendar recordatorio si está configurado
+        if (c.reminderMinutes && Number(c.reminderMinutes) > 0) {
+          apptSvc.scheduleReminder(db, ctx.tenantId, appt.id, {
+            minutesBefore:   Number(c.reminderMinutes),
+            recipient:       'client',
+            messageTemplate: c.reminderMessage || null,
+          });
+        }
+
+        // Enviar confirmación
+        const rawMsg = c.confirmMessage || 'Tu cita ha sido agendada para el {fecha_cita} a las {hora_cita}.';
+        const msg = replaceVars(rawMsg, ctx)
+          .replace(/\{fecha_cita\}/g, appt.fecha)
+          .replace(/\{hora_cita\}/g,  appt.hora);
+
+        if (msg && ctx.convoId) {
+          const convo = db.prepare('SELECT * FROM conversations WHERE id = ? AND tenant_id = ?').get(ctx.convoId, ctx.tenantId);
+          if (convo) await sendMessage(db, convo, msg);
+        }
+        _log('info', `book_appointment: cita ${appt.id} agendada para ${appt.fecha} ${appt.hora}`);
+      } catch (err) {
+        _log('error', `book_appointment error: ${err.message}`);
+        throw new Error(`Agendar cita falló: ${err.message}`);
+      }
+      return false;
+    }
+
+    case 'cancel_appointment': {
+      if (!ctx.contactId) return false;
+      try {
+        const cancelled = apptSvc.cancelLatest(db, ctx.tenantId, ctx.contactId);
+        if (!cancelled) {
+          _log('info', 'cancel_appointment: no hay cita activa para este contacto');
+          return false;
+        }
+
+        const rawMsg = c.message || 'Tu cita del {fecha_cita} a las {hora_cita} ha sido cancelada.';
+        const msg = replaceVars(rawMsg, ctx)
+          .replace(/\{fecha_cita\}/g, cancelled.fecha)
+          .replace(/\{hora_cita\}/g,  cancelled.hora);
+
+        if (msg && ctx.convoId) {
+          const convo = db.prepare('SELECT * FROM conversations WHERE id = ? AND tenant_id = ?').get(ctx.convoId, ctx.tenantId);
+          if (convo) await sendMessage(db, convo, msg);
+        }
+        _log('info', `cancel_appointment: cita ${cancelled.id} cancelada`);
+      } catch (err) {
+        _log('error', `cancel_appointment error: ${err.message}`);
+        throw new Error(`Cancelar cita falló: ${err.message}`);
+      }
+      return false;
+    }
+
+    case 'reschedule_appointment': {
+      if (!ctx.contactId) return false;
+      try {
+        const appt = apptSvc.reschedule(db, ctx.tenantId, {
+          contactId:   ctx.contactId,
+          expedientId: ctx.expedientId || null,
+          convoId:     ctx.convoId     || null,
+          advisorId:   c.advisorId     || null,
+          offsetDays:  c.offsetDays,
+          time:        c.time,
+          durationMin: c.durationMin,
+        });
+
+        const rawMsg = c.message || 'Tu cita ha sido reagendada para el {fecha_cita} a las {hora_cita}.';
+        const msg = replaceVars(rawMsg, ctx)
+          .replace(/\{fecha_cita\}/g, appt.fecha)
+          .replace(/\{hora_cita\}/g,  appt.hora);
+
+        if (msg && ctx.convoId) {
+          const convo = db.prepare('SELECT * FROM conversations WHERE id = ? AND tenant_id = ?').get(ctx.convoId, ctx.tenantId);
+          if (convo) await sendMessage(db, convo, msg);
+        }
+        _log('info', `reschedule_appointment: cita ${appt.id} reagendada a ${appt.fecha} ${appt.hora}`);
+      } catch (err) {
+        _log('error', `reschedule_appointment error: ${err.message}`);
+        throw new Error(`Reagendar cita falló: ${err.message}`);
+      }
+      return false;
     }
 
     default:

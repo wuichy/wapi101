@@ -4956,16 +4956,19 @@ async function loadBotTags() {
 }
 
 const SB_STEP_LABELS = {
-  message:        'Enviar mensaje',
-  template:       'Enviar plantilla',
-  timer:          'Temporizador',
-  condition:      'Condición',
-  stage:          'Cambiar etapa',
-  tag:            'Agregar etiqueta',
-  assign:         'Asignar responsable',
-  stop_bot:       'Parar bot',
-  stop_and_start: 'Parar este bot e iniciar otro',
-  wait_response:  'Esperar respuesta del lead',
+  message:               'Enviar mensaje',
+  template:              'Enviar plantilla',
+  timer:                 'Temporizador',
+  condition:             'Condición',
+  stage:                 'Cambiar etapa',
+  tag:                   'Agregar etiqueta',
+  assign:                'Asignar responsable',
+  stop_bot:              'Parar bot',
+  stop_and_start:        'Parar este bot e iniciar otro',
+  wait_response:         'Esperar respuesta del lead',
+  book_appointment:      'Agendar Cita',
+  cancel_appointment:    'Cancelar Cita',
+  reschedule_appointment:'Reagendar Cita',
 };
 
 const SB_BRANCH_LABELS = {
@@ -5373,6 +5376,21 @@ function stepSummary(step) {
       ).length;
       return `Espera ${dur} · ${filled}/4 ramas configuradas`;
     }
+    case 'book_appointment': {
+      const days = Number(c.offsetDays ?? 1);
+      const t    = c.time || '10:00';
+      const dur  = Number(c.durationMin || 30);
+      const label = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`;
+      return `${label} a las ${t} · ${dur} min`;
+    }
+    case 'cancel_appointment':
+      return c.message ? `"${c.message.slice(0,35)}${c.message.length>35?'…':''}"` : 'Cancela la cita activa del lead';
+    case 'reschedule_appointment': {
+      const days = Number(c.offsetDays ?? 1);
+      const t    = c.time || '10:00';
+      const label = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`;
+      return `Reagenda a ${label} a las ${t}`;
+    }
     default: return '';
   }
 }
@@ -5388,7 +5406,10 @@ function stepIconSvg(type) {
     assign:    `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="7" r="3.5"/><path d="M3 17a7 7 0 0114 0"/></svg>`,
     stop_bot:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>`,
     stop_and_start: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="3" y="3" width="6" height="6" rx="1"/><polygon points="11 14 17 11 17 17"/><path d="M9 17h2"/></svg>`,
-    wait_response:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="10" r="7"/><polyline points="10 5 10 10 13 12"/><path d="M3 10a7 7 0 0 1 1-3.5"/></svg>`,
+    wait_response:         `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="10" r="7"/><polyline points="10 5 10 10 13 12"/><path d="M3 10a7 7 0 0 1 1-3.5"/></svg>`,
+    book_appointment:      `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M6 12h4m-2-2v4"/></svg>`,
+    cancel_appointment:    `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 13l6-2m0 2l-6-2"/></svg>`,
+    reschedule_appointment:`<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 14a3 3 0 0 1 3-3m0 0l-1.5-1.5M10 11l1.5-1.5"/></svg>`,
   };
   return icons[type] || '';
 }
@@ -5631,6 +5652,71 @@ function buildStepBody(step) {
         <div class="sb-wait-branches">
           ${branchHtml}
         </div>`;
+    }
+    case 'book_appointment': {
+      const advisorOpts = (_advisors || []).map(a =>
+        `<option value="${a.id}" ${Number(c.advisorId) === a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`
+      ).join('');
+      return `
+        <div class="sb-appt-grid">
+          <div>
+            <label>Días desde hoy</label>
+            <input type="number" data-field="offsetDays" data-sid="${sid}" min="0" max="365" value="${Number(c.offsetDays ?? 1)}" />
+          </div>
+          <div>
+            <label>Hora (HH:MM)</label>
+            <input type="time" data-field="time" data-sid="${sid}" value="${escHtml(c.time || '10:00')}" />
+          </div>
+          <div>
+            <label>Duración (min)</label>
+            <input type="number" data-field="durationMin" data-sid="${sid}" min="5" max="480" value="${Number(c.durationMin || 30)}" />
+          </div>
+        </div>
+        <label style="margin-top:10px">Asesor asignado (opcional)</label>
+        <select data-field="advisorId" data-sid="${sid}">
+          <option value="">— Sin asignar —</option>
+          ${advisorOpts}
+        </select>
+        <label style="margin-top:10px">Mensaje de confirmación</label>
+        <textarea data-field="confirmMessage" data-sid="${sid}" rows="3" placeholder="Tu cita ha sido agendada para el {fecha_cita} a las {hora_cita}.">${escHtml(c.confirmMessage || '')}</textarea>
+        <p class="sb-hint">Variables: {nombre} {fecha_cita} {hora_cita} {apellido} {telefono}</p>
+        <label style="margin-top:10px">Recordatorio (minutos antes, 0 = sin recordatorio)</label>
+        <input type="number" data-field="reminderMinutes" data-sid="${sid}" min="0" value="${Number(c.reminderMinutes || 0)}" />
+        <label style="margin-top:8px">Mensaje del recordatorio (opcional)</label>
+        <textarea data-field="reminderMessage" data-sid="${sid}" rows="2" placeholder="Recordatorio: tienes una cita el {fecha_cita} a las {hora_cita}.">${escHtml(c.reminderMessage || '')}</textarea>`;
+    }
+    case 'cancel_appointment':
+      return `
+        <label>Mensaje de cancelación</label>
+        <textarea data-field="message" data-sid="${sid}" rows="3" placeholder="Tu cita del {fecha_cita} a las {hora_cita} ha sido cancelada.">${escHtml(c.message || '')}</textarea>
+        <p class="sb-hint">Variables: {nombre} {fecha_cita} {hora_cita}. Cancela la cita activa más reciente del lead.</p>`;
+    case 'reschedule_appointment': {
+      const advisorOpts = (_advisors || []).map(a =>
+        `<option value="${a.id}" ${Number(c.advisorId) === a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`
+      ).join('');
+      return `
+        <div class="sb-appt-grid">
+          <div>
+            <label>Días desde hoy</label>
+            <input type="number" data-field="offsetDays" data-sid="${sid}" min="0" max="365" value="${Number(c.offsetDays ?? 1)}" />
+          </div>
+          <div>
+            <label>Hora (HH:MM)</label>
+            <input type="time" data-field="time" data-sid="${sid}" value="${escHtml(c.time || '10:00')}" />
+          </div>
+          <div>
+            <label>Duración (min)</label>
+            <input type="number" data-field="durationMin" data-sid="${sid}" min="5" max="480" value="${Number(c.durationMin || 30)}" />
+          </div>
+        </div>
+        <label style="margin-top:10px">Asesor asignado (opcional)</label>
+        <select data-field="advisorId" data-sid="${sid}">
+          <option value="">— Sin asignar —</option>
+          ${advisorOpts}
+        </select>
+        <label style="margin-top:10px">Mensaje de confirmación de reagenda</label>
+        <textarea data-field="message" data-sid="${sid}" rows="3" placeholder="Tu cita ha sido reagendada para el {fecha_cita} a las {hora_cita}.">${escHtml(c.message || '')}</textarea>
+        <p class="sb-hint">Variables: {nombre} {fecha_cita} {hora_cita}</p>`;
     }
     default: return '';
   }

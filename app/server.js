@@ -385,6 +385,7 @@ mountSafe('/api/tasks',              require('./src/modules/tasks/routes'));
 mountSafe('/api/ai-knowledge',       require('./src/modules/ai-knowledge/routes'));
 mountSafe('/api/analytics',          require('./src/modules/analytics/routes'));
 mountSafe('/api/business',           require('./src/modules/business/routes'));
+mountSafe('/api/appointments',       require('./src/modules/appointments/routes'));
 
 // Manejador global de errores
 app.use((err, _req, res, _next) => {
@@ -463,6 +464,10 @@ app.listen(config.port, config.host, () => {
   // Iniciar poller que cada 60s resume waits expirados (rama on_timeout)
   try { require('./src/modules/bot/engine').startWaitTimeoutPoller(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar wait timeout poller:', err.message);
+  }
+  // Iniciar poller de recordatorios de citas
+  try { require('./src/modules/bot/reminders').startAppointmentReminderPoller(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar appointment reminder poller:', err.message);
   }
 });
 

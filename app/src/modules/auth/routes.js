@@ -287,10 +287,10 @@ module.exports = function createAuthRouter(db) {
 
   // ─── Threads ───
   router.get('/threads/start', (req, res) => {
-    const appId = process.env.META_IG_APP_ID || process.env.META_APP_ID;
-    const appSecret = process.env.META_IG_APP_SECRET || process.env.META_APP_SECRET;
+    const appId = process.env.META_THREADS_APP_ID;
+    const appSecret = process.env.META_THREADS_APP_SECRET;
     if (!appId || !appSecret) {
-      return oauthError(res, 'No están configuradas las credenciales de Meta para Threads (META_IG_APP_ID / META_IG_APP_SECRET en .env).');
+      return oauthError(res, 'No están configuradas las credenciales de Threads (META_THREADS_APP_ID / META_THREADS_APP_SECRET en .env).');
     }
 
     let state;
@@ -321,8 +321,8 @@ module.exports = function createAuthRouter(db) {
     db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
     const tenantId = stateRow.tenant_id || 1;
-    const appId = process.env.META_IG_APP_ID || process.env.META_APP_ID;
-    const appSecret = process.env.META_IG_APP_SECRET || process.env.META_APP_SECRET;
+    const appId = process.env.META_THREADS_APP_ID;
+    const appSecret = process.env.META_THREADS_APP_SECRET;
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
     const redirectUri = `${baseUrl}/auth/threads/callback`;
 

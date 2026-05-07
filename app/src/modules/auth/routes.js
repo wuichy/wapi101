@@ -84,9 +84,15 @@ module.exports = function createAuthRouter(db) {
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
     const redirectUri = encodeURIComponent(`${baseUrl}/auth/meta/callback`);
 
+    // Instagram usa Instagram Business Login (endpoint separado de Facebook)
+    if (provider === 'instagram') {
+      const igScope = encodeURIComponent('instagram_business_basic,instagram_business_manage_messages');
+      const igUrl = `https://www.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${redirectUri}&scope=${igScope}&response_type=code&state=${state}`;
+      return res.redirect(igUrl);
+    }
+
     const scopeMap = {
       messenger:      'pages_show_list,pages_messaging,pages_read_engagement,pages_manage_metadata',
-      instagram:      'pages_show_list,pages_read_engagement,pages_manage_metadata,pages_messaging,business_management',
       facebook:       'pages_show_list,pages_read_engagement',
       'whatsapp-lite':'whatsapp_business_management,whatsapp_business_messaging',
     };
@@ -113,7 +119,48 @@ module.exports = function createAuthRouter(db) {
     const redirectUri = encodeURIComponent(`${baseUrl}/auth/meta/callback`);
 
     try {
-      // 1. Intercambiar code → short-lived token
+      let integration;
+
+      // Instagram Business Login usa endpoint distinto a Facebook
+      if (provider === 'instagram') {
+        const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: appId,
+            client_secret: appSecret,
+            grant_type: 'authorization_code',
+            redirect_uri: decodeURIComponent(redirectUri),
+            code,
+          }).toString(),
+        });
+        const tokenData = await tokenRes.json();
+        console.log('[auth instagram] token response:', JSON.stringify(tokenData));
+        if (!tokenRes.ok || tokenData.error_message || tokenData.error) {
+          throw new Error(tokenData.error_message || tokenData.error?.message || 'Error obteniendo token de Instagram');
+        }
+        const shortToken = tokenData.access_token;
+        const igUserId = String(tokenData.user_id || '');
+
+        // Long-lived token (60 días)
+        const llRes = await fetch(`https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${appSecret}&access_token=${shortToken}`);
+        const llData = await llRes.json();
+        const accessToken = llData.access_token || shortToken;
+
+        // Datos de la cuenta
+        const meRes = await fetch(`https://graph.instagram.com/me?fields=id,username,name&access_token=${accessToken}`);
+        const meData = await meRes.json();
+        const finalIgId = String(meData.id || igUserId);
+
+        const creds = { igUserId: finalIgId, accessToken, appSecret, appId };
+        integration = await integrationService.connectRaw(db, tenantId, provider, creds, {
+          displayName: meData.username ? `@${meData.username}` : meData.name || `IG ${finalIgId}`,
+          externalId: finalIgId,
+        });
+        return oauthSuccess(res, integration.id, integration.displayName);
+      }
+
+      // 1. Intercambiar code → short-lived token (Facebook Login)
       const tokenRes = await fetch(`https://graph.facebook.com/${META_VERSION}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${redirectUri}&code=${code}`);
       const tokenData = await tokenRes.json();
       if (!tokenRes.ok || tokenData.error) throw new Error(tokenData.error?.message || 'Error obteniendo token');
@@ -122,8 +169,6 @@ module.exports = function createAuthRouter(db) {
       const llRes = await fetch(`https://graph.facebook.com/${META_VERSION}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${tokenData.access_token}`);
       const llData = await llRes.json();
       const userToken = llData.access_token || tokenData.access_token;
-
-      let integration;
 
       if (provider === 'messenger' || provider === 'facebook') {
         // 3a. Obtener páginas del usuario
@@ -142,38 +187,6 @@ module.exports = function createAuthRouter(db) {
         integration = await integrationService.connectRaw(db, tenantId, provider, creds, {
           displayName: page.name,
           externalId: page.id,
-        });
-
-      } else if (provider === 'instagram') {
-        // 3b. Buscar cuenta de Instagram Business
-        const pagesRes = await fetch(`https://graph.facebook.com/${META_VERSION}/me/accounts?access_token=${userToken}&fields=id,name,access_token`);
-        const pagesData = await pagesRes.json();
-        const allPages = pagesData.data || [];
-        if (!allPages.length) throw new Error('No se encontraron Páginas de Facebook en esta cuenta.');
-
-        // Consultar instagram_business_account o connected_instagram_account con el token de cada página
-        for (const p of allPages) {
-          const igRes2 = await fetch(`https://graph.facebook.com/${META_VERSION}/${p.id}?fields=instagram_business_account,connected_instagram_account&access_token=${p.access_token}`);
-          const igData2 = await igRes2.json();
-          console.log('[auth instagram] page', p.id, 'ig check:', JSON.stringify(igData2));
-          p.instagram_business_account = igData2.instagram_business_account || igData2.connected_instagram_account || null;
-        }
-        const pages = allPages.filter(p => p.instagram_business_account);
-        if (!pages.length) throw new Error('No se encontró una cuenta de Instagram Business vinculada a esta cuenta de Facebook.');
-
-        const page = pages[0];
-        const igId = page.instagram_business_account.id;
-        const igRes = await fetch(`https://graph.facebook.com/${META_VERSION}/${igId}?fields=username,name&access_token=${page.access_token}`);
-        const igData = await igRes.json();
-        const creds = {
-          igUserId: igId,
-          accessToken: page.access_token,
-          appSecret,
-          appId,
-        };
-        integration = await integrationService.connectRaw(db, tenantId, provider, creds, {
-          displayName: igData.username ? `@${igData.username}` : igData.name || `IG ${igId}`,
-          externalId: igId,
         });
 
       } else if (provider === 'whatsapp-lite') {

@@ -8764,6 +8764,9 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   /* Chat: ocultar uno de los dos paneles según estado */
   body[data-chat-mobile-view="inbox"] .rh-conversation-panel { display: none; }
   body[data-chat-mobile-view="conversation"] .rh-sidebar { display: none; }
+  /* Colapsar el grid a 1 columna cuando el sidebar está oculto, para que el
+     panel de conversación ocupe todo el ancho (sin esto queda ~90px de ancho) */
+  body[data-chat-mobile-view="conversation"] .rh-shell { grid-template-columns: 1fr; }
 
   /* Botón back visible solo en conversation view */
   body[data-chat-mobile-view="conversation"] .rh-mobile-back { display: inline-flex; }
@@ -8829,6 +8832,19 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .cal-sub-btn.is-active {
   background: var(--surface); color: var(--text);
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+/* Wrapper "+ Nueva tarea" — gemelo del toggle Lista/Mes (mismo borde, padding, radius) */
+.cal-sub-toggle--cta .cal-sub-btn--cta,
+#taskNewBtn.cal-sub-btn--cta {
+  background: #2563eb !important;
+  color: #fff !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.cal-sub-toggle--cta .cal-sub-btn--cta:hover,
+#taskNewBtn.cal-sub-btn--cta:hover {
+  background: #1d4ed8 !important;
+  color: #fff !important;
 }
 
 /* Nav mes */

@@ -219,6 +219,7 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
   });
 
   sock.ev.on('messages.upsert', ({ messages, type }) => {
+    console.log(`[wa-web ${integrationId}] upsert type=${type} count=${messages?.length}`);
     // 'notify' = mensaje en tiempo real.
     // 'append' = mensajes que llegaron mientras el socket estaba reconectando
     //            (típico en el "Stream Errored" del primer auth). Los aceptamos

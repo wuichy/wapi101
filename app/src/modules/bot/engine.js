@@ -387,7 +387,7 @@ async function execute(db, bot, ctx) {
   const contact = ctx.contactId
     ? db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId)
     : null;
-  const fullCtx = { ...ctx, contact, runId };
+  const fullCtx = { ...ctx, contact, runId, _botId: bot.id, _botName: bot.name };
 
   let finalStatus = 'done';
   let errorMsg = null;
@@ -673,6 +673,99 @@ async function executeStep(db, step, ctx) {
         _log('info', `bot pausado para conversación ${ctx.convoId}`);
       }
       return true;
+    }
+
+    case 'http': {
+      // Webhook / HTTP request — fire-and-forget para no bloquear el bot.
+      // Permite integrar con Zapier, n8n, Make, Sheets, ERPs, etc.
+      const url = (c.url || '').trim();
+      if (!url) {
+        _log('warn', `http step sin URL — saltando`);
+        return false;
+      }
+      const method = (c.method || 'POST').toUpperCase();
+      const timeoutMs = Math.min(Math.max(Number(c.timeoutSec || 10), 1) * 1000, 30000);
+
+      // Fetch contact + expedient para construir payload por defecto
+      const contact = ctx.contactId
+        ? db.prepare('SELECT id, first_name, last_name, phone, email FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId)
+        : null;
+      const expedient = ctx.expedientId
+        ? db.prepare(`
+            SELECT e.id, e.name, e.value, e.pipeline_id, e.stage_id,
+                   p.name AS pipeline_name, s.name AS stage_name
+              FROM expedients e
+              LEFT JOIN pipelines p ON p.id = e.pipeline_id
+              LEFT JOIN stages    s ON s.id = e.stage_id
+             WHERE e.id = ? AND e.tenant_id = ?
+          `).get(ctx.expedientId, ctx.tenantId)
+        : null;
+
+      const defaultPayload = {
+        bot:     { id: ctx._botId || null, name: ctx._botName || null },
+        contact: contact ? {
+          id:        contact.id,
+          firstName: contact.first_name || null,
+          lastName:  contact.last_name  || null,
+          phone:     contact.phone      || null,
+          email:     contact.email      || null,
+        } : null,
+        lead: expedient ? {
+          id:           expedient.id,
+          name:         expedient.name,
+          value:        expedient.value,
+          pipelineId:   expedient.pipeline_id,
+          pipelineName: expedient.pipeline_name,
+          stageId:      expedient.stage_id,
+          stageName:    expedient.stage_name,
+        } : null,
+        message:     ctx.messageBody || '',
+        triggeredAt: new Date().toISOString(),
+      };
+
+      // Headers — formato "Key: Value" uno por línea
+      const headers = { 'Content-Type': 'application/json' };
+      if (c.headers) {
+        String(c.headers).split('\n').forEach(line => {
+          const idx = line.indexOf(':');
+          if (idx > 0) {
+            const k = line.slice(0, idx).trim();
+            const v = line.slice(idx + 1).trim();
+            if (k && v) headers[k] = v;
+          }
+        });
+      }
+
+      // Body — vacío = JSON automático con todos los datos. Custom = se sustituyen variables.
+      let body;
+      if (method !== 'GET' && method !== 'DELETE') {
+        const customBody = (c.body || '').trim();
+        if (customBody) {
+          body = replaceVars(customBody, { ...ctx, contact });
+        } else {
+          body = JSON.stringify(defaultPayload, null, 2);
+        }
+      }
+
+      // Fire-and-forget: no bloqueamos el bot esperando la respuesta del webhook.
+      (async () => {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          const res = await fetch(url, {
+            method,
+            headers,
+            body: (method === 'GET' || method === 'DELETE') ? undefined : body,
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          _log('info', `webhook ${method} ${url} → HTTP ${res.status}`);
+        } catch (err) {
+          _log('error', `webhook ${method} ${url} falló: ${err.message}`);
+        }
+      })();
+
+      return false; // continuar con el siguiente step
     }
 
     case 'handover': {

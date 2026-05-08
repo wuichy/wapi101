@@ -6634,6 +6634,20 @@ const BOT_STEP_REGISTRY = {
       return `Pausa bot · ${parts.join(' · ')}`;
     },
   },
+  // ─── Integraciones ───
+  http: {
+    group: 'Integraciones',
+    label:   { es: 'Webhook / HTTP request', en: 'Webhook / HTTP request' },
+    icon:    '<polyline points="7 6 3 10 7 14"/><polyline points="13 6 17 10 13 14"/><line x1="9" y1="14" x2="11" y2="6"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const url = (c.url || '').trim();
+      if (!url) return 'Sin URL configurada';
+      const method = (c.method || 'POST').toUpperCase();
+      const shortUrl = url.length > 40 ? url.slice(0, 37) + '…' : url;
+      return `${method} → ${shortUrl}`;
+    },
+  },
   stop_and_start: {
     group: 'Flujo',
     label:   { es: 'Parar este e iniciar otro bot', en: 'Stop and start another bot' },
@@ -7652,6 +7666,38 @@ function buildStepBody(step) {
           A partir de este paso el bot <strong>dejará de responder</strong> a este contacto.<br>
           Un agente podrá reanudarlo manualmente desde la conversación.
         </p>`;
+    case 'http': {
+      const methods = ['POST','GET','PUT','PATCH','DELETE'];
+      const methodOpts = methods.map(m =>
+        `<option value="${m}" ${(c.method || 'POST') === m ? 'selected' : ''}>${m}</option>`
+      ).join('');
+      return `
+        <p style="font-size:12px;color:var(--text-muted);margin:6px 0 8px;line-height:1.5">
+          Llama a una URL externa con los datos del lead. Funciona con <strong>Zapier</strong>, <strong>Make</strong>, <strong>n8n</strong>, Google Sheets (Apps Script) o tu propio backend.
+        </p>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <select data-field="method" data-sid="${sid}" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;width:100px">
+            ${methodOpts}
+          </select>
+          <input type="url" data-field="url" data-sid="${sid}" value="${escHtml(c.url || '')}" placeholder="https://api.tuservicio.com/webhook" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box" />
+        </div>
+        <details style="margin-bottom:6px">
+          <summary style="font-size:12px;cursor:pointer;color:var(--text-muted);user-select:none">Opciones avanzadas (headers, body custom, timeout)</summary>
+          <div style="padding:10px 0 4px">
+            <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Headers (uno por línea, formato <code>Key: Value</code>)</label>
+            <textarea data-field="headers" data-sid="${sid}" rows="2" placeholder="Authorization: Bearer xxx&#10;X-Custom-Header: value" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;box-sizing:border-box">${escHtml(c.headers || '')}</textarea>
+
+            <label style="font-size:12px;font-weight:600;display:block;margin:10px 0 4px">Body (vacío = JSON automático con contact + lead + message)</label>
+            <textarea data-field="body" data-sid="${sid}" rows="4" placeholder='Vacío → envía JSON con todos los datos del lead automáticamente.&#10;O personaliza: {"name": "{{nombre}}", "phone": "{{phone}}"}' style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;box-sizing:border-box">${escHtml(c.body || '')}</textarea>
+
+            <label style="font-size:12px;font-weight:600;display:block;margin:10px 0 4px">Timeout (segundos, máx 30)</label>
+            <input type="number" data-field="timeoutSec" data-sid="${sid}" value="${escHtml(String(c.timeoutSec || 10))}" min="1" max="30" style="width:100px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px" />
+          </div>
+        </details>
+        <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;line-height:1.4">
+          ⚡ Es <em>fire-and-forget</em>: el bot no espera la respuesta para seguir con el siguiente paso. Errores se loggean en Logs del bot.
+        </p>`;
+    }
     case 'handover': {
       const advisorOptions = (() => {
         const list = (typeof _advisors !== 'undefined' && _advisors) ? _advisors : [];

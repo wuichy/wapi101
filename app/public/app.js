@@ -3833,10 +3833,27 @@ function setupSettingsTabs() {
 
   document.getElementById('btnTestAI')?.addEventListener('click', async () => {
     const btn = document.getElementById('btnTestAI');
+    const saveBtn = document.getElementById('btnSaveAI');
     const statusEl = document.getElementById('aiTestStatus');
-    btn.disabled = true; btn.textContent = 'Probando…';
+    btn.disabled = true; btn.textContent = 'Guardando…';
     if (statusEl) { statusEl.textContent = ''; }
     try {
+      // Guardar primero
+      const provider = document.querySelector('.ai-provider input:checked')?.value || 'anthropic';
+      const apiKeyVal = document.getElementById('aiApiKey')?.value || '';
+      const body = {
+        provider,
+        model:       document.getElementById('aiModel')?.value || '',
+        baseUrl:     document.getElementById('aiBaseUrl')?.value || '',
+        mode:        document.getElementById('aiMode')?.value || 'suggest',
+        temperature: document.getElementById('aiTemperature')?.value,
+        maxTokens:   document.getElementById('aiMaxTokens')?.value,
+      };
+      if (apiKeyVal && !apiKeyVal.startsWith('•')) body.apiKey = apiKeyVal;
+      await api('PATCH', '/api/settings/ai', body);
+      if (saveBtn) { saveBtn.textContent = 'Guardado ✓'; setTimeout(() => { saveBtn.textContent = 'Guardar cambios'; }, 1800); }
+      // Luego probar
+      btn.textContent = 'Probando…';
       await api('POST', '/api/settings/ai/test', {});
       if (statusEl) { statusEl.style.color = '#22c55e'; statusEl.textContent = '✓ Conexión exitosa'; }
     } catch(e) {

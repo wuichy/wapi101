@@ -16075,25 +16075,33 @@ async function cpLoadConfig() {
 }
 
 async function cpSend(message) {
-  if (_cpBusy) return;
+  console.log('[copiloto] cpSend called with:', message);
+  if (_cpBusy) { console.log('[copiloto] busy, abort'); return; }
   _cpBusy = true;
   const sendBtn = document.getElementById('copilotoSendBtn');
   if (sendBtn) sendBtn.disabled = true;
 
   try {
     _cpHistory.push({ role: 'user', content: message });
+    console.log('[copiloto] history after push:', _cpHistory);
     cpRenderMessages();
+    console.log('[copiloto] rendered user message, container content:', document.getElementById('copilotoMessages')?.innerHTML?.slice(0, 200));
     cpShowTyping(true);
 
-    const { reply, history } = await api('POST', '/api/copilot/chat', { message, history: _cpHistory.slice(0, -1) });
-    _cpHistory = Array.isArray(history) ? history : [..._cpHistory, { role: 'assistant', content: reply }];
+    console.log('[copiloto] calling API...');
+    const resp = await api('POST', '/api/copilot/chat', { message, history: _cpHistory.slice(0, -1) });
+    console.log('[copiloto] API response:', resp);
+    const { reply, history } = resp || {};
+    _cpHistory = Array.isArray(history) ? history : [..._cpHistory, { role: 'assistant', content: reply || 'Sin respuesta' }];
   } catch(e) {
+    console.error('[copiloto] error:', e);
     _cpHistory.push({ role: 'assistant', content: '⚠️ ' + e.message });
   } finally {
     cpShowTyping(false);
     _cpBusy = false;
     if (sendBtn) sendBtn.disabled = false;
     cpRenderMessages();
+    console.log('[copiloto] final render done, history length:', _cpHistory.length);
     document.getElementById('copilotoInput')?.focus();
   }
 }

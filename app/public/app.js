@@ -13711,6 +13711,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   ]);
   startChatPolling();
   startVersionCheck();
+  startTasksDuePolling();
   } catch (_bootErr) {
     const box = document.getElementById('_jsErrBox') || (() => {
       const el = document.createElement('div');
@@ -13737,6 +13738,63 @@ async function _fetchVersion() {
     return d.version || null;
   } catch { return null; }
 }
+// ─── Polling de tareas vencidas — notificaciones in-app ───
+// Cada 60s consulta el endpoint de tasks overdue del advisor actual.
+// Actualiza el badge del nav item Calendario y muestra un toast cuando
+// aparecen tareas nuevas vencidas (sin sonido — estilo iMessage).
+let _tasksDueLastIds = new Set();
+let _tasksDueInited  = false;
+
+async function _fetchOverdueTasks() {
+  const advisor = (typeof getAdvisor === 'function') ? getAdvisor() : null;
+  if (!advisor?.id) return [];
+  try {
+    const url = `/api/tasks?filter=overdue&advisorId=${advisor.id}&limit=100`;
+    const data = await api('GET', url);
+    return Array.isArray(data?.items) ? data.items : [];
+  } catch (e) {
+    console.warn('[tasks-due-poll] fetch error:', e.message);
+    return [];
+  }
+}
+
+function _updateCalendarBadge(count) {
+  const badge = document.getElementById('navCalendarBadge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.hidden = false;
+  } else {
+    badge.hidden = true;
+  }
+}
+
+function _showTaskDueToast(newOverdue) {
+  if (!newOverdue.length) return;
+  const txt = newOverdue.length === 1
+    ? `⏰ Tarea vencida: "${newOverdue[0].title}"`
+    : `⏰ ${newOverdue.length} tareas nuevas vencidas`;
+  if (typeof toast === 'function') toast(txt, 'warn');
+}
+
+async function startTasksDuePolling() {
+  const tick = async () => {
+    const items = await _fetchOverdueTasks();
+    _updateCalendarBadge(items.length);
+    const currentIds = new Set(items.map(t => t.id));
+    if (_tasksDueInited) {
+      // Detectar IDs nuevos (no estaban en la última consulta)
+      const newOnes = items.filter(t => !_tasksDueLastIds.has(t.id));
+      if (newOnes.length) _showTaskDueToast(newOnes);
+    }
+    _tasksDueLastIds = currentIds;
+    _tasksDueInited = true;
+  };
+  // Primer tick inmediato (sin toast) + cada 60s
+  await tick();
+  setInterval(tick, 60 * 1000);
+}
+
 async function startVersionCheck() {
   _bootVersion = await _fetchVersion();
   if (!_bootVersion) return;

@@ -6794,6 +6794,14 @@ function openBotBuilder(bot, returnTo = null) {
   document.getElementById('sbTriggerType').value = bot ? bot.trigger_type : 'keyword';
   document.getElementById('sbTriggerValue').value = bot ? (bot.trigger_value || '') : '';
 
+  // Reset a vista Lista al abrir el builder (la vista Código es read-only y confunde si se queda activa)
+  document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(t => {
+    t.classList.toggle('is-active', t.dataset.view === 'list');
+  });
+  document.querySelectorAll('.bb-view-content').forEach(c => {
+    c.hidden = c.dataset.view !== 'list';
+  });
+
   updateTriggerValueVisibility();
 
   // Si el trigger es pipeline_stage, restaurar pipeline+etapa en los selectores
@@ -7883,6 +7891,78 @@ function setupBot() {
   });
 
   // Save bot
+  // ─── Vista de Código (read-only, JSON pretty-printed) ───
+  function bbBuildBotJSON() {
+    const trigger_type = document.getElementById('sbTriggerType')?.value || 'keyword';
+    let trigger_value = document.getElementById('sbTriggerValue')?.value?.trim() || '';
+    if (trigger_type === 'pipeline_stage') {
+      trigger_value = document.getElementById('sbTriggerStage')?.value || '';
+    }
+    return {
+      name:         document.getElementById('botBuilderName')?.value?.trim() || '',
+      enabled:      document.getElementById('botBuilderEnabled')?.checked ? 1 : 0,
+      trigger_type,
+      trigger_value,
+      tags:         (typeof sbTagIds !== 'undefined' && Array.isArray(sbTagIds)) ? sbTagIds : [],
+      steps:        (typeof collectAllSteps === 'function')
+        ? collectAllSteps().map(({ _id, ...rest }) => rest)
+        : [],
+    };
+  }
+
+  function bbHighlightJSON(jsonStr) {
+    return jsonStr
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/("(?:\\.|[^"\\])*")(\s*:)/g,            '<span class="json-key">$1</span>$2')
+      .replace(/:\s*("(?:\\.|[^"\\])*")/g,              ': <span class="json-string">$1</span>')
+      .replace(/:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,': <span class="json-number">$1</span>')
+      .replace(/:\s*(true|false)/g,                      ': <span class="json-bool">$1</span>')
+      .replace(/:\s*(null)/g,                            ': <span class="json-null">$1</span>');
+  }
+
+  function bbRenderCodeView() {
+    const codeEl = document.getElementById('bbCodeContent');
+    if (!codeEl) return;
+    try {
+      const obj = bbBuildBotJSON();
+      const jsonStr = JSON.stringify(obj, null, 2);
+      codeEl.innerHTML = bbHighlightJSON(jsonStr);
+      codeEl.dataset.raw = jsonStr;
+    } catch (e) {
+      codeEl.textContent = '// Error generando JSON: ' + e.message;
+    }
+  }
+
+  function bbSwitchView(view) {
+    document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(t => {
+      t.classList.toggle('is-active', t.dataset.view === view);
+    });
+    document.querySelectorAll('.bb-view-content').forEach(c => {
+      c.hidden = c.dataset.view !== view;
+    });
+    if (view === 'code') bbRenderCodeView();
+  }
+
+  document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(tab => {
+    tab.addEventListener('click', () => bbSwitchView(tab.dataset.view));
+  });
+
+  document.getElementById('bbCodeCopyBtn')?.addEventListener('click', async () => {
+    const codeEl = document.getElementById('bbCodeContent');
+    const raw = codeEl?.dataset.raw || codeEl?.textContent || '';
+    try {
+      await navigator.clipboard.writeText(raw);
+      toast('Código copiado', 'success');
+    } catch {
+      // Fallback para navegadores viejos
+      const ta = document.createElement('textarea');
+      ta.value = raw; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast('Código copiado', 'success'); }
+      catch { toast('No se pudo copiar', 'error'); }
+      document.body.removeChild(ta);
+    }
+  });
+
   document.getElementById('botBuilderSave')?.addEventListener('click', async () => {
     const name = document.getElementById('botBuilderName').value.trim();
     if (!name) { toast('Escribe un nombre para el bot', 'error'); return; }

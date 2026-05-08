@@ -132,7 +132,7 @@ const BASE_SELECT = `
   ) conv ON conv.contact_id = e.contact_id AND conv.tenant_id = e.tenant_id
 `;
 
-function list(db, tenantId, { search = '', page = 1, pageSize = 50, sortBy = 'createdAt', sortDir = 'desc', tags = [], fieldFilters = {} } = {}) {
+function list(db, tenantId, { search = '', page = 1, pageSize = 50, sortBy = 'createdAt', sortDir = 'desc', tags = [], fieldFilters = {}, contactId = null } = {}) {
   pageSize = [10, 25, 50, 100, 200].includes(Number(pageSize)) ? Number(pageSize) : 50;
   page = Math.max(1, Number(page) || 1);
   const sortCol = VALID_SORT[sortBy] || VALID_SORT.createdAt;
@@ -140,6 +140,11 @@ function list(db, tenantId, { search = '', page = 1, pageSize = 50, sortBy = 'cr
 
   const conditions = ['e.tenant_id = ?'];
   const params = [tenantId];
+
+  if (contactId) {
+    conditions.push('e.contact_id = ?');
+    params.push(Number(contactId));
+  }
 
   if (search) {
     const likeVal = `%${search}%`;

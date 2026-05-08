@@ -303,7 +303,7 @@ app.get('/api/me', (req, res) => res.json({ advisor: req.advisor }));
 //      con su Bearer token, recibe un state pre-creado, y abre el popup
 //      con ?state=<existing-state>.
 const crypto = require('crypto');
-const VALID_OAUTH_PROVIDERS = ['messenger', 'instagram', 'facebook', 'whatsapp-lite', 'tiktok', 'threads'];
+const VALID_OAUTH_PROVIDERS = ['messenger', 'instagram', 'facebook', 'whatsapp-lite', 'tiktok', 'threads', 'gmail', 'outlook'];
 app.post('/api/auth/oauth/prepare', (req, res) => {
   const { provider } = req.body || {};
   if (!VALID_OAUTH_PROVIDERS.includes(provider)) {
@@ -335,6 +335,22 @@ app.patch('/api/settings/profile', (req, res) => {
       .run(req.tenantId, JSON.stringify(req.body));
   }
   res.json({ profile: req.body });
+});
+
+// GET /api/settings/split
+app.get('/api/settings/split', (req, res) => {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'chat_split' AND tenant_id = ?").get(req.tenantId);
+  res.json(row ? JSON.parse(row.value) : { enabled: false });
+});
+
+// PATCH /api/settings/split
+app.patch('/api/settings/split', (req, res) => {
+  const val = JSON.stringify(req.body);
+  db.prepare(`
+    INSERT INTO app_settings (tenant_id, key, value, updated_at) VALUES (?, 'chat_split', ?, unixepoch())
+    ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(req.tenantId, val);
+  res.json({ ok: true });
 });
 // /healthz — público, lo pinguea UptimeRobot. Devuelve 503 si algo está mal.
 //   - Server vivo + DB accesible → 200
@@ -373,6 +389,79 @@ app.get('/api/ai/info', (_req, res) => {
   const p = config.ai.provider;
   const model = (config.ai[p] && config.ai[p].model) || null;
   res.json({ provider: p, model });
+});
+
+// ─── AI Settings (por tenant) ───
+const DEFAULT_MODELS = { anthropic: 'claude-opus-4-7', openai: 'gpt-4o-mini', google: 'gemini-1.5-flash', ollama: 'gemma2:9b' };
+
+app.get('/api/settings/ai', (req, res) => {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_settings' AND tenant_id = ?").get(req.tenantId);
+  const saved = row ? JSON.parse(row.value) : {};
+  const provider = saved.provider || config.ai.provider;
+  res.json({
+    provider,
+    model:       saved.model       ?? DEFAULT_MODELS[provider] ?? '',
+    hasApiKey:   !!saved.apiKey,
+    baseUrl:     saved.baseUrl     ?? (config.ai[provider]?.baseUrl || ''),
+    temperature: saved.temperature ?? config.ai.temperature,
+    maxTokens:   saved.maxTokens   ?? config.ai.maxTokens,
+    mode:        saved.mode        || 'suggest',
+  });
+});
+
+app.patch('/api/settings/ai', (req, res) => {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_settings' AND tenant_id = ?").get(req.tenantId);
+  const current = row ? JSON.parse(row.value) : {};
+  const b = req.body || {};
+  const updated = { ...current };
+  if (b.provider)     updated.provider    = b.provider;
+  if (b.model !== undefined) updated.model = b.model;
+  if (b.baseUrl !== undefined) updated.baseUrl = b.baseUrl;
+  if (b.temperature !== undefined) updated.temperature = Number(b.temperature);
+  if (b.maxTokens !== undefined)   updated.maxTokens   = Number(b.maxTokens);
+  if (b.mode)         updated.mode        = b.mode;
+  if (b.apiKey && !b.apiKey.startsWith('•')) updated.apiKey = b.apiKey;
+  db.prepare(`
+    INSERT INTO app_settings (tenant_id, key, value, updated_at) VALUES (?, 'ai_settings', ?, unixepoch())
+    ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(req.tenantId, JSON.stringify(updated));
+  res.json({ ok: true });
+});
+
+app.post('/api/settings/ai/test', async (req, res) => {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'ai_settings' AND tenant_id = ?").get(req.tenantId);
+  const saved = row ? JSON.parse(row.value) : {};
+  const provider = saved.provider || config.ai.provider;
+  const apiKey   = saved.apiKey   || config.ai[provider]?.apiKey || '';
+  const model    = saved.model    || DEFAULT_MODELS[provider] || '';
+  const baseUrl  = saved.baseUrl  || config.ai[provider]?.baseUrl || '';
+
+  try {
+    if (provider === 'anthropic') {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model, max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] }),
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); return res.status(400).json({ ok: false, error: e.error?.message || `HTTP ${r.status}` }); }
+    } else if (provider === 'openai') {
+      const base = baseUrl || 'https://api.openai.com/v1';
+      const r = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${apiKey}` } });
+      if (!r.ok) return res.status(400).json({ ok: false, error: `HTTP ${r.status}` });
+    } else if (provider === 'google') {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      if (!r.ok) { const e = await r.json().catch(() => ({})); return res.status(400).json({ ok: false, error: e.error?.message || `HTTP ${r.status}` }); }
+    } else if (provider === 'ollama') {
+      const base = baseUrl || 'http://localhost:11434';
+      const r = await fetch(`${base}/api/tags`);
+      if (!r.ok) return res.status(400).json({ ok: false, error: `HTTP ${r.status}` });
+    } else {
+      return res.status(400).json({ ok: false, error: 'Proveedor no soportado' });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
 });
 
 // ─── Auth (OAuth callbacks) ───
@@ -475,34 +564,55 @@ app.use(express.static(path.join(__dirname, 'public'), {
   },
 }));
 
-// POST /api/mail/compose — enviar nuevo correo
+// POST /api/mail/compose — enviar nuevo correo (email manual o Gmail OAuth)
 app.post('/api/mail/compose', async (req, res) => {
   const { to, subject, body, integrationId } = req.body || {};
   if (!to || !body) return res.status(400).json({ error: 'Faltan campos' });
   try {
     const { decryptJson } = require('./src/security/crypto');
     const nodemailer = require('nodemailer');
-    const row = db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ? AND provider = ?')
-      .get(integrationId, req.tenantId, 'email');
+    const row = db.prepare("SELECT * FROM integrations WHERE id = ? AND tenant_id = ? AND provider IN ('email','gmail','outlook')")
+      .get(integrationId, req.tenantId);
     if (!row) return res.status(404).json({ error: 'Integración no encontrada' });
     const creds = decryptJson(row.credentials_enc);
-    const port = Number(creds.smtpPort) || 587;
-    const transporter = nodemailer.createTransport({
-      host: creds.smtpHost, port, secure: port === 465,
-      auth: { user: creds.username, pass: creds.password },
-    });
+    let transporter;
+    if (creds.refreshToken) {
+      if (row.provider === 'outlook') {
+        const outlookProv = require('./src/modules/integrations/providers/outlook');
+        const accessToken = await outlookProv.refreshMicrosoftToken(creds.refreshToken);
+        transporter = nodemailer.createTransport({
+          host: 'smtp.office365.com', port: 587, secure: false,
+          auth: { type: 'OAuth2', user: creds.email, accessToken },
+        });
+      } else {
+        const gmailProv = require('./src/modules/integrations/providers/gmail');
+        const accessToken = await gmailProv.refreshGoogleToken(creds.refreshToken);
+        transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { type: 'OAuth2', user: creds.email, accessToken },
+        });
+      }
+    } else {
+      const port = Number(creds.smtpPort) || 587;
+      transporter = nodemailer.createTransport({
+        host: creds.smtpHost, port, secure: port === 465,
+        auth: { user: creds.username, pass: creds.password },
+      });
+    }
+    const fromEmail = creds.email || creds.fromEmail || creds.username;
+    const fromName  = creds.fromName || creds.name || 'Wapi101';
     await transporter.sendMail({
-      from: `"${creds.fromName || 'Wapi101'}" <${creds.fromEmail || creds.username}>`,
+      from: `"${fromName}" <${fromEmail}>`,
       to, subject: subject || '(Sin asunto)', text: body,
     });
-    // Crear conversación + mensaje saliente
     const convoSvc = require('./src/modules/conversations/service');
+    const provider = row.provider;
     const convo = convoSvc.findOrCreate(db, req.tenantId, {
-      provider: 'email', externalId: to,
+      provider, externalId: to,
       integrationId, contactPhone: null, contactName: to,
     });
     convoSvc.addMessage(db, req.tenantId, convo.id, {
-      direction: 'outgoing', provider: 'email',
+      direction: 'outgoing', provider,
       body: `📧 ${subject}\n\n${body}`, status: 'sent',
     });
     res.json({ ok: true, convoId: convo.id });
@@ -511,6 +621,7 @@ app.post('/api/mail/compose', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
 
 app.listen(config.port, config.host, () => {
   console.log(`Wapi101 App → http://${config.host}:${config.port}  (env: ${config.env})`);
@@ -523,6 +634,10 @@ app.listen(config.port, config.host, () => {
   // Iniciar poller IMAP para integraciones de email
   try { require('./src/modules/email/poller').start(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar email poller:', err.message);
+  }
+  // Iniciar poller de comentarios TikTok
+  try { require('./src/modules/tiktok/poller').start(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar tiktok poller:', err.message);
   }
   // Iniciar poller de recordatorios de citas
   try { require('./src/modules/bot/reminders').startAppointmentReminderPoller(db); } catch (err) {

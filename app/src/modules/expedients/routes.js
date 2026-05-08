@@ -42,13 +42,13 @@ module.exports = function createExpedientsRouter(db) {
   // CRUD de expedientes
   router.get('/', (req, res, next) => {
     try {
-      const { search, page, pageSize, sortBy, sortDir, tags: rawTags, fieldFilters: rawFieldFilters } = req.query;
+      const { search, page, pageSize, sortBy, sortDir, contactId, tags: rawTags, fieldFilters: rawFieldFilters } = req.query;
       const tags = rawTags ? (Array.isArray(rawTags) ? rawTags : [rawTags]) : [];
       let fieldFilters = {};
       if (rawFieldFilters) {
         try { fieldFilters = JSON.parse(rawFieldFilters); } catch (_) { fieldFilters = {}; }
       }
-      res.json(service.list(db, req.tenantId, { search, page, pageSize, sortBy, sortDir, tags, fieldFilters }));
+      res.json(service.list(db, req.tenantId, { search, page, pageSize, sortBy, sortDir, tags, fieldFilters, contactId }));
     }
     catch (e) { next(e); }
   });

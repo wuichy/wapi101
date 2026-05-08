@@ -65,14 +65,19 @@ module.exports = function createConversationsRouter(db) {
 
   // GET /api/conversations
   router.get('/', (req, res) => {
-    const { q, provider, unread, page, pageSize, contactId } = req.query;
+    const { q, provider, unread, page, pageSize, contactId, pipelineIds, includeOrphans } = req.query;
+    const parsedPipelineIds = pipelineIds
+      ? pipelineIds.split(',').map(Number).filter(n => n > 0)
+      : null;
     const result = svc.list(db, req.tenantId, {
-      search:     q || '',
-      provider:   provider || '',
-      unreadOnly: unread === '1',
-      contactId:  contactId ? Number(contactId) : null,
-      page:       Number(page) || 1,
-      pageSize:   Number(pageSize) || 50,
+      search:         q || '',
+      provider:       provider || '',
+      unreadOnly:     unread === '1',
+      contactId:      contactId ? Number(contactId) : null,
+      page:           Number(page) || 1,
+      pageSize:       Number(pageSize) || 50,
+      pipelineIds:    parsedPipelineIds,
+      includeOrphans: includeOrphans === '1',
     });
     result.totalAll    = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ?').get(req.tenantId).n;
     result.totalUnread = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ? AND unread_count > 0').get(req.tenantId).n;

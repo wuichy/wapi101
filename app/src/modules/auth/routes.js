@@ -232,7 +232,7 @@ module.exports = function createAuthRouter(db) {
 
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
     const redirectUri = encodeURIComponent(`${baseUrl}/auth/tiktok/callback`);
-    const scope = encodeURIComponent('user.info.basic,video.list,video.upload');
+    const scope = encodeURIComponent('user.info.basic,user.info.profile,video.list');
     const url = `https://www.tiktok.com/v2/auth/authorize?client_key=${clientKey}&response_type=code&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;
     res.redirect(url);
   });

@@ -77,7 +77,7 @@ function hydrateConvo(db, tenantId, row) {
   };
 }
 
-function list(db, tenantId, { search, provider, unreadOnly, contactId, includeArchived = false, page = 1, pageSize = 50 } = {}) {
+function list(db, tenantId, { search, provider, unreadOnly, contactId, includeArchived = false, page = 1, pageSize = 50, pipelineIds = null, includeOrphans = false } = {}) {
   const allowedSizes = [20, 50, 100, 200];
   pageSize = allowedSizes.includes(Number(pageSize)) ? Number(pageSize) : 50;
   page = Math.max(1, Number(page) || 1);
@@ -85,10 +85,38 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
   const conditions = ['c.tenant_id = ?'];
   const params = [tenantId];
 
-  if (provider) { conditions.push('c.provider = ?'); params.push(provider); }
+  if (provider) {
+    conditions.push('c.provider = ?'); params.push(provider);
+  } else {
+    // Email conversations belong to the Mail view, not the main chat
+    conditions.push("c.provider NOT IN ('email','gmail','outlook','icloud_mail','yahoo_mail')");
+  }
   if (unreadOnly) { conditions.push('c.unread_count > 0'); }
   if (contactId) { conditions.push('c.contact_id = ?'); params.push(contactId); }
   if (!includeArchived) conditions.push('COALESCE(c.archived, 0) = 0');
+  if (pipelineIds && Array.isArray(pipelineIds) && pipelineIds.length > 0) {
+    const placeholders = pipelineIds.map(() => '?').join(',');
+    if (includeOrphans) {
+      // Empresa A: contactos con expediente en estos pipelines O sin ningún expediente
+      conditions.push(`(
+        EXISTS (
+          SELECT 1 FROM expedients e
+          WHERE e.contact_id = c.contact_id AND e.tenant_id = c.tenant_id
+            AND e.pipeline_id IN (${placeholders})
+        ) OR NOT EXISTS (
+          SELECT 1 FROM expedients e2
+          WHERE e2.contact_id = c.contact_id AND e2.tenant_id = c.tenant_id
+        )
+      )`);
+    } else {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM expedients e
+        WHERE e.contact_id = c.contact_id AND e.tenant_id = c.tenant_id
+          AND e.pipeline_id IN (${placeholders})
+      )`);
+    }
+    params.push(...pipelineIds);
+  }
   if (search) {
     // Buscador expandido: nombre, teléfono, email, external_id, último msg,
     // mensajes históricos (body de cualquier mensaje de la conversación) y
@@ -152,7 +180,7 @@ function getById(db, tenantId, id) {
 // Busca o crea una conversación. tenantId puede ser null si se pasa integrationId
 // (caso webhook), entonces se deriva del integration. Para creación de contacto
 // nuevo se usa el mismo tenantId.
-function findOrCreate(db, tenantId, { provider, externalId, integrationId, contactPhone, contactName }) {
+function findOrCreate(db, tenantId, { provider, externalId, integrationId, contactPhone, contactName, contactId }) {
   const t = tenantId ?? _tenantFromIntegration(db, integrationId);
   if (!t) throw new Error('No se pudo determinar tenant para la conversación');
 
@@ -165,9 +193,11 @@ function findOrCreate(db, tenantId, { provider, externalId, integrationId, conta
     return row;
   }
 
-  // Buscar contacto existente del MISMO tenant por teléfono normalizado.
+  // Buscar contacto existente del MISMO tenant por id directo, teléfono o email.
   let contact = null;
-  if (contactPhone) {
+  if (contactId) {
+    contact = db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(contactId, t);
+  } else if (contactPhone) {
     const normPhone = customerService.normalizePhone(contactPhone);
     contact = db.prepare('SELECT * FROM contacts WHERE phone = ? AND tenant_id = ?').get(normPhone, t);
     if (!contact) {

@@ -24,13 +24,13 @@ function stop() {
 async function poll() {
   if (!_db) return;
   const integrations = _db.prepare(
-    "SELECT * FROM integrations WHERE provider = 'email' AND status = 'connected'"
+    "SELECT * FROM integrations WHERE provider IN ('email','gmail','outlook','icloud_mail','yahoo_mail') AND status = 'connected'"
   ).all();
   for (const row of integrations) {
     try {
       await pollOne(row);
     } catch (err) {
-      console.error(`[email-poller] error en integración ${row.id}:`, err.message);
+      console.error(`[email-poller] error en integración ${row.id}:`, err.message, err.responseCode || '', err.responseText || '');
     }
   }
 }
@@ -39,16 +39,35 @@ async function pollOne(row) {
   const creds = decryptJson(row.credentials_enc);
   if (!creds) return;
   const { username, password, imapHost, imapPort } = creds;
-  if (!username || !password || !imapHost) return;
 
-  const client = new ImapFlow({
-    host: imapHost,
-    port: Number(imapPort) || 993,
-    secure: Number(imapPort) !== 143 && Number(imapPort) !== 587,
-    auth: { user: username, pass: password },
-    logger: false,
-    connectionTimeout: 15000,
-  });
+  // Gmail / Outlook OAuth2 vs manual IMAP
+  let client;
+  if (creds.refreshToken && row.provider === 'gmail') {
+    const gmailProv = require('../integrations/providers/gmail');
+    const accessToken = await gmailProv.refreshGoogleToken(creds.refreshToken);
+    client = new ImapFlow({
+      host: 'imap.gmail.com', port: 993, secure: true,
+      auth: { user: creds.email, accessToken },
+      logger: false, connectionTimeout: 15000,
+    });
+  } else if (creds.refreshToken && row.provider === 'outlook') {
+    const outlookProv = require('../integrations/providers/outlook');
+    const accessToken = await outlookProv.refreshMicrosoftToken(creds.refreshToken);
+    client = new ImapFlow({
+      host: 'outlook.office365.com', port: 993, secure: true,
+      auth: { user: creds.email, accessToken },
+      logger: false, connectionTimeout: 15000,
+    });
+  } else {
+    if (!username || !password || !imapHost) return;
+    client = new ImapFlow({
+      host: imapHost,
+      port: Number(imapPort) || 993,
+      secure: Number(imapPort) !== 143 && Number(imapPort) !== 587,
+      auth: { user: username, pass: password },
+      logger: false, connectionTimeout: 15000,
+    });
+  }
 
   await client.connect();
   try {
@@ -112,14 +131,15 @@ async function pollOne(row) {
         }
 
         const convo = convoSvc.findOrCreate(_db, tenantId, {
-          provider:      'email',
+          provider:      row.provider,
           externalId:    senderEmail,
           integrationId: row.id,
           contactPhone:  null,
           contactName:   senderName,
+          contactId:     contact?.id,
         });
 
-        // Asignar contact_id si falta
+        // Actualizar contact_id si la conversación ya existía sin él
         if (!convo.contact_id && contact?.id) {
           _db.prepare('UPDATE conversations SET contact_id = ? WHERE id = ?').run(contact.id, convo.id);
         }
@@ -128,7 +148,7 @@ async function pollOne(row) {
         convoSvc.addMessage(_db, tenantId, convo.id, {
           externalId: msgId,
           direction:  'incoming',
-          provider:   'email',
+          provider:   row.provider,
           body,
           status:     'delivered',
           createdAt:  Math.floor((env.date?.getTime() || Date.now()) / 1000),

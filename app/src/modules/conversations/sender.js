@@ -8,7 +8,8 @@ async function sendMessage(db, convo, text) {
   if (convo.provider === 'messenger')       return sendMessenger(db, convo, text);
   if (convo.provider === 'instagram')       return sendInstagram(db, convo, text);
   if (convo.provider === 'telegram')        return sendTelegram(db, convo, text);
-  if (convo.provider === 'email')           return sendEmail(db, convo, text);
+  if (convo.provider === 'email' || convo.provider === 'gmail' || convo.provider === 'outlook' || convo.provider === 'icloud_mail' || convo.provider === 'yahoo_mail') return sendEmail(db, convo, text);
+  if (convo.provider === 'tiktok') return sendTikTokReply(db, convo, text);
   console.warn(`[sender] envío para provider ${convo.provider} no implementado`);
   return null;
 }
@@ -335,25 +336,79 @@ async function sendTelegramMedia(db, convo, { buffer, mimetype, filename, captio
 
 async function sendEmail(db, convo, text) {
   const creds = getIntegrationCreds(db, convo.integrationId);
-  if (!creds?.smtpHost || !creds?.username || !creds?.password) {
-    throw new Error('Faltan credenciales SMTP en la integración de email');
-  }
+  if (!creds) throw new Error('No hay credenciales en la integración de email');
   const nodemailer = require('nodemailer');
-  const port = Number(creds.smtpPort) || 587;
-  const transporter = nodemailer.createTransport({
-    host: creds.smtpHost,
-    port,
-    secure: port === 465,
-    auth: { user: creds.username, pass: creds.password },
-  });
+  let transporter;
+  if (creds.refreshToken) {
+    let accessToken;
+    const row = db.prepare('SELECT provider FROM conversations WHERE id = ?').get(convo.id);
+    if (row?.provider === 'outlook') {
+      const outlookProv = require('../integrations/providers/outlook');
+      accessToken = await outlookProv.refreshMicrosoftToken(creds.refreshToken);
+      transporter = nodemailer.createTransport({
+        host: 'smtp.office365.com', port: 587, secure: false,
+        auth: { type: 'OAuth2', user: creds.email, accessToken },
+      });
+    } else {
+      const gmailProv = require('../integrations/providers/gmail');
+      accessToken = await gmailProv.refreshGoogleToken(creds.refreshToken);
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { type: 'OAuth2', user: creds.email, accessToken },
+      });
+    }
+  } else {
+    if (!creds.smtpHost || !creds.username || !creds.password) {
+      throw new Error('Faltan credenciales SMTP en la integración de email');
+    }
+    const port = Number(creds.smtpPort) || 587;
+    transporter = nodemailer.createTransport({
+      host: creds.smtpHost, port, secure: port === 465,
+      auth: { user: creds.username, pass: creds.password },
+    });
+  }
   const toEmail = convo.external_id || convo.externalId;
+  const fromEmail = creds.email || creds.fromEmail || creds.username;
+  const fromName  = creds.fromName || creds.name || 'Wapi101';
   const info = await transporter.sendMail({
-    from: `"${creds.fromName || 'Wapi101'}" <${creds.fromEmail || creds.username}>`,
+    from: `"${fromName}" <${fromEmail}>`,
     to: toEmail,
     subject: 'Re: tu mensaje',
     text,
   });
   return info.messageId || null;
+}
+
+// ─── TikTok ──────────────────────────────────────────────────────────────────
+
+async function sendTikTokReply(db, convo, text) {
+  if (!convo.integrationId) throw new Error('Conversación sin integración TikTok');
+  const row = db.prepare('SELECT * FROM integrations WHERE id = ?').get(convo.integrationId);
+  if (!row) throw new Error('Integración TikTok no encontrada');
+  const creds = decryptJson(row.credentials_enc);
+  if (!creds?.accessToken) throw new Error('TikTok sin access_token');
+
+  // Obtener el último mensaje entrante para recuperar commentId y videoId
+  const lastIn = db.prepare(
+    "SELECT meta_json FROM messages WHERE conversation_id = ? AND direction = 'incoming' ORDER BY id DESC LIMIT 1"
+  ).get(convo.id);
+  let meta = {};
+  try { if (lastIn?.meta_json) meta = JSON.parse(lastIn.meta_json); } catch {}
+
+  const { commentId, videoId } = meta;
+  if (!commentId || !videoId) throw new Error('No se encontró el comentario TikTok al que responder');
+
+  const res = await fetch('https://open.tiktokapis.com/v2/video/comment/reply/create/', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${creds.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ video_id: videoId, parent_comment_id: commentId, text }),
+  });
+  const data = await res.json();
+  if (data.error?.code) throw new Error(`TikTok reply error: ${data.error.message}`);
+  return { externalId: data.data?.comment_id };
 }
 
 function getIntegrationCreds(db, integrationId) {

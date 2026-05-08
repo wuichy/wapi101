@@ -118,6 +118,29 @@ const I18N_TRANSLATIONS = {
     'task.duration.180': '3 horas',
     'task.duration.480': 'Día completo (8 h)',
     // OAuth
+    // Negocio
+    'settings.tab.negocio': 'Negocio',
+    'settings.tab.suscripcion': 'Suscripción',
+    'biz.profile.title': 'Perfil del negocio',
+    'biz.field.name': 'Nombre del negocio',
+    'biz.field.slug': 'URL del CRM (slug)',
+    'biz.field.website': 'Sitio web',
+    'biz.field.phone': 'Teléfono',
+    'biz.field.address': 'Domicilio',
+    'biz.profile.save': 'Guardar perfil del negocio',
+    'biz.hours.title': 'Horario del negocio',
+    'biz.hours.save': 'Guardar horario',
+    'biz.advisor.hours.title': 'Horarios por asesor',
+    'biz.advisor.hours.save': 'Guardar horario del asesor',
+    // Suscripción
+    'billing.title': 'Suscripción',
+    'billing.monthly': 'Mensual',
+    'billing.semester': 'Semestral',
+    'billing.semester.save': '1 mes gratis',
+    'billing.annual': 'Anual',
+    'billing.annual.save': '3 meses gratis',
+    'billing.loading': 'Cargando planes…',
+    'billing.manage.btn': 'Administrar suscripción (cambiar tarjeta, ver facturas, cancelar)',
     'oauth.connect.facebook': 'Conectar con Facebook',
     'oauth.connect.instagram': 'Conectar con Instagram',
     'oauth.connect.tiktok': 'Conectar con TikTok',
@@ -134,14 +157,375 @@ const I18N_TRANSLATIONS = {
     'signup.free.subtitle': 'Plan Gratis para siempre · Sin tarjeta de crédito.',
     'signup.free.banner.title': '🎁 Plan Gratis para siempre',
     'signup.free.banner.desc': '1 usuario, 500 contactos, todas las funciones. Sin tarjeta.',
+
+    // Nav extras
+    'nav.calendario': 'Calendario',
+    'nav.aplicaciones': 'Aplicaciones',
+    'nav.mail': 'Mail',
+    'nav.cache.title': 'Forzar actualización (limpia caché y recarga)',
+    'nav.logout': 'Cerrar sesión',
+    // Pipeline controls
+    'pl.view.kanban': 'Tablero',
+    'pl.view.list': 'Lista',
+    'pl.view.list.title': 'Lista con selección múltiple',
+    'pl.manage': 'Gestionar',
+    'pl.new': '+ Pipeline',
+    'pl.create': '+ Crear pipeline',
+    'pl.delete': 'Eliminar pipeline',
+    'pl.manage.title': 'Gestionar pipeline',
+    'pl.field.name': 'Nombre del pipeline',
+    'pl.field.color': 'Color',
+    'pl.field.icon': 'Icono',
+    'pl.stages': 'Etapas',
+    'pl.add_stage': '+ Etapa',
+    'pl.empty.desc': 'No tienes pipelines aún. Crea el primero para organizar tus contactos.',
+    // Stage kinds
+    'stage.kind.in_progress': 'En progreso',
+    'stage.kind.won': 'Ganado',
+    'stage.kind.lost': 'Perdido',
+    // Sort options
+    'sort.newest': 'Más reciente',
+    'sort.last_activity': 'Última actividad',
+    'sort.name_az': 'Nombre A–Z',
+    'sort.name_za': 'Nombre Z–A',
+    // Chat filters
+    'chat.filter.all': 'Todos',
+    'chat.filter.unread': 'No leídos',
+    'chat.filter.pinned': 'Fijados',
+    'chat.push.cta': 'Activar notificaciones',
+    'chat.quick_reply': '+ Respuesta rápida',
+    'chat.show_hidden': 'Mostrar chats ocultos',
+    'chat.info.title': 'Información',
+    // Attach preview
+    'attach.preview.title': 'Vista previa',
+    'attach.caption': 'Mensaje (opcional)',
+    // Bot stats
+    'bot.stats.title': 'Estadísticas del bot',
+    'bot.stats.tab.summary': 'Resumen',
+    'bot.stats.tab.history': 'Historial',
+    'bot.stats.chart.label': 'Ejecuciones (últimos 14 días)',
+    // Alarm
+    'alarm.title': 'Alarmas de etapa',
+    'alarm.add': '+ Agregar alarma',
+    // Dashboard
+    'dash.title': 'Analíticas',
+    'dash.advisor.label': 'Asesor:',
+    'dash.advisor.all': 'Todo el equipo',
+    'dash.compare': 'Comparar con período anterior',
+    'dash.card.received': 'Mensajes recibidos',
+    'dash.card.sent': 'Mensajes enviados',
+    'dash.card.convos': 'Conversaciones',
+    'dash.card.contacts': 'Contactos',
+    'dash.card.leads': 'Leads',
+    'dash.card.total': 'en total',
+    'dash.chart.title': 'Actividad últimos 7 días',
+    'dash.legend.received': 'Recibidos',
+    'dash.legend.sent': 'Enviados',
+    'dash.team.title': 'Productividad del equipo',
+    'dash.team.sub': 'Métricas por asesor en el período seleccionado.',
+    'dash.th.advisor': 'Asesor',
+    'dash.th.contacts': 'Contactos',
+    'dash.th.leads': 'Leads',
+    'dash.th.messages': 'Mensajes (equipo)',
+    'dash.th.tasks': 'Tareas hechas',
+    // Period labels
+    'period.today': 'Hoy',
+    'period.yesterday': 'Ayer',
+    'period.week': 'Esta semana',
+    'period.month': 'Este mes',
+    'period.year': 'Este año',
+    // Expedientes
+    'exp.th.name': 'Nombre del lead',
+    'exp.th.contact': 'Contacto',
+    'exp.th.email': 'Email',
+    'exp.th.pipeline_stage': 'Pipeline › Etapa',
+    'exp.th.advisor': 'Asesor',
+    'exp.th.tags': 'Etiquetas',
+    'exp.th.created': 'Creado',
+    'exp.empty': 'No hay leads aún',
+    'exp.create_first': '+ Crear primer lead',
+    'exp.new': '+ Nuevo lead',
+    'exp.delete': 'Eliminar lead',
+    'exp.no_convos': 'Sin conversaciones aún.',
+    'exp.modal.new_title': 'Nuevo lead',
+    'exp.field.name': 'Nombre del lead',
+    'exp.field.contact': 'Contacto',
+    'exp.field.pipeline': 'Pipeline',
+    'exp.field.stage': 'Etapa',
+    'exp.field.tags': 'Etiquetas',
+    'exp.select_pipeline': 'Selecciona pipeline...',
+    'exp.select_stage': 'Selecciona etapa...',
+    'exp.create_contact': '+ Crear contacto',
+    // Quick contact
+    'qc.title': 'Nuevo contacto',
+    'qc.save': 'Crear y seleccionar',
+    // Custom fields
+    'fields.title': 'Campos personalizados',
+    'fields.subtitle': 'Se muestran en todos los leads',
+    'fields.empty': 'No hay campos personalizados aún',
+    'fields.add': '+ Agregar campo',
+    'fields.add_field_btn': 'Agregar campo',
+    'fields.field.name': 'Nombre del campo',
+    'fields.field.type': 'Tipo',
+    'fields.field.options': 'Opciones (una por línea)',
+    'field.type.text': 'Texto',
+    'field.type.number': 'Número',
+    'field.type.toggle': 'Interruptor',
+    'field.type.select': 'Selección',
+    'field.type.multi_select': 'Multi-selección',
+    'field.type.date': 'Día',
+    'field.type.url': 'URL',
+    'field.type.long_text': 'Texto largo',
+    'field.type.birthday': 'Cumpleaños',
+    'field.type.datetime': 'Fecha y hora',
+    // Import
+    'imp.leads.title': 'Importar leads',
+    'imp.contacts.title': 'Importar contactos',
+    'imp.preview': 'Vista previa',
+    'imp.process': 'Procesar',
+    'imp.tab.paste': 'Pegar texto',
+    'imp.tab.file': 'Subir archivo',
+    'imp.dropzone.title': 'Click para elegir o arrastra un archivo aquí',
+    'imp.dropzone.sub': 'CSV, TXT — máximo 5 MB',
+    'imp.bulk_tag': 'Etiquetar todos los importados (opcional):',
+    'imp.dupe_policy': 'Si un contacto ya existe (mismo teléfono o email):',
+    'imp.dupe.skip': 'Omitir',
+    'imp.dupe.update': 'Actualizar datos',
+    'imp.dupe.create': 'Crear duplicado igual',
+    // Table headers (generic)
+    'th.name': 'Nombre',
+    'th.lastname': 'Apellido',
+    'th.phone': 'Teléfono',
+    'th.email': 'Email',
+    'th.tags': 'Etiquetas',
+    'th.leads': 'Leads',
+    'th.created': 'Creado',
+    'th.status': 'Estado',
+    'th.advisor': 'Asesor',
+    'th.access': 'Acceso',
+    'th.role': 'Rol',
+    'th.permissions': 'Permisos',
+    'th.ip': 'IP',
+    'paginator.show': 'Mostrar',
+    // Contacts
+    'contact.new': '+ Nuevo contacto',
+    'contact.modal.new': 'Nuevo contacto',
+    'contact.save': 'Guardar contacto',
+    'contact.leads_section': 'Leads',
+    'contact.add_lead': '+ Agregar lead',
+    'contact.delete.title': 'Eliminar contacto',
+    'contact.delete.leads': 'Leads asociados',
+    'contact.delete.no_leads': 'Este contacto no tiene leads.',
+    'contact.delete.confirm': 'Eliminar definitivamente',
+    // Templates
+    'tpl.new': '+ Nueva plantilla',
+    'tpl.tab.free': 'Libres',
+    'tpl.empty': 'No hay plantillas todavía.',
+    'tpl.modal.new': 'Nueva plantilla',
+    'tpl.field.type': 'Tipo de plantilla',
+    'tpl.type.wa_api': 'WhatsApp API',
+    'tpl.type.free': 'Libre',
+    'tpl.field.display_name': 'Nombre para mostrar',
+    'tpl.field.body': 'Cuerpo del mensaje',
+    'tpl.field.footer': 'Pie de página',
+    'tpl.hint.footer_optional': '(opcional, máx 60 chars)',
+    'tpl.field.buttons': 'Botones',
+    'tpl.hint.buttons_optional': '(opcional, máx 3 — todos QUICK_REPLY o hasta 2 CTA)',
+    'tpl.add_button': '+ Agregar botón',
+    'tpl.field.tags': 'Etiquetas',
+    'tpl.hint.tags': '(para organizar y filtrar — no se envían a Meta)',
+    'tpl.save': 'Guardar plantilla',
+    'tpl.send.title': 'Enviar plantilla',
+    'tpl.tags.title': 'Etiquetas de plantillas',
+    // Integrations
+    'int.tab.connected': 'Mis integraciones',
+    'int.tab.vote': 'Solicitar integración',
+    'int.vote.suggest': 'Sugerir y votar',
+    'int.connect': 'Conectar',
+    'int.disconnect': 'Desconectar',
+    'routing.title': '¿Dónde llegan los mensajes?',
+    'routing.pipeline': 'Pipeline',
+    'routing.stage': 'Etapa inicial',
+    'routing.skip': 'Usar predeterminado',
+    'wh.modal.title': 'Agregar Webhook',
+    // Bot builder
+    'bot.create': '+ Crear bot',
+    'bot.empty.desc': 'Aún no tienes bots. Crea el primero para automatizar tus conversaciones.',
+    'bot.tags.title': 'Etiquetas de bots',
+    'bot.builder.labels': 'ETIQUETAS',
+    'bot.builder.trigger': 'DISPARADOR',
+    'bot.builder.active': 'Activo',
+    'bot.add_step': 'Agregar paso',
+    'bot.trigger.keyword': 'Palabra clave en mensaje',
+    'bot.trigger.new_contact': 'Nuevo contacto creado',
+    'bot.trigger.pipeline_stage': 'Lead entra a etapa',
+    'bot.trigger.always': 'Cualquier mensaje entrante',
+    'bot.trigger.outbound': 'Manual / Outbound (tú inicias)',
+    'bot.step.message': 'Enviar mensaje',
+    'bot.step.template': 'Enviar plantilla (WhatsApp API)',
+    'bot.step.timer': 'Temporizador',
+    'bot.step.condition': 'Condición',
+    'bot.step.stage': 'Cambiar etapa',
+    'bot.step.tag': 'Agregar etiqueta',
+    'bot.step.assign': 'Asignar responsable',
+    'bot.step.wait_response': 'Esperar respuesta del lead',
+    'bot.step.stop_bot': 'Parar bot',
+    'bot.step.stop_and_start': 'Parar este e iniciar otro bot',
+    'bot.step.book_appointment': 'Agendar Cita',
+    'bot.step.cancel_appointment': 'Cancelar Cita',
+    'bot.step.reschedule_appointment': 'Reagendar Cita',
+    // Advisors
+    'advisor.new': '+ Nuevo asesor',
+    'advisor.modal.new': 'Nuevo asesor',
+    'advisor.section.access': 'Datos de acceso',
+    'advisor.section.role': 'Rol',
+    'advisor.section.perms': 'Permisos del asesor',
+    'advisor.delete': 'Eliminar asesor',
+    'advisor.empty': 'No hay asesores aún.',
+    'role.admin': 'Administrador',
+    'role.admin.desc': 'Acceso total al sistema',
+    'role.advisor': 'Asesor',
+    'role.advisor.desc': 'Acceso según permisos',
+    'perm.write.name': 'Escribir y editar',
+    'perm.write.desc': 'Enviar mensajes, editar leads y contactos',
+    'perm.delete.name': 'Eliminar registros',
+    'perm.delete.desc': 'Borrar leads, contactos y conversaciones',
+    'perm.reports.name': 'Ver reportes',
+    'perm.reports.desc': 'Acceder al dashboard e historial de actividad',
+    'perm.advisors.name': 'Gestionar asesores',
+    'perm.advisors.desc': 'Crear, editar y desactivar otros asesores',
+    // IA
+    'ia.title': 'Inteligencia artificial',
+    'ia.provider': 'Proveedor',
+    'ia.knowledge': 'Fuentes de conocimiento',
+    'ia.add_source': '+ Nueva fuente',
+    'ia.behavior': 'Comportamiento',
+    'ia.save': 'Guardar cambios',
+    'ia.test': 'Probar conexión',
+    // Notifications
+    'notif.log.title': 'Bitácora reciente',
+    // Trash
+    'trash.empty_all': 'Vaciar papelera',
+    'trash.filter.all': 'Todo',
+    'trash.filter.contacts': 'Contactos',
+    'trash.filter.leads': 'Leads',
+    'trash.filter.pipelines': 'Pipelines',
+    'trash.filter.stages': 'Etapas',
+    'trash.filter.bots': 'Bots',
+    'trash.empty': 'La papelera está vacía',
+    // Config: lead value
+    'config.lead_value.section': 'Valor de lead',
+    'config.lead_value.title': 'Habilitar valor de lead',
+    'config.lead_value.desc': 'Agrega un campo de valor monetario (MXN) a cada lead. Muestra el total por etapa en el kanban y el valor acumulado del pipeline completo.',
+    // Reports
+    'report.new': '+ Nuevo reporte',
+    'report.filter.all': 'Todos',
+    'report.filter.open': 'Abiertos',
+    'report.filter.in_progress': 'En progreso',
+    'report.filter.resolved': 'Resueltos',
+    'report.filter.wontfix': 'No se hará',
+    'report.modal.new': 'Nuevo reporte',
+    'report.submit': 'Enviar reporte',
+    // Machine tokens
+    'mt.new': '+ Generar token',
+    'mt.revoke_all': 'Revocar todos',
+    'mt.show_revoked': 'Mostrar revocados',
+    'mt.th.prefix': 'Prefijo',
+    'mt.th.last_used': 'Último uso',
+    'mt.empty': 'No hay tokens generados.',
+    'mt.token.title': 'Token generado',
+    'mt.new.title': 'Nuevo token',
+    'mt.device_name': 'Nombre del dispositivo',
+    'mt.generate': 'Generar',
+    'mt.done': 'Listo',
+    // Calendar
+    'cal.tab.overdue': 'Vencidas',
+    'cal.tab.today': 'Hoy',
+    'cal.tab.upcoming': 'Próximas',
+    'cal.tab.completed': 'Completadas',
+    'cal.today': 'Hoy',
+    'cal.foot': 'Click en un día para ver/agregar tareas. Click en una tarea para editarla.',
+    // Account
+    'account.personal_info': 'Información personal',
+    'account.save_profile': 'Guardar cambios',
+    'account.change_password': 'Cambiar contraseña',
+    'account.save_password': 'Cambiar contraseña',
+    // Mail
+    'mail.compose': 'Redactar',
+    'mail.inbox': 'Recibidos',
+    'mail.sent': 'Enviados',
+    'mail.all': 'Todo',
+    'mail.accounts': 'Cuentas',
+    'mail.new_message': 'Nuevo mensaje',
+    'mail.to': 'Para',
+    'mail.subject': 'Asunto',
+    'mail.from': 'Desde',
+    'mail.discard': 'Descartar',
+    'mail.select_email': 'Selecciona un correo',
+    // Buttons extra
+    'btn.copy': 'Copiar',
+    'btn.fields': 'Campos',
+    // Business profile
+    'biz.field.logo': 'Logo',
+
+
+    // Greetings
+    'greeting.morning': 'Buenos días',
+    'greeting.afternoon': 'Buenas tardes',
+    'greeting.evening': 'Buenas noches',
+    // Connection status
+    'conn.offline': 'Sin conexión con el servidor — reintentando…',
+    'conn.degraded': 'Conexión inestable — verificando…',
+    'conn.recovered': 'Conexión restaurada ✓',
+    // Bot list table
+    'bot.th.steps': 'Pasos',
+    // Advisor modal edit  
+    'advisor.modal.edit': 'Editar asesor',
+    // Contact modal edit
+    'contact.modal.edit': 'Editar contacto',
+
     'signup.free.btn': 'Crear cuenta gratis',
+
+    // Bot list — filter empty states
+    'bot.filter.no_match': 'No hay bots que coincidan con "{q}".',
+    'bot.filter.no_errors': '🎉 Ningún bot tiene errores. Todo en orden.',
+    'bot.filter.no_warns': '✨ Ningún bot tiene avisos.',
+    'bot.filter.no_tag': 'Ningún bot tiene esta etiqueta.',
+    // Bot list — row metadata
+    'bot.row.created': 'Creado {date}',
+    'bot.row.step': 'paso',
+    'bot.row.steps': 'pasos',
+    // Bot drag handle
+    'bot.drag.title': 'Arrastra para reordenar',
+    // Bot status toggle
+    'bot.status.paused': 'Bot pausado',
+    'bot.status.active': 'Bot activo',
+    // Bot name placeholder
+    'bot.name.placeholder': 'Nombre del bot',
+    // Chat — no messages
+    'chat.no_messages': 'No hay mensajes todavía.',
+    // Integration modal
+    'int.modal.edit': 'Editar {name}',
+    'int.modal.connect': 'Conectar {name}',
+    'int.how_to_connect': 'Cómo conectar',
+    // Webhook modal edit title
+    'wh.modal.edit': 'Editar Webhook',
+    // Pipeline modal titles
+    'pl.modal.edit': 'Editar pipeline',
+    'pl.modal.new': 'Nuevo pipeline',
+    // Lead modal edit title
+    'exp.modal.edit_title': 'Editar lead',
+    // Placeholders
+    'stage.name.placeholder': 'Nombre de etapa',
+    'pl.name.placeholder': 'Ej. Ventas',
+    'mail.search.placeholder': 'Buscar correos...',
   },
   'en': {
     // Nav sidebar
     'nav.inicio': 'Analytics',
     'nav.chats': 'Chats',
     'nav.pipelines': 'Pipelines',
-    'nav.expedientes': 'Cases',
+    'nav.expedientes': 'Leads',
     'nav.contactos': 'Contacts',
     'nav.plantillas': 'Templates',
     'nav.integraciones': 'Integrations',
@@ -246,6 +630,29 @@ const I18N_TRANSLATIONS = {
     'task.duration.180': '3 hours',
     'task.duration.480': 'Full day (8 h)',
     // OAuth
+    // Business
+    'settings.tab.negocio': 'Business',
+    'settings.tab.suscripcion': 'Subscription',
+    'biz.profile.title': 'Business Profile',
+    'biz.field.name': 'Business name',
+    'biz.field.slug': 'CRM URL (slug)',
+    'biz.field.website': 'Website',
+    'biz.field.phone': 'Phone',
+    'biz.field.address': 'Address',
+    'biz.profile.save': 'Save business profile',
+    'biz.hours.title': 'Business hours',
+    'biz.hours.save': 'Save hours',
+    'biz.advisor.hours.title': 'Agent hours',
+    'biz.advisor.hours.save': 'Save agent hours',
+    // Subscription
+    'billing.title': 'Subscription',
+    'billing.monthly': 'Monthly',
+    'billing.semester': 'Biannual',
+    'billing.semester.save': '1 month free',
+    'billing.annual': 'Annual',
+    'billing.annual.save': '3 months free',
+    'billing.loading': 'Loading plans…',
+    'billing.manage.btn': 'Manage subscription (change card, view invoices, cancel)',
     'oauth.connect.facebook': 'Connect with Facebook',
     'oauth.connect.instagram': 'Connect with Instagram',
     'oauth.connect.tiktok': 'Connect with TikTok',
@@ -262,7 +669,368 @@ const I18N_TRANSLATIONS = {
     'signup.free.subtitle': 'Free forever · No credit card required.',
     'signup.free.banner.title': '🎁 Free plan forever',
     'signup.free.banner.desc': '1 user, 500 contacts, all features. No credit card.',
+
+    // Nav extras
+    'nav.calendario': 'Calendar',
+    'nav.aplicaciones': 'Apps',
+    'nav.mail': 'Mail',
+    'nav.cache.title': 'Force refresh (clears cache and reloads)',
+    'nav.logout': 'Log out',
+    // Pipeline controls
+    'pl.view.kanban': 'Board',
+    'pl.view.list': 'List',
+    'pl.view.list.title': 'List with multi-select',
+    'pl.manage': 'Manage',
+    'pl.new': '+ Pipeline',
+    'pl.create': '+ Create pipeline',
+    'pl.delete': 'Delete pipeline',
+    'pl.manage.title': 'Manage pipeline',
+    'pl.field.name': 'Pipeline name',
+    'pl.field.color': 'Color',
+    'pl.field.icon': 'Icon',
+    'pl.stages': 'Stages',
+    'pl.add_stage': '+ Stage',
+    'pl.empty.desc': 'No pipelines yet. Create the first one to organize your contacts.',
+    // Stage kinds
+    'stage.kind.in_progress': 'In progress',
+    'stage.kind.won': 'Won',
+    'stage.kind.lost': 'Lost',
+    // Sort options
+    'sort.newest': 'Most recent',
+    'sort.last_activity': 'Last activity',
+    'sort.name_az': 'Name A–Z',
+    'sort.name_za': 'Name Z–A',
+    // Chat filters
+    'chat.filter.all': 'All',
+    'chat.filter.unread': 'Unread',
+    'chat.filter.pinned': 'Pinned',
+    'chat.push.cta': 'Enable notifications',
+    'chat.quick_reply': '+ Quick reply',
+    'chat.show_hidden': 'Show hidden chats',
+    'chat.info.title': 'Information',
+    // Attach preview
+    'attach.preview.title': 'Preview',
+    'attach.caption': 'Caption (optional)',
+    // Bot stats
+    'bot.stats.title': 'Bot statistics',
+    'bot.stats.tab.summary': 'Summary',
+    'bot.stats.tab.history': 'History',
+    'bot.stats.chart.label': 'Executions (last 14 days)',
+    // Alarm
+    'alarm.title': 'Stage alarms',
+    'alarm.add': '+ Add alarm',
+    // Dashboard
+    'dash.title': 'Analytics',
+    'dash.advisor.label': 'Agent:',
+    'dash.advisor.all': 'Whole team',
+    'dash.compare': 'Compare with previous period',
+    'dash.card.received': 'Messages received',
+    'dash.card.sent': 'Messages sent',
+    'dash.card.convos': 'Conversations',
+    'dash.card.contacts': 'Contacts',
+    'dash.card.leads': 'Leads',
+    'dash.card.total': 'total',
+    'dash.chart.title': 'Activity last 7 days',
+    'dash.legend.received': 'Received',
+    'dash.legend.sent': 'Sent',
+    'dash.team.title': 'Team productivity',
+    'dash.team.sub': 'Metrics per agent in the selected period.',
+    'dash.th.advisor': 'Agent',
+    'dash.th.contacts': 'Contacts',
+    'dash.th.leads': 'Leads',
+    'dash.th.messages': 'Messages (team)',
+    'dash.th.tasks': 'Tasks done',
+    // Period labels
+    'period.today': 'Today',
+    'period.yesterday': 'Yesterday',
+    'period.week': 'This week',
+    'period.month': 'This month',
+    'period.year': 'This year',
+    // Expedientes
+    'exp.th.name': 'Lead name',
+    'exp.th.contact': 'Contact',
+    'exp.th.email': 'Email',
+    'exp.th.pipeline_stage': 'Pipeline › Stage',
+    'exp.th.advisor': 'Agent',
+    'exp.th.tags': 'Tags',
+    'exp.th.created': 'Created',
+    'exp.empty': 'No leads yet',
+    'exp.create_first': '+ Create first lead',
+    'exp.new': '+ New lead',
+    'exp.delete': 'Delete lead',
+    'exp.no_convos': 'No conversations yet.',
+    'exp.modal.new_title': 'New lead',
+    'exp.field.name': 'Lead name',
+    'exp.field.contact': 'Contact',
+    'exp.field.pipeline': 'Pipeline',
+    'exp.field.stage': 'Stage',
+    'exp.field.tags': 'Tags',
+    'exp.select_pipeline': 'Select pipeline...',
+    'exp.select_stage': 'Select stage...',
+    'exp.create_contact': '+ Create contact',
+    // Quick contact
+    'qc.title': 'New contact',
+    'qc.save': 'Create and select',
+    // Custom fields
+    'fields.title': 'Custom fields',
+    'fields.subtitle': 'Shown on all leads',
+    'fields.empty': 'No custom fields yet',
+    'fields.add': '+ Add field',
+    'fields.add_field_btn': 'Add field',
+    'fields.field.name': 'Field name',
+    'fields.field.type': 'Type',
+    'fields.field.options': 'Options (one per line)',
+    'field.type.text': 'Text',
+    'field.type.number': 'Number',
+    'field.type.toggle': 'Toggle',
+    'field.type.select': 'Select',
+    'field.type.multi_select': 'Multi-select',
+    'field.type.date': 'Date',
+    'field.type.url': 'URL',
+    'field.type.long_text': 'Long text',
+    'field.type.birthday': 'Birthday',
+    'field.type.datetime': 'Date & time',
+    // Import
+    'imp.leads.title': 'Import leads',
+    'imp.contacts.title': 'Import contacts',
+    'imp.preview': 'Preview',
+    'imp.process': 'Process',
+    'imp.tab.paste': 'Paste text',
+    'imp.tab.file': 'Upload file',
+    'imp.dropzone.title': 'Click to choose or drag a file here',
+    'imp.dropzone.sub': 'CSV, TXT — max 5 MB',
+    'imp.bulk_tag': 'Tag all imported (optional):',
+    'imp.dupe_policy': 'If a contact already exists (same phone or email):',
+    'imp.dupe.skip': 'Skip',
+    'imp.dupe.update': 'Update data',
+    'imp.dupe.create': 'Create duplicate',
+    // Table headers (generic)
+    'th.name': 'Name',
+    'th.lastname': 'Last name',
+    'th.phone': 'Phone',
+    'th.email': 'Email',
+    'th.tags': 'Tags',
+    'th.leads': 'Leads',
+    'th.created': 'Created',
+    'th.status': 'Status',
+    'th.advisor': 'Agent',
+    'th.access': 'Access',
+    'th.role': 'Role',
+    'th.permissions': 'Permissions',
+    'th.ip': 'IP',
+    'paginator.show': 'Show',
+    // Contacts
+    'contact.new': '+ New contact',
+    'contact.modal.new': 'New contact',
+    'contact.save': 'Save contact',
+    'contact.leads_section': 'Leads',
+    'contact.add_lead': '+ Add lead',
+    'contact.delete.title': 'Delete contact',
+    'contact.delete.leads': 'Associated leads',
+    'contact.delete.no_leads': 'This contact has no leads.',
+    'contact.delete.confirm': 'Delete permanently',
+    // Templates
+    'tpl.new': '+ New template',
+    'tpl.tab.free': 'Free-form',
+    'tpl.empty': 'No templates yet.',
+    'tpl.modal.new': 'New template',
+    'tpl.field.type': 'Template type',
+    'tpl.type.wa_api': 'WhatsApp API',
+    'tpl.type.free': 'Free',
+    'tpl.field.display_name': 'Display name',
+    'tpl.field.body': 'Message body',
+    'tpl.field.footer': 'Footer',
+    'tpl.hint.footer_optional': '(optional, max 60 chars)',
+    'tpl.field.buttons': 'Buttons',
+    'tpl.hint.buttons_optional': '(optional, max 3 — all QUICK_REPLY or up to 2 CTA)',
+    'tpl.add_button': '+ Add button',
+    'tpl.field.tags': 'Tags',
+    'tpl.hint.tags': '(to organize and filter — not sent to Meta)',
+    'tpl.save': 'Save template',
+    'tpl.send.title': 'Send template',
+    'tpl.tags.title': 'Template tags',
+    // Integrations
+    'int.tab.connected': 'My integrations',
+    'int.tab.vote': 'Request integration',
+    'int.vote.suggest': 'Suggest and vote',
+    'int.connect': 'Connect',
+    'int.disconnect': 'Disconnect',
+    'routing.title': 'Where do messages land?',
+    'routing.pipeline': 'Pipeline',
+    'routing.stage': 'Initial stage',
+    'routing.skip': 'Use default',
+    'wh.modal.title': 'Add Webhook',
+    // Bot builder
+    'bot.create': '+ Create bot',
+    'bot.empty.desc': 'No bots yet. Create the first one to automate your conversations.',
+    'bot.tags.title': 'Bot tags',
+    'bot.builder.labels': 'TAGS',
+    'bot.builder.trigger': 'TRIGGER',
+    'bot.builder.active': 'Active',
+    'bot.add_step': 'Add step',
+    'bot.trigger.keyword': 'Keyword in message',
+    'bot.trigger.new_contact': 'New contact created',
+    'bot.trigger.pipeline_stage': 'Lead enters stage',
+    'bot.trigger.always': 'Any incoming message',
+    'bot.trigger.outbound': 'Manual / Outbound (you start)',
+    'bot.step.message': 'Send message',
+    'bot.step.template': 'Send template (WhatsApp API)',
+    'bot.step.timer': 'Timer',
+    'bot.step.condition': 'Condition',
+    'bot.step.stage': 'Change stage',
+    'bot.step.tag': 'Add tag',
+    'bot.step.assign': 'Assign agent',
+    'bot.step.wait_response': 'Wait for lead reply',
+    'bot.step.stop_bot': 'Stop bot',
+    'bot.step.stop_and_start': 'Stop this bot and start another',
+    'bot.step.book_appointment': 'Book appointment',
+    'bot.step.cancel_appointment': 'Cancel appointment',
+    'bot.step.reschedule_appointment': 'Reschedule appointment',
+    // Advisors
+    'advisor.new': '+ New agent',
+    'advisor.modal.new': 'New agent',
+    'advisor.section.access': 'Access credentials',
+    'advisor.section.role': 'Role',
+    'advisor.section.perms': 'Agent permissions',
+    'advisor.delete': 'Delete agent',
+    'advisor.empty': 'No agents yet.',
+    'role.admin': 'Administrator',
+    'role.admin.desc': 'Full system access',
+    'role.advisor': 'Agent',
+    'role.advisor.desc': 'Access per permissions',
+    'perm.write.name': 'Write & edit',
+    'perm.write.desc': 'Send messages, edit leads and contacts',
+    'perm.delete.name': 'Delete records',
+    'perm.delete.desc': 'Delete leads, contacts and conversations',
+    'perm.reports.name': 'View reports',
+    'perm.reports.desc': 'Access the dashboard and activity history',
+    'perm.advisors.name': 'Manage agents',
+    'perm.advisors.desc': 'Create, edit and deactivate other agents',
+    // IA
+    'ia.title': 'Artificial intelligence',
+    'ia.provider': 'Provider',
+    'ia.knowledge': 'Knowledge sources',
+    'ia.add_source': '+ New source',
+    'ia.behavior': 'Behavior',
+    'ia.save': 'Save changes',
+    'ia.test': 'Test connection',
+    // Notifications
+    'notif.log.title': 'Recent log',
+    // Trash
+    'trash.empty_all': 'Empty trash',
+    'trash.filter.all': 'All',
+    'trash.filter.contacts': 'Contacts',
+    'trash.filter.leads': 'Leads',
+    'trash.filter.pipelines': 'Pipelines',
+    'trash.filter.stages': 'Stages',
+    'trash.filter.bots': 'Bots',
+    'trash.empty': 'Trash is empty',
+    // Config: lead value
+    'config.lead_value.section': 'Lead value',
+    'config.lead_value.title': 'Enable lead value',
+    'config.lead_value.desc': 'Adds a monetary value field (MXN) to each lead. Shows the total per stage on the kanban and the cumulative value of the full pipeline.',
+    // Reports
+    'report.new': '+ New report',
+    'report.filter.all': 'All',
+    'report.filter.open': 'Open',
+    'report.filter.in_progress': 'In progress',
+    'report.filter.resolved': 'Resolved',
+    'report.filter.wontfix': "Won't fix",
+    'report.modal.new': 'New report',
+    'report.submit': 'Submit report',
+    // Machine tokens
+    'mt.new': '+ Generate token',
+    'mt.revoke_all': 'Revoke all',
+    'mt.show_revoked': 'Show revoked',
+    'mt.th.prefix': 'Prefix',
+    'mt.th.last_used': 'Last used',
+    'mt.empty': 'No tokens generated.',
+    'mt.token.title': 'Token generated',
+    'mt.new.title': 'New token',
+    'mt.device_name': 'Device name',
+    'mt.generate': 'Generate',
+    'mt.done': 'Done',
+    // Calendar
+    'cal.tab.overdue': 'Overdue',
+    'cal.tab.today': 'Today',
+    'cal.tab.upcoming': 'Upcoming',
+    'cal.tab.completed': 'Completed',
+    'cal.today': 'Today',
+    'cal.foot': 'Click a day to view/add tasks. Click a task to edit it.',
+    // Account
+    'account.personal_info': 'Personal information',
+    'account.save_profile': 'Save changes',
+    'account.change_password': 'Change password',
+    'account.save_password': 'Change password',
+    // Mail
+    'mail.compose': 'Compose',
+    'mail.inbox': 'Inbox',
+    'mail.sent': 'Sent',
+    'mail.all': 'All',
+    'mail.accounts': 'Accounts',
+    'mail.new_message': 'New message',
+    'mail.to': 'To',
+    'mail.subject': 'Subject',
+    'mail.from': 'From',
+    'mail.discard': 'Discard',
+    'mail.select_email': 'Select an email',
+    // Buttons extra
+    'btn.copy': 'Copy',
+    'btn.fields': 'Fields',
+    // Business profile
+    'biz.field.logo': 'Logo',
+
+
+    // Greetings
+    'greeting.morning': 'Good morning',
+    'greeting.afternoon': 'Good afternoon',
+    'greeting.evening': 'Good evening',
+    // Connection status
+    'conn.offline': 'No server connection — retrying…',
+    'conn.degraded': 'Unstable connection — checking…',
+    'conn.recovered': 'Connection restored ✓',
+    // Bot list table
+    'bot.th.steps': 'Steps',
+    // Advisor modal edit
+    'advisor.modal.edit': 'Edit agent',
+    // Contact modal edit
+    'contact.modal.edit': 'Edit contact',
+
     'signup.free.btn': 'Create free account',
+
+    // Bot list — filter empty states
+    'bot.filter.no_match': 'No bots match "{q}".',
+    'bot.filter.no_errors': '🎉 No bot has errors. All good.',
+    'bot.filter.no_warns': '✨ No bot has warnings.',
+    'bot.filter.no_tag': 'No bot has this tag.',
+    // Bot list — row metadata
+    'bot.row.created': 'Created {date}',
+    'bot.row.step': 'step',
+    'bot.row.steps': 'steps',
+    // Bot drag handle
+    'bot.drag.title': 'Drag to reorder',
+    // Bot status toggle
+    'bot.status.paused': 'Bot paused',
+    'bot.status.active': 'Bot active',
+    // Bot name placeholder
+    'bot.name.placeholder': 'Bot name',
+    // Chat — no messages
+    'chat.no_messages': 'No messages yet.',
+    // Integration modal
+    'int.modal.edit': 'Edit {name}',
+    'int.modal.connect': 'Connect {name}',
+    'int.how_to_connect': 'How to connect',
+    // Webhook modal edit title
+    'wh.modal.edit': 'Edit Webhook',
+    // Pipeline modal titles
+    'pl.modal.edit': 'Edit pipeline',
+    'pl.modal.new': 'New pipeline',
+    // Lead modal edit title
+    'exp.modal.edit_title': 'Edit lead',
+    // Placeholders
+    'stage.name.placeholder': 'Stage name',
+    'pl.name.placeholder': 'e.g. Sales',
+    'mail.search.placeholder': 'Search emails...',
   },
 };
 
@@ -356,9 +1124,9 @@ function markConnFailure() {
   if (!connState.isOffline && connState.fails >= CONN_FAIL_THRESHOLD) {
     connState.isOffline = true;
     if (connState.recoveryTimer) { clearTimeout(connState.recoveryTimer); connState.recoveryTimer = null; }
-    setConnBanner("offline", "Sin conexión con el servidor — reintentando…");
+    setConnBanner("offline", t('conn.offline'));
   } else if (!connState.isOffline) {
-    setConnBanner("degraded", "Conexión inestable — verificando…");
+    setConnBanner("degraded", t('conn.degraded'));
   }
 }
 
@@ -367,7 +1135,7 @@ function markConnSuccess() {
   connState.fails = 0;
   connState.isOffline = false;
   if (wasOffline) {
-    setConnBanner("recovered", "Conexión restaurada ✓");
+    setConnBanner("recovered", t('conn.recovered'));
     if (connState.recoveryTimer) clearTimeout(connState.recoveryTimer);
     connState.recoveryTimer = setTimeout(() => setConnBanner(null), CONN_RECOVERY_BANNER_MS);
   } else if (connState.fails === 0) {
@@ -428,6 +1196,11 @@ let CHAT_FILTER_UNREAD = false;
 let CHAT_FILTER_PINNED = false;
 let CHAT_SEARCH = '';
 let _chatPollTimer = null;
+let SPLIT_CONFIG = { enabled: false };
+let SPLIT_ACTIVE_COMPANY = 'a';
+let SPLIT_ACTIVE_MAIL_COMPANY = 'a';
+let CHAT_PIPELINE_FILTER = [];
+let CHAT_SPLIT_ORPHANS   = false;
 
 const PROVIDER_LABEL = { whatsapp: 'WhatsApp Business API', 'whatsapp-lite': 'WhatsApp Lite', messenger: 'Messenger', instagram: 'Instagram', telegram: 'Telegram', tiktok: 'TikTok' };
 
@@ -490,6 +1263,8 @@ async function loadConversations() {
       const params = new URLSearchParams();
       if (window.PERSONAL_SHOW_HIDDEN) params.set('showHidden', '1');
       params.set('limit', '200');
+      if (CHAT_PIPELINE_FILTER && CHAT_PIPELINE_FILTER.length > 0) params.set('pipelineIds', CHAT_PIPELINE_FILTER.join(','));
+      if (CHAT_SPLIT_ORPHANS) params.set('includeOrphans', '1');
       data = await api('GET', `/api/personal-chat/conversations?${params}`);
       // El endpoint personal devuelve campos planos — normalizar a la forma esperada por renderChatList
       data.items = (data.items || []).map(r => ({
@@ -514,21 +1289,242 @@ async function loadConversations() {
       if (CHAT_SEARCH) params.set('q', CHAT_SEARCH);
       if (CHAT_FILTER_PROVIDER) params.set('provider', CHAT_FILTER_PROVIDER);
       if (CHAT_FILTER_UNREAD) params.set('unread', '1');
+      if (CHAT_PIPELINE_FILTER && CHAT_PIPELINE_FILTER.length > 0) params.set('pipelineIds', CHAT_PIPELINE_FILTER.join(','));
+      if (CHAT_SPLIT_ORPHANS) params.set('includeOrphans', '1');
       data = await api('GET', `/api/conversations?${params}`);
     }
-    CONVERSATIONS = data.items || [];
+    const EMAIL_PROVIDERS_SET = new Set(['email', 'gmail', 'outlook', 'icloud_mail', 'yahoo_mail']);
+    CONVERSATIONS = (data.items || []).filter(c => !EMAIL_PROVIDERS_SET.has(c.provider));
     renderChatList();
-    // Actualizar badges de los filtros
+    // Conteos solo de convos de mensajería (sin email)
+    const totalUnread = CONVERSATIONS.filter(c => (c.unreadCount || 0) > 0).length;
     const elAll    = document.getElementById('pillCountAll');
     const elUnread = document.getElementById('pillCountUnread');
-    if (elAll)    elAll.textContent    = data.totalAll    ?? '';
-    if (elUnread) elUnread.textContent = data.totalUnread || '';
-    if (elUnread) elUnread.style.display = data.totalUnread ? '' : 'none';
+    if (elAll)    elAll.textContent    = CONVERSATIONS.length || '';
+    if (elUnread) elUnread.textContent = totalUnread || '';
+    if (elUnread) elUnread.style.display = totalUnread ? '' : 'none';
     // Badge en la nav lateral — suma de las convos cargadas (lo que el usuario realmente ve)
     updateChatsNavBadge(CONVERSATIONS.reduce((s, c) => s + (c.unreadCount || 0), 0));
   } catch (err) {
     console.error('loadConversations', err);
   }
+}
+
+// ─── Chat/Mail Split ───
+
+async function loadSplitConfig() {
+  try {
+    SPLIT_CONFIG = await api('GET', '/api/settings/split');
+  } catch (_) { SPLIT_CONFIG = { enabled: false }; }
+  applySplitUI();
+  applyChatSplitFilter();
+  // Sincroniza el toggle de Configuración con el estado real
+  const toggleEl = document.getElementById('cfgSplitEnabled');
+  const panelEl  = document.getElementById('cfgSplitPanel');
+  if (toggleEl) toggleEl.checked = !!SPLIT_CONFIG.enabled;
+  if (panelEl)  panelEl.style.display = SPLIT_CONFIG.enabled ? '' : 'none';
+}
+
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0,2), 16);
+  const g = parseInt(h.slice(2,4), 16);
+  const b = parseInt(h.slice(4,6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function applySplitUI() {
+  const chatSwitcher = document.getElementById('chatSplitSwitcher');
+  const mailSwitcher = document.getElementById('mailSplitSwitcher');
+  const sidebarEl    = document.querySelector('.rh-sidebar');
+  const mainEl       = document.querySelector('.rh-main');
+
+  if (!SPLIT_CONFIG.enabled) {
+    if (chatSwitcher) chatSwitcher.style.display = 'none';
+    if (mailSwitcher) mailSwitcher.style.display = 'none';
+    if (mainEl)    mainEl.style.background    = '';
+    if (sidebarEl) sidebarEl.style.background = '';
+    CHAT_PIPELINE_FILTER = [];
+    CHAT_SPLIT_ORPHANS   = false;
+    return;
+  }
+  const nameA = SPLIT_CONFIG.nameA || 'Empresa A';
+  const nameB = SPLIT_CONFIG.nameB || 'Empresa B';
+  if (chatSwitcher) {
+    chatSwitcher.style.display = 'flex';
+    const btnA = document.getElementById('splitChatBtnA');
+    const btnB = document.getElementById('splitChatBtnB');
+    if (btnA) btnA.textContent = nameA;
+    if (btnB) btnB.textContent = nameB;
+  }
+  if (mailSwitcher) {
+    mailSwitcher.style.display = 'flex';
+    const btnA = document.getElementById('splitMailBtnA');
+    const btnB = document.getElementById('splitMailBtnB');
+    if (btnA) btnA.textContent = nameA;
+    if (btnB) btnB.textContent = nameB;
+  }
+  const rawColor = SPLIT_ACTIVE_COMPANY === 'a'
+    ? (SPLIT_CONFIG.colorA || '')
+    : (SPLIT_CONFIG.colorB || '');
+  const tintColor = rawColor ? hexToRgba(rawColor, 0.2) : '';
+  if (mainEl)    mainEl.style.background    = tintColor;
+  if (sidebarEl) sidebarEl.style.background = tintColor;
+}
+
+function applyChatSplitFilter() {
+  if (!SPLIT_CONFIG.enabled) {
+    CHAT_PIPELINE_FILTER = [];
+    CHAT_SPLIT_ORPHANS   = false;
+  } else {
+    const ids = SPLIT_ACTIVE_COMPANY === 'a'
+      ? (SPLIT_CONFIG.pipelinesA || [])
+      : (SPLIT_CONFIG.pipelinesB || []);
+    CHAT_PIPELINE_FILTER = ids;
+    CHAT_SPLIT_ORPHANS   = SPLIT_ACTIVE_COMPANY === 'a';
+  }
+  loadConversations();
+}
+
+function _setupSplitListeners() {
+  ['splitChatBtnA', 'splitChatBtnB'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      SPLIT_ACTIVE_COMPANY = btn.dataset.company;
+      document.getElementById('splitChatBtnA')?.classList.toggle('split-btn--active', SPLIT_ACTIVE_COMPANY === 'a');
+      document.getElementById('splitChatBtnB')?.classList.toggle('split-btn--active', SPLIT_ACTIVE_COMPANY === 'b');
+      const rawColor = SPLIT_ACTIVE_COMPANY === 'a'
+        ? (SPLIT_CONFIG.colorA || '')
+        : (SPLIT_CONFIG.colorB || '');
+      const tintColor = rawColor ? hexToRgba(rawColor, 0.2) : '';
+      const mainEl    = document.querySelector('.rh-main');
+      const sidebarEl = document.querySelector('.rh-sidebar');
+      if (mainEl)    mainEl.style.background    = tintColor;
+      if (sidebarEl) sidebarEl.style.background = tintColor;
+      applyChatSplitFilter();
+    });
+  });
+
+  ['splitMailBtnA', 'splitMailBtnB'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      SPLIT_ACTIVE_MAIL_COMPANY = btn.dataset.company;
+      document.getElementById('splitMailBtnA')?.classList.toggle('split-btn--active', SPLIT_ACTIVE_MAIL_COMPANY === 'a');
+      document.getElementById('splitMailBtnB')?.classList.toggle('split-btn--active', SPLIT_ACTIVE_MAIL_COMPANY === 'b');
+      renderMailList();
+    });
+  });
+}
+
+function _populateSplitPanel() {
+  const pipelines = PIPELINES || [];
+  const EMAIL_PROVIDERS = ['email', 'gmail', 'outlook', 'icloud_mail', 'yahoo_mail'];
+  const mailIntegrations = EMAIL_PROVIDERS.flatMap(key => {
+    const prov = (INTEGRATIONS || []).find(p => p.key === key);
+    return (prov?.integrations || []).filter(i => i.status === 'connected').map(i => ({ ...i, _provider: key }));
+  });
+
+  // Solo Company B tiene checklists — A recibe todo lo que no esté en B
+  const savedPlB   = SPLIT_CONFIG.pipelinesB || [];
+  const savedMailB = SPLIT_CONFIG.mailsB     || [];
+
+  const plB = document.getElementById('splitPipelinesB');
+  if (plB) {
+    plB.innerHTML = pipelines.map(p => `
+      <label>
+        <input type="checkbox" data-split-pl-b value="${p.id}" ${savedPlB.includes(p.id) ? 'checked' : ''} />
+        ${escapeHtml(p.name || String(p.id))}
+      </label>`).join('') || '<span style="font-size:12px;color:var(--text-muted)">Sin pipelines</span>';
+  }
+
+  const mailB = document.getElementById('splitMailB');
+  if (mailB) {
+    mailB.innerHTML = mailIntegrations.map(i => `
+      <label>
+        <input type="checkbox" data-split-mail-b value="${i.id}" ${savedMailB.includes(i.id) ? 'checked' : ''} />
+        ${escapeHtml(i.display_name || String(i.id))}
+      </label>`).join('') || '<span style="font-size:12px;color:var(--text-muted)">Sin cuentas de correo conectadas</span>';
+  }
+}
+
+function _setupSplitSettings() {
+  const toggle = document.getElementById('cfgSplitEnabled');
+  const panel  = document.getElementById('cfgSplitPanel');
+  if (!toggle || !panel) return;
+
+  toggle.checked = !!SPLIT_CONFIG.enabled;
+  if (SPLIT_CONFIG.enabled) panel.style.display = '';
+
+  const nameA  = document.getElementById('splitNameA');
+  const nameB  = document.getElementById('splitNameB');
+  const colorA = document.getElementById('splitColorA');
+  const colorB = document.getElementById('splitColorB');
+  if (nameA)  nameA.value  = SPLIT_CONFIG.nameA  || '';
+  if (nameB)  nameB.value  = SPLIT_CONFIG.nameB  || '';
+  if (colorA) colorA.value = SPLIT_CONFIG.colorA || '#e8f4fd';
+  if (colorB) colorB.value = SPLIT_CONFIG.colorB || '#fdf0e8';
+
+  toggle.addEventListener('change', async () => {
+    panel.style.display = toggle.checked ? '' : 'none';
+    if (toggle.checked) {
+      _populateSplitPanel();
+    } else {
+      // Al desactivar, guardar de inmediato (no hay nada que configurar)
+      try {
+        await api('PATCH', '/api/settings/split', { ...SPLIT_CONFIG, enabled: false });
+        await loadSplitConfig();
+        toast('Split desactivado', 'success');
+      } catch (err) {
+        toast('Error al desactivar: ' + err.message, 'error');
+        toggle.checked = true; // revertir si falla
+        panel.style.display = '';
+      }
+    }
+  });
+
+  if (SPLIT_CONFIG.enabled) _populateSplitPanel();
+
+  document.getElementById('cfgSplitSave')?.addEventListener('click', async () => {
+    const pipelinesB = [...document.querySelectorAll('[data-split-pl-b]:checked')].map(el => Number(el.value));
+    const mailsB     = [...document.querySelectorAll('[data-split-mail-b]:checked')].map(el => Number(el.value));
+
+    if (toggle.checked && pipelinesB.length === 0) {
+      toast('Debes asignar al menos un pipeline a Empresa B para activar el split.', 'error');
+      return;
+    }
+
+    // Empresa A recibe todos los pipelines que no estén en B
+    const allPipelineIds = (PIPELINES || []).map(p => p.id);
+    const pipelinesA = allPipelineIds.filter(id => !pipelinesB.includes(id));
+
+    const EMAIL_PROVIDERS = ['email', 'gmail', 'outlook', 'icloud_mail', 'yahoo_mail'];
+    const allMailIds = EMAIL_PROVIDERS.flatMap(key => {
+      const prov = (INTEGRATIONS || []).find(p => p.key === key);
+      return (prov?.integrations || []).filter(i => i.status === 'connected').map(i => i.id);
+    });
+    const mailsA = allMailIds.filter(id => !mailsB.includes(id));
+
+    const payload = {
+      enabled:    toggle.checked,
+      nameA:      nameA?.value.trim() || 'Empresa A',
+      nameB:      nameB?.value.trim() || 'Empresa B',
+      colorA:     colorA?.value || '#e8f4fd',
+      colorB:     colorB?.value || '#fdf0e8',
+      pipelinesA,
+      pipelinesB,
+      mailsA,
+      mailsB,
+    };
+    try {
+      await api('PATCH', '/api/settings/split', payload);
+      await loadSplitConfig();
+      toast('Configuración guardada', 'success');
+    } catch (err) {
+      toast('Error al guardar: ' + err.message, 'error');
+    }
+  });
 }
 
 // Actualiza el círculo rojo en la nav lateral del item "Chats" con el
@@ -690,6 +1686,12 @@ async function openConversation(convoId) {
 
   // Salir del empty state
   document.getElementById('rhConvPanel')?.classList.remove('rh-empty');
+
+  // Si el panel de info está abierto, actualizarlo con el nuevo contacto
+  const infoPanel = document.getElementById('rhChatInfoPanel');
+  if (infoPanel && !infoPanel.hidden) {
+    renderChatInfoPanel();
+  }
 
   // Marcar activa en la lista
   document.querySelectorAll(".rh-chat-item").forEach((x) => {
@@ -947,7 +1949,7 @@ function updateBotToggleUI() {
   if (!btn) return;
   btn.hidden = false;
   btn.classList.toggle('is-paused', _chatBotPaused);
-  btn.querySelector('.rh-bot-toggle-label').textContent = _chatBotPaused ? 'Bot pausado' : 'Bot activo';
+  btn.querySelector('.rh-bot-toggle-label').textContent = _chatBotPaused ? t('bot.status.paused') : t('bot.status.active');
   btn.title = _chatBotPaused ? 'Reanudar bot para este contacto' : 'Parar bot para este contacto';
 }
 
@@ -993,7 +1995,7 @@ function renderMessages() {
   const prevHeight  = root.scrollHeight;
 
   if (!CHAT_MESSAGES.length) {
-    root.innerHTML = '<p class="rh-messages-empty">No hay mensajes todavía.</p>';
+    root.innerHTML = `<p class="rh-messages-empty">${t('chat.no_messages')}</p>`;
     return;
   }
 
@@ -1407,7 +2409,7 @@ function renderTagChips() {
 
 async function openCustomerModal(customer = null) {
   editingCustomerId = customer?.id || null;
-  document.getElementById("customerModalTitle").textContent = customer ? "Editar contacto" : "Nuevo contacto";
+  document.getElementById("customerModalTitle").textContent = customer ? t('contact.modal.edit') : t('contact.modal.new');
   const form = document.getElementById("customerForm");
   form.firstName.value = customer?.firstName || "";
   form.lastName.value = customer?.lastName || "";
@@ -2170,7 +3172,7 @@ function openAdvisorModal(id = null) {
   if (id) {
     const a = _advisors.find(x => x.id === id);
     if (!a) return;
-    title.textContent = 'Editar asesor';
+    title.textContent = t('advisor.modal.edit');
     document.getElementById('advName').value     = a.name     || '';
     document.getElementById('advUsername').value = a.username || '';
     document.getElementById('advEmail').value    = a.email    || '';
@@ -2183,7 +3185,7 @@ function openAdvisorModal(id = null) {
     const me = getAdvisor();
     delBtn.hidden = (me?.id === id); // no puede borrarse a sí mismo
   } else {
-    title.textContent = 'Nuevo asesor';
+    title.textContent = t('advisor.modal.new');
     ['advName','advUsername','advEmail','advPassword'].forEach(id => document.getElementById(id).value = '');
     passLabel.innerHTML = 'Contraseña <span class="int-field-required">*</span>';
     document.querySelector('input[name="advRole"][value="asesor"]').checked = true;
@@ -2429,11 +3431,11 @@ let _dashAdvisorId = '';
 let _dashCompare = false;
 
 const PERIOD_LABELS = {
-  today: 'hoy',
-  yesterday: 'ayer',
-  week: 'los últimos 7 días',
-  month: 'este mes',
-  year: 'este año',
+  get today()     { return t('period.today').toLowerCase(); },
+  get yesterday() { return t('period.yesterday').toLowerCase(); },
+  get week()      { return t('period.week').toLowerCase(); },
+  get month()     { return t('period.month').toLowerCase(); },
+  get year()      { return t('period.year').toLowerCase(); },
 };
 
 async function loadDashboard() {
@@ -2441,7 +3443,7 @@ async function loadDashboard() {
   if (subtitle) {
     const now = new Date();
     const h = now.getHours();
-    const greeting = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+    const greeting = h < 12 ? t('greeting.morning') : h < 19 ? t('greeting.afternoon') : t('greeting.evening');
     const advisor = _profile?.firstName || _profile?.name || _advisor?.name || '';
     subtitle.textContent = `${greeting}${advisor ? ', ' + advisor : ''} · Analíticas de ${PERIOD_LABELS[_dashPeriod] || _dashPeriod}`;
   }
@@ -2757,13 +3759,91 @@ function setupSettingsTabs() {
       if (target === 'reportes') loadReports();
       if (target === 'negocio') loadBusinessHours();
       if (target === 'suscripcion') loadBilling();
+      if (target === 'ia') loadAISettings();
     });
   });
-  document.querySelectorAll(".ai-provider input").forEach((input) => {
-    input.addEventListener("change", () => {
-      document.querySelectorAll(".ai-provider").forEach((el) => el.classList.remove("is-selected"));
-      input.closest(".ai-provider").classList.add("is-selected");
+
+  const AI_DEFAULT_MODELS = { anthropic: 'claude-opus-4-7', openai: 'gpt-4o-mini', google: 'gemini-1.5-flash', ollama: 'gemma2:9b' };
+  const AI_KEY_PLACEHOLDERS = { anthropic: 'sk-ant-...', openai: 'sk-...', google: 'AIza...', ollama: '(sin API key)' };
+
+  function applyAIProviderUI(provider) {
+    document.querySelectorAll('.ai-provider').forEach(el => el.classList.remove('is-selected'));
+    const radio = document.querySelector(`.ai-provider input[value="${provider}"]`);
+    if (radio) { radio.checked = true; radio.closest('.ai-provider').classList.add('is-selected'); }
+    const urlField = document.getElementById('aiBaseUrl');
+    const keyField = document.getElementById('aiApiKey');
+    if (urlField) urlField.disabled = (provider !== 'ollama');
+    if (keyField) keyField.placeholder = AI_KEY_PLACEHOLDERS[provider] || 'API Key';
+    if (provider === 'ollama' && urlField && !urlField.value) urlField.value = 'http://localhost:11434';
+  }
+
+  document.querySelectorAll('.ai-provider input').forEach(input => {
+    input.addEventListener('change', () => {
+      applyAIProviderUI(input.value);
+      const modelEl = document.getElementById('aiModel');
+      if (modelEl && !modelEl.dataset.userEdited) modelEl.value = AI_DEFAULT_MODELS[input.value] || '';
     });
+  });
+  document.getElementById('aiModel')?.addEventListener('input', function() { this.dataset.userEdited = '1'; });
+
+  async function loadAISettings() {
+    try {
+      const s = await api('GET', '/api/settings/ai');
+      applyAIProviderUI(s.provider);
+      const modelEl = document.getElementById('aiModel');
+      if (modelEl) { modelEl.value = s.model || AI_DEFAULT_MODELS[s.provider] || ''; modelEl.dataset.userEdited = ''; }
+      const keyEl = document.getElementById('aiApiKey');
+      if (keyEl) keyEl.placeholder = s.hasApiKey ? '••••••••••••' : (AI_KEY_PLACEHOLDERS[s.provider] || 'API Key');
+      const urlEl = document.getElementById('aiBaseUrl');
+      if (urlEl) urlEl.value = s.baseUrl || '';
+      const modeEl = document.getElementById('aiMode');
+      if (modeEl) modeEl.value = s.mode || 'suggest';
+      const tempEl = document.getElementById('aiTemperature');
+      if (tempEl) tempEl.value = s.temperature ?? 0.7;
+      const tokEl = document.getElementById('aiMaxTokens');
+      if (tokEl) tokEl.value = s.maxTokens ?? 2048;
+    } catch(e) { console.error('loadAISettings', e); }
+  }
+
+  document.getElementById('btnSaveAI')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btnSaveAI');
+    const statusEl = document.getElementById('aiTestStatus');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      const provider = document.querySelector('.ai-provider input:checked')?.value || 'anthropic';
+      const apiKeyVal = document.getElementById('aiApiKey')?.value || '';
+      const body = {
+        provider,
+        model:       document.getElementById('aiModel')?.value || '',
+        baseUrl:     document.getElementById('aiBaseUrl')?.value || '',
+        mode:        document.getElementById('aiMode')?.value || 'suggest',
+        temperature: document.getElementById('aiTemperature')?.value,
+        maxTokens:   document.getElementById('aiMaxTokens')?.value,
+      };
+      if (apiKeyVal && !apiKeyVal.startsWith('•')) body.apiKey = apiKeyVal;
+      await api('PATCH', '/api/settings/ai', body);
+      btn.textContent = 'Guardado ✓';
+      if (statusEl) { statusEl.textContent = ''; }
+      setTimeout(() => { btn.textContent = 'Guardar cambios'; btn.disabled = false; }, 1800);
+    } catch(e) {
+      btn.textContent = 'Guardar cambios'; btn.disabled = false;
+      if (statusEl) { statusEl.style.color = '#ef4444'; statusEl.textContent = 'Error: ' + e.message; }
+    }
+  });
+
+  document.getElementById('btnTestAI')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btnTestAI');
+    const statusEl = document.getElementById('aiTestStatus');
+    btn.disabled = true; btn.textContent = 'Probando…';
+    if (statusEl) { statusEl.textContent = ''; }
+    try {
+      await api('POST', '/api/settings/ai/test', {});
+      if (statusEl) { statusEl.style.color = '#22c55e'; statusEl.textContent = '✓ Conexión exitosa'; }
+    } catch(e) {
+      if (statusEl) { statusEl.style.color = '#ef4444'; statusEl.textContent = '✗ ' + (e.message || 'Error de conexión'); }
+    } finally {
+      btn.textContent = 'Probar conexión'; btn.disabled = false;
+    }
   });
 
   // Switch: mostrar alarmas de leads estancados en pipelines
@@ -2811,6 +3891,8 @@ function setupSettingsTabs() {
       toast(`✓ ${langName}`, 'success');
     });
   }
+
+  _setupSplitSettings();
 }
 
 // ═══════ Integraciones ═══════
@@ -2833,6 +3915,9 @@ const PROVIDER_ICONS = {
   'shopify': `<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M15.337.009s-.137-.009-.273-.009c-.092 0-.23.025-.368.057C14.397.092 13.5.46 13.5.46s-.57-.156-1.24-.156C9.48.304 7.963 2.15 7.41 4.097c-.781.24-1.33.41-1.347.416C5.38 4.826 5.354 4.851 5.34 5.547L4.154 19.4l9.614 1.603L18.846 19.4 17.66 5.547c-.014-.696-.04-.721-.714-.914-.017-.006-.55-.17-1.347-.416C15.044 1.27 15.2.734 15.337.009zM13.774 1.04l-.005.094c-.48.146-.988.3-1.506.46l-.008-.028c.016-.008.033-.017.051-.026.235-.123.484-.247.74-.363.236-.11.49-.155.728-.137zm-1.514 1.378c.048.166.096.333.148.499-.6.183-1.252.382-1.916.585.16-.58.45-1.095.85-1.48.29-.276.616-.476.918-.572zm2.49-.79c-.11.37-.268.8-.49 1.235l-.245.075c-.063-.215-.126-.43-.194-.643.17-.092.345-.176.527-.25.135-.054.268-.1.402-.137v-.28zm-3.786 9.944-.71-.067.06-.56.768.072.02-.2-.768-.072.054-.512.73.07.02-.2-.73-.07.055-.527 1.07.1-.02.2-1.07-.1v.528l1.01.095-.018.2-1.01-.096v.56l.77.072-.062.56-.77-.072v.2l.74.07.062.56-.74-.07.2 1.887-1.255.118-.2-1.887-.73.07-.062-.56.73-.07-.065-.6-.77.073-.062-.56.77-.073v-.528l-1.07.1-.02-.2 1.07-.1.056.527.73-.07.02.2-.73.07v.512l.768-.072.02.2-.768.072.018.2.71.067z"/></svg>`,
 
   'square': `<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M17.5 0h-11A6.5 6.5 0 0 0 0 6.5v11A6.5 6.5 0 0 0 6.5 24h11A6.5 6.5 0 0 0 24 17.5v-11A6.5 6.5 0 0 0 17.5 0zM16 16H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2z"/></svg>`,
+  'gmail': `<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.910 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>`,
+  'outlook': `<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M7.88 12.04q0 .45-.11.87-.1.41-.33.74-.22.33-.58.52-.37.2-.87.2t-.85-.2q-.35-.21-.57-.55-.22-.33-.33-.75-.1-.42-.1-.86t.1-.87q.1-.43.34-.76.22-.34.59-.54.36-.2.87-.2t.86.2q.35.21.57.55.22.34.31.77.1.43.1.88zM24 12v9.38q0 .46-.33.8-.33.32-.8.32H7.13q-.46 0-.8-.33-.32-.33-.32-.8V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h6.5V2.55q0-.44.3-.75.3-.3.75-.3h12.9q.44 0 .75.3.3.3.3.75V10.85l1.24.72q.07.04.11.1.03.06.03.13zm-7.98-4.67-1.75 8.12h1.3l1.02-5.42 1.6 5.42h1.08l1.62-5.42 1 5.42h1.28L23.5 7.33h-1.37l-1.5 5.2-1.5-5.2h-1.11z"/></svg>`,
+  'email': `<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.910 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>`,
 };
 
 let INTEGRATIONS = [];
@@ -2873,6 +3958,8 @@ async function loadOutgoingWebhooks() {
 
 function oauthIcon(providerKey, hasExisting) {
   if (hasExisting) return t('oauth.connect.more');
+  if (providerKey === 'outlook')   return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M7.88 12.04q0 .45-.11.87-.1.41-.33.74-.22.33-.58.52-.37.2-.87.2t-.85-.2q-.35-.21-.57-.55-.22-.33-.33-.75-.1-.42-.1-.86t.1-.87q.1-.43.34-.76.22-.34.59-.54.36-.2.87-.2t.86.2q.35.21.57.55.22.34.31.77.1.43.1.88zM24 12v9.38q0 .46-.33.8-.33.32-.8.32H7.13q-.46 0-.8-.33-.32-.33-.32-.8V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h6.5V2.55q0-.44.3-.75.3-.3.75-.3h12.9q.44 0 .75.3.3.3.3.75V10.85l1.24.72q.07.04.11.1.03.06.03.13zm-7.98-4.67-1.75 8.12h1.3l1.02-5.42 1.6 5.42h1.08l1.62-5.42 1 5.42h1.28L23.5 7.33h-1.37l-1.5 5.2-1.5-5.2h-1.11z"/></svg> Conectar con Outlook`;
+  if (providerKey === 'gmail')     return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.910 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg> Conectar con Gmail`;
   if (providerKey === 'tiktok')    return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.2 8.2 0 0 0 4.78 1.5V6.73a4.85 4.85 0 0 1-1-.04z"/></svg> ${t('oauth.connect.tiktok')}`;
   if (providerKey === 'instagram') return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg> ${t('oauth.connect.instagram')}`;
   return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0C5.373 0 0 4.973 0 11.111c0 3.497 1.745 6.616 4.472 8.652V24l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111C24 4.973 18.627 0 12 0zm1.194 14.963-3.055-3.26-5.963 3.26 6.559-6.963 3.13 3.26 5.957-3.26-6.628 6.963z"/></svg> ${t('oauth.connect.facebook')}`;
@@ -3112,6 +4199,8 @@ async function connectOAuth(providerKey, authType) {
   // El popup es un GET sin headers Auth, por eso el state debe venir pre-creado.
   const provider = authType === 'oauth_tiktok' ? 'tiktok'
                  : authType === 'oauth_threads' ? 'threads'
+                 : authType === 'oauth_google' ? 'gmail'
+                 : authType === 'oauth_microsoft' ? 'outlook'
                  : providerKey;
   let state;
   try {
@@ -3126,6 +4215,10 @@ async function connectOAuth(providerKey, authType) {
     ? `/auth/tiktok/start?state=${state}`
     : authType === 'oauth_threads'
     ? `/auth/threads/start?state=${state}`
+    : authType === 'oauth_google'
+    ? `/auth/google/start?state=${state}`
+    : authType === 'oauth_microsoft'
+    ? `/auth/microsoft/start?state=${state}`
     : `/auth/meta/start?state=${state}`;
 
   const w = 620, h = 700;
@@ -3192,7 +4285,7 @@ function openIntegrationModal(providerKey, instanceId = null) {
   const iconSvg = PROVIDER_ICONS[provider.key];
   if (iconSvg) { modalIcon.innerHTML = iconSvg; } else { modalIcon.textContent = provider.initial || provider.name[0]; }
   modalIcon.style.background = provider.color;
-  document.getElementById("intModalTitle").textContent = instance ? `Editar ${provider.name}` : `Conectar ${provider.name}`;
+  document.getElementById("intModalTitle").textContent = instance ? t('int.modal.edit').replace('{name}', provider.name) : t('int.modal.connect').replace('{name}', provider.name);
   document.getElementById("intModalDesc").textContent = provider.description;
 
   // Setup steps (solo al conectar por primera vez, no al editar)
@@ -3200,7 +4293,7 @@ function openIntegrationModal(providerKey, instanceId = null) {
   const steps = provider.setupSteps || [];
   if (stepsBox) {
     if (!instance && steps.length) {
-      stepsBox.innerHTML = `<p class="int-steps-title">Cómo conectar</p><ol class="int-steps-list">${
+      stepsBox.innerHTML = `<p class="int-steps-title">${t('int.how_to_connect')}</p><ol class="int-steps-list">${
         steps.map(s => `<li>${s}</li>`).join('')
       }</ol>`;
       stepsBox.hidden = false;
@@ -3230,34 +4323,41 @@ function openIntegrationModal(providerKey, instanceId = null) {
     // OAuth sin cuenta conectada: campo vacío, el botón Conectar dispara OAuth
     fields.innerHTML = '';
   } else {
-    fields.innerHTML = (provider.fields || []).map((f) => {
+    const normalFields   = (provider.fields || []).filter(f => !f.advanced);
+    const advancedFields = (provider.fields || []).filter(f =>  f.advanced);
+    const hasAdvanced    = advancedFields.length > 0;
+    // Si ya hay valores guardados en campos avanzados, mostrarlos abiertos
+    const advancedHasValues = advancedFields.some(f => values[f.key]);
+
+    const renderField = (f) => {
       const val = values[f.key] || "";
       const inputType = f.type === "textarea" ? "textarea" : (f.type === "password" ? "password" : "text");
-      const req = f.required ? '<span class="int-field-required">*</span>' : '';
+      const req  = f.required ? '<span class="int-field-required">*</span>' : '';
       const help = f.help ? `<div class="int-field-help">${escapeHtml(f.help)}</div>` : "";
       if (inputType === "textarea") return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><textarea name="${f.key}" rows="3">${escapeHtml(val)}</textarea>${help}</div>`;
       return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><input type="${inputType}" name="${f.key}" value="${escapeHtml(val)}" autocomplete="off" />${help}</div>`;
-    }).join("");
+    };
 
-    // Auto-fill presets para email según dominio
-    if (provider.key === 'email' && !instance) {
-      const presets = provider.presets || {};
+    fields.innerHTML = normalFields.map(renderField).join("") + (hasAdvanced ? `
+      <div class="int-advanced-toggle" id="intAdvancedToggle">
+        <span>⚙ Configuración avanzada</span>
+      </div>
+      <div class="int-advanced-fields" id="intAdvancedFields" style="display:${advancedHasValues ? 'block' : 'none'}">
+        ${advancedFields.map(renderField).join("")}
+      </div>` : '');
+
+    if (hasAdvanced) {
       setTimeout(() => {
-        const emailInput = fields.querySelector('[name="fromEmail"]');
-        const userInput  = fields.querySelector('[name="username"]');
-        if (!emailInput) return;
-        emailInput.addEventListener('blur', () => {
-          const domain = (emailInput.value.split('@')[1] || '').toLowerCase();
-          const p = presets[domain];
-          if (!p) return;
-          const set = (name, val) => { const el = fields.querySelector(`[name="${name}"]`); if (el && !el.value) el.value = val; };
-          set('imapHost', p.imapHost); set('imapPort', p.imapPort);
-          set('smtpHost', p.smtpHost); set('smtpPort', p.smtpPort);
-          if (userInput && !userInput.value) userInput.value = emailInput.value;
-        });
-        emailInput.addEventListener('input', () => {
-          if (userInput && !userInput.value) userInput.value = emailInput.value;
-        });
+        const toggle = document.getElementById('intAdvancedToggle');
+        const panel  = document.getElementById('intAdvancedFields');
+        if (toggle && panel) {
+          toggle.addEventListener('click', () => {
+            const open = panel.style.display !== 'none';
+            panel.style.display = open ? 'none' : 'block';
+            toggle.classList.toggle('int-advanced-open', !open);
+          });
+          if (advancedHasValues) toggle.classList.add('int-advanced-open');
+        }
       }, 0);
     }
   }
@@ -3280,7 +4380,7 @@ function openIntegrationModal(providerKey, instanceId = null) {
   document.getElementById("intDocsLink").href = provider.docsUrl || "#";
   document.getElementById("intDocsLink").hidden = !provider.docsUrl;
   document.getElementById("intDisconnectBtn").hidden = !instance;
-  document.getElementById("intSubmitBtn").textContent = instance ? "Guardar cambios" : "Conectar";
+  document.getElementById("intSubmitBtn").textContent = instance ? t('btn.save') : t('int.connect');
   // OAuth providers con cuenta ya conectada: ocultar botón submit (no hay form que enviar)
   if (isOAuthProvider && instance) document.getElementById("intSubmitBtn").hidden = true;
 
@@ -3529,7 +4629,7 @@ function bindOutgoingWebhookCardListeners(root) {
 function openWebhookModal(whId) {
   WH_EDIT = whId ? OUTGOING_WEBHOOKS.find((w) => w.id === whId) : null;
 
-  document.getElementById("whModalTitle").textContent = WH_EDIT ? "Editar Webhook" : "Agregar Webhook";
+  document.getElementById("whModalTitle").textContent = WH_EDIT ? t('wh.modal.edit') : t('wh.modal.title');
   document.getElementById("whName").value = WH_EDIT?.name || "";
   document.getElementById("whUrl").value = WH_EDIT?.url || "";
   document.getElementById("whSecret").value = "";
@@ -4420,7 +5520,7 @@ function renderExpDetailMessages() {
   if (!visible.length) {
     root.innerHTML = q
       ? `<p class="rh-messages-empty">Sin resultados para "<em>${escapeHtml(q)}</em>".</p>`
-      : '<p class="rh-messages-empty">No hay mensajes todavía.</p>';
+      : `<p class="rh-messages-empty">${t('chat.no_messages')}</p>`;
     return;
   }
 
@@ -4652,7 +5752,7 @@ async function openExpModal(idOrNull = null) {
   }
 
   const exp = EXP_EDIT;
-  document.getElementById('expModalTitle').textContent = exp ? 'Editar lead' : 'Nuevo lead';
+  document.getElementById('expModalTitle').textContent = exp ? t('exp.modal.edit_title') : t('exp.modal.new_title');
   document.getElementById('expName').value = exp?.name || '';
   document.getElementById('expDeleteBtn').hidden = !exp;
   document.getElementById('expModalError').hidden = true;
@@ -5326,19 +6426,19 @@ async function loadBotTags() {
 }
 
 const SB_STEP_LABELS = {
-  message:               'Enviar mensaje',
-  template:              'Enviar plantilla',
-  timer:                 'Temporizador',
-  condition:             'Condición',
-  stage:                 'Cambiar etapa',
-  tag:                   'Agregar etiqueta',
-  assign:                'Asignar responsable',
-  stop_bot:              'Parar bot',
-  stop_and_start:        'Parar este bot e iniciar otro',
-  wait_response:         'Esperar respuesta del lead',
-  book_appointment:      'Agendar Cita',
-  cancel_appointment:    'Cancelar Cita',
-  reschedule_appointment:'Reagendar Cita',
+  get message()               { return t('bot.step.message'); },
+  get template()              { return t('bot.step.template'); },
+  get timer()                 { return t('bot.step.timer'); },
+  get condition()             { return t('bot.step.condition'); },
+  get stage()                 { return t('bot.step.stage'); },
+  get tag()                   { return t('bot.step.tag'); },
+  get assign()                { return t('bot.step.assign'); },
+  get stop_bot()              { return t('bot.step.stop_bot'); },
+  get stop_and_start()        { return t('bot.step.stop_and_start'); },
+  get wait_response()         { return t('bot.step.wait_response'); },
+  get book_appointment()      { return t('bot.step.book_appointment'); },
+  get cancel_appointment()    { return t('bot.step.cancel_appointment'); },
+  get reschedule_appointment(){ return t('bot.step.reschedule_appointment'); },
 };
 
 const SB_BRANCH_LABELS = {
@@ -5348,11 +6448,11 @@ const SB_BRANCH_LABELS = {
   on_delivery_fail: 'No le llegó el mensaje',
 };
 const SB_TRIGGER_LABELS = {
-  keyword:        'Palabra clave',
-  new_contact:    'Nuevo contacto',
-  pipeline_stage: 'Lead entra a etapa',
-  always:         'Cualquier mensaje',
-  outbound:       'Manual / Outbound',
+  get keyword()        { return t('bot.trigger.keyword'); },
+  get new_contact()    { return t('bot.trigger.new_contact'); },
+  get pipeline_stage() { return t('bot.trigger.pipeline_stage'); },
+  get always()         { return t('bot.trigger.always'); },
+  get outbound()       { return t('bot.trigger.outbound'); },
 };
 
 async function loadSalsbots() {
@@ -5519,10 +6619,10 @@ function renderBotList() {
 
   if (!visibleBots.length) {
     let reason;
-    if (q) reason = `No hay bots que coincidan con "${escHtml(q)}".`;
-    else if (_botTagFilter === '__errors__') reason = '🎉 Ningún bot tiene errores. Todo en orden.';
-    else if (_botTagFilter === '__warns__')  reason = '✨ Ningún bot tiene avisos.';
-    else reason = 'Ningún bot tiene esta etiqueta.';
+    if (q) reason = t('bot.filter.no_match').replace('{q}', escHtml(q));
+    else if (_botTagFilter === '__errors__') reason = t('bot.filter.no_errors');
+    else if (_botTagFilter === '__warns__')  reason = t('bot.filter.no_warns');
+    else reason = t('bot.filter.no_tag');
     list.innerHTML = `<div class="bot-list-empty-filter">${reason}</div>`;
     return;
   }
@@ -5534,24 +6634,24 @@ function renderBotList() {
   list.innerHTML = `
     <div class="bot-list-table">
       <div class="bot-list-head">
-        <div>Nombre</div>
-        <div>Disparador</div>
-        <div>Pasos</div>
-        <div>Activo</div>
+        <div>${t('th.name')}</div>
+        <div>${t('bot.builder.trigger')}</div>
+        <div>${t('bot.th.steps')}</div>
+        <div>${t('bot.builder.active')}</div>
         <div></div>
       </div>
       ${visibleBots.map(b => `
         <div class="bot-list-row" data-bot-id="${b.id}" ${_botSort === 'manual' ? 'draggable="true"' : ''}>
           ${_botSort === 'manual' ? `
-            <span class="bot-row-drag-handle" title="Arrastra para reordenar">
+            <span class="bot-row-drag-handle" title="${t('bot.drag.title')}">
               <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.5"/><circle cx="7.5" cy="2.5" r="1.5"/><circle cx="2.5" cy="7" r="1.5"/><circle cx="7.5" cy="7" r="1.5"/><circle cx="2.5" cy="11.5" r="1.5"/><circle cx="7.5" cy="11.5" r="1.5"/></svg>
             </span>` : ''}
           <div class="bot-row-name-wrap">
             <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}${botIssuesBadgeHtml(b)}</div>
-            ${b.created_at ? `<div class="bot-row-date">Creado ${escHtml(formatBotDate(b.created_at))}</div>` : ''}
+            ${b.created_at ? `<div class="bot-row-date">${t('bot.row.created').replace('{date}', escHtml(formatBotDate(b.created_at)))}</div>` : ''}
           </div>
           <div class="bot-row-trigger">${botTriggerHtml(b)}</div>
-          <div class="bot-row-steps">${b.steps.length} paso${b.steps.length !== 1 ? 's' : ''}</div>
+          <div class="bot-row-steps">${b.steps.length} ${t(b.steps.length !== 1 ? 'bot.row.steps' : 'bot.row.step')}</div>
           <div>
             <label class="sb-toggle" onclick="event.stopPropagation()">
               <input type="checkbox" class="sb-enabled-toggle" data-id="${b.id}" ${b.enabled ? 'checked' : ''} />
@@ -5587,8 +6687,8 @@ function openBotBuilder(bot, returnTo = null) {
   // Ajustar texto del botón "←" según el origen
   const backBtn = document.getElementById('botBackBtn');
   if (backBtn) {
-    const labels = { pipelines: 'Pipelines', templates: 'Plantillas', expedientes: 'Leads' };
-    const label = labels[returnTo] || 'Bots';
+    const labels = { pipelines: 'Pipelines', templates: t('nav.plantillas'), expedientes: t('nav.expedientes') };
+    const label = labels[returnTo] || t('nav.bot');
     // Mantener el SVG y solo cambiar el texto
     const svg = backBtn.querySelector('svg');
     backBtn.innerHTML = '';
@@ -8087,7 +9187,7 @@ function _updatePlIconPreview(iconKey, color) {
 
 function openManageModal(pipeline) {
   PL_MANAGE_ID = pipeline ? pipeline.id : null;
-  document.getElementById('plManageTitle').textContent = pipeline ? 'Editar pipeline' : 'Nuevo pipeline';
+  document.getElementById('plManageTitle').textContent = pipeline ? t('pl.modal.edit') : t('pl.modal.new');
   document.getElementById('plManageName').value = pipeline ? pipeline.name : '';
   document.getElementById('plManageColor').value = pipeline ? pipeline.color : '#2563eb';
   // Icono
@@ -9489,8 +10589,7 @@ async function refreshChatPushCta() {
     return;
   }
 
-  // Default: invitar a activar
-  if (btn) btn.textContent = '🔔 Activar notificaciones';
+  // Default: invitar a activar (no sobrescribimos textContent — perdería el SVG; el HTML ya tiene el SVG + span)
   cta.hidden = false;
 }
 
@@ -11183,6 +12282,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAdvisors();
   setupMachineTokens();
   setupNotifications();
+  _setupSplitListeners();
   registerServiceWorker();
   const _savedView   = localStorage.getItem('lastView') || 'chats';
   const _savedExpId  = localStorage.getItem('lastExpDetailId');
@@ -11209,6 +12309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadAdvisors(),
     loadTemplates(),
     loadMinAdvisors(),
+    loadSplitConfig(),
   ]);
   startChatPolling();
   startVersionCheck();
@@ -14488,21 +15589,28 @@ let MAIL_CONVOS = [];
 let MAIL_SELECTED_ID = null;
 let MAIL_EMAIL_INTEGRATIONS = [];
 let MAIL_SEARCH = '';
+let MAIL_ACCOUNT_FILTER = null; // null = todas las cuentas
 
 function updateMailNavVisibility() {
-  const hasEmail = (INTEGRATIONS || []).some(p => p.key === 'email' && (p.integrations || []).some(i => i.status === 'connected'));
+  const EMAIL_PROVIDERS = ['email', 'gmail', 'outlook', 'icloud_mail', 'yahoo_mail'];
+  MAIL_EMAIL_INTEGRATIONS = EMAIL_PROVIDERS.flatMap(key => {
+    const prov = (INTEGRATIONS || []).find(p => p.key === key);
+    return (prov?.integrations || []).filter(i => i.status === 'connected').map(i => ({ ...i, _provider: key }));
+  });
+  const hasEmail = MAIL_EMAIL_INTEGRATIONS.length > 0;
   const nav = document.getElementById('navMail');
   if (nav) nav.hidden = !hasEmail;
-  MAIL_EMAIL_INTEGRATIONS = hasEmail
-    ? (INTEGRATIONS.find(p => p.key === 'email')?.integrations || []).filter(i => i.status === 'connected')
-    : [];
 }
 
 async function loadMailView() {
   updateMailNavVisibility();
   if (!MAIL_EMAIL_INTEGRATIONS.length) return;
   try {
-    const data = await api('GET', '/api/conversations?provider=email&pageSize=100');
+    const EMAIL_PROVIDERS = ['email', 'gmail', 'outlook', 'icloud_mail', 'yahoo_mail'];
+    const results = await Promise.all(
+      EMAIL_PROVIDERS.map(p => api('GET', `/api/conversations?provider=${p}&pageSize=100`).catch(() => ({ items: [] })))
+    );
+    const data = { items: results.flatMap(r => r.items || []) };
     MAIL_CONVOS = data.items || [];
     renderMailList();
     renderMailAccounts();
@@ -14512,15 +15620,25 @@ async function loadMailView() {
 }
 
 function updateMailUnreadBadge() {
-  const badge = document.getElementById('mailInboxBadge');
-  if (!badge) return;
   const unread = MAIL_CONVOS.filter(c => c.unread_count > 0).length;
-  badge.textContent = unread || '';
-  badge.hidden = !unread;
+  const badge = document.getElementById('mailInboxBadge');
+  if (badge) { badge.textContent = unread || ''; badge.hidden = !unread; }
+  const navBadge = document.getElementById('navMailBadge');
+  if (navBadge) { navBadge.textContent = unread || ''; navBadge.hidden = !unread; }
 }
 
 function mailFilteredConvos() {
   let convos = MAIL_CONVOS;
+  if (SPLIT_CONFIG.enabled) {
+    const mailIds = SPLIT_ACTIVE_MAIL_COMPANY === 'a'
+      ? (SPLIT_CONFIG.mailsA || [])
+      : (SPLIT_CONFIG.mailsB || []);
+    // Si la empresa no tiene cuentas asignadas, devuelve 0 correos (no falla al filtro vacío)
+    convos = convos.filter(c => mailIds.includes(c.integrationId));
+  }
+  if (MAIL_ACCOUNT_FILTER !== null) {
+    convos = convos.filter(c => c.integrationId === MAIL_ACCOUNT_FILTER);
+  }
   if (MAIL_FOLDER === 'sent') {
     convos = convos.filter(c => c.last_message_direction === 'outgoing');
   }
@@ -14673,12 +15791,32 @@ async function openMailConvo(convoId) {
 function renderMailAccounts() {
   const el = document.getElementById('mailAccountsList');
   if (!el) return;
-  el.innerHTML = MAIL_EMAIL_INTEGRATIONS.map(i =>
-    `<div class="mail-account-item">
-      <div class="mail-account-dot" style="background:#6366f1"></div>
-      <span>${escapeHtml(i.displayName || i.credentials?.fromEmail || 'Email')}</span>
-    </div>`
-  ).join('');
+  const providerColor = { gmail: '#EA4335', outlook: '#0078D4', email: '#6366f1' };
+  const allActive = MAIL_ACCOUNT_FILTER === null;
+  const items = [
+    `<div class="mail-account-item${allActive ? ' mail-account-item--active' : ''}" data-account="all" style="cursor:pointer">
+      <div class="mail-account-dot" style="background:#64748b"></div>
+      <span>Todas las cuentas</span>
+    </div>`,
+    ...MAIL_EMAIL_INTEGRATIONS.map(i => {
+      const color = providerColor[i._provider] || '#6366f1';
+      const isActive = MAIL_ACCOUNT_FILTER === i.id;
+      const label = i.displayName || 'Email';
+      return `<div class="mail-account-item${isActive ? ' mail-account-item--active' : ''}" data-account="${i.id}" style="cursor:pointer">
+        <div class="mail-account-dot" style="background:${color}"></div>
+        <span>${escapeHtml(label)}</span>
+      </div>`;
+    }),
+  ];
+  el.innerHTML = items.join('');
+  el.querySelectorAll('.mail-account-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const val = item.dataset.account;
+      MAIL_ACCOUNT_FILTER = val === 'all' ? null : Number(val);
+      renderMailAccounts();
+      renderMailList();
+    });
+  });
 }
 
 function renderMailComposePicker() {

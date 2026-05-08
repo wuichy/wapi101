@@ -101,7 +101,8 @@ async function connect(db, tenantId, providerKey, incomingCreds) {
 
   const externalId = testResult.externalId || incomingCreds.phoneNumberId || incomingCreds.pageId || incomingCreds.igUserId || incomingCreds.openId || null;
   const displayName = testResult.displayName || provider.meta.name;
-  const encrypted = encryptJson(incomingCreds);
+  const credsToSave = provider.normalizeCredentials ? provider.normalizeCredentials(incomingCreds, testResult) : incomingCreds;
+  const encrypted = encryptJson(credsToSave);
 
   // La unicidad por (provider, external_id) sigue siendo global por ahora.
   // En la práctica un mismo phone_number_id no puede estar en 2 tenants

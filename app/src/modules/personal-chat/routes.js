@@ -15,6 +15,29 @@ module.exports = function personalChatRoutes(db) {
     const showHidden = req.query.showHidden === '1';
     const limit = Math.min(Number(req.query.limit) || 100, 500);
 
+    // Chat/Mail split: filtro por pipelines (vía expedientes del contacto)
+    const pipelineIds = req.query.pipelineIds
+      ? req.query.pipelineIds.split(',').map(Number).filter(n => n > 0)
+      : null;
+    const includeOrphans = req.query.includeOrphans === '1';
+
+    // Excluir email providers (van al tab Mail) y armar filtro opcional de pipelines
+    const baseExclude = "c.provider NOT IN ('email','gmail','outlook','icloud_mail','yahoo_mail')";
+    let pipelineFilter = '';
+    const extraParams = [];
+    if (pipelineIds && pipelineIds.length > 0) {
+      const placeholders = pipelineIds.map(() => '?').join(',');
+      if (includeOrphans) {
+        pipelineFilter = ` AND (
+          EXISTS (SELECT 1 FROM expedients e WHERE e.contact_id = c.contact_id AND e.tenant_id = c.tenant_id AND e.pipeline_id IN (${placeholders}))
+          OR NOT EXISTS (SELECT 1 FROM expedients e2 WHERE e2.contact_id = c.contact_id AND e2.tenant_id = c.tenant_id)
+        )`;
+      } else {
+        pipelineFilter = ` AND EXISTS (SELECT 1 FROM expedients e WHERE e.contact_id = c.contact_id AND e.tenant_id = c.tenant_id AND e.pipeline_id IN (${placeholders}))`;
+      }
+      extraParams.push(...pipelineIds);
+    }
+
     let sql;
     if (showHidden) {
       sql = `
@@ -26,7 +49,9 @@ module.exports = function personalChatRoutes(db) {
           JOIN personal_conversation_state pcs
             ON pcs.conversation_id = c.id AND pcs.advisor_id = ?
          WHERE c.tenant_id = ?
+           AND ${baseExclude}
            AND c.last_message_at <= pcs.hidden_at
+           ${pipelineFilter}
          ORDER BY c.last_message_at DESC
          LIMIT ?
       `;
@@ -39,13 +64,15 @@ module.exports = function personalChatRoutes(db) {
           LEFT JOIN personal_conversation_state pcs
             ON pcs.conversation_id = c.id AND pcs.advisor_id = ?
          WHERE c.tenant_id = ?
+           AND ${baseExclude}
            AND (pcs.hidden_at IS NULL OR c.last_message_at > pcs.hidden_at)
+           ${pipelineFilter}
          ORDER BY c.last_message_at DESC
          LIMIT ?
       `;
     }
 
-    const rows = db.prepare(sql).all(advisorId, req.tenantId, limit);
+    const rows = db.prepare(sql).all(advisorId, req.tenantId, ...extraParams, limit);
     res.json({ items: rows });
   });
 

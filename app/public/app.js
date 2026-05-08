@@ -6712,7 +6712,16 @@ const BOT_STEP_REGISTRY = {
     group: 'Lead',
     label:   { es: 'Asignar responsable', en: 'Assign advisor' },
     icon:    '<circle cx="10" cy="7" r="3.5"/><path d="M3 17a7 7 0 0114 0"/>',
-    summary: (step) => (step.config?.assignee || 'Sin asignar'),
+    summary: (step) => {
+      const v = String(step.config?.assignee || '').trim();
+      if (!v) return 'Sin asignar';
+      // Si es numérico, resolver al nombre del asesor del cache
+      if (/^\d+$/.test(v) && typeof _advisors !== 'undefined' && _advisors) {
+        const adv = _advisors.find(a => Number(a.id) === Number(v));
+        return adv?.name ? `→ ${adv.name}` : `→ Asesor #${v}`;
+      }
+      return `→ ${v}`;
+    },
   },
   // ─── Citas (gated por feature 'appointments') ───
   book_appointment: {
@@ -7678,10 +7687,26 @@ function buildStepBody(step) {
         </div>
         <input type="hidden" data-field="tag" data-sid="${sid}" value="${escHtml(c.tag || '')}" />`;
     }
-    case 'assign':
+    case 'assign': {
+      const list = (typeof _advisors !== 'undefined' && _advisors) ? _advisors : [];
+      // Retrocompat: bots viejos guardaban el nombre del asesor como string.
+      // Si el valor actual no es numérico, intentamos pre-seleccionar por nombre.
+      const cur = String(c.assignee || '').trim();
+      let preSelected = '';
+      if (cur && /^\d+$/.test(cur)) preSelected = cur;
+      else if (cur) {
+        const match = list.find(a => (a.name || '').toLowerCase() === cur.toLowerCase());
+        if (match) preSelected = String(match.id);
+      }
+      const opts = list.map(a => `<option value="${a.id}" ${preSelected === String(a.id) ? 'selected' : ''}>${escHtml(a.name || `Asesor #${a.id}`)}</option>`).join('');
       return `
         <label>Responsable</label>
-        <input type="text" data-field="assignee" data-sid="${sid}" value="${escHtml(c.assignee||'')}" placeholder="Nombre del agente" />`;
+        <select data-field="assignee" data-sid="${sid}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+          <option value="">— Selecciona asesor —</option>
+          ${opts}
+        </select>
+        ${cur && !preSelected ? `<p style="font-size:11px;color:var(--warning,#f59e0b);margin:6px 0 0">⚠ El asesor "${escHtml(cur)}" guardado anteriormente no se encontró. Selecciona uno nuevo.</p>` : ''}`;
+    }
     case 'ai_reply':
       return `
         <p style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;line-height:1.5">

@@ -637,6 +637,45 @@ async function executeStep(db, step, ctx) {
       return false;
     }
 
+    case 'assign': {
+      // c.assignee: nombre o ID del asesor a asignar al expediente.
+      // Acepta ambos formatos por retrocompat (UI solo guardaba nombre).
+      if (!ctx.expedientId) {
+        _log('warn', 'assign: sin expedientId, saltando');
+        return false;
+      }
+      const raw = String(c.assignee || '').trim();
+      if (!raw) {
+        _log('warn', 'assign: sin asesor configurado, saltando');
+        return false;
+      }
+      let advisor = null;
+      // Intentar como ID numérico primero
+      if (/^\d+$/.test(raw)) {
+        advisor = db.prepare('SELECT id, name FROM advisors WHERE id = ? AND tenant_id = ?').get(Number(raw), ctx.tenantId);
+      }
+      // Si no, buscar por nombre (case-insensitive, exact match)
+      if (!advisor) {
+        advisor = db.prepare('SELECT id, name FROM advisors WHERE LOWER(name) = LOWER(?) AND tenant_id = ?').get(raw, ctx.tenantId);
+      }
+      // Si no, buscar por nombre LIKE (primer match)
+      if (!advisor) {
+        advisor = db.prepare('SELECT id, name FROM advisors WHERE LOWER(name) LIKE LOWER(?) AND tenant_id = ? LIMIT 1').get(`%${raw}%`, ctx.tenantId);
+      }
+      if (!advisor) {
+        _log('warn', `assign: no se encontró asesor "${raw}" en tenant ${ctx.tenantId}`);
+        return false;
+      }
+      try {
+        db.prepare('UPDATE expedients SET assigned_advisor_id = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+          .run(advisor.id, ctx.expedientId, ctx.tenantId);
+        _log('info', `assign: expediente ${ctx.expedientId} asignado a ${advisor.name} (id=${advisor.id})`);
+      } catch (e) {
+        _log('error', `assign error: ${e.message}`);
+      }
+      return false;
+    }
+
     case 'tag': {
       // c.tag puede ser:
       //   - string simple ("interesado") — legacy

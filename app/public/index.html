@@ -1843,6 +1843,24 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 </aside>
                 <div class="bb-visual-stage" id="bbVisualStage"></div>
 
+                <!-- Panel lateral para editar trigger (Phase D refinements) -->
+                <aside class="bb-visual-editor bb-visual-trigger-editor" id="bbVisualTriggerEditor" hidden>
+                  <header class="bb-visual-editor-head">
+                    <div class="bb-visual-editor-title">
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="3 3 17 10 3 17 3 3"/></svg>
+                      <span>Editar disparador</span>
+                    </div>
+                    <button type="button" class="modal-close" id="bbVisualTriggerEditorClose" title="Cerrar">×</button>
+                  </header>
+                  <div class="bb-visual-editor-body" id="bbVisualTriggerEditorSlot">
+                    <!-- El trigger card de la vista Lista se mueve aquí al abrir y vuelve a su sitio al cerrar -->
+                  </div>
+                  <footer class="bb-visual-editor-foot">
+                    <p style="margin:0;font-size:11px;color:var(--text-muted);flex:1">Los cambios se aplican al cerrar.</p>
+                    <button type="button" class="btn btn--primary" id="bbVisualTriggerEditorDone">Listo</button>
+                  </footer>
+                </aside>
+
                 <!-- Panel lateral para editar step (Phase B) -->
                 <aside class="bb-visual-editor" id="bbVisualEditor" hidden>
                   <header class="bb-visual-editor-head">

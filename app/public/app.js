@@ -9072,6 +9072,13 @@ function setupBot() {
   }
 
   function bbSwitchView(view) {
+    // Si estamos saliendo de Visual y el editor del trigger está abierto,
+    // cerrarlo para devolver la trigger card a la Lista (sino se queda en
+    // el modal y la Lista aparece sin trigger card).
+    const trigEditor = document.getElementById('bbVisualTriggerEditor');
+    if (trigEditor && !trigEditor.hidden && view !== 'visual') {
+      bbCloseTriggerEditorInline();
+    }
     document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(t => {
       t.classList.toggle('is-active', t.dataset.view === view);
     });
@@ -9369,6 +9376,11 @@ function setupBot() {
     stage.style.width  = totalWidth + 'px';
     stage.style.height = totalHeight + 'px';
     _bbVisualApplyZoom();
+
+    // Tras el render, los nodos ya tienen dimensiones reales en el DOM (puede
+    // que la altura calculada con _VS_NODE_H sea distinta). Recomputamos edges
+    // midiendo offsetHeight/offsetWidth para que las líneas conecten exactos.
+    requestAnimationFrame(() => _bbRecomputeAllEdges());
   }
 
   function _bbVisualApplyZoom() {
@@ -9444,43 +9456,45 @@ function setupBot() {
     }
   }
 
-  // Helper: recalcula los edges donde el nodo dado es from o to.
-  function _bbUpdateEdgesForNode(nodeId, newX, newY) {
+  // Helper: dado un id de nodo, devuelve sus dimensiones reales del DOM.
+  // Si no encuentra el elemento, fallback a _VS_NODE_W/H del layout.
+  function _bbActualRect(nodeId) {
+    const stage = document.getElementById('bbVisualStage');
+    if (!stage) return { x: 0, y: 0, w: _VS_NODE_W, h: _VS_NODE_H };
+    let el = null;
+    if (nodeId === '__trigger') {
+      el = stage.querySelector('.bb-visual-trigger');
+    } else {
+      el = stage.querySelector(`[data-step-id="${nodeId}"], [data-node-id="${nodeId}"]`);
+    }
+    if (!el) return { x: 0, y: 0, w: _VS_NODE_W, h: _VS_NODE_H };
+    return {
+      x: parseFloat(el.style.left) || 0,
+      y: parseFloat(el.style.top)  || 0,
+      w: el.offsetWidth  || _VS_NODE_W,
+      h: el.offsetHeight || _VS_NODE_H,
+    };
+  }
+
+  // Recalcula todas las edges del SVG midiendo del DOM. Si dragId está dado,
+  // ese nodo usa newX/newY (durante drag) en lugar del style.left/top actual.
+  function _bbRecomputeAllEdges(dragId, newX, newY) {
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return;
-    const w = _VS_NODE_W;
-    const h = _VS_NODE_H;
-    // Edges donde este nodo es source (sale de su lado inferior)
-    stage.querySelectorAll(`svg.bb-visual-edges path[data-from="${nodeId}"]`).forEach(p => {
-      const toId = p.getAttribute('data-to');
-      const toNode = _bbVisualNodeMap[toId];
-      if (!toNode) return;
-      // Posición visual actual del nodo destino (puede estar también arrastrado)
-      const toEl = stage.querySelector(`[data-step-id="${toId}"], [data-node-id="${toId}"]`);
-      const toX = toEl ? parseFloat(toEl.style.left) || toNode.x : toNode.x;
-      const toY = toEl ? parseFloat(toEl.style.top)  || toNode.y : toNode.y;
-      p.setAttribute('d', _bbVisualEdgePath(newX + w/2, newY + h, toX + toNode.w/2, toY));
-    });
-    // Edges donde este nodo es target (entra por su lado superior)
-    stage.querySelectorAll(`svg.bb-visual-edges path[data-to="${nodeId}"]`).forEach(p => {
+    stage.querySelectorAll('svg.bb-visual-edges path').forEach(p => {
       const fromId = p.getAttribute('data-from');
-      // El trigger es virtual (id="__trigger") — usar posición del trigger node
-      let fromX, fromY;
-      if (fromId === '__trigger') {
-        const trigEl = stage.querySelector('.bb-visual-trigger');
-        fromX = (parseFloat(trigEl?.style.left) || 0) + w / 2;
-        fromY = (parseFloat(trigEl?.style.top)  || 0) + h;
-      } else {
-        const fromNode = _bbVisualNodeMap[fromId];
-        if (!fromNode) return;
-        const fromEl = stage.querySelector(`[data-step-id="${fromId}"], [data-node-id="${fromId}"]`);
-        const fx = fromEl ? parseFloat(fromEl.style.left) || fromNode.x : fromNode.x;
-        const fy = fromEl ? parseFloat(fromEl.style.top)  || fromNode.y : fromNode.y;
-        fromX = fx + fromNode.w / 2;
-        fromY = fy + fromNode.h;
-      }
-      p.setAttribute('d', _bbVisualEdgePath(fromX, fromY, newX + w/2, newY));
+      const toId   = p.getAttribute('data-to');
+      const f = _bbActualRect(fromId);
+      const t = _bbActualRect(toId);
+      if (dragId === fromId) { f.x = newX; f.y = newY; }
+      if (dragId === toId)   { t.x = newX; t.y = newY; }
+      p.setAttribute('d', _bbVisualEdgePath(f.x + f.w/2, f.y + f.h, t.x + t.w/2, t.y));
     });
+  }
+
+  // Wrapper para drag — actualiza edges relativas al nodo arrastrado
+  function _bbUpdateEdgesForNode(nodeId, newX, newY) {
+    _bbRecomputeAllEdges(nodeId, newX, newY);
   }
 
   function _bbVisualMouseUp(e) {
@@ -9559,25 +9573,55 @@ function setupBot() {
 
   document.getElementById('bbVisualStage')?.addEventListener('mousedown', _bbVisualMouseDown);
 
-  // Click en el trigger node → switch a Lista y scroll al trigger card
+  // ─── Editor inline del trigger en el Visual (reparenting de la trigger card) ───
+  // En lugar de duplicar el form (que tiene IDs únicos como sbTriggerType,
+  // sbTriggerNoRespAmount, etc.), MUEVE la trigger card original al modal
+  // del visual y la regresa a su lugar al cerrar. Single source of truth, no
+  // ID conflicts, todos los widgets custom (no_response, scheduled_field, etc.)
+  // funcionan idéntico.
+  let _bbTriggerCardOrigParent = null;
+  let _bbTriggerCardPlaceholder = null;
+
+  function bbOpenTriggerEditorInline() {
+    const card = document.getElementById('sbTriggerType')?.closest('.sb-trigger-card');
+    if (!card) return;
+    const slot = document.getElementById('bbVisualTriggerEditorSlot');
+    if (!slot) return;
+    // Recordar dónde estaba para devolverla
+    _bbTriggerCardOrigParent = card.parentNode;
+    _bbTriggerCardPlaceholder = document.createElement('div');
+    _bbTriggerCardPlaceholder.style.display = 'none';
+    _bbTriggerCardOrigParent.insertBefore(_bbTriggerCardPlaceholder, card);
+    // Mover al modal del visual
+    slot.appendChild(card);
+    document.getElementById('bbVisualTriggerEditor').hidden = false;
+  }
+
+  function bbCloseTriggerEditorInline() {
+    const slot = document.getElementById('bbVisualTriggerEditorSlot');
+    const card = slot?.querySelector('.sb-trigger-card');
+    if (card && _bbTriggerCardOrigParent && _bbTriggerCardPlaceholder) {
+      // Devolver a su lugar original
+      _bbTriggerCardOrigParent.insertBefore(card, _bbTriggerCardPlaceholder);
+      _bbTriggerCardPlaceholder.remove();
+      _bbTriggerCardPlaceholder = null;
+      _bbTriggerCardOrigParent = null;
+    }
+    document.getElementById('bbVisualTriggerEditor').hidden = true;
+    // Re-render el visual para reflejar el cambio del trigger
+    bbRenderVisualView();
+  }
+
+  // Click en el trigger node → abre editor inline
   document.getElementById('bbVisualStage')?.addEventListener('click', (e) => {
     const trigEl = e.target.closest('[data-trigger-edit]');
     if (!trigEl) return;
     e.preventDefault();
-    bbSwitchView('list');
-    setTimeout(() => {
-      const triggerCard = document.querySelector('.sb-trigger-card:has(#sbTriggerType)') || document.getElementById('sbTriggerType')?.closest('.sb-trigger-card');
-      if (triggerCard) {
-        triggerCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const orig = triggerCard.style.boxShadow;
-        triggerCard.style.transition = 'box-shadow .3s';
-        triggerCard.style.boxShadow = '0 0 0 3px rgba(37,99,235,.4)';
-        setTimeout(() => { triggerCard.style.boxShadow = orig; }, 1200);
-      }
-      // Auto-focus el primer input visible del trigger
-      document.getElementById('sbTriggerType')?.focus();
-    }, 80);
+    bbOpenTriggerEditorInline();
   });
+
+  document.getElementById('bbVisualTriggerEditorClose')?.addEventListener('click', bbCloseTriggerEditorInline);
+  document.getElementById('bbVisualTriggerEditorDone')?.addEventListener('click', bbCloseTriggerEditorInline);
   document.addEventListener('mousemove', _bbVisualMouseMove);
   document.addEventListener('mouseup', _bbVisualMouseUp);
 

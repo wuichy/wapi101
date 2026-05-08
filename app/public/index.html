@@ -1636,10 +1636,21 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <div class="sb-card-label" data-i18n="bot.builder.trigger">DISPARADOR</div>
               <div class="sb-trigger-row">
                 <select id="sbTriggerType">
-                  <option value="keyword" data-i18n="bot.trigger.keyword">Palabra clave en mensaje</option>
-                  <option value="new_contact" data-i18n="bot.trigger.new_contact">Nuevo contacto creado</option>
-                  <option value="pipeline_stage" data-i18n="bot.trigger.pipeline_stage">Lead entra a etapa</option>
-                  <option value="always" data-i18n="bot.trigger.always">Cualquier mensaje entrante</option>
+                  <optgroup label="Mensajes">
+                    <option value="keyword" data-i18n="bot.trigger.keyword">Palabra clave en mensaje</option>
+                    <option value="always" data-i18n="bot.trigger.always">Cualquier mensaje entrante</option>
+                  </optgroup>
+                  <optgroup label="Contactos">
+                    <option value="new_contact" data-i18n="bot.trigger.new_contact">Nuevo contacto creado</option>
+                  </optgroup>
+                  <optgroup label="Pipeline">
+                    <option value="pipeline_stage" data-i18n="bot.trigger.pipeline_stage">Lead entra a etapa</option>
+                    <option value="pipeline_stage_leave" data-i18n="bot.trigger.pipeline_stage_leave">Lead sale de etapa</option>
+                  </optgroup>
+                  <optgroup label="Lead">
+                    <option value="tag_added" data-i18n="bot.trigger.tag_added">Etiqueta agregada al lead</option>
+                    <option value="assignee_changed" data-i18n="bot.trigger.assignee_changed">Cambio de asesor responsable</option>
+                  </optgroup>
                 </select>
                 <input type="text" id="sbTriggerValue" placeholder='p.ej. "precio", "hola", "info"' />
                 <div id="sbTriggerStageWrap" hidden style="display:flex;flex-direction:column;gap:6px;margin-top:6px">

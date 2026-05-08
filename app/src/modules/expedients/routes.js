@@ -184,10 +184,20 @@ module.exports = function createExpedientsRouter(db) {
       console.error('[expedients] error registrando actividad:', e.message);
     }
 
-    // Trigger bots si cambia la etapa
+    // Trigger bots si cambia la etapa (entrada Y salida)
     try {
       const newStageId = item.stageId;
       if (newStageId && prev && newStageId !== prev.stageId) {
+        // 1) Bot por SALIR de la etapa anterior
+        if (prev.stageId) {
+          botEngine.triggerPipelineStageLeave(db, {
+            expedientId: item.id,
+            contactId:   item.contactId,
+            pipelineId:  prev.pipelineId,
+            stageId:     prev.stageId,
+          });
+        }
+        // 2) Bot por ENTRAR a la nueva etapa (comportamiento existente)
         botEngine.triggerPipelineStage(db, {
           expedientId: item.id,
           contactId:   item.contactId,
@@ -196,7 +206,39 @@ module.exports = function createExpedientsRouter(db) {
         });
       }
     } catch (e) {
-      console.error('[expedients] error disparando bot:', e.message);
+      console.error('[expedients] error disparando bot stage:', e.message);
+    }
+
+    // Trigger bot por cambio de asesor responsable
+    try {
+      if (prev && prev.assignedAdvisorId !== item.assignedAdvisorId) {
+        botEngine.triggerAssigneeChanged(db, {
+          expedientId:   item.id,
+          contactId:     item.contactId,
+          oldAdvisorId:  prev.assignedAdvisorId || null,
+          newAdvisorId:  item.assignedAdvisorId || null,
+        });
+      }
+    } catch (e) {
+      console.error('[expedients] error disparando bot assignee:', e.message);
+    }
+
+    // Trigger bot por etiqueta agregada (una vez por cada tag nueva)
+    try {
+      if (prev) {
+        const prevTagsSet = new Set(prev.tags || []);
+        for (const tag of (item.tags || [])) {
+          if (!prevTagsSet.has(tag)) {
+            botEngine.triggerTagAdded(db, {
+              expedientId: item.id,
+              contactId:   item.contactId,
+              tag,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[expedients] error disparando bot tag_added:', e.message);
     }
   });
 

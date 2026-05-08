@@ -359,6 +359,9 @@ const I18N_TRANSLATIONS = {
     'bot.trigger.keyword': 'Palabra clave en mensaje',
     'bot.trigger.new_contact': 'Nuevo contacto creado',
     'bot.trigger.pipeline_stage': 'Lead entra a etapa',
+    'bot.trigger.pipeline_stage_leave': 'Lead sale de etapa',
+    'bot.trigger.tag_added': 'Etiqueta agregada al lead',
+    'bot.trigger.assignee_changed': 'Cambio de asesor responsable',
     'bot.trigger.always': 'Cualquier mensaje entrante',
     'bot.step.message': 'Enviar mensaje',
     'bot.step.template': 'Enviar plantilla (WhatsApp API)',
@@ -871,6 +874,9 @@ const I18N_TRANSLATIONS = {
     'bot.trigger.keyword': 'Keyword in message',
     'bot.trigger.new_contact': 'New contact created',
     'bot.trigger.pipeline_stage': 'Lead enters stage',
+    'bot.trigger.pipeline_stage_leave': 'Lead leaves stage',
+    'bot.trigger.tag_added': 'Tag added to lead',
+    'bot.trigger.assignee_changed': 'Lead assignee changed',
     'bot.trigger.always': 'Any incoming message',
     'bot.step.message': 'Send message',
     'bot.step.template': 'Send template (WhatsApp API)',
@@ -5137,10 +5143,13 @@ async function renderExpDetailBots() {
   if (!root || !EXP_DETAIL) return;
 
   const TRIGGER_LABEL = {
-    keyword:        'Palabra clave',
-    new_contact:    'Nuevo contacto',
-    pipeline_stage: 'Entra a etapa',
-    always:         'Cualquier mensaje',
+    keyword:              'Palabra clave',
+    new_contact:          'Nuevo contacto',
+    pipeline_stage:       'Entra a etapa',
+    pipeline_stage_leave: 'Sale de etapa',
+    tag_added:            'Etiqueta agregada',
+    assignee_changed:     'Cambio de asesor',
+    always:               'Cualquier mensaje',
   };
 
   function fmtDuration(startedAt, finishedAt) {
@@ -6402,8 +6411,8 @@ let _botSearch = '';      // texto de búsqueda en lista de bots
 function _botMatchesQuery(bot, q) {
   if ((bot.name || '').toLowerCase().includes(q)) return true;
   if ((bot.trigger_value || '').toLowerCase().includes(q)) return true;
-  // Trigger pipeline_stage → resolver pipeline + stage
-  if (bot.trigger_type === 'pipeline_stage' && bot.trigger_value) {
+  // Trigger pipeline_stage / pipeline_stage_leave → resolver pipeline + stage
+  if ((bot.trigger_type === 'pipeline_stage' || bot.trigger_type === 'pipeline_stage_leave') && bot.trigger_value) {
     const stageId = Number(bot.trigger_value);
     const info = _resolveStage(stageId);
     if (info) {
@@ -6523,10 +6532,13 @@ const SB_BRANCH_LABELS = {
   on_delivery_fail: 'No le llegó el mensaje',
 };
 const SB_TRIGGER_LABELS = {
-  get keyword()        { return t('bot.trigger.keyword'); },
-  get new_contact()    { return t('bot.trigger.new_contact'); },
-  get pipeline_stage() { return t('bot.trigger.pipeline_stage'); },
-  get always()         { return t('bot.trigger.always'); },
+  get keyword()              { return t('bot.trigger.keyword'); },
+  get new_contact()          { return t('bot.trigger.new_contact'); },
+  get pipeline_stage()       { return t('bot.trigger.pipeline_stage'); },
+  get pipeline_stage_leave() { return t('bot.trigger.pipeline_stage_leave'); },
+  get tag_added()            { return t('bot.trigger.tag_added'); },
+  get assignee_changed()     { return t('bot.trigger.assignee_changed'); },
+  get always()               { return t('bot.trigger.always'); },
 };
 
 async function loadSalsbots() {
@@ -6617,7 +6629,7 @@ function _resolveStage(stageId) {
 // nombres legibles del pipeline + etapa (en lugar de mostrar el stage_id raw).
 function botTriggerHtml(bot) {
   const label = SB_TRIGGER_LABELS[bot.trigger_type] || bot.trigger_type;
-  if (bot.trigger_type === 'pipeline_stage' && bot.trigger_value) {
+  if ((bot.trigger_type === 'pipeline_stage' || bot.trigger_type === 'pipeline_stage_leave') && bot.trigger_value) {
     const info = _resolveStage(bot.trigger_value);
     if (info) {
       return `${escHtml(label)}: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name">${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}1a;color:${escHtml(info.color)};border-color:${escHtml(info.color)}66"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
@@ -6626,6 +6638,13 @@ function botTriggerHtml(bot) {
   }
   if (bot.trigger_type === 'keyword' && bot.trigger_value) {
     return `${escHtml(label)}: "${escHtml(bot.trigger_value)}"`;
+  }
+  if (bot.trigger_type === 'tag_added' && bot.trigger_value) {
+    return `${escHtml(label)}: "${escHtml(bot.trigger_value)}"`;
+  }
+  if (bot.trigger_type === 'assignee_changed' && bot.trigger_value) {
+    const adv = (typeof ADVISORS !== 'undefined' ? ADVISORS : []).find(a => Number(a.id) === Number(bot.trigger_value));
+    return `${escHtml(label)}: → ${escHtml(adv?.name || `asesor #${bot.trigger_value}`)}`;
   }
   return escHtml(label);
 }
@@ -6804,8 +6823,8 @@ function openBotBuilder(bot, returnTo = null) {
 
   updateTriggerValueVisibility();
 
-  // Si el trigger es pipeline_stage, restaurar pipeline+etapa en los selectores
-  if (bot?.trigger_type === 'pipeline_stage' && bot.trigger_value) {
+  // Si el trigger es pipeline_stage o pipeline_stage_leave, restaurar pipeline+etapa
+  if ((bot?.trigger_type === 'pipeline_stage' || bot?.trigger_type === 'pipeline_stage_leave') && bot.trigger_value) {
     const stageId = Number(bot.trigger_value);
     const pl = (PIPELINES || []).find(p => p.stages?.some(s => s.id === stageId));
     if (pl) populateTriggerPipelines(pl.id, stageId);
@@ -6823,11 +6842,18 @@ function updateTriggerValueVisibility() {
   const type = document.getElementById('sbTriggerType').value;
   const valInput = document.getElementById('sbTriggerValue');
   const stageWrap = document.getElementById('sbTriggerStageWrap');
-  const isStage = type === 'pipeline_stage';
-  const hideValue = ['always', 'new_contact', 'pipeline_stage'].includes(type);
+  const isStage = type === 'pipeline_stage' || type === 'pipeline_stage_leave';
+  const hideValue = ['always', 'new_contact', 'pipeline_stage', 'pipeline_stage_leave'].includes(type);
   valInput.hidden = hideValue;
   if (stageWrap) stageWrap.hidden = !isStage;
-  valInput.placeholder = 'p.ej. "precio", "hola", "info"';
+  // Placeholder según tipo
+  if (type === 'tag_added') {
+    valInput.placeholder = 'Etiqueta exacta (ej: "VIP"). Vacío = cualquier etiqueta';
+  } else if (type === 'assignee_changed') {
+    valInput.placeholder = 'ID de asesor (opcional). Vacío = cualquier cambio';
+  } else {
+    valInput.placeholder = 'p.ej. "precio", "hola", "info"';
+  }
   if (isStage) populateTriggerPipelines();
 }
 
@@ -7895,7 +7921,7 @@ function setupBot() {
   function bbBuildBotJSON() {
     const trigger_type = document.getElementById('sbTriggerType')?.value || 'keyword';
     let trigger_value = document.getElementById('sbTriggerValue')?.value?.trim() || '';
-    if (trigger_type === 'pipeline_stage') {
+    if (trigger_type === 'pipeline_stage' || trigger_type === 'pipeline_stage_leave') {
       trigger_value = document.getElementById('sbTriggerStage')?.value || '';
     }
     return {
@@ -8062,7 +8088,7 @@ function setupBot() {
     const enabled = document.getElementById('botBuilderEnabled').checked ? 1 : 0;
     const trigger_type = document.getElementById('sbTriggerType').value;
     let trigger_value = document.getElementById('sbTriggerValue').value.trim();
-    if (trigger_type === 'pipeline_stage') {
+    if (trigger_type === 'pipeline_stage' || trigger_type === 'pipeline_stage_leave') {
       trigger_value = document.getElementById('sbTriggerStage')?.value || '';
     }
     const steps = collectAllSteps().map(({ _id, ...rest }) => rest);

@@ -163,6 +163,94 @@ function triggerNewContact(db, { contactId }) {
   }
 }
 
+/**
+ * triggerPipelineStageLeave — fires when a lead LEAVES a stage (mirror of triggerPipelineStage).
+ * trigger_value = the stageId being abandoned.
+ */
+function triggerPipelineStageLeave(db, { expedientId, contactId, pipelineId, stageId, chainDepth = 0 }) {
+  _log('info', `triggerPipelineStageLeave → expediente=${expedientId} contacto=${contactId} etapa-saliente=${stageId} (chain=${chainDepth})`);
+  if (chainDepth > MAX_BOT_CHAIN_DEPTH) {
+    _log('error', `chain depth ${chainDepth} excede el máximo. Posible bucle — abortando.`);
+    return;
+  }
+  const tenantId = _tenantFromContact(db, contactId);
+  if (!tenantId) { _log('warn', `triggerPipelineStageLeave: contacto ${contactId} sin tenant — abortando`); return; }
+  const bots = enabledBots(db, tenantId);
+  for (const bot of bots) {
+    if (bot.trigger_type !== 'pipeline_stage_leave') continue;
+    if (Number(bot.trigger_value) !== stageId) continue;
+    const convoRow = db.prepare(
+      'SELECT id, provider, integration_id FROM conversations WHERE contact_id = ? AND tenant_id = ? ORDER BY last_message_at DESC LIMIT 1'
+    ).get(contactId, tenantId);
+    runAsync(db, bot, {
+      convoId:       convoRow?.id || null,
+      contactId,
+      messageBody:   '',
+      provider:      convoRow?.provider || null,
+      integrationId: convoRow?.integration_id || null,
+      expedientId, pipelineId, stageId, chainDepth, tenantId,
+    });
+  }
+}
+
+/**
+ * triggerAssigneeChanged — fires when a lead's assigned_advisor_id changes.
+ * trigger_value: optional advisor_id; empty = fires on ANY change.
+ */
+function triggerAssigneeChanged(db, { expedientId, contactId, oldAdvisorId, newAdvisorId }) {
+  _log('info', `triggerAssigneeChanged → exp=${expedientId} ${oldAdvisorId} → ${newAdvisorId}`);
+  const tenantId = _tenantFromContact(db, contactId);
+  if (!tenantId) { _log('warn', `triggerAssigneeChanged: contacto ${contactId} sin tenant — abortando`); return; }
+  const bots = enabledBots(db, tenantId);
+  for (const bot of bots) {
+    if (bot.trigger_type !== 'assignee_changed') continue;
+    const filterId = (bot.trigger_value || '').trim();
+    // Si trigger_value vacío → cualquier cambio. Si tiene valor → solo cuando ese advisor entra como nuevo.
+    if (filterId && Number(filterId) !== Number(newAdvisorId)) continue;
+    const convoRow = db.prepare(
+      'SELECT id, provider, integration_id FROM conversations WHERE contact_id = ? AND tenant_id = ? ORDER BY last_message_at DESC LIMIT 1'
+    ).get(contactId, tenantId);
+    runAsync(db, bot, {
+      convoId:       convoRow?.id || null,
+      contactId,
+      messageBody:   '',
+      provider:      convoRow?.provider || null,
+      integrationId: convoRow?.integration_id || null,
+      expedientId,
+      oldAdvisorId, newAdvisorId,
+      tenantId,
+    });
+  }
+}
+
+/**
+ * triggerTagAdded — fires when a tag is added to an expedient (lead).
+ * trigger_value: exact tag name to match. Empty = matches any tag added.
+ */
+function triggerTagAdded(db, { expedientId, contactId, tag }) {
+  _log('info', `triggerTagAdded → exp=${expedientId} tag="${tag}"`);
+  const tenantId = _tenantFromContact(db, contactId);
+  if (!tenantId) { _log('warn', `triggerTagAdded: contacto ${contactId} sin tenant — abortando`); return; }
+  const bots = enabledBots(db, tenantId);
+  for (const bot of bots) {
+    if (bot.trigger_type !== 'tag_added') continue;
+    const filterTag = (bot.trigger_value || '').trim();
+    if (filterTag && filterTag.toLowerCase() !== String(tag).trim().toLowerCase()) continue;
+    const convoRow = db.prepare(
+      'SELECT id, provider, integration_id FROM conversations WHERE contact_id = ? AND tenant_id = ? ORDER BY last_message_at DESC LIMIT 1'
+    ).get(contactId, tenantId);
+    runAsync(db, bot, {
+      convoId:       convoRow?.id || null,
+      contactId,
+      messageBody:   '',
+      provider:      convoRow?.provider || null,
+      integrationId: convoRow?.integration_id || null,
+      expedientId, tag,
+      tenantId,
+    });
+  }
+}
+
 // ─── Internal helpers ───
 
 function enabledBots(db, tenantId) {
@@ -949,6 +1037,8 @@ function replaceVars(text, ctx) {
 
 module.exports = {
   triggerMessage, triggerPipelineStage, triggerNewContact,
+  // Disparadores nuevos (Fase 1):
+  triggerPipelineStageLeave, triggerAssigneeChanged, triggerTagAdded,
   getLogs, clearLogs, killRun, pauseRun, resumeRun,
   // Sistema de wait_response (Opción A — branching):
   resumeWait, resumeWaitsForContact, startWaitTimeoutPoller,

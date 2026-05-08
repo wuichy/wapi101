@@ -360,7 +360,6 @@ const I18N_TRANSLATIONS = {
     'bot.trigger.new_contact': 'Nuevo contacto creado',
     'bot.trigger.pipeline_stage': 'Lead entra a etapa',
     'bot.trigger.always': 'Cualquier mensaje entrante',
-    'bot.trigger.outbound': 'Manual / Outbound (tú inicias)',
     'bot.step.message': 'Enviar mensaje',
     'bot.step.template': 'Enviar plantilla (WhatsApp API)',
     'bot.step.timer': 'Temporizador',
@@ -873,7 +872,6 @@ const I18N_TRANSLATIONS = {
     'bot.trigger.new_contact': 'New contact created',
     'bot.trigger.pipeline_stage': 'Lead enters stage',
     'bot.trigger.always': 'Any incoming message',
-    'bot.trigger.outbound': 'Manual / Outbound (you start)',
     'bot.step.message': 'Send message',
     'bot.step.template': 'Send template (WhatsApp API)',
     'bot.step.timer': 'Timer',
@@ -5143,7 +5141,6 @@ async function renderExpDetailBots() {
     new_contact:    'Nuevo contacto',
     pipeline_stage: 'Entra a etapa',
     always:         'Cualquier mensaje',
-    outbound:       'Manual',
   };
 
   function fmtDuration(startedAt, finishedAt) {
@@ -6530,7 +6527,6 @@ const SB_TRIGGER_LABELS = {
   get new_contact()    { return t('bot.trigger.new_contact'); },
   get pipeline_stage() { return t('bot.trigger.pipeline_stage'); },
   get always()         { return t('bot.trigger.always'); },
-  get outbound()       { return t('bot.trigger.outbound'); },
 };
 
 async function loadSalsbots() {
@@ -6820,7 +6816,7 @@ function updateTriggerValueVisibility() {
   const valInput = document.getElementById('sbTriggerValue');
   const stageWrap = document.getElementById('sbTriggerStageWrap');
   const isStage = type === 'pipeline_stage';
-  const hideValue = ['always', 'new_contact', 'outbound', 'pipeline_stage'].includes(type);
+  const hideValue = ['always', 'new_contact', 'pipeline_stage'].includes(type);
   valInput.hidden = hideValue;
   if (stageWrap) stageWrap.hidden = !isStage;
   valInput.placeholder = 'p.ej. "precio", "hola", "info"';
@@ -6978,7 +6974,7 @@ function buildStepBody(step) {
           ${connectedIntegrationOptions(c.channelId)}
         </select>
         <p class="sb-channel-hint" style="font-size:11px;color:var(--text-muted);margin-top:3px;margin-bottom:0">
-          "Automático" responde por el canal donde llegó el mensaje. Elige uno específico solo en bots outbound.
+          "Automático" responde por el canal donde llegó el mensaje.
         </p>
         <div class="sb-msg-label-row">
           <label>Mensaje</label>

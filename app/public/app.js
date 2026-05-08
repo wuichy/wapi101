@@ -6928,7 +6928,7 @@ function stepIconSvg(type) {
     book_appointment:      `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M6 12h4m-2-2v4"/></svg>`,
     cancel_appointment:    `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 13l6-2m0 2l-6-2"/></svg>`,
     reschedule_appointment:`<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 14a3 3 0 0 1 3-3m0 0l-1.5-1.5M10 11l1.5-1.5"/></svg>`,
-    ai_reply: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M10 2l1.9 5.9H18l-5 3.6 1.9 5.9L10 14l-4.9 3.4 1.9-5.9-5-3.6h6.1z"/></svg>`,
+    ai_reply: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M10 2 C9.6 6.3 6.3 9.6 2 10 C6.3 10.4 9.6 13.7 10 18 C10.4 13.7 13.7 10.4 18 10 C13.7 9.6 10.4 6.3 10 2 Z"/></svg>`,
   };
   return icons[type] || '';
 }
@@ -16107,7 +16107,7 @@ function cpShowTyping(show) {
     const div = document.createElement('div');
     div.id = 'cpTypingIndicator';
     div.className = 'copiloto-msg copiloto-msg--ai';
-    div.innerHTML = `<div class="copiloto-msg-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg></div><div class="copiloto-typing"><span></span><span></span><span></span></div>`;
+    div.innerHTML = `<div class="copiloto-msg-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2 C11.5 7.5 7.5 11.5 2 12 C7.5 12.5 11.5 16.5 12 22 C12.5 16.5 16.5 12.5 22 12 C16.5 11.5 12.5 7.5 12 2 Z"/></svg></div><div class="copiloto-typing"><span></span><span></span><span></span></div>`;
     msgs?.appendChild(div);
     msgs?.scrollTo({ top: msgs.scrollHeight, behavior: 'smooth' });
   } else if (!show && el) {
@@ -16121,7 +16121,7 @@ function cpRenderMessages(scrollOnly = false) {
 
   if (!_cpHistory.length) {
     container.innerHTML = `<div class="copiloto-welcome">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" style="opacity:.3"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" style="opacity:.3"><path d="M12 2 C11.5 7.5 7.5 11.5 2 12 C7.5 12.5 11.5 16.5 12 22 C12.5 16.5 16.5 12.5 22 12 C16.5 11.5 12.5 7.5 12 2 Z"/></svg>
       <p>Hola, soy tu Copiloto.<br>Puedo consultar clientes, leads, pipelines y más.<br>¿En qué te ayudo?</p>
       <div class="copiloto-suggestions">
         <button class="copiloto-suggestion" data-q="¿Cuántos leads hay activos en total?">¿Cuántos leads activos?</button>
@@ -16138,7 +16138,7 @@ function cpRenderMessages(scrollOnly = false) {
     const text   = typeof m.content === 'string' ? m.content : '';
     if (!text) return '';
     return `<div class="copiloto-msg copiloto-msg--${isUser ? 'user' : 'ai'}">
-      <div class="copiloto-msg-avatar">${isUser ? (CURRENT_ADVISOR?.name?.[0]||'U') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>`}</div>
+      <div class="copiloto-msg-avatar">${isUser ? (CURRENT_ADVISOR?.name?.[0]||'U') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2 C11.5 7.5 7.5 11.5 2 12 C7.5 12.5 11.5 16.5 12 22 C12.5 16.5 16.5 12.5 22 12 C16.5 11.5 12.5 7.5 12 2 Z"/></svg>`}</div>
       <div class="copiloto-msg-bubble">${escHtml(text)}</div>
     </div>`;
   }).filter(Boolean).join('');

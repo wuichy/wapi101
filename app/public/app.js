@@ -9409,14 +9409,31 @@ function setupBot() {
   let _bbDrag = null;
   let _bbDragMoved = false;
 
+  // Pan del canvas — click en área vacía del grid + drag mueve el scroll
+  let _bbPan = null;
+
   function _bbVisualMouseDown(e) {
+    const stage = document.getElementById('bbVisualStage');
+    if (!stage) return;
+
+    // Click en área vacía (no sobre nodo, trigger, ni dropzone) → pan del canvas
+    const onInteractive = e.target.closest('.bb-visual-node, .bb-visual-trigger, .bb-visual-dropzone, .bb-palette-item');
+    if (!onInteractive) {
+      _bbPan = {
+        startX: e.clientX,
+        startY: e.clientY,
+        scrollL: stage.scrollLeft,
+        scrollT: stage.scrollTop,
+      };
+      stage.classList.add('is-panning');
+      e.preventDefault();
+      return;
+    }
+
     const nodeEl = e.target.closest('.bb-visual-node');
     if (!nodeEl) return;
     const stepId = nodeEl.dataset.stepId || '';
     const isBranchStep = stepId.includes('.');
-
-    const stage = document.getElementById('bbVisualStage');
-    if (!stage) return;
     const idx = Number(nodeEl.dataset.stepIndex);
     const startX = parseFloat(nodeEl.style.left) || 0;
     const startY = parseFloat(nodeEl.style.top)  || 0;
@@ -9438,6 +9455,15 @@ function setupBot() {
   }
 
   function _bbVisualMouseMove(e) {
+    // Pan del canvas — actualiza scroll del stage
+    if (_bbPan) {
+      const stage = document.getElementById('bbVisualStage');
+      if (stage) {
+        stage.scrollLeft = _bbPan.scrollL - (e.clientX - _bbPan.startX);
+        stage.scrollTop  = _bbPan.scrollT - (e.clientY - _bbPan.startY);
+      }
+      return;
+    }
     if (!_bbDrag) return;
     const dx = (e.clientX - _bbDrag.startMouseX) / _bbDrag.zoom;
     const dy = (e.clientY - _bbDrag.startMouseY) / _bbDrag.zoom;
@@ -9516,6 +9542,13 @@ function setupBot() {
   }
 
   function _bbVisualMouseUp(e) {
+    // Fin del pan del canvas
+    if (_bbPan) {
+      _bbPan = null;
+      const stage = document.getElementById('bbVisualStage');
+      stage?.classList.remove('is-panning');
+      return;
+    }
     if (!_bbDrag) return;
     const drag = _bbDrag;
     _bbDrag = null;

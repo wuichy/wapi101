@@ -20,6 +20,7 @@ const convoSvc = require('../conversations/service');
 const expedientSvc = require('../expedients/service');
 const botEngine = require('../bot/engine');
 const pushSvc = require('../notifications/service');
+const avatarsSvc = require('../customers/avatars');
 
 // Helper: push notification para mensaje entrante (colapsa por convo).
 // Si no tenemos tenantId (integración no encontrada), envía broadcast global —
@@ -561,6 +562,11 @@ module.exports = function createWebhooksRouter(db) {
       );
       console.log(`[webhook ${provider} comment] guardado: id=${commentId} from="${fromName || fromId || '?'}" contact=${contactId || '?'} body="${body.slice(0,50)}"`);
 
+      // Sync avatar (fire-and-forget) si tenemos contacto y la foto está vieja
+      if (contactId && fromId) {
+        avatarsSvc.syncAvatarAsync(db, tenantId, contactId, provider, fromId, integration);
+      }
+
       // Para IG: fetch permalink en background usando Graph API (fire-and-forget).
       // Lo guardamos cuando llegue. No bloquea el procesamiento del webhook.
       if (provider === 'instagram' && !permalinkUrl) {
@@ -614,6 +620,9 @@ module.exports = function createWebhooksRouter(db) {
             createdAt:  ts,
           });
 
+          // Sync avatar (fire-and-forget) si no tiene foto o lleva > 7 días
+          avatarsSvc.syncAvatarAsync(db, tenantId, convo.contact_id, 'messenger', senderId, integration);
+
           botEngine.triggerMessage(db, {
             convoId:       convo.id,
             contactId:     convo.contact_id,
@@ -659,6 +668,9 @@ module.exports = function createWebhooksRouter(db) {
             status:     'delivered',
             createdAt:  ts,
           });
+
+          // Sync avatar (fire-and-forget) si no tiene foto o lleva > 7 días
+          avatarsSvc.syncAvatarAsync(db, tenantId, convo.contact_id, 'instagram', senderId, integration);
 
           botEngine.triggerMessage(db, {
             convoId:       convo.id,

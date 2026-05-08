@@ -46,15 +46,19 @@ module.exports = function createIntegrationsRouter(db) {
       if (text.length > 8000) return res.status(400).json({ error: 'text demasiado largo' });
 
       const comment = db.prepare(`
-        SELECT c.*, i.credentials AS integ_credentials
+        SELECT c.*, i.credentials_enc AS integ_credentials_enc
           FROM social_comments c
           LEFT JOIN integrations i ON i.id = c.integration_id
          WHERE c.id = ? AND c.tenant_id = ?
       `).get(id, req.tenantId);
       if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
 
-      const creds = (() => { try { return JSON.parse(comment.integ_credentials || '{}'); } catch { return {}; } })();
-      const accessToken = creds.accessToken;
+      // credentials viene encriptado; necesitamos pasar por decryptJson
+      const { decryptJson } = require('../../security/crypto');
+      let creds = {};
+      try { creds = comment.integ_credentials_enc ? (decryptJson(comment.integ_credentials_enc) || {}) : {}; } catch { creds = {}; }
+      // Messenger usa 'pageAccessToken', Instagram y otros usan 'accessToken'
+      const accessToken = creds.pageAccessToken || creds.accessToken;
       if (!accessToken) return res.status(400).json({ error: 'La integración no tiene access token configurado' });
 
       // FB Page comment reply: POST /{comment-id}/comments

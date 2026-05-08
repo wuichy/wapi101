@@ -191,8 +191,17 @@ module.exports = function createWebhooksRouter(db) {
           processWhatsAppMessages(payload, integration);
         }
       } else if (provider === 'messenger') {
+        // Si el cambio es un comentario del feed de la Page, procesar como tal
+        const change = payload?.entry?.[0]?.changes?.[0];
+        if (change?.field === 'feed' && change?.value) {
+          processSocialComment('messenger', change.value, payload, integration);
+        }
         processMessengerMessages(payload, integration);
       } else if (provider === 'instagram') {
+        const change = payload?.entry?.[0]?.changes?.[0];
+        if (change?.field === 'comments' && change?.value) {
+          processSocialComment('instagram', change.value, payload, integration);
+        }
         processInstagramMessages(payload, integration);
       }
 
@@ -486,6 +495,42 @@ module.exports = function createWebhooksRouter(db) {
       } catch (err) {
         console.error('[webhook status] error procesando status:', err.message);
       }
+    }
+  }
+
+  // Persiste un comentario de FB Page o IG en social_comments.
+  // FB Page (provider='messenger') value shape: { item, comment_id, post_id, sender_id, sender_name, message, parent_id, ... }
+  // IG (provider='instagram') value shape: { id, text, from: {id, username}, media: {id}, parent_id, ... }
+  function processSocialComment(provider, value, _payload, integration) {
+    try {
+      const tenantId = integration?.tenant_id;
+      if (!tenantId) { console.warn(`[webhook ${provider} comment] sin tenant`); return; }
+
+      // Filtrar eventos no-comentario en FB feed (likes, reacciones, edits, etc.)
+      if (provider === 'messenger' && value.item !== 'comment') return;
+      // Filtrar verbs de "remove"/"hide" — solo procesamos comentarios entrantes nuevos
+      if (provider === 'messenger' && value.verb && value.verb !== 'add') return;
+
+      const commentId       = String(provider === 'instagram' ? value.id            : value.comment_id || '').trim();
+      if (!commentId) return;
+      const postId          = String(provider === 'instagram' ? (value.media?.id || '') : (value.post_id || '')).trim() || null;
+      const parentCommentId = String(provider === 'instagram' ? (value.parent_id || '') : (value.parent_id || '')).trim() || null;
+      const fromId          = String(provider === 'instagram' ? (value.from?.id || '')  : (value.sender_id || value.from?.id || '')).trim() || null;
+      const fromName        = (provider === 'instagram' ? value.from?.username : (value.sender_name || value.from?.name)) || null;
+      const body            = (provider === 'instagram' ? value.text : value.message) || '';
+
+      db.prepare(`
+        INSERT OR IGNORE INTO social_comments
+          (tenant_id, integration_id, provider, post_id, comment_id, parent_comment_id,
+           from_id, from_name, body, meta_json, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', unixepoch())
+      `).run(
+        tenantId, integration?.id || null, provider, postId, commentId, parentCommentId,
+        fromId, fromName, body, JSON.stringify(value).slice(0, 5000)
+      );
+      console.log(`[webhook ${provider} comment] guardado: id=${commentId} from="${fromName || fromId || '?'}" body="${body.slice(0,50)}"`);
+    } catch (err) {
+      console.error(`[webhook ${provider} comment] error procesando:`, err.message);
     }
   }
 

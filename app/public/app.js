@@ -8950,13 +8950,19 @@ function setupBot() {
 
     steps.forEach((step, idx) => {
       const id = prefix ? `${prefix}.${idx}` : String(idx);
+      // Si el step tiene posición manual guardada (_pos), respetarla.
+      // Si no, usar layout automático top-down.
+      const pos = step._pos && Number.isFinite(step._pos.x) && Number.isFinite(step._pos.y)
+        ? step._pos
+        : { x: originX, y };
       const node = {
         id, step, idx,
-        x: originX,
-        y,
+        x: pos.x,
+        y: pos.y,
         w: _VS_NODE_W,
         h: _VS_NODE_H,
         prefix,
+        manual: !!step._pos,
       };
       nodes.push(node);
       if (prevId !== null) edges.push({ from: prevId, to: id });
@@ -9114,27 +9120,140 @@ function setupBot() {
     if (label) label.textContent = `${Math.round(_bbVisualZoom * 100)}%`;
   }
 
-  // Click en un node del visual → vuelve a Lista y scrollea
-  document.getElementById('bbVisualStage')?.addEventListener('click', (e) => {
+  // ─── Drag & edit en el Visual (Phase B) ───
+  // State del drag
+  let _bbDrag = null;
+  let _bbDragMoved = false;
+
+  function _bbVisualMouseDown(e) {
     const nodeEl = e.target.closest('.bb-visual-node');
     if (!nodeEl) return;
     const stepId = nodeEl.dataset.stepId || '';
-    // Solo navegamos a steps del flujo principal (sin "." en el id)
+    // Solo arrastramos steps del flujo principal por ahora
     if (stepId.includes('.')) return;
+
+    const stage = document.getElementById('bbVisualStage');
+    if (!stage) return;
     const idx = Number(nodeEl.dataset.stepIndex);
-    bbSwitchView('list');
-    setTimeout(() => {
-      const flow = document.getElementById('sbStepsFlow');
-      const target = flow?.children?.[idx];
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const orig = target.style.backgroundColor;
-        target.style.transition = 'background-color .3s';
-        target.style.backgroundColor = 'rgba(37,99,235,.12)';
-        setTimeout(() => { target.style.backgroundColor = orig; }, 800);
+    const startX = parseFloat(nodeEl.style.left) || 0;
+    const startY = parseFloat(nodeEl.style.top)  || 0;
+    _bbDrag = {
+      idx,
+      nodeEl,
+      stepId,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      startX,
+      startY,
+      zoom: _bbVisualZoom,
+    };
+    _bbDragMoved = false;
+    nodeEl.classList.add('is-dragging');
+    document.body.style.cursor = 'grabbing';
+    e.preventDefault();
+  }
+
+  function _bbVisualMouseMove(e) {
+    if (!_bbDrag) return;
+    const dx = (e.clientX - _bbDrag.startMouseX) / _bbDrag.zoom;
+    const dy = (e.clientY - _bbDrag.startMouseY) / _bbDrag.zoom;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) _bbDragMoved = true;
+    const newX = Math.max(0, _bbDrag.startX + dx);
+    const newY = Math.max(0, _bbDrag.startY + dy);
+    _bbDrag.nodeEl.style.left = newX + 'px';
+    _bbDrag.nodeEl.style.top  = newY + 'px';
+    _bbDrag.lastX = newX;
+    _bbDrag.lastY = newY;
+  }
+
+  function _bbVisualMouseUp(e) {
+    if (!_bbDrag) return;
+    const drag = _bbDrag;
+    _bbDrag = null;
+    drag.nodeEl.classList.remove('is-dragging');
+    document.body.style.cursor = '';
+
+    if (_bbDragMoved && Number.isFinite(drag.lastX) && Number.isFinite(drag.lastY)) {
+      // Persistir posición en el step.config — sbSteps[idx]._pos
+      const step = sbSteps[drag.idx];
+      if (step) {
+        step._pos = { x: Math.round(drag.lastX), y: Math.round(drag.lastY) };
+        // Re-render del visual para actualizar las edges (líneas)
+        bbRenderVisualView();
       }
-    }, 50);
-  });
+    } else {
+      // Click sin drag → abrir editor del step
+      bbOpenVisualEditor(drag.idx);
+    }
+  }
+
+  document.getElementById('bbVisualStage')?.addEventListener('mousedown', _bbVisualMouseDown);
+  document.addEventListener('mousemove', _bbVisualMouseMove);
+  document.addEventListener('mouseup', _bbVisualMouseUp);
+
+  // ─── Editor panel lateral (Phase B) ───
+  let _bbEditingIdx = null;
+
+  function bbOpenVisualEditor(idx) {
+    const step = sbSteps[idx];
+    if (!step) return;
+    _bbEditingIdx = idx;
+    const def = BOT_STEP_REGISTRY[step.type];
+    const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || step.type) : step.type;
+
+    document.getElementById('bbVisualEditorIcon').innerHTML = stepIcon(step.type, 18);
+    document.getElementById('bbVisualEditorLabel').textContent = label;
+
+    // Reusa el form de la vista Lista
+    const body = document.getElementById('bbVisualEditorBody');
+    if (body && typeof buildStepBody === 'function') {
+      try { body.innerHTML = buildStepBody(step); }
+      catch (e) { body.innerHTML = `<p style="color:#dc2626">Error: ${escHtml(e.message)}</p>`; }
+    }
+    document.getElementById('bbVisualEditor').hidden = false;
+  }
+
+  function bbCloseVisualEditor() {
+    document.getElementById('bbVisualEditor').hidden = true;
+    _bbEditingIdx = null;
+  }
+
+  function bbSaveVisualEditor() {
+    if (_bbEditingIdx === null) return;
+    const step = sbSteps[_bbEditingIdx];
+    if (!step) return;
+    // Recolectar el config desde los inputs del editor body
+    if (typeof collectStepConfig === 'function') {
+      try {
+        // collectStepConfig lee inputs por data-sid="X" — el body del editor los tiene
+        const newConfig = collectStepConfig(step._id);
+        // Preservar _pos si existía
+        if (step._pos) newConfig._pos = step._pos;
+        step.config = newConfig;
+      } catch (e) {
+        if (typeof toast === 'function') toast('Error: ' + e.message, 'error');
+        return;
+      }
+    }
+    bbCloseVisualEditor();
+    bbRenderVisualView();
+    if (typeof toast === 'function') toast('Cambios aplicados (recuerda Guardar el bot)', 'success');
+  }
+
+  function bbDeleteStepFromVisual() {
+    if (_bbEditingIdx === null) return;
+    if (!confirm('¿Eliminar este paso?')) return;
+    sbSteps.splice(_bbEditingIdx, 1);
+    bbCloseVisualEditor();
+    // Re-render Lista también para mantener consistencia
+    if (typeof renderStepsFlow === 'function') renderStepsFlow();
+    bbRenderVisualView();
+  }
+
+  document.getElementById('bbVisualEditorClose')?.addEventListener('click', bbCloseVisualEditor);
+  document.getElementById('bbVisualEditorCancel')?.addEventListener('click', bbCloseVisualEditor);
+  document.getElementById('bbVisualEditorSave')?.addEventListener('click', bbSaveVisualEditor);
+  document.getElementById('bbVisualEditorDelete')?.addEventListener('click', bbDeleteStepFromVisual);
 
   // Zoom
   document.getElementById('bbVisualZoomIn')?.addEventListener('click', () => {

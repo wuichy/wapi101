@@ -1837,6 +1837,24 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </div>
               <div class="bb-visual-canvas" id="bbVisualCanvas">
                 <div class="bb-visual-stage" id="bbVisualStage"></div>
+
+                <!-- Panel lateral para editar step (Phase B) -->
+                <aside class="bb-visual-editor" id="bbVisualEditor" hidden>
+                  <header class="bb-visual-editor-head">
+                    <div class="bb-visual-editor-title">
+                      <span id="bbVisualEditorIcon"></span>
+                      <span id="bbVisualEditorLabel">Editar paso</span>
+                    </div>
+                    <button type="button" class="modal-close" id="bbVisualEditorClose" title="Cerrar">×</button>
+                  </header>
+                  <div class="bb-visual-editor-body" id="bbVisualEditorBody"></div>
+                  <footer class="bb-visual-editor-foot">
+                    <button type="button" class="btn btn--ghost" id="bbVisualEditorDelete">Eliminar paso</button>
+                    <div style="flex:1"></div>
+                    <button type="button" class="btn btn--ghost" id="bbVisualEditorCancel">Cancelar</button>
+                    <button type="button" class="btn btn--primary" id="bbVisualEditorSave">Aplicar</button>
+                  </footer>
+                </aside>
               </div>
               <p class="bb-visual-mobile-hint">El visual funciona mejor en pantallas grandes. En móvil usa la vista <strong>Árbol</strong>.</p>
             </div>

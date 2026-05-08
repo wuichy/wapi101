@@ -1,6 +1,6 @@
 'use strict';
 
-const { getSettings, callAI } = require('./service');
+const { getSettings, getKnowledgeContext, callAI } = require('./service');
 const { getEnabledTools, executeTool } = require('./tools');
 
 const MAX_ROUNDS = 4;
@@ -26,8 +26,9 @@ async function chat(db, tenantId, history, userMessage, config = {}) {
     return { reply: '⚠️ Configura el API Key de IA en **Ajustes → IA** para usar el Copiloto.', history };
   }
 
-  const tools   = getEnabledTools(config);
-  const context = config.context ? `\nContexto de tu empresa: ${config.context}` : '';
+  const tools     = getEnabledTools(config);
+  const knowledge = getKnowledgeContext(db, tenantId);
+  const context   = knowledge ? `\n\nContexto del negocio (Fuentes de conocimiento):\n${knowledge}` : '';
   const sysPrompt = SYSTEM_PROMPT.replace('{{context}}', context);
 
   // Max 20 mensajes de historial para controlar tokens

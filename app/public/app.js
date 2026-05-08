@@ -16070,7 +16070,6 @@ function initCopiloto() {
       canAssign:    document.getElementById('cpCfgAssign')?.checked    ?? true,
       canAddTag:    document.getElementById('cpCfgAddTag')?.checked    ?? true,
       canAddNote:   document.getElementById('cpCfgAddNote')?.checked   ?? true,
-      context:      document.getElementById('cpCfgContext')?.value     || '',
       model:        document.getElementById('cpCfgModel')?.value       || '',
     };
     try {
@@ -16088,7 +16087,6 @@ async function cpLoadConfig() {
     if (el('cpCfgAssign'))    el('cpCfgAssign').checked    = cfg.canAssign    !== false;
     if (el('cpCfgAddTag'))    el('cpCfgAddTag').checked    = cfg.canAddTag    !== false;
     if (el('cpCfgAddNote'))   el('cpCfgAddNote').checked   = cfg.canAddNote   !== false;
-    if (el('cpCfgContext'))   el('cpCfgContext').value      = cfg.context || '';
     if (el('cpCfgModel'))     el('cpCfgModel').value        = cfg.model   || '';
   } catch(e) { console.error('cpLoadConfig', e); }
 }

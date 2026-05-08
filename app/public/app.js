@@ -5152,20 +5152,11 @@ async function renderExpDetailBots() {
   const root = document.getElementById('expDetailBots');
   if (!root || !EXP_DETAIL) return;
 
-  const TRIGGER_LABEL = {
-    keyword:              'Palabra clave',
-    new_contact:          'Nuevo contacto',
-    pipeline_stage:       'Entra a etapa',
-    pipeline_stage_leave: 'Sale de etapa',
-    tag_added:            'Etiqueta agregada',
-    assignee_changed:     'Cambio de asesor',
-    always:               'Cualquier mensaje',
-    no_response:          'Sin respuesta',
-    message_read:         'Mensaje leído',
-    scheduled_one_time:   'Programado una vez',
-    scheduled_daily:      'Programado diario',
-    scheduled_field:      'Programado por campo',
-  };
+  // Construye el map a partir del registry — un solo lugar de mantenimiento
+  const TRIGGER_LABEL = {};
+  for (const [type, def] of Object.entries(BOT_TRIGGER_REGISTRY)) {
+    TRIGGER_LABEL[type] = def.shortLabel || type;
+  }
 
   function fmtDuration(startedAt, finishedAt) {
     const secs = (finishedAt || Math.floor(Date.now() / 1000)) - startedAt;
@@ -6546,20 +6537,288 @@ const SB_BRANCH_LABELS = {
   on_timeout:       'No responde (timeout)',
   on_delivery_fail: 'No le llegó el mensaje',
 };
-const SB_TRIGGER_LABELS = {
-  get keyword()              { return t('bot.trigger.keyword'); },
-  get new_contact()          { return t('bot.trigger.new_contact'); },
-  get pipeline_stage()       { return t('bot.trigger.pipeline_stage'); },
-  get pipeline_stage_leave() { return t('bot.trigger.pipeline_stage_leave'); },
-  get tag_added()            { return t('bot.trigger.tag_added'); },
-  get assignee_changed()     { return t('bot.trigger.assignee_changed'); },
-  get always()               { return t('bot.trigger.always'); },
-  get no_response()          { return t('bot.trigger.no_response'); },
-  get message_read()         { return t('bot.trigger.message_read'); },
-  get scheduled_one_time()   { return t('bot.trigger.scheduled_one_time'); },
-  get scheduled_daily()      { return t('bot.trigger.scheduled_daily'); },
-  get scheduled_field()      { return t('bot.trigger.scheduled_field'); },
+// ═══════════════════════════════════════════════════════════════════
+// BOT TRIGGER REGISTRY — fuente única de verdad de los disparadores.
+// Para agregar uno nuevo:
+//   1. Implementa la función trigger en src/modules/bot/engine.js
+//   2. Hookea su llamada (route handler / poller / webhook)
+//   3. Agrega una entrada aquí con su config
+// El dropdown, traducciones, render bonito, save/load — TODO se genera
+// automáticamente desde este objeto.
+// ═══════════════════════════════════════════════════════════════════
+const BOT_TRIGGER_REGISTRY = {
+  // ─── Mensajes ───
+  keyword: {
+    group: 'Mensajes',
+    label:      { es: 'Palabra clave en mensaje', en: 'Keyword in message' },
+    shortLabel: 'Palabra clave',
+    widget:     'text',
+    valuePlaceholder: 'p.ej. "precio", "hola", "info"',
+    summaryHtml: (bot) => bot.trigger_value ? `: "${escHtml(bot.trigger_value)}"` : '',
+  },
+  always: {
+    group: 'Mensajes',
+    label:      { es: 'Cualquier mensaje entrante', en: 'Any incoming message' },
+    shortLabel: 'Cualquier mensaje',
+    widget:     null,
+  },
+  no_response: {
+    group: 'Mensajes',
+    label:      { es: 'Sin respuesta en X tiempo', en: 'No response in X time' },
+    shortLabel: 'Sin respuesta',
+    widget:     'no_response',
+    serialize() {
+      const amt  = document.getElementById('sbTriggerNoRespAmount')?.value;
+      const unit = document.getElementById('sbTriggerNoRespUnit')?.value;
+      return String(noRespToMinutes(amt, unit));
+    },
+    deserialize(val) {
+      const { amount, unit } = noRespFromMinutes(Number(val || 1440));
+      const amtEl  = document.getElementById('sbTriggerNoRespAmount');
+      const unitEl = document.getElementById('sbTriggerNoRespUnit');
+      if (amtEl)  amtEl.value  = amount;
+      if (unitEl) unitEl.value = unit;
+    },
+    summaryHtml(bot) {
+      if (!bot.trigger_value) return '';
+      const { amount, unit } = noRespFromMinutes(Number(bot.trigger_value));
+      const unitLabel = unit === 'd' ? 'día' : unit === 'h' ? 'hora' : 'min';
+      const plural = (amount !== 1 && unit !== 'm') ? 's' : '';
+      return `: ${amount} ${unitLabel}${plural}`;
+    },
+  },
+  message_read: {
+    group: 'Mensajes',
+    label:      { es: 'Mensaje saliente leído', en: 'Outgoing message read' },
+    shortLabel: 'Mensaje leído',
+    widget:     null,
+  },
+  // ─── Contactos ───
+  new_contact: {
+    group: 'Contactos',
+    label:      { es: 'Nuevo contacto creado', en: 'New contact created' },
+    shortLabel: 'Nuevo contacto',
+    widget:     null,
+  },
+  // ─── Pipeline ───
+  pipeline_stage: {
+    group: 'Pipeline',
+    label:      { es: 'Lead entra a etapa', en: 'Lead enters stage' },
+    shortLabel: 'Entra a etapa',
+    widget:     'stage',
+    serialize:  () => document.getElementById('sbTriggerStage')?.value || '',
+    deserialize(val) {
+      const stageId = Number(val);
+      const pl = (PIPELINES || []).find(p => p.stages?.some(s => s.id === stageId));
+      if (pl) populateTriggerPipelines(pl.id, stageId);
+    },
+    summaryHtml(bot) {
+      const info = _resolveStage(bot.trigger_value);
+      if (info) {
+        return `: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name">${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}1a;color:${escHtml(info.color)};border-color:${escHtml(info.color)}66"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
+      }
+      return `: stage #${escHtml(bot.trigger_value)} (no encontrada)`;
+    },
+  },
+  pipeline_stage_leave: {
+    group: 'Pipeline',
+    label:      { es: 'Lead sale de etapa', en: 'Lead leaves stage' },
+    shortLabel: 'Sale de etapa',
+    widget:     'stage',
+    serialize:  () => document.getElementById('sbTriggerStage')?.value || '',
+    deserialize(val) {
+      const stageId = Number(val);
+      const pl = (PIPELINES || []).find(p => p.stages?.some(s => s.id === stageId));
+      if (pl) populateTriggerPipelines(pl.id, stageId);
+    },
+    summaryHtml(bot) {
+      const info = _resolveStage(bot.trigger_value);
+      if (info) {
+        return `: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name">${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}1a;color:${escHtml(info.color)};border-color:${escHtml(info.color)}66"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
+      }
+      return `: stage #${escHtml(bot.trigger_value)} (no encontrada)`;
+    },
+  },
+  // ─── Lead ───
+  tag_added: {
+    group: 'Lead',
+    label:      { es: 'Etiqueta agregada al lead', en: 'Tag added to lead' },
+    shortLabel: 'Etiqueta agregada',
+    widget:     'text',
+    valuePlaceholder: 'Etiqueta exacta (ej: "VIP"). Vacío = cualquier etiqueta',
+    summaryHtml: (bot) => bot.trigger_value ? `: "${escHtml(bot.trigger_value)}"` : '',
+  },
+  assignee_changed: {
+    group: 'Lead',
+    label:      { es: 'Cambio de asesor responsable', en: 'Lead assignee changed' },
+    shortLabel: 'Cambio de asesor',
+    widget:     'text',
+    valuePlaceholder: 'ID de asesor (opcional). Vacío = cualquier cambio',
+    summaryHtml(bot) {
+      if (!bot.trigger_value) return '';
+      const adv = (typeof ADVISORS !== 'undefined' ? ADVISORS : []).find(a => Number(a.id) === Number(bot.trigger_value));
+      return `: → ${escHtml(adv?.name || `asesor #${bot.trigger_value}`)}`;
+    },
+  },
+  // ─── Programado ───
+  scheduled_one_time: {
+    group: 'Programado',
+    label:      { es: 'Una sola vez (fecha + hora)', en: 'One-time (date + time)' },
+    shortLabel: 'Programado una vez',
+    widget:     'one_time',
+    serialize() {
+      const d  = document.getElementById('sbTriggerOneTimeDate')?.value;
+      const tt = document.getElementById('sbTriggerOneTimeTime')?.value || '09:00';
+      if (!d) throw new Error('Selecciona la fecha del disparador');
+      return JSON.stringify({ datetime: `${d}T${tt}` });
+    },
+    deserialize(val) {
+      try {
+        const cfg = JSON.parse(val);
+        if (cfg.datetime) {
+          const [date, time] = cfg.datetime.split('T');
+          const dEl = document.getElementById('sbTriggerOneTimeDate');
+          const tEl = document.getElementById('sbTriggerOneTimeTime');
+          if (dEl) dEl.value = date || '';
+          if (tEl) tEl.value = (time || '09:00').slice(0,5);
+        }
+      } catch {}
+    },
+    summaryHtml(bot) {
+      if (!bot.trigger_value) return '';
+      try {
+        const cfg = JSON.parse(bot.trigger_value);
+        return `: ${escHtml((cfg.datetime || '').replace('T', ' '))}`;
+      } catch { return ''; }
+    },
+  },
+  scheduled_daily: {
+    group: 'Programado',
+    label:      { es: 'Diariamente a una hora', en: 'Daily at a time' },
+    shortLabel: 'Programado diario',
+    widget:     'daily',
+    serialize() {
+      const hour = document.getElementById('sbTriggerDailyTime')?.value || '09:00';
+      const weekdays = [0,1,2,3,4,5,6].map(d => {
+        const cb = document.querySelector(`#sbTriggerDailyWrap input[data-weekday="${d}"]`);
+        return cb?.checked ? 1 : 0;
+      });
+      if (weekdays.every(x => !x)) throw new Error('Selecciona al menos un día de la semana');
+      return JSON.stringify({ hour, weekdays });
+    },
+    deserialize(val) {
+      try {
+        const cfg = JSON.parse(val);
+        const tEl = document.getElementById('sbTriggerDailyTime');
+        if (tEl) tEl.value = cfg.hour || '09:00';
+        const wd = Array.isArray(cfg.weekdays) ? cfg.weekdays : [1,1,1,1,1,1,1];
+        document.querySelectorAll('#sbTriggerDailyWrap input[data-weekday]').forEach(cb => {
+          cb.checked = !!wd[Number(cb.dataset.weekday)];
+        });
+      } catch {}
+    },
+    summaryHtml(bot) {
+      if (!bot.trigger_value) return '';
+      try {
+        const cfg = JSON.parse(bot.trigger_value);
+        const dayLabels = ['L','M','X','J','V','S','D'];
+        const days = (cfg.weekdays || []).map((on, i) => on ? dayLabels[i] : '').filter(Boolean).join(',');
+        return `: ${escHtml(cfg.hour || '')} (${days || 'todos'})`;
+      } catch { return ''; }
+    },
+  },
+  scheduled_field: {
+    group: 'Programado',
+    label:      { es: 'Antes/después de un campo de fecha', en: 'Before/after a date field' },
+    shortLabel: 'Programado por campo',
+    widget:     'field',
+    serialize() {
+      const fieldId = Number(document.getElementById('sbTriggerFieldId')?.value || 0);
+      const amt     = Number(document.getElementById('sbTriggerFieldAmount')?.value || 0);
+      const unit    = document.getElementById('sbTriggerFieldUnit')?.value || 'h';
+      const dir     = document.getElementById('sbTriggerFieldDir')?.value || 'before';
+      const sign    = dir === 'before' ? -1 : 1;
+      const offsetMinutes = sign * noRespToMinutes(amt, unit);
+      if (!fieldId) throw new Error('Selecciona un campo de fecha');
+      return JSON.stringify({ fieldId, offsetMinutes });
+    },
+    deserialize(val) {
+      try {
+        const cfg = JSON.parse(val);
+        populateTriggerDateFields(cfg.fieldId);
+        const off = Number(cfg.offsetMinutes) || 0;
+        const abs = Math.abs(off);
+        const dir = off < 0 ? 'before' : 'after';
+        const dirEl = document.getElementById('sbTriggerFieldDir');
+        if (dirEl) dirEl.value = dir;
+        const { amount, unit } = noRespFromMinutes(abs);
+        const aEl = document.getElementById('sbTriggerFieldAmount');
+        const uEl = document.getElementById('sbTriggerFieldUnit');
+        if (aEl) aEl.value = abs ? amount : 24;
+        if (uEl) uEl.value = abs ? unit   : 'h';
+      } catch {}
+    },
+    summaryHtml(bot) {
+      if (!bot.trigger_value) return '';
+      try {
+        const cfg = JSON.parse(bot.trigger_value);
+        const off = Number(cfg.offsetMinutes) || 0;
+        const { amount, unit } = noRespFromMinutes(Math.abs(off));
+        const unitLabel = unit === 'd' ? 'día' : unit === 'h' ? 'hora' : 'min';
+        const plural = (amount !== 1 && unit !== 'm') ? 's' : '';
+        const dir = off < 0 ? 'antes' : 'después';
+        return `: ${amount} ${unitLabel}${plural} ${dir} (campo #${escHtml(String(cfg.fieldId || '?'))})`;
+      } catch { return ''; }
+    },
+  },
 };
+
+// Helper para obtener idioma actual con fallback a español.
+function _botRegistryLang() {
+  return (typeof CURRENT_LANG !== 'undefined' && CURRENT_LANG) ? CURRENT_LANG : 'es';
+}
+
+// ─── Helpers derivados del registry — usados por los consumidores ───
+
+// Genera el HTML de las <option> del dropdown agrupadas por `group`.
+function buildBotTriggerDropdownOptions() {
+  const groups = {};
+  for (const [type, def] of Object.entries(BOT_TRIGGER_REGISTRY)) {
+    const g = def.group || 'Otros';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push({ type, def });
+  }
+  let html = '';
+  for (const [groupName, items] of Object.entries(groups)) {
+    html += `<optgroup label="${escHtml(groupName)}">`;
+    for (const { type, def } of items) {
+      const lang = _botRegistryLang();
+      const label = (def.label && (def.label[lang] || def.label.es)) || type;
+      html += `<option value="${type}">${escHtml(label)}</option>`;
+    }
+    html += '</optgroup>';
+  }
+  return html;
+}
+
+// Re-poblar el select del builder cuando se abre o cuando cambia el idioma.
+function rebuildBotTriggerDropdown() {
+  const sel = document.getElementById('sbTriggerType');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = buildBotTriggerDropdownOptions();
+  if (current && BOT_TRIGGER_REGISTRY[current]) sel.value = current;
+}
+
+// ─── SB_TRIGGER_LABELS ahora deriva del registry ───
+const SB_TRIGGER_LABELS = new Proxy({}, {
+  get(_, type) {
+    const def = BOT_TRIGGER_REGISTRY[type];
+    if (!def) return type;
+    const lang = _botRegistryLang();
+    return (def.label && (def.label[lang] || def.label.es)) || type;
+  },
+});
 
 async function loadSalsbots() {
   try {
@@ -6645,59 +6904,14 @@ function _resolveStage(stageId) {
   return null;
 }
 
-// Construye el texto del trigger de un bot, enriqueciendo pipeline_stage con
-// nombres legibles del pipeline + etapa (en lugar de mostrar el stage_id raw).
+// Construye el texto del trigger de un bot. La lógica de cada tipo está
+// declarada en BOT_TRIGGER_REGISTRY[type].summaryHtml(bot).
 function botTriggerHtml(bot) {
-  const label = SB_TRIGGER_LABELS[bot.trigger_type] || bot.trigger_type;
-  if ((bot.trigger_type === 'pipeline_stage' || bot.trigger_type === 'pipeline_stage_leave') && bot.trigger_value) {
-    const info = _resolveStage(bot.trigger_value);
-    if (info) {
-      return `${escHtml(label)}: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name">${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}1a;color:${escHtml(info.color)};border-color:${escHtml(info.color)}66"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
-    }
-    return `${escHtml(label)}: stage #${escHtml(bot.trigger_value)} (no encontrada)`;
-  }
-  if (bot.trigger_type === 'keyword' && bot.trigger_value) {
-    return `${escHtml(label)}: "${escHtml(bot.trigger_value)}"`;
-  }
-  if (bot.trigger_type === 'tag_added' && bot.trigger_value) {
-    return `${escHtml(label)}: "${escHtml(bot.trigger_value)}"`;
-  }
-  if (bot.trigger_type === 'assignee_changed' && bot.trigger_value) {
-    const adv = (typeof ADVISORS !== 'undefined' ? ADVISORS : []).find(a => Number(a.id) === Number(bot.trigger_value));
-    return `${escHtml(label)}: → ${escHtml(adv?.name || `asesor #${bot.trigger_value}`)}`;
-  }
-  if (bot.trigger_type === 'no_response' && bot.trigger_value) {
-    const { amount, unit } = noRespFromMinutes(Number(bot.trigger_value));
-    const unitLabel = unit === 'd' ? 'día' : unit === 'h' ? 'hora' : 'min';
-    const plural = (amount !== 1 && unit !== 'm') ? 's' : '';
-    return `${escHtml(label)}: ${amount} ${unitLabel}${plural}`;
-  }
-  if (bot.trigger_type === 'scheduled_one_time' && bot.trigger_value) {
-    try {
-      const cfg = JSON.parse(bot.trigger_value);
-      return `${escHtml(label)}: ${escHtml((cfg.datetime || '').replace('T', ' '))}`;
-    } catch { return escHtml(label); }
-  }
-  if (bot.trigger_type === 'scheduled_daily' && bot.trigger_value) {
-    try {
-      const cfg = JSON.parse(bot.trigger_value);
-      const dayLabels = ['L','M','X','J','V','S','D'];
-      const days = (cfg.weekdays || []).map((on, i) => on ? dayLabels[i] : '').filter(Boolean).join(',');
-      return `${escHtml(label)}: ${escHtml(cfg.hour || '')} (${days || 'todos'})`;
-    } catch { return escHtml(label); }
-  }
-  if (bot.trigger_type === 'scheduled_field' && bot.trigger_value) {
-    try {
-      const cfg = JSON.parse(bot.trigger_value);
-      const off = Number(cfg.offsetMinutes) || 0;
-      const { amount, unit } = noRespFromMinutes(Math.abs(off));
-      const unitLabel = unit === 'd' ? 'día' : unit === 'h' ? 'hora' : 'min';
-      const plural = (amount !== 1 && unit !== 'm') ? 's' : '';
-      const dir = off < 0 ? 'antes' : 'después';
-      return `${escHtml(label)}: ${amount} ${unitLabel}${plural} ${dir} (campo #${escHtml(String(cfg.fieldId || '?'))})`;
-    } catch { return escHtml(label); }
-  }
-  return escHtml(label);
+  const def   = BOT_TRIGGER_REGISTRY[bot.trigger_type];
+  const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es) : bot.trigger_type;
+  let suffix  = '';
+  try { suffix = def?.summaryHtml ? def.summaryHtml(bot) : ''; } catch (e) { console.warn('botTriggerHtml summaryHtml error', e); }
+  return `${escHtml(label || '')}${suffix || ''}`;
 }
 
 // Badge "⚠ N errores" si el bot tiene referencias rotas (plantilla/etapa/bot
@@ -6872,61 +7086,23 @@ function openBotBuilder(bot, returnTo = null) {
     c.hidden = c.dataset.view !== 'list';
   });
 
+  // Reconstruye el dropdown desde el registry (idempotente, deja seleccionado el actual)
+  rebuildBotTriggerDropdown();
+  if (bot?.trigger_type) {
+    document.getElementById('sbTriggerType').value = bot.trigger_type;
+  }
   updateTriggerValueVisibility();
 
-  // Si el trigger es pipeline_stage o pipeline_stage_leave, restaurar pipeline+etapa
-  if ((bot?.trigger_type === 'pipeline_stage' || bot?.trigger_type === 'pipeline_stage_leave') && bot.trigger_value) {
-    const stageId = Number(bot.trigger_value);
-    const pl = (PIPELINES || []).find(p => p.stages?.some(s => s.id === stageId));
-    if (pl) populateTriggerPipelines(pl.id, stageId);
-  }
-  // Si el trigger es no_response, restaurar amount + unit del trigger_value (minutos)
-  if (bot?.trigger_type === 'no_response') {
-    const { amount, unit } = noRespFromMinutes(Number(bot.trigger_value || 1440));
-    const amtEl  = document.getElementById('sbTriggerNoRespAmount');
-    const unitEl = document.getElementById('sbTriggerNoRespUnit');
-    if (amtEl)  amtEl.value  = amount;
-    if (unitEl) unitEl.value = unit;
-  }
-  // Disparadores programados — el trigger_value es JSON
-  if (bot?.trigger_type === 'scheduled_one_time' && bot.trigger_value) {
-    try {
-      const cfg = JSON.parse(bot.trigger_value);
-      if (cfg.datetime) {
-        const [date, time] = cfg.datetime.split('T');
-        const dEl = document.getElementById('sbTriggerOneTimeDate');
-        const tEl = document.getElementById('sbTriggerOneTimeTime');
-        if (dEl) dEl.value = date || '';
-        if (tEl) tEl.value = (time || '09:00').slice(0,5);
-      }
-    } catch {}
-  }
-  if (bot?.trigger_type === 'scheduled_daily' && bot.trigger_value) {
-    try {
-      const cfg = JSON.parse(bot.trigger_value);
-      const tEl = document.getElementById('sbTriggerDailyTime');
-      if (tEl) tEl.value = cfg.hour || '09:00';
-      const wd = Array.isArray(cfg.weekdays) ? cfg.weekdays : [1,1,1,1,1,1,1];
-      document.querySelectorAll('#sbTriggerDailyWrap input[data-weekday]').forEach(cb => {
-        cb.checked = !!wd[Number(cb.dataset.weekday)];
-      });
-    } catch {}
-  }
-  if (bot?.trigger_type === 'scheduled_field' && bot.trigger_value) {
-    try {
-      const cfg = JSON.parse(bot.trigger_value);
-      populateTriggerDateFields(cfg.fieldId);
-      const off = Number(cfg.offsetMinutes) || 0;
-      const abs = Math.abs(off);
-      const dir = off < 0 ? 'before' : 'after';
-      const dirEl = document.getElementById('sbTriggerFieldDir');
-      if (dirEl) dirEl.value = dir;
-      const { amount, unit } = noRespFromMinutes(abs);
-      const aEl = document.getElementById('sbTriggerFieldAmount');
-      const uEl = document.getElementById('sbTriggerFieldUnit');
-      if (aEl) aEl.value = abs ? amount : 24;
-      if (uEl) uEl.value = abs ? unit   : 'h';
-    } catch {}
+  // Si el trigger tiene valor guardado, deserializa al widget según el registry
+  if (bot?.trigger_type && bot.trigger_value !== undefined && bot.trigger_value !== null) {
+    const def = BOT_TRIGGER_REGISTRY[bot.trigger_type];
+    if (def?.deserialize) {
+      try { def.deserialize(bot.trigger_value); }
+      catch (e) { console.warn('deserialize trigger error:', e); }
+    } else if (def?.widget === 'text') {
+      const v = document.getElementById('sbTriggerValue');
+      if (v) v.value = bot.trigger_value || '';
+    }
   }
   renderStepsFlow();
 }
@@ -6937,36 +7113,39 @@ function closeBotBuilder() {
   const _bce = document.getElementById('topbarBotExtras'); if (_bce) _bce.hidden = false;
 }
 
+// Mapeo widget → ID del wrapper. Cada disparador declara qué widget usa
+// en el registry; este mapa solo dice qué elemento DOM corresponde.
+const _BOT_TRIGGER_WIDGET_WRAPS = {
+  text:        null, // usa #sbTriggerValue (input genérico)
+  stage:       'sbTriggerStageWrap',
+  no_response: 'sbTriggerNoResponseWrap',
+  one_time:    'sbTriggerOneTimeWrap',
+  daily:       'sbTriggerDailyWrap',
+  field:       'sbTriggerFieldWrap',
+};
+
 function updateTriggerValueVisibility() {
-  const type = document.getElementById('sbTriggerType').value;
+  const type = document.getElementById('sbTriggerType')?.value;
+  const def  = BOT_TRIGGER_REGISTRY[type];
   const valInput = document.getElementById('sbTriggerValue');
-  const stageWrap = document.getElementById('sbTriggerStageWrap');
-  const noRespWrap = document.getElementById('sbTriggerNoResponseWrap');
-  const oneTimeWrap = document.getElementById('sbTriggerOneTimeWrap');
-  const dailyWrap   = document.getElementById('sbTriggerDailyWrap');
-  const fieldWrap   = document.getElementById('sbTriggerFieldWrap');
-  const isStage    = type === 'pipeline_stage' || type === 'pipeline_stage_leave';
-  const isNoResp   = type === 'no_response';
-  const isOneTime  = type === 'scheduled_one_time';
-  const isDaily    = type === 'scheduled_daily';
-  const isField    = type === 'scheduled_field';
-  const hideValue  = ['always', 'new_contact', 'pipeline_stage', 'pipeline_stage_leave', 'no_response', 'message_read', 'scheduled_one_time', 'scheduled_daily', 'scheduled_field'].includes(type);
-  valInput.hidden = hideValue;
-  if (stageWrap)   stageWrap.hidden   = !isStage;
-  if (noRespWrap)  noRespWrap.hidden  = !isNoResp;
-  if (oneTimeWrap) oneTimeWrap.hidden = !isOneTime;
-  if (dailyWrap)   dailyWrap.hidden   = !isDaily;
-  if (fieldWrap)   fieldWrap.hidden   = !isField;
-  // Placeholder según tipo
-  if (type === 'tag_added') {
-    valInput.placeholder = 'Etiqueta exacta (ej: "VIP"). Vacío = cualquier etiqueta';
-  } else if (type === 'assignee_changed') {
-    valInput.placeholder = 'ID de asesor (opcional). Vacío = cualquier cambio';
-  } else {
-    valInput.placeholder = 'p.ej. "precio", "hola", "info"';
+  const widget = def?.widget || null;
+
+  // Mostrar/ocultar el input genérico de texto
+  if (valInput) {
+    valInput.hidden = (widget !== 'text');
+    valInput.placeholder = def?.valuePlaceholder || 'p.ej. "precio", "hola", "info"';
   }
-  if (isStage) populateTriggerPipelines();
-  if (isField) populateTriggerDateFields();
+
+  // Mostrar el wrapper del widget activo, ocultar todos los demás
+  for (const [w, wrapId] of Object.entries(_BOT_TRIGGER_WIDGET_WRAPS)) {
+    if (!wrapId) continue;
+    const el = document.getElementById(wrapId);
+    if (el) el.hidden = (widget !== w);
+  }
+
+  // Side effects específicos al activar ciertos widgets
+  if (widget === 'stage') populateTriggerPipelines();
+  if (widget === 'field') populateTriggerDateFields();
 }
 
 // Carga campos custom de tipo fecha en el dropdown del trigger scheduled_field
@@ -8061,39 +8240,27 @@ function setupBot() {
 
   // Save bot
   // ─── Vista de Código (read-only, JSON pretty-printed) ───
+  // Lee el trigger_value desde el widget activo según el registry.
+  // Si serialize() falla (validación), lanza Error con mensaje al usuario.
+  function bbReadTriggerValue(trigger_type) {
+    const def = BOT_TRIGGER_REGISTRY[trigger_type];
+    if (!def) return '';
+    if (def.serialize) {
+      try { return def.serialize(); }
+      catch (e) {
+        // En el preview de Código no queremos romper el render — devolver '' silencioso
+        return '';
+      }
+    }
+    if (def.widget === 'text') {
+      return document.getElementById('sbTriggerValue')?.value?.trim() || '';
+    }
+    return ''; // widgets sin valor: always, message_read, new_contact
+  }
+
   function bbBuildBotJSON() {
     const trigger_type = document.getElementById('sbTriggerType')?.value || 'keyword';
-    let trigger_value = document.getElementById('sbTriggerValue')?.value?.trim() || '';
-    if (trigger_type === 'pipeline_stage' || trigger_type === 'pipeline_stage_leave') {
-      trigger_value = document.getElementById('sbTriggerStage')?.value || '';
-    }
-    if (trigger_type === 'no_response') {
-      const amt = document.getElementById('sbTriggerNoRespAmount')?.value;
-      const unit = document.getElementById('sbTriggerNoRespUnit')?.value;
-      trigger_value = String(noRespToMinutes(amt, unit));
-    }
-    if (trigger_type === 'scheduled_one_time') {
-      const d = document.getElementById('sbTriggerOneTimeDate')?.value;
-      const t = document.getElementById('sbTriggerOneTimeTime')?.value || '09:00';
-      trigger_value = d ? JSON.stringify({ datetime: `${d}T${t}` }) : '';
-    }
-    if (trigger_type === 'scheduled_daily') {
-      const hour = document.getElementById('sbTriggerDailyTime')?.value || '09:00';
-      const weekdays = [0,1,2,3,4,5,6].map(d => {
-        const cb = document.querySelector(`#sbTriggerDailyWrap input[data-weekday="${d}"]`);
-        return cb?.checked ? 1 : 0;
-      });
-      trigger_value = JSON.stringify({ hour, weekdays });
-    }
-    if (trigger_type === 'scheduled_field') {
-      const fieldId = Number(document.getElementById('sbTriggerFieldId')?.value || 0);
-      const amt     = Number(document.getElementById('sbTriggerFieldAmount')?.value || 0);
-      const unit    = document.getElementById('sbTriggerFieldUnit')?.value || 'h';
-      const dir     = document.getElementById('sbTriggerFieldDir')?.value || 'before';
-      const sign    = dir === 'before' ? -1 : 1;
-      const offsetMinutes = sign * noRespToMinutes(amt, unit);
-      trigger_value = fieldId ? JSON.stringify({ fieldId, offsetMinutes }) : '';
-    }
+    const trigger_value = bbReadTriggerValue(trigger_type);
     return {
       name:         document.getElementById('botBuilderName')?.value?.trim() || '',
       enabled:      document.getElementById('botBuilderEnabled')?.checked ? 1 : 0,
@@ -8144,17 +8311,19 @@ function setupBot() {
   }
 
   function bbTriggerSummaryHTML(type, value) {
-    const label = (typeof SB_TRIGGER_LABELS === 'object' && SB_TRIGGER_LABELS[type]) ? SB_TRIGGER_LABELS[type] : type;
+    // Reusa la lógica del registry para mantener un solo lugar de verdad.
+    const def = BOT_TRIGGER_REGISTRY[type];
+    const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || type) : type;
     let detail = '';
-    if (type === 'keyword' && value) detail = ` — "${escHtml(String(value))}"`;
-    else if (type === 'pipeline_stage' && value) {
-      const stageId = Number(value);
-      const pl = (typeof PIPELINES !== 'undefined' && PIPELINES) ? PIPELINES.find(p => p.stages?.some(s => s.id === stageId)) : null;
-      const stage = pl?.stages?.find(s => s.id === stageId);
-      if (stage) detail = ` — ${escHtml(pl.name)} / ${escHtml(stage.name)}`;
-    }
+    try {
+      if (def?.summaryHtml) {
+        const raw = def.summaryHtml({ trigger_type: type, trigger_value: value });
+        // El registry retorna ": ..." — para el árbol preferimos " — ..."
+        detail = (raw || '').replace(/^:\s*/, ' — ');
+      }
+    } catch {}
     return `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="3 3 17 10 3 17 3 3"/></svg>
-            <span>Disparador: ${escHtml(label)}${detail}</span>`;
+            <span>Disparador: ${escHtml(label)}${detail || ''}</span>`;
   }
 
   function bbRenderStepNode(step, idx) {
@@ -8257,39 +8426,17 @@ function setupBot() {
     if (!name) { toast('Escribe un nombre para el bot', 'error'); return; }
     const enabled = document.getElementById('botBuilderEnabled').checked ? 1 : 0;
     const trigger_type = document.getElementById('sbTriggerType').value;
-    let trigger_value = document.getElementById('sbTriggerValue').value.trim();
-    if (trigger_type === 'pipeline_stage' || trigger_type === 'pipeline_stage_leave') {
-      trigger_value = document.getElementById('sbTriggerStage')?.value || '';
-    }
-    if (trigger_type === 'no_response') {
-      const amt = document.getElementById('sbTriggerNoRespAmount')?.value;
-      const unit = document.getElementById('sbTriggerNoRespUnit')?.value;
-      trigger_value = String(noRespToMinutes(amt, unit));
-    }
-    if (trigger_type === 'scheduled_one_time') {
-      const d = document.getElementById('sbTriggerOneTimeDate')?.value;
-      const tt = document.getElementById('sbTriggerOneTimeTime')?.value || '09:00';
-      if (!d) { toast('Selecciona la fecha del disparador', 'error'); return; }
-      trigger_value = JSON.stringify({ datetime: `${d}T${tt}` });
-    }
-    if (trigger_type === 'scheduled_daily') {
-      const hour = document.getElementById('sbTriggerDailyTime')?.value || '09:00';
-      const weekdays = [0,1,2,3,4,5,6].map(d => {
-        const cb = document.querySelector(`#sbTriggerDailyWrap input[data-weekday="${d}"]`);
-        return cb?.checked ? 1 : 0;
-      });
-      if (weekdays.every(x => !x)) { toast('Selecciona al menos un día de la semana', 'error'); return; }
-      trigger_value = JSON.stringify({ hour, weekdays });
-    }
-    if (trigger_type === 'scheduled_field') {
-      const fieldId = Number(document.getElementById('sbTriggerFieldId')?.value || 0);
-      const amt     = Number(document.getElementById('sbTriggerFieldAmount')?.value || 0);
-      const unit    = document.getElementById('sbTriggerFieldUnit')?.value || 'h';
-      const dir     = document.getElementById('sbTriggerFieldDir')?.value || 'before';
-      const sign    = dir === 'before' ? -1 : 1;
-      const offsetMinutes = sign * noRespToMinutes(amt, unit);
-      if (!fieldId) { toast('Selecciona un campo de fecha', 'error'); return; }
-      trigger_value = JSON.stringify({ fieldId, offsetMinutes });
+    const def = BOT_TRIGGER_REGISTRY[trigger_type];
+    let trigger_value = '';
+    try {
+      if (def?.serialize) {
+        trigger_value = def.serialize();
+      } else if (def?.widget === 'text') {
+        trigger_value = document.getElementById('sbTriggerValue')?.value?.trim() || '';
+      }
+    } catch (e) {
+      toast(e.message || 'Configuración del disparador incompleta', 'error');
+      return;
     }
     const steps = collectAllSteps().map(({ _id, ...rest }) => rest);
     try {

@@ -16077,24 +16077,22 @@ async function cpLoadConfig() {
 async function cpSend(message) {
   if (_cpBusy) return;
   _cpBusy = true;
-  document.getElementById('copilotoSendBtn').disabled = true;
-
-  // Añadir mensaje del usuario
-  _cpHistory.push({ role: 'user', content: message });
-  cpRenderMessages(true);
-
-  // Typing indicator
-  cpShowTyping(true);
+  const sendBtn = document.getElementById('copilotoSendBtn');
+  if (sendBtn) sendBtn.disabled = true;
 
   try {
+    _cpHistory.push({ role: 'user', content: message });
+    cpRenderMessages();
+    cpShowTyping(true);
+
     const { reply, history } = await api('POST', '/api/copilot/chat', { message, history: _cpHistory.slice(0, -1) });
-    _cpHistory = history || [..._cpHistory, { role: 'assistant', content: reply }];
+    _cpHistory = Array.isArray(history) ? history : [..._cpHistory, { role: 'assistant', content: reply }];
   } catch(e) {
     _cpHistory.push({ role: 'assistant', content: '⚠️ ' + e.message });
   } finally {
     cpShowTyping(false);
     _cpBusy = false;
-    document.getElementById('copilotoSendBtn').disabled = false;
+    if (sendBtn) sendBtn.disabled = false;
     cpRenderMessages();
     document.getElementById('copilotoInput')?.focus();
   }

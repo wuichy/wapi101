@@ -3611,7 +3611,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones','mail']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones','mail','copiloto']);
 
 // Filtro de búsqueda de la vista Aplicaciones (topbar)
 let _appsSearch = '';
@@ -3762,6 +3762,7 @@ function setupSettingsTabs() {
       if (target === 'negocio') loadBusinessHours();
       if (target === 'suscripcion') loadBilling();
       if (target === 'ia') loadAISettings();
+      if (target === 'copiloto') initCopiloto();
     });
   });
 
@@ -15965,3 +15966,163 @@ document.addEventListener('DOMContentLoaded', () => {
     _pwaInstallPrompt = null;
   });
 });
+
+// ═══════════════════════════════════════════════════════════
+// COPILOTO IA
+// ═══════════════════════════════════════════════════════════
+let _cpHistory = [];
+let _cpBusy    = false;
+let _cpInited  = false;
+
+function initCopiloto() {
+  if (_cpInited) return;
+  _cpInited = true;
+
+  const form    = document.getElementById('copilotoForm');
+  const input   = document.getElementById('copilotoInput');
+  const sendBtn = document.getElementById('copilotoSendBtn');
+
+  // Auto-resize textarea
+  input?.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+  });
+
+  // Enter = enviar, Shift+Enter = nueva línea
+  input?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form?.requestSubmit(); }
+  });
+
+  form?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const msg = input?.value.trim();
+    if (!msg || _cpBusy) return;
+    input.value = ''; input.style.height = 'auto';
+    await cpSend(msg);
+  });
+
+  // Suggestions
+  document.getElementById('copilotoMessages')?.addEventListener('click', e => {
+    const btn = e.target.closest('.copiloto-suggestion');
+    if (btn) cpSend(btn.dataset.q);
+  });
+
+  // Nueva conversación
+  document.getElementById('copilotrClearBtn')?.addEventListener('click', () => {
+    _cpHistory = [];
+    cpRenderMessages();
+  });
+
+  // Config drawer
+  document.getElementById('copilotoConfigBtn')?.addEventListener('click', async () => {
+    await cpLoadConfig();
+    document.getElementById('copilotoConfigDrawer').hidden = false;
+  });
+  document.getElementById('copilotoConfigClose')?.addEventListener('click', () => {
+    document.getElementById('copilotoConfigDrawer').hidden = true;
+  });
+  document.getElementById('copilotoConfigSave')?.addEventListener('click', async () => {
+    const body = {
+      canMoveStage: document.getElementById('cpCfgMoveStage')?.checked ?? true,
+      canAssign:    document.getElementById('cpCfgAssign')?.checked    ?? true,
+      canAddTag:    document.getElementById('cpCfgAddTag')?.checked    ?? true,
+      canAddNote:   document.getElementById('cpCfgAddNote')?.checked   ?? true,
+      context:      document.getElementById('cpCfgContext')?.value     || '',
+      model:        document.getElementById('cpCfgModel')?.value       || '',
+    };
+    try {
+      await api('PATCH', '/api/copilot/config', body);
+      document.getElementById('copilotoConfigDrawer').hidden = true;
+    } catch(e) { alert('Error guardando config: ' + e.message); }
+  });
+}
+
+async function cpLoadConfig() {
+  try {
+    const cfg = await api('GET', '/api/copilot/config');
+    const el = id => document.getElementById(id);
+    if (el('cpCfgMoveStage')) el('cpCfgMoveStage').checked = cfg.canMoveStage !== false;
+    if (el('cpCfgAssign'))    el('cpCfgAssign').checked    = cfg.canAssign    !== false;
+    if (el('cpCfgAddTag'))    el('cpCfgAddTag').checked    = cfg.canAddTag    !== false;
+    if (el('cpCfgAddNote'))   el('cpCfgAddNote').checked   = cfg.canAddNote   !== false;
+    if (el('cpCfgContext'))   el('cpCfgContext').value      = cfg.context || '';
+    if (el('cpCfgModel'))     el('cpCfgModel').value        = cfg.model   || '';
+  } catch(e) { console.error('cpLoadConfig', e); }
+}
+
+async function cpSend(message) {
+  if (_cpBusy) return;
+  _cpBusy = true;
+  document.getElementById('copilotoSendBtn').disabled = true;
+
+  // Añadir mensaje del usuario
+  _cpHistory.push({ role: 'user', content: message });
+  cpRenderMessages(true);
+
+  // Typing indicator
+  cpShowTyping(true);
+
+  try {
+    const { reply, history } = await api('POST', '/api/copilot/chat', { message, history: _cpHistory.slice(0, -1) });
+    _cpHistory = history || [..._cpHistory, { role: 'assistant', content: reply }];
+  } catch(e) {
+    _cpHistory.push({ role: 'assistant', content: '⚠️ ' + e.message });
+  } finally {
+    cpShowTyping(false);
+    _cpBusy = false;
+    document.getElementById('copilotoSendBtn').disabled = false;
+    cpRenderMessages();
+    document.getElementById('copilotoInput')?.focus();
+  }
+}
+
+function cpShowTyping(show) {
+  const el = document.getElementById('cpTypingIndicator');
+  if (show && !el) {
+    const msgs = document.getElementById('copilotoMessages');
+    const div = document.createElement('div');
+    div.id = 'cpTypingIndicator';
+    div.className = 'copiloto-msg copiloto-msg--ai';
+    div.innerHTML = `<div class="copiloto-msg-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg></div><div class="copiloto-typing"><span></span><span></span><span></span></div>`;
+    msgs?.appendChild(div);
+    msgs?.scrollTo({ top: msgs.scrollHeight, behavior: 'smooth' });
+  } else if (!show && el) {
+    el.remove();
+  }
+}
+
+function cpRenderMessages(scrollOnly = false) {
+  const container = document.getElementById('copilotoMessages');
+  if (!container) return;
+
+  if (!_cpHistory.length) {
+    container.innerHTML = `<div class="copiloto-welcome">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" style="opacity:.3"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+      <p>Hola, soy tu Copiloto.<br>Puedo consultar clientes, leads, pipelines y más.<br>¿En qué te ayudo?</p>
+      <div class="copiloto-suggestions">
+        <button class="copiloto-suggestion" data-q="¿Cuántos leads hay activos en total?">¿Cuántos leads activos?</button>
+        <button class="copiloto-suggestion" data-q="Muéstrame el resumen de todos los pipelines">Resumen de pipelines</button>
+        <button class="copiloto-suggestion" data-q="¿Qué estadísticas hay de los últimos 7 días?">Stats últimos 7 días</button>
+        <button class="copiloto-suggestion" data-q="Lista los asesores y cuántos leads tiene cada uno">Carga por asesor</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  const html = _cpHistory.map(m => {
+    const isUser = m.role === 'user';
+    const text   = typeof m.content === 'string' ? m.content : '';
+    if (!text) return '';
+    return `<div class="copiloto-msg copiloto-msg--${isUser ? 'user' : 'ai'}">
+      <div class="copiloto-msg-avatar">${isUser ? (CURRENT_ADVISOR?.name?.[0]||'U') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>`}</div>
+      <div class="copiloto-msg-bubble">${escHtml(text)}</div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  container.innerHTML = html;
+  container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}

@@ -464,6 +464,35 @@ app.post('/api/settings/ai/test', async (req, res) => {
   }
 });
 
+// ─── Copiloto IA ───
+const DEFAULT_COPILOT_CONFIG = { canMoveStage: true, canAssign: true, canAddTag: true, canAddNote: true, context: '', model: '' };
+
+app.get('/api/copilot/config', (req, res) => {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = 'copilot_config' AND tenant_id = ?").get(req.tenantId);
+  res.json(row ? { ...DEFAULT_COPILOT_CONFIG, ...JSON.parse(row.value) } : DEFAULT_COPILOT_CONFIG);
+});
+
+app.patch('/api/copilot/config', (req, res) => {
+  const val = JSON.stringify({ ...DEFAULT_COPILOT_CONFIG, ...(req.body || {}) });
+  db.prepare(`INSERT INTO app_settings (tenant_id, key, value, updated_at) VALUES (?, 'copilot_config', ?, unixepoch())
+    ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`).run(req.tenantId, val);
+  res.json({ ok: true });
+});
+
+app.post('/api/copilot/chat', async (req, res) => {
+  try {
+    const copilot = require('./src/modules/ai/copilot');
+    const configRow = db.prepare("SELECT value FROM app_settings WHERE key = 'copilot_config' AND tenant_id = ?").get(req.tenantId);
+    const config = { ...DEFAULT_COPILOT_CONFIG, ...(configRow ? JSON.parse(configRow.value) : {}) };
+    const { message, history = [] } = req.body || {};
+    if (!message) return res.status(400).json({ error: 'message requerido' });
+    const result = await copilot.chat(db, req.tenantId, history, message, config);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── AI Suggest (genera borrador de respuesta para el chat) ───
 app.post('/api/conversations/:id/ai-suggest', async (req, res) => {
   try {

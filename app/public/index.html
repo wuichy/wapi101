@@ -73,6 +73,10 @@
           <span>Mail</span>
           <span class="nav-badge" id="navMailBadge" hidden></span>
         </a>
+        <a href="#copiloto" class="nav-item" data-view="copiloto" id="navCopiloto">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+          <span>Copiloto</span>
+        </a>
         <a href="#integraciones" class="nav-item" data-view="integraciones" data-i18n="nav.integraciones">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11h-1V9a3 3 0 00-3-3h-2V5a3 3 0 00-6 0v1H5a3 3 0 00-3 3v3h1a2 2 0 010 4H2v3a3 3 0 003 3h3v-1a2 2 0 014 0v1h3a3 3 0 003-3v-2h1a3 3 0 000-6z"/></svg>
           <span>Integraciones</span>
@@ -2632,6 +2636,94 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <h3 data-i18n="apps.market.title">Marketplace próximamente</h3>
               <p data-i18n="apps.market.desc">Estamos preparando integraciones con Zapier, Google Sheets, HubSpot y más.</p>
               <p class="apps-coming-soon-note">¿Necesitas una integración específica? Escríbenos a <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a>.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── VISTA: COPILOTO ─── -->
+      <section class="view view-copiloto" data-view="copiloto" hidden>
+        <div class="copiloto-shell">
+          <!-- Header -->
+          <div class="copiloto-header">
+            <div class="copiloto-header-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+              <span>Copiloto</span>
+              <span class="copiloto-badge">IA</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button class="btn btn--ghost btn--sm" id="copilotrClearBtn" title="Nueva conversación">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg>
+                Nueva
+              </button>
+              <button class="btn btn--ghost btn--sm" id="copilotoConfigBtn" title="Configuración del Copiloto">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9z"/></svg>
+                Config
+              </button>
+            </div>
+          </div>
+
+          <!-- Messages -->
+          <div class="copiloto-messages" id="copilotoMessages">
+            <div class="copiloto-welcome">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" style="opacity:.3"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+              <p>Hola, soy tu Copiloto.<br>Puedo consultar clientes, leads, pipelines y más.<br>¿En qué te ayudo?</p>
+              <div class="copiloto-suggestions">
+                <button class="copiloto-suggestion" data-q="¿Cuántos leads hay activos en total?">¿Cuántos leads activos?</button>
+                <button class="copiloto-suggestion" data-q="Muéstrame el resumen de todos los pipelines">Resumen de pipelines</button>
+                <button class="copiloto-suggestion" data-q="¿Qué estadísticas hay de los últimos 7 días?">Stats últimos 7 días</button>
+                <button class="copiloto-suggestion" data-q="Lista los asesores y cuántos leads tiene cada uno">Carga por asesor</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Input -->
+          <form class="copiloto-form" id="copilotoForm">
+            <textarea class="copiloto-input" id="copilotoInput" rows="1" placeholder="Pregunta algo o pide una acción…" maxlength="2000"></textarea>
+            <button type="submit" class="copiloto-send-btn" id="copilotoSendBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </button>
+          </form>
+        </div>
+
+        <!-- Config Drawer -->
+        <div class="copiloto-config-drawer" id="copilotoConfigDrawer" hidden>
+          <div class="copiloto-config-panel">
+            <div class="copiloto-config-header">
+              <h3>Configuración del Copiloto</h3>
+              <button type="button" class="btn btn--ghost btn--sm" id="copilotoConfigClose">✕</button>
+            </div>
+            <div class="copiloto-config-body">
+              <p class="settings-note" style="margin-bottom:16px">Define qué acciones puede ejecutar el Copiloto. Las acciones desactivadas solo podrá consultarlas, no modificarlas.</p>
+
+              <h4 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Acciones permitidas</h4>
+
+              <label class="form-field form-field--switch" style="margin-bottom:8px">
+                <span>Mover leads de etapa</span>
+                <input type="checkbox" id="cpCfgMoveStage" checked>
+              </label>
+              <label class="form-field form-field--switch" style="margin-bottom:8px">
+                <span>Asignar lead a asesor</span>
+                <input type="checkbox" id="cpCfgAssign" checked>
+              </label>
+              <label class="form-field form-field--switch" style="margin-bottom:8px">
+                <span>Agregar etiquetas a leads</span>
+                <input type="checkbox" id="cpCfgAddTag" checked>
+              </label>
+              <label class="form-field form-field--switch" style="margin-bottom:16px">
+                <span>Agregar notas a leads</span>
+                <input type="checkbox" id="cpCfgAddNote" checked>
+              </label>
+
+              <h4 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Contexto del negocio</h4>
+              <textarea id="cpCfgContext" rows="3" class="form-input" placeholder="Ej: Somos una agencia de seguros en CDMX especializada en autos y vida. Nuestros clientes son empresas medianas." style="width:100%;margin-bottom:16px;resize:vertical"></textarea>
+
+              <h4 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Modelo (opcional)</h4>
+              <input type="text" id="cpCfgModel" class="form-input" placeholder="Vacío = usar el modelo configurado en Ajustes → IA" style="width:100%;margin-bottom:4px">
+              <p class="settings-note">Recomendado: <code>claude-haiku-4-5-20251001</code> (rápido y barato)</p>
+            </div>
+            <div class="copiloto-config-footer">
+              <button type="button" class="btn btn--primary" id="copilotoConfigSave">Guardar</button>
             </div>
           </div>
         </div>

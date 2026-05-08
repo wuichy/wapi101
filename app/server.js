@@ -464,6 +464,38 @@ app.post('/api/settings/ai/test', async (req, res) => {
   }
 });
 
+// ─── AI Suggest (genera borrador de respuesta para el chat) ───
+app.post('/api/conversations/:id/ai-suggest', async (req, res) => {
+  try {
+    const aiSvc = require('./src/modules/ai/service');
+    const settings = aiSvc.getSettings(db, req.tenantId);
+    if (!settings.apiKey && settings.provider !== 'ollama') {
+      return res.status(400).json({ error: 'Configura el API Key de IA en Ajustes → IA antes de usar esta función.' });
+    }
+    const convoId = Number(req.params.id);
+    const convo = db.prepare('SELECT * FROM conversations WHERE id = ? AND tenant_id = ?').get(convoId, req.tenantId);
+    if (!convo) return res.status(404).json({ error: 'Conversación no encontrada' });
+
+    const knowledge = aiSvc.getKnowledgeContext(db, req.tenantId);
+    const history   = aiSvc.getConversationHistory(db, req.tenantId, convoId, 15);
+    if (!history.length) return res.status(400).json({ error: 'No hay mensajes en la conversación todavía.' });
+
+    const profileRow = db.prepare("SELECT value FROM app_settings WHERE key = 'profile' AND tenant_id = ?").get(req.tenantId);
+    const profile = profileRow ? JSON.parse(profileRow.value) : {};
+    const companyName = profile.businessName || profile.name || 'nuestra empresa';
+
+    const systemPrompt = [
+      `Eres un asesor de ventas de ${companyName}. Responde de forma profesional, amigable y concisa en el mismo idioma que usa el cliente. No uses markdown.`,
+      knowledge ? `Fuentes de conocimiento:\n${knowledge}` : '',
+    ].filter(Boolean).join('\n\n');
+
+    const suggestion = await aiSvc.callAI(settings, systemPrompt, history);
+    res.json({ suggestion });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Auth (OAuth callbacks) ───
 mountSafe('/auth', require('./src/modules/auth/routes'));
 

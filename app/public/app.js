@@ -368,6 +368,7 @@ const I18N_TRANSLATIONS = {
     'bot.step.stage': 'Cambiar etapa',
     'bot.step.tag': 'Agregar etiqueta',
     'bot.step.assign': 'Asignar responsable',
+    'bot.step.ai_reply': 'Respuesta IA',
     'bot.step.wait_response': 'Esperar respuesta del lead',
     'bot.step.stop_bot': 'Parar bot',
     'bot.step.stop_and_start': 'Parar este e iniciar otro bot',
@@ -880,6 +881,7 @@ const I18N_TRANSLATIONS = {
     'bot.step.stage': 'Change stage',
     'bot.step.tag': 'Add tag',
     'bot.step.assign': 'Assign agent',
+    'bot.step.ai_reply': 'AI Reply',
     'bot.step.wait_response': 'Wait for lead reply',
     'bot.step.stop_bot': 'Stop bot',
     'bot.step.stop_and_start': 'Stop this bot and start another',
@@ -6443,6 +6445,7 @@ async function loadBotTags() {
 }
 
 const SB_STEP_LABELS = {
+  get ai_reply()              { return t('bot.step.ai_reply'); },
   get message()               { return t('bot.step.message'); },
   get template()              { return t('bot.step.template'); },
   get timer()                 { return t('bot.step.timer'); },
@@ -6848,6 +6851,7 @@ function stepSummary(step) {
       return list.length ? list.map(t => `#${t}`).join(' ') : 'Sin etiqueta';
     }
     case 'assign':    return c.assignee || 'Sin asignar';
+    case 'ai_reply':  return c.instruction ? `"${c.instruction.slice(0,50)}${c.instruction.length>50?'…':''}"` : 'Responde con IA usando el historial del chat';
     case 'stop_bot':  return 'El bot deja de responder a este contacto';
     case 'stop_and_start': {
       const target = (sbBots || []).find(b => b.id === Number(c.targetBotId));
@@ -6899,6 +6903,7 @@ function stepIconSvg(type) {
     book_appointment:      `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M6 12h4m-2-2v4"/></svg>`,
     cancel_appointment:    `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 13l6-2m0 2l-6-2"/></svg>`,
     reschedule_appointment:`<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 14a3 3 0 0 1 3-3m0 0l-1.5-1.5M10 11l1.5-1.5"/></svg>`,
+    ai_reply: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M10 2l1.9 5.9H18l-5 3.6 1.9 5.9L10 14l-4.9 3.4 1.9-5.9-5-3.6h6.1z"/></svg>`,
   };
   return icons[type] || '';
 }
@@ -7079,6 +7084,14 @@ function buildStepBody(step) {
       return `
         <label>Responsable</label>
         <input type="text" data-field="assignee" data-sid="${sid}" value="${escHtml(c.assignee||'')}" placeholder="Nombre del agente" />`;
+    case 'ai_reply':
+      return `
+        <p style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;line-height:1.5">
+          La IA lee el historial de la conversación y tus fuentes de conocimiento para generar y enviar una respuesta automáticamente.<br>
+          Deja la instrucción vacía para usar el tono por defecto configurado en Ajustes → IA.
+        </p>
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Instrucción personalizada (opcional)</label>
+        <textarea data-field="instruction" data-sid="${sid}" rows="3" style="width:100%;resize:vertical;font-size:13px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);box-sizing:border-box" placeholder="Ej: Responde como un experto en soporte técnico, sé breve y directo.">${c.instruction || ''}</textarea>`;
     case 'stop_bot':
       return `
         <p style="font-size:13px;color:var(--text-muted);margin:10px 0 4px;line-height:1.5">
@@ -12655,6 +12668,34 @@ function setupTplPicker() {
     const ta = document.getElementById('expDetailReplyText');
     if (!ta) return;
     openTplPicker(e.currentTarget, ta, convo?.provider, convo?.lastIncomingAt);
+  });
+
+  async function _aiSuggest(convoId, textarea) {
+    if (!convoId || !textarea) return;
+    const btn = textarea.closest('.rh-reply-input-row')?.querySelector('.rh-ai-suggest-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+    try {
+      const { suggestion } = await api('POST', `/api/conversations/${convoId}/ai-suggest`, {});
+      if (suggestion) {
+        textarea.value = suggestion;
+        textarea.dispatchEvent(new Event('input'));
+        textarea.focus();
+      }
+    } catch (e) {
+      alert('IA: ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
+  }
+
+  document.getElementById('rhAiSuggestBtn')?.addEventListener('click', () => {
+    const ta = document.querySelector('.rh-reply-form textarea');
+    _aiSuggest(ACTIVE_CONVO_ID, ta);
+  });
+
+  document.getElementById('expDetailAiSuggestBtn')?.addEventListener('click', () => {
+    const ta = document.getElementById('expDetailReplyText');
+    _aiSuggest(EXP_DETAIL_CONVO_ID, ta);
   });
 }
 

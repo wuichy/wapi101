@@ -8,6 +8,7 @@ const expedientSvc = require('../expedients/service');
 const activitySvc  = require('../expedients/activity');
 const { sendMessage, sendWhatsAppTemplate } = require('../conversations/sender');
 const apptSvc      = require('../appointments/service');
+const aiSvc        = require('../ai/service');
 
 const MS = { segundos: 1000, minutos: 60_000, horas: 3_600_000, 'días': 86_400_000 };
 
@@ -698,6 +699,46 @@ async function executeStep(db, step, ctx) {
       } catch (err) {
         _log('error', `reschedule_appointment error: ${err.message}`);
         throw new Error(`Reagendar cita falló: ${err.message}`);
+      }
+      return false;
+    }
+
+    case 'ai_reply': {
+      if (!ctx.convoId) {
+        _log('warn', 'ai_reply: no hay conversación activa');
+        return false;
+      }
+      try {
+        const settings = aiSvc.getSettings(db, ctx.tenantId);
+        if (!settings.apiKey && settings.provider !== 'ollama') {
+          _log('warn', 'ai_reply: sin API key configurada, paso omitido');
+          return false;
+        }
+        const knowledge = aiSvc.getKnowledgeContext(db, ctx.tenantId);
+        const history   = aiSvc.getConversationHistory(db, ctx.tenantId, ctx.convoId, 15);
+
+        const instruction = replaceVars(c.instruction || '', ctx);
+        const profileRow  = db.prepare("SELECT value FROM app_settings WHERE key = 'profile' AND tenant_id = ?").get(ctx.tenantId);
+        const profile     = profileRow ? JSON.parse(profileRow.value) : {};
+        const companyName = profile.businessName || profile.name || 'nuestra empresa';
+
+        const systemPrompt = [
+          instruction || `Eres un asesor de ventas de ${companyName}. Responde de forma profesional, amigable y concisa en el mismo idioma que usa el cliente. No uses markdown.`,
+          knowledge ? `Fuentes de conocimiento:\n${knowledge}` : '',
+        ].filter(Boolean).join('\n\n');
+
+        const reply = await aiSvc.callAI(settings, systemPrompt, history.length ? history : [{ role: 'user', content: ctx.messageBody || '' }]);
+        if (!reply || !reply.trim()) return false;
+
+        const convo = convoSvc.getById(db, null, ctx.convoId);
+        if (!convo) return false;
+        const externalId = await sendMessage(db, convo, reply);
+        convoSvc.addMessage(db, null, ctx.convoId, {
+          externalId, direction: 'outgoing', provider: convo.provider, body: reply, status: 'sent',
+        });
+        _log('info', `ai_reply enviado: "${reply.slice(0, 80)}"`);
+      } catch (err) {
+        _log('error', `ai_reply error: ${err.message}`);
       }
       return false;
     }

@@ -405,6 +405,9 @@
                     <button type="button" class="rh-icon-button rh-tpl-trigger" id="rhTplTrigger" title="Plantillas">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                     </button>
+                    <button type="button" class="rh-icon-button rh-ai-suggest-btn" id="rhAiSuggestBtn" title="Sugerir respuesta con IA">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+                    </button>
                   </div>
                   <div class="rh-reply-compose">
                     <textarea placeholder="Escribe un mensaje…" rows="1"></textarea>
@@ -831,6 +834,9 @@
                   </div>
                   <button type="button" class="rh-icon-button rh-tpl-trigger" id="expDetailTplTrigger" title="Plantillas">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                  </button>
+                  <button type="button" class="rh-icon-button rh-ai-suggest-btn" id="expDetailAiSuggestBtn" title="Sugerir respuesta con IA">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
                   </button>
                 </div>
                 <div class="rh-reply-compose">
@@ -1651,6 +1657,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </button>
               <!-- Picker de tipo de paso -->
               <div class="sb-step-picker" id="sbStepPicker" hidden>
+                <button class="sb-step-type-btn" data-type="ai_reply">
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><path d="M10 2l1.9 5.9H18l-5 3.6 1.9 5.9L10 14l-4.9 3.4 1.9-5.9-5-3.6h6.1z"/></svg>
+                  <span>Respuesta IA</span>
+                </button>
                 <button class="sb-step-type-btn" data-type="message">
                   <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20"><path d="M3 4h14a1 1 0 011 1v9a1 1 0 01-1 1H5l-3 3V5a1 1 0 011-1z"/></svg>
                   <span data-i18n="bot.step.message">Enviar mensaje</span>

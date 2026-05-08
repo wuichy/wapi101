@@ -3698,10 +3698,10 @@ function showView(viewName) {
   }
   const cleanTopbar = (viewName === 'contactos');
   if (title) title.hidden = cleanTopbar;
-  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail';
+  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail' || viewName === 'copiloto';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
-  if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta');
+  if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta' || viewName === 'copiloto');
   const customersExtras = document.getElementById('topbarCustomersExtras');
   if (customersExtras) customersExtras.hidden = (viewName !== 'contactos');
   const expExtras = document.getElementById('topbarExpExtras');
@@ -3723,6 +3723,7 @@ function showView(viewName) {
   if (viewName === 'chats') loadConversations();
   if (viewName === 'inicio') loadDashboard();
   if (viewName === 'mail') { loadMailView(); initMailView(); }
+  if (viewName === 'copiloto') initCopiloto();
 }
 
 function setupNav() {
@@ -3762,7 +3763,6 @@ function setupSettingsTabs() {
       if (target === 'negocio') loadBusinessHours();
       if (target === 'suscripcion') loadBilling();
       if (target === 'ia') loadAISettings();
-      if (target === 'copiloto') initCopiloto();
     });
   });
 

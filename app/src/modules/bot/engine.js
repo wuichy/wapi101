@@ -675,6 +675,84 @@ async function executeStep(db, step, ctx) {
       return true;
     }
 
+    case 'create_task': {
+      // Crea una tarea en el módulo de Recordatorios. Útil para programar
+      // follow-ups automáticos. Hereda el asesor del lead si no se configuró
+      // uno específico.
+      const title = replaceVars(c.title || '', ctx).trim();
+      if (!title) {
+        _log('warn', 'create_task sin título — saltando');
+        return false;
+      }
+      const description = replaceVars(c.description || '', ctx).trim() || null;
+      // offsetAmount + offsetUnit → minutos (usado para due_at relativo a ahora)
+      const offsetAmount = Number(c.offsetAmount || 1);
+      const offsetUnit   = c.offsetUnit || 'h';
+      const offsetMin    = offsetUnit === 'd' ? offsetAmount * 1440
+                         : offsetUnit === 'h' ? offsetAmount * 60
+                         : offsetAmount;
+      const dueAt = Math.floor(Date.now() / 1000) + (offsetMin * 60);
+      const durationMin = Math.max(Number(c.durationMinutes || 30), 1);
+
+      // Asesor: configurado > asesor del lead > null
+      let assignedAdvisorId = c.assignToAdvisorId ? Number(c.assignToAdvisorId) : null;
+      if (!assignedAdvisorId && ctx.expedientId) {
+        try {
+          const exp = db.prepare('SELECT assigned_advisor_id FROM expedients WHERE id = ? AND tenant_id = ?').get(ctx.expedientId, ctx.tenantId);
+          assignedAdvisorId = exp?.assigned_advisor_id || null;
+        } catch {}
+      }
+
+      try {
+        // Insertar directo (sin pasar por service.create) para evitar el chequeo
+        // de conflictos — los bots automáticos no deben fallar por solapamientos.
+        db.prepare(`
+          INSERT INTO tasks (tenant_id, title, description, due_at, duration_minutes, assigned_advisor_id, expedient_id, contact_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          ctx.tenantId, title, description, dueAt, durationMin,
+          assignedAdvisorId, ctx.expedientId || null, ctx.contactId || null
+        );
+        _log('info', `create_task: "${title}" creada (due=${new Date(dueAt*1000).toISOString()}, asignado=${assignedAdvisorId || 'sin'})`);
+      } catch (e) {
+        _log('error', `create_task error: ${e.message}`);
+      }
+      return false;
+    }
+
+    case 'update_field': {
+      // Actualiza un campo personalizado del expediente.
+      const fieldId = Number(c.fieldId || 0);
+      if (!fieldId) {
+        _log('warn', 'update_field sin fieldId — saltando');
+        return false;
+      }
+      if (!ctx.expedientId) {
+        _log('warn', 'update_field sin expedientId — saltando');
+        return false;
+      }
+      // Validar que el campo pertenece a este tenant y entidad expedient
+      const fieldDef = db.prepare(
+        "SELECT id, label, field_type FROM custom_field_defs WHERE id = ? AND tenant_id = ? AND entity = 'expedient'"
+      ).get(fieldId, ctx.tenantId);
+      if (!fieldDef) {
+        _log('warn', `update_field: campo ${fieldId} no existe en tenant ${ctx.tenantId}`);
+        return false;
+      }
+      const value = replaceVars(c.value || '', ctx);
+      try {
+        db.prepare(`
+          INSERT INTO custom_field_values (tenant_id, entity, record_id, field_id, value)
+          VALUES (?, 'expedient', ?, ?, ?)
+          ON CONFLICT(entity, record_id, field_id) DO UPDATE SET value = excluded.value
+        `).run(ctx.tenantId, ctx.expedientId, fieldId, value);
+        _log('info', `update_field: "${fieldDef.label}" = "${value}" en expediente ${ctx.expedientId}`);
+      } catch (e) {
+        _log('error', `update_field error: ${e.message}`);
+      }
+      return false;
+    }
+
     case 'http': {
       // Webhook / HTTP request — fire-and-forget para no bloquear el bot.
       // Permite integrar con Zapier, n8n, Make, Sheets, ERPs, etc.

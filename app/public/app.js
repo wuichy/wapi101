@@ -6634,6 +6634,36 @@ const BOT_STEP_REGISTRY = {
       return `Pausa bot · ${parts.join(' · ')}`;
     },
   },
+  create_task: {
+    group: 'Lead',
+    label:   { es: 'Crear tarea / recordatorio', en: 'Create task / reminder' },
+    icon:    '<rect x="3" y="4" width="14" height="13" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><polyline points="7 12 9 14 13 10"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      if (!c.title) return 'Sin título';
+      const title = c.title.length > 30 ? c.title.slice(0, 27) + '…' : c.title;
+      const amt  = Number(c.offsetAmount || 1);
+      const unit = c.offsetUnit || 'h';
+      const unitLabel = unit === 'd' ? 'día' : unit === 'h' ? 'hora' : 'min';
+      const plural = (amt !== 1 && unit !== 'm') ? 's' : '';
+      return `"${title}" · en ${amt} ${unitLabel}${plural}`;
+    },
+  },
+  update_field: {
+    group: 'Lead',
+    label:   { es: 'Actualizar campo del lead', en: 'Update lead field' },
+    icon:    '<rect x="3" y="3" width="14" height="14" rx="2"/><line x1="3" y1="9" x2="17" y2="9"/><line x1="9" y1="13" x2="14" y2="13"/><circle cx="6" cy="13" r="1" fill="currentColor" stroke="none"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      if (!c.fieldId) return 'Sin campo seleccionado';
+      const fd = (typeof EXP_FIELD_DEFS !== 'undefined' ? EXP_FIELD_DEFS : []).find(f => Number(f.id) === Number(c.fieldId));
+      const label = fd?.label || `Campo #${c.fieldId}`;
+      const val = c.value
+        ? `"${c.value.length > 25 ? c.value.slice(0, 22) + '…' : c.value}"`
+        : '(vacío)';
+      return `${label} = ${val}`;
+    },
+  },
   // ─── Integraciones ───
   http: {
     group: 'Integraciones',
@@ -7666,6 +7696,67 @@ function buildStepBody(step) {
           A partir de este paso el bot <strong>dejará de responder</strong> a este contacto.<br>
           Un agente podrá reanudarlo manualmente desde la conversación.
         </p>`;
+    case 'create_task': {
+      const advisorOptions = (() => {
+        const list = (typeof _advisors !== 'undefined' && _advisors) ? _advisors : [];
+        const opts = list.map(a => `<option value="${a.id}" ${Number(c.assignToAdvisorId) === a.id ? 'selected' : ''}>${escHtml(a.name || `Asesor #${a.id}`)}</option>`).join('');
+        return `<option value="">— Asesor del lead (default) —</option>${opts}`;
+      })();
+      const ofAmt  = Number(c.offsetAmount || 1);
+      const ofUnit = c.offsetUnit || 'h';
+      return `
+        <p style="font-size:12px;color:var(--text-muted);margin:6px 0 8px;line-height:1.5">
+          Crea una tarea automáticamente en el módulo Recordatorios. Útil para programar follow-ups, llamadas o revisiones.
+        </p>
+        <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Título *</label>
+        <input type="text" data-field="title" data-sid="${sid}" value="${escHtml(c.title || '')}" placeholder="Ej: Llamar a {{nombre}} para seguimiento" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px;box-sizing:border-box" />
+
+        <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Descripción (opcional)</label>
+        <textarea data-field="description" data-sid="${sid}" rows="2" placeholder="Notas adicionales para el asesor" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit;margin-bottom:8px">${escHtml(c.description || '')}</textarea>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--text-muted)">Vence en</span>
+          <input type="number" data-field="offsetAmount" data-sid="${sid}" value="${ofAmt}" min="1" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px" />
+          <select data-field="offsetUnit" data-sid="${sid}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+            <option value="m" ${ofUnit==='m'?'selected':''}>minutos</option>
+            <option value="h" ${ofUnit==='h'?'selected':''}>horas</option>
+            <option value="d" ${ofUnit==='d'?'selected':''}>días</option>
+          </select>
+          <span style="font-size:12px;color:var(--text-muted)">desde ahora</span>
+        </div>
+
+        <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Asignar a</label>
+        <select data-field="assignToAdvisorId" data-sid="${sid}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px">
+          ${advisorOptions}
+        </select>
+
+        <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Duración (min)</label>
+        <input type="number" data-field="durationMinutes" data-sid="${sid}" value="${escHtml(String(c.durationMinutes ?? 30))}" min="1" style="width:100px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px" />
+
+        <p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;line-height:1.4">
+          Soporta variables: <code>{{nombre}}</code>, <code>{{phone}}</code>, etc.
+        </p>`;
+    }
+    case 'update_field': {
+      const fieldDefs = (typeof EXP_FIELD_DEFS !== 'undefined' && EXP_FIELD_DEFS) ? EXP_FIELD_DEFS.filter(f => f.entity === 'expedient' || !f.entity) : [];
+      const fieldOpts = fieldDefs.length
+        ? fieldDefs.map(f => `<option value="${f.id}" ${Number(c.fieldId) === f.id ? 'selected' : ''}>${escHtml(f.label)} (${escHtml(f.field_type)})</option>`).join('')
+        : '';
+      return `
+        <p style="font-size:12px;color:var(--text-muted);margin:6px 0 8px;line-height:1.5">
+          Actualiza un campo personalizado del lead. Útil para guardar información que el cliente envía o que el bot extrae con IA.
+        </p>
+        <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Campo *</label>
+        <select data-field="fieldId" data-sid="${sid}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px">
+          <option value="">— Selecciona un campo —</option>
+          ${fieldOpts || '<option disabled>Sin campos personalizados — créalos en Leads → Campos</option>'}
+        </select>
+        <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Nuevo valor</label>
+        <input type="text" data-field="value" data-sid="${sid}" value="${escHtml(c.value || '')}" placeholder='Ej: "presupuesto medio" o {{messageBody}}' style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box" />
+        <p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;line-height:1.4">
+          Soporta variables: <code>{{nombre}}</code>, <code>{{phone}}</code>, <code>{{email}}</code>, etc.
+        </p>`;
+    }
     case 'http': {
       const methods = ['POST','GET','PUT','PATCH','DELETE'];
       const methodOpts = methods.map(m =>

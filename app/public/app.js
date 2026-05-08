@@ -8928,7 +8928,7 @@ function setupBot() {
     });
     if (view === 'code')     bbRenderCodeView();
     if (view === 'indented') bbRenderIndentedView();
-    if (view === 'visual')   bbRenderVisualView();
+    if (view === 'visual')   { _bbBuildPalette(); bbRenderVisualView(); }
   }
 
   // ─── Visual node graph (Fase A read-only) ───
@@ -9254,6 +9254,98 @@ function setupBot() {
   document.getElementById('bbVisualEditorCancel')?.addEventListener('click', bbCloseVisualEditor);
   document.getElementById('bbVisualEditorSave')?.addEventListener('click', bbSaveVisualEditor);
   document.getElementById('bbVisualEditorDelete')?.addEventListener('click', bbDeleteStepFromVisual);
+
+  // ─── Palette de pasos draggables (Phase C) ───
+  function _bbBuildPalette() {
+    const list = document.getElementById('bbVisualPaletteList');
+    if (!list) return;
+    const groups = {};
+    for (const [type, def] of Object.entries(BOT_STEP_REGISTRY)) {
+      // Filtrar steps gated por feature (ej: appointments)
+      if (def.feature === 'appointments' && typeof isAppointmentsEnabled === 'function' && !isAppointmentsEnabled()) continue;
+      const g = def.group || 'Otros';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push({ type, def });
+    }
+    let html = '';
+    for (const [groupName, items] of Object.entries(groups)) {
+      html += `<div class="bb-palette-group-label">${escHtml(groupName)}</div>`;
+      for (const { type, def } of items) {
+        const lang = _botRegistryLang();
+        const label = def.label?.[lang] || def.label?.es || type;
+        html += `<div class="bb-palette-item" draggable="true" data-step-type="${escHtml(type)}">
+          <span class="bb-palette-item-icon">${stepIcon(type, 14)}</span>
+          <span>${escHtml(label)}</span>
+        </div>`;
+      }
+    }
+    list.innerHTML = html;
+  }
+
+  // Drag desde palette al stage
+  let _bbPaletteDrag = null;
+  let _bbPaletteGhost = null;
+
+  document.getElementById('bbVisualPaletteList')?.addEventListener('dragstart', (e) => {
+    const item = e.target.closest('.bb-palette-item');
+    if (!item) return;
+    _bbPaletteDrag = { type: item.dataset.stepType };
+    e.dataTransfer.effectAllowed = 'copy';
+    // Necesario para que el drag funcione, aunque no lo usemos
+    e.dataTransfer.setData('text/plain', item.dataset.stepType);
+    // Crear ghost para feedback visual
+    _bbPaletteGhost = document.createElement('div');
+    _bbPaletteGhost.className = 'bb-palette-ghost';
+    _bbPaletteGhost.innerHTML = item.innerHTML;
+    document.body.appendChild(_bbPaletteGhost);
+  });
+
+  document.addEventListener('dragend', () => {
+    _bbPaletteDrag = null;
+    if (_bbPaletteGhost) { _bbPaletteGhost.remove(); _bbPaletteGhost = null; }
+  });
+
+  document.addEventListener('drag', (e) => {
+    if (_bbPaletteGhost && e.clientX > 0) {
+      _bbPaletteGhost.style.left = (e.clientX + 10) + 'px';
+      _bbPaletteGhost.style.top  = (e.clientY + 10) + 'px';
+    }
+  });
+
+  document.getElementById('bbVisualStage')?.addEventListener('dragover', (e) => {
+    if (_bbPaletteDrag) e.preventDefault(); // permite drop
+  });
+
+  document.getElementById('bbVisualStage')?.addEventListener('drop', (e) => {
+    if (!_bbPaletteDrag) return;
+    e.preventDefault();
+    const stage = document.getElementById('bbVisualStage');
+    if (!stage) return;
+    // Calcular posición relativa al stage (compensando scroll y zoom)
+    const rect = stage.getBoundingClientRect();
+    const x = (e.clientX - rect.left + stage.scrollLeft) / _bbVisualZoom - _VS_NODE_W / 2;
+    const y = (e.clientY - rect.top  + stage.scrollTop)  / _bbVisualZoom - _VS_NODE_H / 2;
+
+    // Crear nuevo step
+    sbStepCounter++;
+    const newStep = {
+      _id: `s${sbStepCounter}`,
+      type: _bbPaletteDrag.type,
+      config: {},
+      _pos: { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) },
+    };
+    sbSteps.push(newStep);
+
+    // Re-render lista (para mantener consistencia) y visual
+    if (typeof renderStepsFlow === 'function') renderStepsFlow();
+    bbRenderVisualView();
+
+    // Abrir editor del nuevo step automáticamente
+    setTimeout(() => bbOpenVisualEditor(sbSteps.length - 1), 100);
+
+    _bbPaletteDrag = null;
+    if (_bbPaletteGhost) { _bbPaletteGhost.remove(); _bbPaletteGhost = null; }
+  });
 
   // Zoom
   document.getElementById('bbVisualZoomIn')?.addEventListener('click', () => {

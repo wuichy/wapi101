@@ -675,6 +675,74 @@ async function executeStep(db, step, ctx) {
       return true;
     }
 
+    case 'handover': {
+      // Asignación a humano: pausa el bot, opcionalmente reasigna el lead a un
+      // asesor específico, agrega una etiqueta de seguimiento y registra una
+      // nota interna como actividad. Termina la cadena (return true).
+      const targetAdvisorId = c.assignToAdvisorId ? Number(c.assignToAdvisorId) : null;
+      const tagToAdd        = (c.addTag || '').trim();
+      const noteText        = (c.note   || '').trim();
+
+      // 1) Pausar el bot para esta conversación
+      if (ctx.convoId) {
+        try {
+          convoSvc.setBotPaused(db, null, ctx.convoId, true);
+          _log('info', `handover: bot pausado en conversación ${ctx.convoId}`);
+        } catch (e) {
+          _log('error', `handover: error pausando bot: ${e.message}`);
+        }
+      }
+
+      // 2) Reasignar lead a asesor específico
+      if (targetAdvisorId && ctx.expedientId) {
+        try {
+          const adv = db.prepare('SELECT id FROM advisors WHERE id = ? AND tenant_id = ?').get(targetAdvisorId, ctx.tenantId);
+          if (adv) {
+            db.prepare('UPDATE expedients SET assigned_advisor_id = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+              .run(targetAdvisorId, ctx.expedientId, ctx.tenantId);
+            _log('info', `handover: expediente ${ctx.expedientId} asignado a asesor ${targetAdvisorId}`);
+          } else {
+            _log('warn', `handover: asesor ${targetAdvisorId} no existe en tenant ${ctx.tenantId}`);
+          }
+        } catch (e) {
+          _log('error', `handover: error asignando: ${e.message}`);
+        }
+      }
+
+      // 3) Agregar etiqueta de seguimiento al contacto
+      if (tagToAdd && ctx.contactId) {
+        try {
+          const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
+          if (row) {
+            const tags = (() => { try { return JSON.parse(row.tags || '[]'); } catch { return []; } })();
+            if (!tags.includes(tagToAdd)) {
+              tags.push(tagToAdd);
+              db.prepare('UPDATE contacts SET tags = ? WHERE id = ? AND tenant_id = ?').run(JSON.stringify(tags), ctx.contactId, ctx.tenantId);
+              _log('info', `handover: etiqueta "${tagToAdd}" agregada al contacto ${ctx.contactId}`);
+            }
+          }
+        } catch (e) {
+          _log('error', `handover: error agregando etiqueta: ${e.message}`);
+        }
+      }
+
+      // 4) Registrar nota como actividad para el humano que tome el lead
+      if (noteText && ctx.expedientId) {
+        try {
+          require('../expedients/activity').log(db, {
+            expedientId: ctx.expedientId,
+            contactId:   ctx.contactId,
+            type:        'note',
+            description: `🤖 Bot → humano: ${noteText}`,
+          });
+        } catch (e) {
+          _log('error', `handover: error registrando nota: ${e.message}`);
+        }
+      }
+
+      return true; // detener cadena
+    }
+
     case 'stop_and_start': {
       // Termina el bot actual y dispara otro bot (mismo contacto, mismo expediente).
       // No pausa la conversación — el nuevo bot toma el relevo.

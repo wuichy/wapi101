@@ -6618,6 +6618,22 @@ const BOT_STEP_REGISTRY = {
     icon:    '<rect x="4" y="4" width="12" height="12" rx="2"/>',
     summary: () => 'El bot deja de responder a este contacto',
   },
+  handover: {
+    group: 'Flujo',
+    label:   { es: 'Asignar a humano', en: 'Hand over to human' },
+    icon:    '<path d="M3 11a7 7 0 0 1 14 0v3a2 2 0 0 1-2 2h-2v-5h4M3 11v3a2 2 0 0 0 2 2h2v-5H3"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const parts = [];
+      if (c.assignToAdvisorId) {
+        const adv = (typeof _advisors !== 'undefined' && _advisors) ? _advisors.find(a => Number(a.id) === Number(c.assignToAdvisorId)) : null;
+        parts.push(`→ ${adv?.name || `asesor #${c.assignToAdvisorId}`}`);
+      }
+      if (c.addTag) parts.push(`#${c.addTag}`);
+      if (!parts.length) return 'Pausa el bot y notifica al equipo';
+      return `Pausa bot · ${parts.join(' · ')}`;
+    },
+  },
   stop_and_start: {
     group: 'Flujo',
     label:   { es: 'Parar este e iniciar otro bot', en: 'Stop and start another bot' },
@@ -7636,6 +7652,25 @@ function buildStepBody(step) {
           A partir de este paso el bot <strong>dejará de responder</strong> a este contacto.<br>
           Un agente podrá reanudarlo manualmente desde la conversación.
         </p>`;
+    case 'handover': {
+      const advisorOptions = (() => {
+        const list = (typeof _advisors !== 'undefined' && _advisors) ? _advisors : [];
+        const opts = list.map(a => `<option value="${a.id}" ${Number(c.assignToAdvisorId) === a.id ? 'selected' : ''}>${escHtml(a.name || `Asesor #${a.id}`)}</option>`).join('');
+        return `<option value="">— Cualquier asesor (no reasigna) —</option>${opts}`;
+      })();
+      return `
+        <p style="font-size:12px;color:var(--text-muted);margin:6px 0 10px;line-height:1.5">
+          El bot <strong>se detiene</strong> y opcionalmente reasigna el lead, le agrega una etiqueta y registra una nota interna para que el humano sepa qué pasó.
+        </p>
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Asignar a asesor (opcional)</label>
+        <select data-field="assignToAdvisorId" data-sid="${sid}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:10px">
+          ${advisorOptions}
+        </select>
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Etiqueta a agregar (opcional)</label>
+        <input type="text" data-field="addTag" data-sid="${sid}" value="${escHtml(c.addTag || '')}" placeholder='Ej: "necesita-humano", "VIP-urgente"' style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:10px;box-sizing:border-box" />
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Nota interna (opcional)</label>
+        <textarea data-field="note" data-sid="${sid}" rows="2" placeholder="Ej: Cliente necesita cotización personalizada por >$50k" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit">${escHtml(c.note || '')}</textarea>`;
+    }
     case 'stop_and_start': {
       // Excluir el bot actual (no se puede auto-disparar)
       const others = (sbBots || []).filter(b => b.id !== sbCurrentId);

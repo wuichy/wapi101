@@ -6514,22 +6514,230 @@ async function loadBotTags() {
   }
 }
 
-const SB_STEP_LABELS = {
-  get ai_reply()              { return t('bot.step.ai_reply'); },
-  get message()               { return t('bot.step.message'); },
-  get template()              { return t('bot.step.template'); },
-  get timer()                 { return t('bot.step.timer'); },
-  get condition()             { return t('bot.step.condition'); },
-  get stage()                 { return t('bot.step.stage'); },
-  get tag()                   { return t('bot.step.tag'); },
-  get assign()                { return t('bot.step.assign'); },
-  get stop_bot()              { return t('bot.step.stop_bot'); },
-  get stop_and_start()        { return t('bot.step.stop_and_start'); },
-  get wait_response()         { return t('bot.step.wait_response'); },
-  get book_appointment()      { return t('bot.step.book_appointment'); },
-  get cancel_appointment()    { return t('bot.step.cancel_appointment'); },
-  get reschedule_appointment(){ return t('bot.step.reschedule_appointment'); },
+// ═══════════════════════════════════════════════════════════════════
+// BOT STEP REGISTRY — fuente única de verdad de los pasos del bot.
+// Para agregar un step nuevo:
+//   1. Agrega la entrada aquí (label/icon/group/summary)
+//   2. Agrega su HTML de configuración en buildStepBody() (switch case)
+//   3. Implementa el ejecutor en src/modules/bot/engine.js (case en execute())
+// El picker, las traducciones, el ícono y el resumen se generan automático
+// desde este objeto.
+// ═══════════════════════════════════════════════════════════════════
+
+// El icon es solo el "cuerpo" del SVG (paths, circles, etc.); el wrapper
+// <svg viewBox="0 0 20 20" ... width=X height=X> se agrega por stepIcon().
+const BOT_STEP_REGISTRY = {
+  // ─── Comunicación ───
+  ai_reply: {
+    group: 'Comunicación',
+    label:   { es: 'Respuesta IA', en: 'AI Reply' },
+    icon:    '<path d="M10 2 C9.6 6.3 6.3 9.6 2 10 C6.3 10.4 9.6 13.7 10 18 C10.4 13.7 13.7 10.4 18 10 C13.7 9.6 10.4 6.3 10 2 Z"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      return c.instruction
+        ? `"${c.instruction.slice(0,50)}${c.instruction.length>50?'…':''}"`
+        : 'Responde con IA usando el historial del chat';
+    },
+  },
+  message: {
+    group: 'Comunicación',
+    label:   { es: 'Enviar mensaje', en: 'Send message' },
+    icon:    '<path d="M3 4h14a1 1 0 011 1v9a1 1 0 01-1 1H5l-3 3V5a1 1 0 011-1z"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const preview = c.text ? `"${c.text.slice(0, 40)}${c.text.length > 40 ? '…' : ''}"` : 'Sin texto';
+      if (c.channelId && c.channelId !== 'auto' && typeof INTEGRATIONS !== 'undefined') {
+        const inst = INTEGRATIONS.flatMap(p => p.integrations || []).find(i => i.id == c.channelId);
+        const chanName = inst ? inst.name || inst.providerKey : `Canal ${c.channelId}`;
+        return `${preview} · vía ${chanName}`;
+      }
+      return preview;
+    },
+  },
+  template: {
+    group: 'Comunicación',
+    label:   { es: 'Enviar plantilla (WhatsApp API)', en: 'Send template (WhatsApp API)' },
+    icon:    '<rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M7 12h6"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      if (!c.templateId) return 'Sin plantilla seleccionada';
+      const tpl = (typeof _tplItems !== 'undefined' ? _tplItems : []).find(t => t.id == c.templateId);
+      if (!tpl) return `Plantilla #${c.templateId} (no encontrada)`;
+      const status = tpl.waStatus === 'approved' ? '✓' : `⚠ ${tpl.waStatus}`;
+      return `📋 ${tpl.displayName || tpl.name} · ${status}`;
+    },
+  },
+  // ─── Flujo / control ───
+  timer: {
+    group: 'Flujo',
+    label:   { es: 'Temporizador', en: 'Timer' },
+    icon:    '<circle cx="10" cy="11" r="7"/><path d="M10 7v4l2.5 2.5"/><path d="M8 2h4"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      if (c.days !== undefined || c.hours !== undefined || c.minutes !== undefined || c.seconds !== undefined) {
+        const parts = [];
+        if (Number(c.days) > 0)    parts.push(`${c.days}d`);
+        if (Number(c.hours) > 0)   parts.push(`${c.hours}h`);
+        if (Number(c.minutes) > 0) parts.push(`${c.minutes}m`);
+        if (Number(c.seconds) > 0) parts.push(`${c.seconds}s`);
+        return parts.length ? `Esperar ${parts.join(' ')}` : 'Sin duración';
+      }
+      return c.amount ? `Esperar ${c.amount} ${c.unit || 'minutos'}` : 'Sin duración';
+    },
+  },
+  condition: {
+    group: 'Flujo',
+    label:   { es: 'Condición', en: 'Condition' },
+    icon:    '<path d="M10 3v14M3 10h14"/><circle cx="10" cy="10" r="3"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      return c.field ? `Si ${c.field} = "${c.value || ''}"` : 'Sin condición';
+    },
+  },
+  wait_response: {
+    group: 'Flujo',
+    label:   { es: 'Esperar respuesta del lead', en: 'Wait for lead reply' },
+    icon:    '<circle cx="10" cy="10" r="7"/><polyline points="10 5 10 10 13 12"/><path d="M3 10a7 7 0 0 1 1-3.5"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const t = Number(c.timeoutMinutes || 1440);
+      let dur;
+      if (t >= 1440 && t % 1440 === 0)   dur = `${t / 1440}d`;
+      else if (t >= 60 && t % 60 === 0)  dur = `${t / 60}h`;
+      else                                dur = `${t}min`;
+      const branches = c.branches || {};
+      const filled = Object.keys(SB_BRANCH_LABELS).filter(k =>
+        Array.isArray(branches[k]) && branches[k].some(s => (s.config?.text || '').trim() || s.config?.templateId)
+      ).length;
+      return `Espera ${dur} · ${filled}/4 ramas configuradas`;
+    },
+  },
+  stop_bot: {
+    group: 'Flujo',
+    label:   { es: 'Parar bot', en: 'Stop bot' },
+    icon:    '<rect x="4" y="4" width="12" height="12" rx="2"/>',
+    summary: () => 'El bot deja de responder a este contacto',
+  },
+  stop_and_start: {
+    group: 'Flujo',
+    label:   { es: 'Parar este e iniciar otro bot', en: 'Stop and start another bot' },
+    icon:    '<rect x="3" y="3" width="6" height="6" rx="1"/><polygon points="11 14 17 11 17 17"/><path d="M9 17h2"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const target = (typeof sbBots !== 'undefined' ? sbBots : []).find(b => b.id === Number(c.targetBotId));
+      return target ? `Termina y arranca: ${target.name}` : 'Sin bot destino';
+    },
+  },
+  // ─── Lead / CRM ───
+  stage: {
+    group: 'Lead',
+    label:   { es: 'Cambiar etapa', en: 'Change stage' },
+    icon:    '<rect x="2" y="5" width="16" height="12" rx="2"/><path d="M2 9h16"/><circle cx="6" cy="14" r="1" fill="currentColor" stroke="none"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      return c.stageName ? `→ ${c.stageName}` : 'Sin etapa';
+    },
+  },
+  tag: {
+    group: 'Lead',
+    label:   { es: 'Agregar etiqueta', en: 'Add tag' },
+    icon:    '<path d="M3 3h7l7 7-7 7-7-7V3z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const list = String(c.tag || '').split(',').map(t => t.trim()).filter(Boolean);
+      return list.length ? list.map(t => `#${t}`).join(' ') : 'Sin etiqueta';
+    },
+  },
+  assign: {
+    group: 'Lead',
+    label:   { es: 'Asignar responsable', en: 'Assign advisor' },
+    icon:    '<circle cx="10" cy="7" r="3.5"/><path d="M3 17a7 7 0 0114 0"/>',
+    summary: (step) => (step.config?.assignee || 'Sin asignar'),
+  },
+  // ─── Citas (gated por feature 'appointments') ───
+  book_appointment: {
+    group: 'Citas',
+    feature: 'appointments',
+    label:   { es: 'Agendar Cita', en: 'Book appointment' },
+    icon:    '<rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M6 12h4m-2-2v4"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const days = Number(c.offsetDays ?? 1);
+      const time = c.time || '10:00';
+      const dur  = Number(c.durationMin || 30);
+      const label = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`;
+      return `${label} a las ${time} · ${dur} min`;
+    },
+  },
+  cancel_appointment: {
+    group: 'Citas',
+    feature: 'appointments',
+    label:   { es: 'Cancelar Cita', en: 'Cancel appointment' },
+    icon:    '<rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 13l6-2m0 2l-6-2"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      return c.message ? `"${c.message.slice(0,35)}${c.message.length>35?'…':''}"` : 'Cancela la cita activa del lead';
+    },
+  },
+  reschedule_appointment: {
+    group: 'Citas',
+    feature: 'appointments',
+    label:   { es: 'Reagendar Cita', en: 'Reschedule appointment' },
+    icon:    '<rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 14a3 3 0 0 1 3-3m0 0l-1.5-1.5M10 11l1.5-1.5"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const days = Number(c.offsetDays ?? 1);
+      const time = c.time || '10:00';
+      const label = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`;
+      return `Reagenda a ${label} a las ${time}`;
+    },
+  },
 };
+
+// Renderiza el ícono de un step a un tamaño dado (default 17px para cards,
+// 20px para el picker). Wrapper SVG común con stroke-width consistente.
+function stepIcon(type, size = 17) {
+  const body = BOT_STEP_REGISTRY[type]?.icon || '<circle cx="10" cy="10" r="6"/>';
+  return `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="${size}" height="${size}">${body}</svg>`;
+}
+
+// Construye el HTML del picker de pasos auto-generado desde el registry.
+function buildBotStepPickerHTML() {
+  const lang = _botRegistryLang();
+  return Object.entries(BOT_STEP_REGISTRY).map(([type, def]) => {
+    const featureAttr = def.feature ? ` data-feature="${escHtml(def.feature)}" hidden` : '';
+    const label = (def.label?.[lang] || def.label?.es || type);
+    return `<button class="sb-step-type-btn" data-type="${escHtml(type)}"${featureAttr}>
+      ${stepIcon(type, 20)}
+      <span>${escHtml(label)}</span>
+    </button>`;
+  }).join('');
+}
+
+// Re-poblar el picker cuando se abre el builder (idempotente).
+function rebuildBotStepPicker() {
+  const picker = document.getElementById('sbStepPicker');
+  if (!picker) return;
+  picker.innerHTML = buildBotStepPickerHTML();
+  // Si la feature 'appointments' está activa, mostrar los steps gated
+  if (typeof isAppointmentsEnabled === 'function' && isAppointmentsEnabled()) {
+    picker.querySelectorAll('[data-feature="appointments"]').forEach(b => b.hidden = false);
+  }
+  // Re-aplicar visibilidad condicional por IA (oculta ai_reply si no hay IA conectada)
+  if (typeof applyAIConditionalVisibility === 'function') {
+    applyAIConditionalVisibility().catch?.(() => {});
+  }
+}
+
+// ─── SB_STEP_LABELS ahora deriva del registry ───
+const SB_STEP_LABELS = new Proxy({}, {
+  get(_, type) {
+    const def = BOT_STEP_REGISTRY[type];
+    if (!def) return type;
+    const lang = _botRegistryLang();
+    return (def.label && (def.label[lang] || def.label.es)) || type;
+  },
+});
 
 const SB_BRANCH_LABELS = {
   on_button_click:  'Hace clic en un botón',
@@ -7086,8 +7294,9 @@ function openBotBuilder(bot, returnTo = null) {
     c.hidden = c.dataset.view !== 'list';
   });
 
-  // Reconstruye el dropdown desde el registry (idempotente, deja seleccionado el actual)
+  // Reconstruye el dropdown y el step picker desde los registries
   rebuildBotTriggerDropdown();
+  rebuildBotStepPicker();
   if (bot?.trigger_type) {
     document.getElementById('sbTriggerType').value = bot.trigger_type;
   }
@@ -7224,98 +7433,17 @@ function connectedIntegrationOptions(selectedId) {
 }
 
 // ── Step rendering ──
+// Resumen del step — delega a la función summary() declarada en BOT_STEP_REGISTRY.
 function stepSummary(step) {
-  const c = step.config || {};
-  switch (step.type) {
-    case 'message': {
-      const preview = c.text ? `"${c.text.slice(0, 40)}${c.text.length > 40 ? '…' : ''}"` : 'Sin texto';
-      if (c.channelId && c.channelId !== 'auto') {
-        const inst = INTEGRATIONS.flatMap(p => p.integrations || []).find(i => i.id == c.channelId);
-        const chanName = inst ? inst.name || inst.providerKey : `Canal ${c.channelId}`;
-        return `${preview} · vía ${chanName}`;
-      }
-      return preview;
-    }
-    case 'template': {
-      if (!c.templateId) return 'Sin plantilla seleccionada';
-      const tpl = (_tplItems || []).find(t => t.id == c.templateId);
-      if (!tpl) return `Plantilla #${c.templateId} (no encontrada)`;
-      const status = tpl.waStatus === 'approved' ? '✓' : `⚠ ${tpl.waStatus}`;
-      return `📋 ${tpl.displayName || tpl.name} · ${status}`;
-    }
-    case 'timer': {
-      if (c.days !== undefined || c.hours !== undefined || c.minutes !== undefined || c.seconds !== undefined) {
-        const parts = [];
-        if (Number(c.days) > 0) parts.push(`${c.days}d`);
-        if (Number(c.hours) > 0) parts.push(`${c.hours}h`);
-        if (Number(c.minutes) > 0) parts.push(`${c.minutes}m`);
-        if (Number(c.seconds) > 0) parts.push(`${c.seconds}s`);
-        return parts.length ? `Esperar ${parts.join(' ')}` : 'Sin duración';
-      }
-      return c.amount ? `Esperar ${c.amount} ${c.unit || 'minutos'}` : 'Sin duración';
-    }
-    case 'condition': return c.field ? `Si ${c.field} = "${c.value || ''}"` : 'Sin condición';
-    case 'stage':     return c.stageName ? `→ ${c.stageName}` : 'Sin etapa';
-    case 'tag': {
-      const list = String(c.tag || '').split(',').map(t => t.trim()).filter(Boolean);
-      return list.length ? list.map(t => `#${t}`).join(' ') : 'Sin etiqueta';
-    }
-    case 'assign':    return c.assignee || 'Sin asignar';
-    case 'ai_reply':  return c.instruction ? `"${c.instruction.slice(0,50)}${c.instruction.length>50?'…':''}"` : 'Responde con IA usando el historial del chat';
-    case 'stop_bot':  return 'El bot deja de responder a este contacto';
-    case 'stop_and_start': {
-      const target = (sbBots || []).find(b => b.id === Number(c.targetBotId));
-      return target ? `Termina y arranca: ${target.name}` : 'Sin bot destino';
-    }
-    case 'wait_response': {
-      const t = Number(c.timeoutMinutes || 1440);
-      let dur;
-      if (t >= 1440 && t % 1440 === 0) dur = `${t / 1440}d`;
-      else if (t >= 60 && t % 60 === 0) dur = `${t / 60}h`;
-      else dur = `${t}min`;
-      const branches = c.branches || {};
-      const filled = Object.keys(SB_BRANCH_LABELS).filter(k =>
-        Array.isArray(branches[k]) && branches[k].some(s => (s.config?.text || '').trim() || s.config?.templateId)
-      ).length;
-      return `Espera ${dur} · ${filled}/4 ramas configuradas`;
-    }
-    case 'book_appointment': {
-      const days = Number(c.offsetDays ?? 1);
-      const t    = c.time || '10:00';
-      const dur  = Number(c.durationMin || 30);
-      const label = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`;
-      return `${label} a las ${t} · ${dur} min`;
-    }
-    case 'cancel_appointment':
-      return c.message ? `"${c.message.slice(0,35)}${c.message.length>35?'…':''}"` : 'Cancela la cita activa del lead';
-    case 'reschedule_appointment': {
-      const days = Number(c.offsetDays ?? 1);
-      const t    = c.time || '10:00';
-      const label = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`;
-      return `Reagenda a ${label} a las ${t}`;
-    }
-    default: return '';
-  }
+  const def = BOT_STEP_REGISTRY[step.type];
+  if (!def?.summary) return '';
+  try { return def.summary(step) || ''; }
+  catch (e) { console.warn('stepSummary error', step.type, e); return ''; }
 }
 
+// Wrapper para retrocompatibilidad — delega a stepIcon() que lee del registry.
 function stepIconSvg(type) {
-  const icons = {
-    message:   `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M3 4h14a1 1 0 011 1v9a1 1 0 01-1 1H5l-3 3V5a1 1 0 011-1z"/></svg>`,
-    template:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14"/><path d="M7 12h6"/></svg>`,
-    timer:     `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="11" r="7"/><path d="M10 7v4l2.5 2.5"/><path d="M8 2h4"/></svg>`,
-    condition: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M10 3v14M3 10h14"/><circle cx="10" cy="10" r="3"/></svg>`,
-    stage:     `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="5" width="16" height="12" rx="2"/><path d="M2 9h16"/><circle cx="6" cy="14" r="1" fill="currentColor" stroke="none"/></svg>`,
-    tag:       `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M3 3h7l7 7-7 7-7-7V3z"/><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"/></svg>`,
-    assign:    `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="7" r="3.5"/><path d="M3 17a7 7 0 0114 0"/></svg>`,
-    stop_bot:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>`,
-    stop_and_start: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="3" y="3" width="6" height="6" rx="1"/><polygon points="11 14 17 11 17 17"/><path d="M9 17h2"/></svg>`,
-    wait_response:         `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><circle cx="10" cy="10" r="7"/><polyline points="10 5 10 10 13 12"/><path d="M3 10a7 7 0 0 1 1-3.5"/></svg>`,
-    book_appointment:      `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M6 12h4m-2-2v4"/></svg>`,
-    cancel_appointment:    `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 13l6-2m0 2l-6-2"/></svg>`,
-    reschedule_appointment:`<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 14a3 3 0 0 1 3-3m0 0l-1.5-1.5M10 11l1.5-1.5"/></svg>`,
-    ai_reply: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17"><path d="M10 2 C9.6 6.3 6.3 9.6 2 10 C6.3 10.4 9.6 13.7 10 18 C10.4 13.7 13.7 10.4 18 10 C13.7 9.6 10.4 6.3 10 2 Z"/></svg>`,
-  };
-  return icons[type] || '';
+  return stepIcon(type, 17);
 }
 
 function buildStepBody(step) {

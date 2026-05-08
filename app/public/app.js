@@ -6601,6 +6601,18 @@ const BOT_STEP_REGISTRY = {
       return c.field ? `Si ${c.field} = "${c.value || ''}"` : 'Sin condición';
     },
   },
+  branch: {
+    group: 'Flujo',
+    label:   { es: 'Ramificar (multi-caso)', en: 'Branch (multi-case)' },
+    icon:    '<path d="M5 3v6"/><path d="M5 9c0 5 5 5 5 8"/><path d="M15 3v6"/><path d="M15 9c0 5-5 5-5 8"/><circle cx="5" cy="3" r="1.5"/><circle cx="15" cy="3" r="1.5"/><circle cx="10" cy="17" r="1.5"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const n = Array.isArray(c.cases) ? c.cases.length : 0;
+      const hasDefault = Array.isArray(c.default) && c.default.length > 0;
+      if (!n && !hasDefault) return 'Sin casos configurados';
+      return `${n} caso${n !== 1 ? 's' : ''}${hasDefault ? ' + default' : ''}`;
+    },
+  },
   wait_response: {
     group: 'Flujo',
     label:   { es: 'Esperar respuesta del lead', en: 'Wait for lead reply' },
@@ -7856,6 +7868,58 @@ function buildStepBody(step) {
           Este bot terminará y se ejecutará el bot seleccionado para el mismo contacto, en su mismo lead.
         </p>`;
     }
+    case 'branch': {
+      // MVP: cada caso tiene 1 mensaje. Ampliable a multi-step después.
+      const cases = Array.isArray(c.cases) ? c.cases : [];
+      const defaultBranch = Array.isArray(c.default) ? c.default : [];
+      const defaultMsg = defaultBranch[0]?.config?.text || '';
+
+      const caseHtml = cases.map((cs, ci) => {
+        const text = cs.branch?.[0]?.config?.text || '';
+        const op = cs.op || 'contains';
+        return `
+          <details class="sb-branch-case" data-branch-case="${ci}" data-parent-sid="${sid}">
+            <summary>
+              <span class="sb-branch-case-num">${ci + 1}</span>
+              <span class="sb-branch-case-label">${escHtml(cs.field === 'tag' ? `Tag = "${cs.value || '?'}"` : `Mensaje ${op} "${cs.value || '?'}"`)}</span>
+              <span class="sb-branch-case-state ${text.trim() ? 'is-set' : ''}">${text.trim() ? '✓' : 'Vacía'}</span>
+              <button type="button" class="sb-branch-case-del" data-del-case="${ci}" data-sid="${sid}" title="Eliminar caso">×</button>
+            </summary>
+            <div class="sb-branch-case-body">
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+                <select class="sb-branch-case-field" data-case="${ci}" data-sid="${sid}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+                  <option value="message"${cs.field === 'message' || !cs.field ? ' selected' : ''}>Mensaje</option>
+                  <option value="tag"${cs.field === 'tag' ? ' selected' : ''}>Etiqueta</option>
+                </select>
+                <select class="sb-branch-case-op" data-case="${ci}" data-sid="${sid}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+                  <option value="contains"${op === 'contains' ? ' selected' : ''}>contiene</option>
+                  <option value="equals"${op === 'equals' ? ' selected' : ''}>es exactamente</option>
+                  <option value="starts_with"${op === 'starts_with' ? ' selected' : ''}>empieza con</option>
+                  <option value="matches_any"${op === 'matches_any' ? ' selected' : ''}>coincide con (lista)</option>
+                </select>
+                <input type="text" class="sb-branch-case-value" data-case="${ci}" data-sid="${sid}" value="${escHtml(cs.value || '')}" placeholder="valor o lista,sep,coma" style="flex:1;min-width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" />
+              </div>
+              <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Mensaje cuando matchea este caso</label>
+              <textarea class="sb-branch-case-text" data-case="${ci}" data-sid="${sid}" rows="2" placeholder="Texto a enviar...">${escHtml(text)}</textarea>
+            </div>
+          </details>`;
+      }).join('');
+
+      return `
+        <p style="font-size:12px;color:var(--text-muted);margin:6px 0 8px;line-height:1.5">
+          Evalúa los casos en orden y ejecuta el primero que matchea. Si nada matchea, usa <strong>default</strong>. Útil para rutear según contenido del mensaje (ej: cupones distintos por keyword).
+        </p>
+        <div class="sb-branch-cases" data-sid="${sid}">
+          ${caseHtml || '<p style="font-size:12px;color:var(--text-muted);margin:0">Sin casos. Agrega uno abajo.</p>'}
+        </div>
+        <button type="button" class="btn btn--ghost btn--sm sb-branch-add-case" data-sid="${sid}" style="margin:8px 0">
+          + Agregar caso
+        </button>
+        <details class="sb-branch-default">
+          <summary style="font-size:12px;font-weight:600;color:var(--text-muted)">Default (si nada matchea)</summary>
+          <textarea class="sb-branch-default-text" data-sid="${sid}" rows="2" placeholder="Mensaje por defecto. Vacío = no responde nada.">${escHtml(defaultMsg)}</textarea>
+        </details>`;
+    }
     case 'wait_response': {
       // MVP: cada rama tiene 1 paso de tipo "message". Las ramas se guardan en
       // c.branches[branchKey] = [{ type:'message', config:{ text } }]. La UI
@@ -8139,6 +8203,25 @@ function collectStepConfig(sid) {
         ? [{ type: 'message', config: { text, channelId: 'auto' } }]
         : [];
     });
+  }
+
+  // branch step — recolectar cases[] + default
+  const branchCases = body.querySelectorAll('.sb-branch-case[data-branch-case]');
+  if (branchCases.length || body.querySelector('.sb-branch-default-text')) {
+    cfg.cases = [];
+    branchCases.forEach((caseEl) => {
+      const ci    = caseEl.dataset.branchCase;
+      const field = caseEl.querySelector('.sb-branch-case-field')?.value || 'message';
+      const op    = caseEl.querySelector('.sb-branch-case-op')?.value    || 'contains';
+      const value = caseEl.querySelector('.sb-branch-case-value')?.value?.trim() || '';
+      const text  = caseEl.querySelector('.sb-branch-case-text')?.value?.trim()  || '';
+      cfg.cases.push({
+        field, op, value,
+        branch: text ? [{ type: 'message', config: { text, channelId: 'auto' } }] : [],
+      });
+    });
+    const defaultText = body.querySelector('.sb-branch-default-text')?.value?.trim() || '';
+    cfg.default = defaultText ? [{ type: 'message', config: { text: defaultText, channelId: 'auto' } }] : [];
   }
   return cfg;
 }
@@ -8656,6 +8739,54 @@ function setupBot() {
   });
 
   // Pipeline / Stage picker buttons (replace native select dropdowns)
+  // ─── Handlers de step `branch` (multi-case) ───
+  function _refreshBranchStepBody(sid) {
+    const step = sbSteps.find(s => s._id === sid);
+    if (!step) return;
+    // Re-renderizar solo el body de ese step
+    const body = document.querySelector(`[data-body-sid="${sid}"]`);
+    if (body && typeof buildStepBody === 'function') {
+      body.innerHTML = buildStepBody(step);
+    }
+    // También actualizar resumen del card si está abierto
+    const summaryEl = document.querySelector(`.sb-step-summary[data-summary-sid="${sid}"]`);
+    if (summaryEl && typeof stepSummary === 'function') {
+      summaryEl.textContent = stepSummary(step);
+    }
+  }
+
+  // Click en + Agregar caso o eliminar caso
+  document.body.addEventListener('click', (e) => {
+    const addBtn = e.target.closest('.sb-branch-add-case');
+    if (addBtn) {
+      e.preventDefault();
+      const sid = addBtn.dataset.sid;
+      const step = sbSteps.find(s => s._id === sid);
+      if (!step) return;
+      // Antes de modificar, guardar el config actual desde el DOM (hay textos del usuario)
+      step.config = collectStepConfig(sid);
+      step.config.cases = step.config.cases || [];
+      step.config.cases.push({ field: 'message', op: 'contains', value: '', branch: [] });
+      _refreshBranchStepBody(sid);
+      return;
+    }
+    const delBtn = e.target.closest('.sb-branch-case-del');
+    if (delBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const sid = delBtn.dataset.sid;
+      const ci  = Number(delBtn.dataset.delCase);
+      const step = sbSteps.find(s => s._id === sid);
+      if (!step) return;
+      step.config = collectStepConfig(sid);
+      if (Array.isArray(step.config.cases)) {
+        step.config.cases.splice(ci, 1);
+      }
+      _refreshBranchStepBody(sid);
+      return;
+    }
+  });
+
   document.getElementById('sbStepsFlow')?.addEventListener('click', (e) => {
     const plBtn = e.target.closest('.sb-pipeline-btn');
     if (plBtn) {
@@ -8903,6 +9034,27 @@ function setupBot() {
       parts.push('</div>');
       html += parts.join('');
     }
+    // branch step: render cases + default
+    if (type === 'branch' && (Array.isArray(step.config?.cases) || Array.isArray(step.config?.default))) {
+      const cases = step.config.cases || [];
+      const parts = ['<div class="bb-tree-branches">'];
+      cases.forEach((cs, ci) => {
+        const branchSteps = Array.isArray(cs.branch) ? cs.branch : [];
+        const fieldLabel = cs.field === 'tag' ? 'Si tag' : 'Si mensaje';
+        const opLabel = cs.op === 'equals' ? '=' : cs.op === 'starts_with' ? 'empieza con' : 'contiene';
+        parts.push(`<div class="bb-tree-branch-label">${escHtml(`Caso ${ci + 1}: ${fieldLabel} ${opLabel} "${cs.value || '?'}"`)}</div>`);
+        if (branchSteps.length === 0) parts.push(`<div class="bb-tree-branch-empty">— sin pasos —</div>`);
+        else branchSteps.forEach((s, i) => parts.push(bbRenderStepNode(s, i)));
+      });
+      const defSteps = Array.isArray(step.config.default) ? step.config.default : [];
+      if (defSteps.length || cases.length) {
+        parts.push(`<div class="bb-tree-branch-label">Default (si nada matchea)</div>`);
+        if (defSteps.length === 0) parts.push(`<div class="bb-tree-branch-empty">— sin pasos —</div>`);
+        else defSteps.forEach((s, i) => parts.push(bbRenderStepNode(s, i)));
+      }
+      parts.push('</div>');
+      html += parts.join('');
+    }
     return html;
   }
 
@@ -8968,6 +9120,46 @@ function setupBot() {
       if (prevId !== null) edges.push({ from: prevId, to: id });
       prevId = id;
       y += _VS_NODE_H + _VS_GAP_Y;
+
+      // branch step (multi-case): expandir cases + default como columnas hacia abajo
+      if (step.type === 'branch' && (Array.isArray(step.config?.cases) || Array.isArray(step.config?.default))) {
+        const cases = step.config.cases || [];
+        const branchSubLayouts = [];
+        const numCols = cases.length + (Array.isArray(step.config.default) && step.config.default.length ? 1 : 0);
+        if (numCols > 0) {
+          const branchY = y;
+          let bx = node.x - ((numCols - 1) * (_VS_NODE_W + _VS_GAP_X)) / 2;
+          cases.forEach((cs, ci) => {
+            const bSteps = Array.isArray(cs.branch) ? cs.branch : [];
+            const colX = bx + ci * (_VS_NODE_W + _VS_GAP_X);
+            if (!bSteps.length) return;
+            const sub = _bbLayoutSteps(bSteps, colX, branchY, `${id}.case${ci}`);
+            if (sub.nodes.length) {
+              const label = `${cs.field === 'tag' ? '🏷' : '💬'} ${cs.value || '?'}`;
+              edges.push({ from: id, to: sub.nodes[0].id, label });
+            }
+            branchSubLayouts.push(sub);
+          });
+          if (Array.isArray(step.config.default) && step.config.default.length) {
+            const colX = bx + cases.length * (_VS_NODE_W + _VS_GAP_X);
+            const sub = _bbLayoutSteps(step.config.default, colX, branchY, `${id}.default`);
+            if (sub.nodes.length) {
+              edges.push({ from: id, to: sub.nodes[0].id, label: 'default' });
+            }
+            branchSubLayouts.push(sub);
+          }
+          if (branchSubLayouts.length) {
+            const maxBottom = Math.max(...branchSubLayouts.map(s => s.height + branchY));
+            y = maxBottom + _VS_GAP_Y;
+            prevId = null;
+            for (const sub of branchSubLayouts) {
+              nodes.push(...sub.nodes);
+              edges.push(...sub.edges);
+              maxX = Math.max(maxX, sub.maxX);
+            }
+          }
+        }
+      }
 
       // wait_response: expandir ramas como columnas hacia abajo
       if (step.type === 'wait_response' && step.config?.branches) {

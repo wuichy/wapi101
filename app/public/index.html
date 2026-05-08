@@ -1679,7 +1679,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     <option value="scheduled_field" data-i18n="bot.trigger.scheduled_field">Antes/después de un campo de fecha</option>
                   </optgroup>
                 </select>
-                <input type="text" id="sbTriggerValue" placeholder='p.ej. "precio", "hola", "info"' />
+                <textarea id="sbTriggerValue" rows="2" placeholder='Una palabra clave por línea. El bot dispara si el mensaje contiene cualquiera.&#10;p.ej.&#10;quiero mi cupon&#10;ya pagué' style="resize:vertical;font-family:inherit"></textarea>
                 <div id="sbTriggerNoResponseWrap" hidden style="display:flex;align-items:center;gap:8px;margin-top:6px">
                   <span style="font-size:13px;color:var(--text-muted)">Disparar después de</span>
                   <input type="number" id="sbTriggerNoRespAmount" min="1" value="24" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:6px" />

@@ -86,9 +86,22 @@ function triggerMessage(db, { convoId, contactId, messageBody, provider, integra
     if (bot.trigger_type === 'always') {
       runAsync(db, bot, { convoId, contactId, messageBody, provider, integrationId, tenantId });
     } else if (bot.trigger_type === 'keyword') {
-      const kw = (bot.trigger_value || '').toLowerCase().trim();
-      if (kw && (messageBody || '').toLowerCase().includes(kw)) {
-        runAsync(db, bot, { convoId, contactId, messageBody, provider, integrationId, tenantId });
+      // trigger_value puede ser una sola keyword o varias separadas por
+      // \n, | o coma. Dispara si el mensaje contiene CUALQUIERA. El keyword
+      // que matched se pasa en ctx.matchedKeyword para que steps lo usen.
+      const raw = (bot.trigger_value || '').trim();
+      const keywords = raw
+        .split(/[\n|,]/)
+        .map(k => k.toLowerCase().trim())
+        .filter(Boolean);
+      if (!keywords.length) continue;
+      const body = (messageBody || '').toLowerCase();
+      const matched = keywords.find(k => body.includes(k));
+      if (matched) {
+        runAsync(db, bot, {
+          convoId, contactId, messageBody, provider, integrationId, tenantId,
+          matchedKeyword: matched,
+        });
       }
     }
   }
@@ -997,6 +1010,74 @@ async function executeStep(db, step, ctx) {
       // Basic condition: if false, skip remaining steps
       const passes = evaluateCondition(db, c, ctx);
       return !passes; // return true (stop) if condition fails
+    }
+
+    case 'branch': {
+      // Multi-case routing. Evalúa cases[] en orden, ejecuta el branch del
+      // primer match. Si nada matchea, ejecuta default. La rama es self-contained
+      // — al terminar, halta el flujo (return true) igual que wait_response.
+      const cases = Array.isArray(c.cases) ? c.cases : [];
+      let matchedBranch = null;
+      let matchedLabel = null;
+      for (const cs of cases) {
+        try {
+          const op    = cs.op || 'contains';
+          const value = String(cs.value || '').toLowerCase();
+          const field = cs.field || 'message';
+          let actualValue = '';
+          if (field === 'message') {
+            actualValue = String(ctx.messageBody || '').toLowerCase();
+          } else if (field === 'tag') {
+            const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
+            const tags = (() => { try { return JSON.parse(row?.tags || '[]'); } catch { return []; } })();
+            // Para tag, "contains" significa "tiene el tag"
+            if (op === 'contains' || op === 'equals') {
+              if (tags.map(t => String(t).toLowerCase()).includes(value)) {
+                matchedBranch = cs.branch || []; matchedLabel = cs.value;
+                break;
+              }
+              continue;
+            }
+          }
+          // operadores sobre string
+          let isMatch = false;
+          if      (op === 'equals')      isMatch = actualValue === value;
+          else if (op === 'starts_with') isMatch = actualValue.startsWith(value);
+          else if (op === 'matches_any') {
+            const list = value.split(',').map(s => s.trim()).filter(Boolean);
+            isMatch = list.some(v => actualValue.includes(v));
+          }
+          else /* contains (default) */  isMatch = actualValue.includes(value);
+          if (isMatch) {
+            matchedBranch = cs.branch || []; matchedLabel = cs.value;
+            break;
+          }
+        } catch (err) {
+          _log('error', `branch case error: ${err.message}`);
+        }
+      }
+      if (matchedBranch === null && Array.isArray(c.default)) {
+        matchedBranch = c.default; matchedLabel = '(default)';
+      }
+      if (!matchedBranch) {
+        _log('info', `branch: ningún case matcheó y no hay default — saltando`);
+        return false;
+      }
+      _log('info', `branch matched "${matchedLabel}" — ejecutando ${matchedBranch.length} pasos`);
+      // Ejecutar los pasos de la rama secuencialmente
+      for (const subStep of matchedBranch) {
+        try {
+          const result = await executeStep(db, subStep, ctx);
+          if (result === true || result === 'stop') return true;
+          if (result === 'suspend') return 'suspend';
+        } catch (subErr) {
+          _log('error', `branch sub-step error: ${subErr.message}`);
+          break;
+        }
+      }
+      // La rama IS el flujo principal a partir de aquí — no continuamos con
+      // los steps hermanos del branch (igual que wait_response)
+      return true;
     }
 
     case 'wait_response': {

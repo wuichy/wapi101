@@ -3821,6 +3821,7 @@ function setupSettingsTabs() {
       if (keyEl) { keyEl.value = ''; keyEl.placeholder = AI_KEY_PLACEHOLDERS[document.querySelector('.ai-provider input:checked')?.value] || 'API Key'; }
       if (statusEl) { statusEl.style.color = 'var(--text-muted)'; statusEl.textContent = 'API key eliminado'; setTimeout(() => { statusEl.textContent = ''; }, 2000); }
       btn.hidden = true;
+      applyAIConditionalVisibility();
     } catch(e) {
       alert('Error: ' + e.message);
     } finally {
@@ -3851,6 +3852,7 @@ function setupSettingsTabs() {
         const disconnBtn = document.getElementById('btnDisconnectAI');
         if (disconnBtn) disconnBtn.hidden = false;
       }
+      applyAIConditionalVisibility();
       setTimeout(() => { btn.textContent = 'Guardar cambios'; btn.disabled = false; }, 1800);
     } catch(e) {
       btn.textContent = 'Guardar cambios'; btn.disabled = false;
@@ -12365,6 +12367,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadTemplates(),
     loadMinAdvisors(),
     loadSplitConfig(),
+    applyAIConditionalVisibility(),
   ]);
   startChatPolling();
   startVersionCheck();
@@ -15992,6 +15995,22 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// VISIBILIDAD CONDICIONAL — IA conectada
+// ═══════════════════════════════════════════════════════════
+async function applyAIConditionalVisibility() {
+  let connected = false;
+  try {
+    const s = await api('GET', '/api/settings/ai');
+    connected = !!s && (s.hasApiKey || s.provider === 'ollama');
+  } catch {}
+  const navItem = document.getElementById('navCopiloto');
+  if (navItem) navItem.hidden = !connected;
+  document.querySelectorAll('.sb-step-type-btn[data-type="ai_reply"]').forEach(btn => {
+    btn.hidden = !connected;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
 // COPILOTO IA
 // ═══════════════════════════════════════════════════════════
 let _cpHistory = [];
@@ -16075,22 +16094,17 @@ async function cpLoadConfig() {
 }
 
 async function cpSend(message) {
-  console.log('[copiloto] cpSend called with:', message);
-  if (_cpBusy) { console.log('[copiloto] busy, abort'); return; }
+  if (_cpBusy) return;
   _cpBusy = true;
   const sendBtn = document.getElementById('copilotoSendBtn');
   if (sendBtn) sendBtn.disabled = true;
 
   try {
     _cpHistory.push({ role: 'user', content: message });
-    console.log('[copiloto] history after push:', _cpHistory);
     cpRenderMessages();
-    console.log('[copiloto] rendered user message, container content:', document.getElementById('copilotoMessages')?.innerHTML?.slice(0, 200));
     cpShowTyping(true);
 
-    console.log('[copiloto] calling API...');
     const resp = await api('POST', '/api/copilot/chat', { message, history: _cpHistory.slice(0, -1) });
-    console.log('[copiloto] API response:', resp);
     const { reply, history } = resp || {};
     _cpHistory = Array.isArray(history) ? history : [..._cpHistory, { role: 'assistant', content: reply || 'Sin respuesta' }];
   } catch(e) {
@@ -16101,7 +16115,6 @@ async function cpSend(message) {
     _cpBusy = false;
     if (sendBtn) sendBtn.disabled = false;
     cpRenderMessages();
-    console.log('[copiloto] final render done, history length:', _cpHistory.length);
     document.getElementById('copilotoInput')?.focus();
   }
 }
@@ -16144,7 +16157,7 @@ function cpRenderMessages(scrollOnly = false) {
     const text   = typeof m.content === 'string' ? m.content : '';
     if (!text) return '';
     return `<div class="copiloto-msg copiloto-msg--${isUser ? 'user' : 'ai'}">
-      <div class="copiloto-msg-avatar">${isUser ? (CURRENT_ADVISOR?.name?.[0]||'U') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2 C11.5 7.5 7.5 11.5 2 12 C7.5 12.5 11.5 16.5 12 22 C12.5 16.5 16.5 12.5 22 12 C16.5 11.5 12.5 7.5 12 2 Z"/></svg>`}</div>
+      <div class="copiloto-msg-avatar">${isUser ? ((getAdvisor()?.name?.[0])||'U') : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 2 C11.5 7.5 7.5 11.5 2 12 C7.5 12.5 11.5 16.5 12 22 C12.5 16.5 16.5 12.5 22 12 C16.5 11.5 12.5 7.5 12 2 Z"/></svg>`}</div>
       <div class="copiloto-msg-bubble">${escHtml(text)}</div>
     </div>`;
   }).filter(Boolean).join('');

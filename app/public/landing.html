@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es-MX">
+<html lang="es-MX" id="htmlRoot">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Wapi101 · CRM para WhatsApp Business | Multicanal México y LATAM</title>
+  <title id="pageTitle">Wapi101 · CRM para WhatsApp Business | Multicanal México y LATAM</title>
   <meta name="description" content="CRM para WhatsApp Business con bots visuales, pipelines kanban y plantillas aprobadas. Multicanal: WhatsApp, Messenger, Instagram y Telegram en una sola bandeja. Hecho en México para PyMEs LATAM. Prueba gratis 14 días sin tarjeta." />
   <meta name="keywords" content="crm whatsapp, crm whatsapp business, crm para pymes mexico, crm multicanal, automatizar whatsapp ventas, bot whatsapp, plantillas whatsapp aprobadas, pipelines ventas, crm latam" />
   <meta name="author" content="Wapi101" />
@@ -12,7 +12,6 @@
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
   <link rel="apple-touch-icon" href="/icons/icon-180.png" />
 
-  <!-- Open Graph (Facebook, LinkedIn, WhatsApp link previews) -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Wapi101" />
   <meta property="og:title" content="Wapi101 · CRM para WhatsApp Business en México y LATAM" />
@@ -21,13 +20,11 @@
   <meta property="og:url" content="https://wapi101.com/" />
   <meta property="og:locale" content="es_MX" />
 
-  <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Wapi101 · CRM para WhatsApp Business" />
   <meta name="twitter:description" content="CRM multicanal con bots visuales y pipelines kanban. Para PyMEs en México y LATAM. 14 días gratis." />
   <meta name="twitter:image" content="https://wapi101.com/icons/wapi101-logo.svg" />
 
-  <!-- Schema.org JSON-LD para rich snippets en Google -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -35,118 +32,15 @@
     "name": "Wapi101",
     "alternateName": "Wapi101 CRM",
     "applicationCategory": "BusinessApplication",
-    "applicationSubCategory": "CRM Software",
     "operatingSystem": "Web, iOS, Android",
     "url": "https://wapi101.com/",
     "logo": "https://wapi101.com/icons/wapi101-logo.svg",
     "description": "CRM multicanal para WhatsApp Business, Messenger, Instagram y Telegram. Bots visuales, pipelines kanban y plantillas aprobadas. Diseñado para PyMEs en México y Latinoamérica.",
     "inLanguage": "es-MX",
     "offers": [
-      {
-        "@type": "Offer",
-        "name": "Básico",
-        "price": "149",
-        "priceCurrency": "MXN",
-        "priceSpecification": {
-          "@type": "UnitPriceSpecification",
-          "price": "149",
-          "priceCurrency": "MXN",
-          "billingDuration": "P1M",
-          "unitText": "MONTH"
-        }
-      },
-      {
-        "@type": "Offer",
-        "name": "Pro",
-        "price": "299",
-        "priceCurrency": "MXN",
-        "priceSpecification": {
-          "@type": "UnitPriceSpecification",
-          "price": "299",
-          "priceCurrency": "MXN",
-          "billingDuration": "P1M",
-          "unitText": "MONTH"
-        }
-      },
-      {
-        "@type": "Offer",
-        "name": "Ultra",
-        "price": "499",
-        "priceCurrency": "MXN",
-        "priceSpecification": {
-          "@type": "UnitPriceSpecification",
-          "price": "499",
-          "priceCurrency": "MXN",
-          "billingDuration": "P1M",
-          "unitText": "MONTH"
-        }
-      }
-    ],
-    "featureList": [
-      "Multicanal: WhatsApp, Messenger, Instagram, Telegram",
-      "Bots visuales sin código",
-      "Pipelines kanban drag-and-drop",
-      "Plantillas WhatsApp aprobadas por Meta",
-      "Alarmas multi-condición",
-      "Adjuntos en chat (imagen, audio, PDF, video)"
-    ]
-  }
-  </script>
-
-  <!-- Schema.org Organization (para Knowledge Panel de Google) -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "Wapi101",
-    "url": "https://wapi101.com/",
-    "logo": "https://wapi101.com/icons/wapi101-logo.svg",
-    "email": "soporte@wapi101.com",
-    "address": {
-      "@type": "PostalAddress",
-      "addressCountry": "MX"
-    }
-  }
-  </script>
-
-  <!-- Schema.org FAQPage (rich snippets de FAQ) -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": "¿Qué pasa cuando termina el trial de 14 días?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Si no agregas un método de pago, tu cuenta se degrada al plan gratuito (con 50 contactos, 1 conversación activa, branding visible). Puedes seguir usando Wapi101 sin tarjeta, solo con esos límites."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "¿Necesito una cuenta de WhatsApp Business API ya configurada?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "No es indispensable. Puedes empezar conectando tu WhatsApp normal vía QR (modo Lite). Cuando estés listo para volumen alto, te ayudamos a registrar tu WhatsApp Cloud API oficial con Meta."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "¿Mis contactos están seguros?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Tus datos están aislados por workspace. Ningún otro cliente puede ver tus chats ni tus contactos. Las credenciales se guardan cifradas con AES-256-GCM."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "¿Puedo cancelar en cualquier momento?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Sí, sin penalizaciones. Cancela desde tu panel de cuenta. El servicio sigue activo hasta el fin del período pagado."
-        }
-      }
+      { "@type": "Offer", "name": "Básico", "price": "149", "priceCurrency": "MXN" },
+      { "@type": "Offer", "name": "Pro",    "price": "299", "priceCurrency": "MXN" },
+      { "@type": "Offer", "name": "Ultra",  "price": "499", "priceCurrency": "MXN" }
     ]
   }
   </script>
@@ -181,7 +75,7 @@
     }
     .topbar-inner {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 24px; max-width: 1140px; margin: 0 auto;
+      padding: 14px 24px; max-width: 1140px; margin: 0 auto;
     }
     .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 18px; }
     .brand-mark {
@@ -189,21 +83,50 @@
       display: flex; align-items: center; justify-content: center;
       font-weight: 800; border-radius: 8px;
     }
-    .topbar-nav { display: flex; align-items: center; gap: 24px; font-size: 14px; }
+    .topbar-nav { display: flex; align-items: center; gap: 20px; font-size: 14px; }
     .topbar-nav a { color: var(--text-soft); }
     .topbar-nav a:hover { color: var(--text); }
+
+    /* Buttons */
     .btn {
       display: inline-block; padding: 10px 20px;
       border-radius: 8px; font-weight: 600; font-size: 14px;
-      transition: all 0.15s; cursor: pointer; border: 0; text-align: center;
+      transition: all 0.18s ease; cursor: pointer; border: 0; text-align: center;
     }
-    .btn-primary { background: var(--primary); color: #fff; }
-    .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn-primary {
+      background: var(--primary); color: #fff;
+    }
+    a.btn-primary, a.btn-primary:visited, a.btn-primary:link { color: #fff; }
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(37,99,235,.35);
+    }
     .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-    .btn-ghost:hover { background: var(--bg-soft); }
+    .btn-ghost:hover { background: var(--bg-soft); transform: translateY(-1px); }
     .btn-lg { padding: 14px 32px; font-size: 16px; border-radius: 10px; }
+    .btn-lg.btn-primary:hover { box-shadow: 0 12px 32px rgba(37,99,235,.4); }
+
     @media (max-width: 720px) {
-      .topbar-nav a:not(.btn) { display: none; }
+      .topbar-nav a:not(.btn):not(.lang-btn) { display: none; }
+    }
+
+    /* Language switcher */
+    .lang-sw {
+      display: flex; gap: 2px;
+      background: #e2e8f0; border-radius: 6px; padding: 2px;
+    }
+    .lang-btn {
+      background: transparent; border: 0;
+      padding: 4px 9px; border-radius: 4px;
+      font-size: 12px; font-weight: 700; color: #64748b;
+      cursor: pointer; transition: all 0.12s; letter-spacing: 0.03em;
+      font-family: inherit;
+    }
+    .lang-btn.is-active {
+      background: #fff; color: #0f172a;
+      box-shadow: 0 1px 3px rgba(0,0,0,.1);
     }
 
     /* Hero */
@@ -219,19 +142,14 @@
       letter-spacing: -0.02em; margin-bottom: 16px;
     }
     .hero h1 em { font-style: normal; color: var(--primary); }
-    .hero p.lead {
-      font-size: 18px; color: var(--text-soft); margin-bottom: 32px;
-    }
+    .hero p.lead { font-size: 18px; color: var(--text-soft); margin-bottom: 32px; }
     .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; }
     .hero-trust { margin-top: 24px; font-size: 13px; color: var(--text-soft); }
     .hero-trust strong { color: var(--text); }
-
     .hero-mockup {
-      background: #fff;
-      border-radius: 16px;
+      background: #fff; border-radius: 16px;
       box-shadow: 0 24px 48px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.04);
-      overflow: hidden;
-      border: 1px solid var(--border);
+      overflow: hidden; border: 1px solid var(--border);
     }
     .mockup-bar {
       display: flex; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--border);
@@ -246,13 +164,12 @@
     .bubble { padding: 10px 14px; border-radius: 16px; font-size: 14px; max-width: 75%; }
     .bubble-in  { background: #f1f5f9; align-self: flex-start; border-bottom-left-radius: 4px; }
     .bubble-out { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-
     @media (max-width: 900px) {
       .hero-grid { grid-template-columns: 1fr; gap: 40px; }
       .hero h1 { font-size: 36px; }
     }
 
-    /* Section title */
+    /* Section */
     .section { padding: 80px 0; }
     .section-light { background: var(--bg-soft); }
     .section-title {
@@ -265,13 +182,10 @@
     }
 
     /* Features */
-    .features-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
-    }
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
     .feature {
       padding: 32px 24px; background: #fff;
-      border: 1px solid var(--border); border-radius: 12px;
-      transition: all 0.15s;
+      border: 1px solid var(--border); border-radius: 12px; transition: all 0.15s;
     }
     .feature:hover { border-color: var(--primary); box-shadow: 0 8px 16px rgba(37,99,235,0.06); }
     .feature-icon {
@@ -282,14 +196,10 @@
     }
     .feature h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
     .feature p { color: var(--text-soft); font-size: 14px; }
-    @media (max-width: 720px) {
-      .features-grid { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 720px) { .features-grid { grid-template-columns: 1fr; } }
 
     /* How it works */
-    .steps {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; counter-reset: step;
-    }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
     .step { padding: 24px; }
     .step-num {
       width: 40px; height: 40px; border-radius: 50%;
@@ -299,20 +209,18 @@
     }
     .step h3 { font-size: 18px; margin-bottom: 8px; }
     .step p { color: var(--text-soft); font-size: 14px; }
-    @media (max-width: 720px) {
-      .steps { grid-template-columns: 1fr; gap: 16px; }
-    }
+    @media (max-width: 720px) { .steps { grid-template-columns: 1fr; gap: 16px; } }
 
     /* Pricing */
     .pricing-toggle {
-      display: inline-flex; background: #f1f5f9; border-radius: 999px;
-      padding: 4px; gap: 4px; margin: 0 auto 32px; display: flex;
+      display: flex; background: #f1f5f9; border-radius: 999px;
+      padding: 4px; gap: 4px; margin: 0 auto 32px;
       width: max-content;
     }
     .pt-opt {
       background: transparent; border: 0; padding: 8px 20px; border-radius: 999px;
       font-size: 14px; font-weight: 600; color: var(--text-soft); cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.15s; font-family: inherit;
     }
     .pt-opt.is-active { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .pt-save {
@@ -324,18 +232,16 @@
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
       max-width: 1240px; margin: 0 auto;
     }
-    @media (max-width: 1100px) {
-      .pricing-grid { grid-template-columns: repeat(2, 1fr); }
-    }
+    @media (max-width: 1100px) { .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
     .price-card {
       padding: 32px 24px; background: #fff;
       border: 2px solid var(--border); border-radius: 16px;
-      display: flex; flex-direction: column; gap: 16px;
-      position: relative;
+      display: flex; flex-direction: column; gap: 16px; position: relative;
     }
     .price-card.featured { border-color: var(--primary); }
     .price-card.featured::before {
-      content: 'Más popular'; position: absolute; top: -12px; left: 50%;
+      content: attr(data-badge);
+      position: absolute; top: -12px; left: 50%;
       transform: translateX(-50%); background: var(--primary); color: #fff;
       padding: 4px 12px; border-radius: 999px; font-size: 11px;
       font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
@@ -348,7 +254,6 @@
     .price-card ul li { display: flex; gap: 8px; align-items: flex-start; }
     .price-card ul li::before { content: '✓'; color: var(--accent); font-weight: 700; }
     .price-card .btn { margin-top: auto; }
-    /* Promo styles */
     .lp-promo-ribbon {
       display: inline-flex; align-items: center; gap: 5px;
       background: #fef3c7; color: #92400e;
@@ -356,14 +261,8 @@
       padding: 4px 10px; border-radius: 6px; margin-bottom: 4px;
     }
     .lp-price-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-    .lp-original {
-      font-size: 18px; font-weight: 500; color: var(--text-soft);
-      text-decoration: line-through;
-    }
-    .lp-discount {
-      font-size: 12px; font-weight: 700; padding: 2px 7px;
-      background: #dcfce7; color: #14532d; border-radius: 5px;
-    }
+    .lp-original { font-size: 18px; font-weight: 500; color: var(--text-soft); text-decoration: line-through; }
+    .lp-discount { font-size: 12px; font-weight: 700; padding: 2px 7px; background: #dcfce7; color: #14532d; border-radius: 5px; }
     .lp-price-note { font-size: 12px; color: var(--text-soft); margin-top: 4px; }
     .lp-usd { font-size: 11px; color: var(--text-soft); font-weight: 500; }
     .lp-card-trial-note { font-size: 11px; color: var(--text-soft); text-align: center; margin-top: -8px; }
@@ -376,15 +275,11 @@
       transition: all 0.15s;
     }
     .btn-outline:hover { background: var(--primary); color: #fff; }
-    @media (max-width: 900px) {
-      .pricing-grid { grid-template-columns: 1fr; max-width: 420px; }
-    }
+    @media (max-width: 900px) { .pricing-grid { grid-template-columns: 1fr; max-width: 420px; } }
 
     /* FAQ */
     .faq { max-width: 720px; margin: 0 auto; }
-    .faq-item {
-      border-bottom: 1px solid var(--border); padding: 20px 0;
-    }
+    .faq-item { border-bottom: 1px solid var(--border); padding: 20px 0; }
     .faq-item summary {
       cursor: pointer; font-weight: 600; font-size: 16px;
       list-style: none; display: flex; justify-content: space-between; align-items: center;
@@ -394,7 +289,7 @@
     .faq-item[open] summary::after { transform: rotate(45deg); }
     .faq-item p { color: var(--text-soft); margin-top: 12px; font-size: 15px; }
 
-    /* CTA final */
+    /* Final CTA */
     .final-cta {
       text-align: center; padding: 80px 24px;
       background: linear-gradient(135deg, var(--primary) 0%, #1e40af 100%);
@@ -403,15 +298,12 @@
     }
     .final-cta h2 { font-size: 32px; font-weight: 800; margin-bottom: 12px; }
     .final-cta p { opacity: 0.9; margin-bottom: 24px; }
-    .final-cta .btn-primary {
-      background: #fff; color: var(--primary);
-    }
-    .final-cta .btn-primary:hover { background: #f1f5f9; }
+    .final-cta .btn-primary { background: #fff; color: var(--primary); }
+    .final-cta .btn-primary:hover { background: #f1f5f9; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+    a.final-cta .btn-primary, .final-cta a.btn-primary { color: var(--primary); }
 
     /* Footer */
-    footer {
-      padding: 40px 24px; background: #0f172a; color: #94a3b8; font-size: 14px;
-    }
+    footer { padding: 40px 24px; background: #0f172a; color: #94a3b8; font-size: 14px; }
     .footer-grid {
       display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 32px;
       max-width: 1140px; margin: 0 auto;
@@ -423,9 +315,7 @@
       max-width: 1140px; margin: 32px auto 0; padding-top: 24px;
       border-top: 1px solid #1e293b; text-align: center; font-size: 13px;
     }
-    @media (max-width: 720px) {
-      .footer-grid { grid-template-columns: 1fr 1fr; }
-    }
+    @media (max-width: 720px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
 <body>
@@ -438,11 +328,15 @@
       Wapi101
     </a>
     <nav class="topbar-nav">
-      <a href="#features">Funcionalidades</a>
-      <a href="#pricing">Precios</a>
-      <a href="#faq">FAQ</a>
-      <a href="/login" class="btn btn-ghost">Iniciar sesión</a>
-      <a href="/signup" class="btn btn-primary">Empieza gratis</a>
+      <a href="#features"  id="navFeatures">Funcionalidades</a>
+      <a href="#pricingSection" id="navPricing">Precios</a>
+      <a href="#faq"       id="navFaq">FAQ</a>
+      <div class="lang-sw" id="langSw">
+        <button class="lang-btn is-active" data-lang="es">ES</button>
+        <button class="lang-btn" data-lang="en">EN</button>
+      </div>
+      <a href="/login"  class="btn btn-ghost" id="navLogin">Iniciar sesión</a>
+      <a href="/signup" class="btn btn-primary" id="navCta">Empieza gratis</a>
     </nav>
   </div>
 </header>
@@ -452,15 +346,15 @@
   <div class="container">
     <div class="hero-grid">
       <div>
-        <h1>El <em>CRM</em> hecho para WhatsApp Business en LATAM</h1>
-        <p class="lead">
+        <h1 id="heroTitle">El <em>CRM</em> hecho para WhatsApp Business en LATAM</h1>
+        <p class="lead" id="heroLead">
           Automatiza ventas por WhatsApp con bots visuales, pipelines kanban y plantillas aprobadas por Meta. Multicanal: WhatsApp, Messenger, Instagram y Telegram en una sola bandeja. Diseñado para PyMEs y emprendedores en México y Latinoamérica.
         </p>
         <div class="hero-ctas">
-          <a href="/signup" class="btn btn-primary btn-lg">Empieza gratis 14 días →</a>
-          <a href="#features" class="btn btn-ghost btn-lg">Ver cómo funciona</a>
+          <a href="/signup" class="btn btn-primary btn-lg" id="heroCta1">Empieza gratis 14 días →</a>
+          <a href="#features" class="btn btn-ghost btn-lg" id="heroCta2">Ver cómo funciona</a>
         </div>
-        <p class="hero-trust">
+        <p class="hero-trust" id="heroTrust">
           ⭐ <strong>Sin tarjeta de crédito.</strong> Trial completo del plan Pro. Cancela cuando quieras.
         </p>
       </div>
@@ -468,13 +362,13 @@
         <div class="mockup-bar"><span></span><span></span><span></span></div>
         <div class="mockup-body">
           <div class="mockup-chat">
-            <div class="bubble bubble-in">Hola, ¿tienen disponible el serum facial?</div>
-            <div class="bubble bubble-out">¡Hola! Sí, tenemos en stock. ¿Te mando el catálogo? 🌿</div>
-            <div class="bubble bubble-in">Sí porfa</div>
-            <div class="bubble bubble-out">Listo, te enviamos el PDF y un cupón de 15% para primera compra 🎁</div>
-            <div class="bubble bubble-in">Perfecto, lo reviso 🙌</div>
+            <div class="bubble bubble-in"  id="bubble1">Hola, ¿tienen disponible el serum facial?</div>
+            <div class="bubble bubble-out" id="bubble2">¡Hola! Sí, tenemos en stock. ¿Te mando el catálogo? 🌿</div>
+            <div class="bubble bubble-in"  id="bubble3">Sí porfa</div>
+            <div class="bubble bubble-out" id="bubble4">Listo, te enviamos el PDF y un cupón de 15% para primera compra 🎁</div>
+            <div class="bubble bubble-in"  id="bubble5">Perfecto, lo reviso 🙌</div>
           </div>
-          <p style="text-align:center;color:#64748b;font-size:12px;margin-top:24px;">Ejemplo de conversación con bot automatizado</p>
+          <p style="text-align:center;color:#64748b;font-size:12px;margin-top:24px;" id="mockupCaption">Ejemplo de conversación con bot automatizado</p>
         </div>
       </div>
     </div>
@@ -484,38 +378,38 @@
 <!-- Features -->
 <section class="section" id="features">
   <div class="container">
-    <h2 class="section-title">Todo lo que necesitas para vender</h2>
-    <p class="section-sub">Wapi101 reemplaza WhatsApp Web + un CRM clásico + tu hoja de Excel + tus mil chats. Todo en una sola pantalla.</p>
+    <h2 class="section-title" id="featuresTitle">Todo lo que necesitas para vender</h2>
+    <p class="section-sub" id="featuresSub">Wapi101 reemplaza WhatsApp Web + un CRM clásico + tu hoja de Excel + tus mil chats. Todo en una sola pantalla.</p>
     <div class="features-grid">
       <div class="feature">
         <div class="feature-icon">💬</div>
-        <h3>Multi-canal</h3>
-        <p>WhatsApp Cloud API, Messenger, Instagram y Telegram en una sola bandeja unificada.</p>
+        <h3 id="feat1Title">Multi-canal</h3>
+        <p  id="feat1Desc">WhatsApp Cloud API, Messenger, Instagram y Telegram en una sola bandeja unificada.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">🤖</div>
-        <h3>Bots visuales</h3>
-        <p>Crea flujos automáticos sin código. Mensaje → espera → respuesta → cambio de etapa.</p>
+        <h3 id="feat2Title">Bots visuales</h3>
+        <p  id="feat2Desc">Crea flujos automáticos sin código. Mensaje → espera → respuesta → cambio de etapa.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">📊</div>
-        <h3>Pipelines kanban</h3>
-        <p>Como Trello pero para tus ventas. Mueve clientes entre etapas con drag-and-drop.</p>
+        <h3 id="feat3Title">Pipelines kanban</h3>
+        <p  id="feat3Desc">Como Trello pero para tus ventas. Mueve clientes entre etapas con drag-and-drop.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">📋</div>
-        <h3>Plantillas WA</h3>
-        <p>Manda plantillas aprobadas por Meta directo desde el CRM. Con imágenes y botones.</p>
+        <h3 id="feat4Title">Plantillas WA</h3>
+        <p  id="feat4Desc">Manda plantillas aprobadas por Meta directo desde el CRM. Con imágenes y botones.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">⏰</div>
-        <h3>Alarmas</h3>
-        <p>Te avisa cuando un lead lleva días estancado. Configura por etapa, hasta múltiples por etapa.</p>
+        <h3 id="feat5Title">Alarmas</h3>
+        <p  id="feat5Desc">Te avisa cuando un lead lleva días estancado. Configura por etapa, hasta múltiples por etapa.</p>
       </div>
       <div class="feature">
         <div class="feature-icon">📎</div>
-        <h3>Adjuntos</h3>
-        <p>Manda imagen, audio, PDF, video desde el chat. Adjuntos también en plantillas.</p>
+        <h3 id="feat6Title">Adjuntos</h3>
+        <p  id="feat6Desc">Manda imagen, audio, PDF, video desde el chat. Adjuntos también en plantillas.</p>
       </div>
     </div>
   </div>
@@ -524,23 +418,23 @@
 <!-- How it works -->
 <section class="section section-light">
   <div class="container">
-    <h2 class="section-title">Empieza en 5 minutos</h2>
-    <p class="section-sub">Sin instalación, sin servidor propio, sin curva de aprendizaje empinada.</p>
+    <h2 class="section-title" id="stepsTitle">Empieza en 5 minutos</h2>
+    <p class="section-sub"   id="stepsSub">Sin instalación, sin servidor propio, sin curva de aprendizaje empinada.</p>
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
-        <h3>Crea tu cuenta</h3>
-        <p>Regístrate gratis con tu email. Trial de 14 días sin tarjeta de crédito.</p>
+        <h3 id="step1Title">Crea tu cuenta</h3>
+        <p  id="step1Desc">Regístrate gratis con tu email. Trial de 14 días sin tarjeta de crédito.</p>
       </div>
       <div class="step">
         <div class="step-num">2</div>
-        <h3>Conecta WhatsApp</h3>
-        <p>Vincula tu número de WhatsApp Business en 30 segundos vía Meta o escaneando QR.</p>
+        <h3 id="step2Title">Conecta WhatsApp</h3>
+        <p  id="step2Desc">Vincula tu número de WhatsApp Business en 30 segundos vía Meta o escaneando QR.</p>
       </div>
       <div class="step">
         <div class="step-num">3</div>
-        <h3>Crea tu primer bot</h3>
-        <p>Diseña un flujo de bienvenida o seguimiento con el editor visual. Listo.</p>
+        <h3 id="step3Title">Crea tu primer bot</h3>
+        <p  id="step3Desc">Diseña un flujo de bienvenida o seguimiento con el editor visual. Listo.</p>
       </div>
     </div>
   </div>
@@ -549,17 +443,17 @@
 <!-- Pricing -->
 <section class="section" id="pricingSection">
   <div class="container">
-    <h2 class="section-title">Precios de lanzamiento</h2>
-    <p class="section-sub">Empieza gratis para siempre con el plan básico, o prueba cualquier plan de pago <strong>14 días gratis con tarjeta</strong>. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa.</p>
+    <h2 class="section-title" id="pricingTitle">Precios de lanzamiento</h2>
+    <p class="section-sub" id="pricingSub">Empieza gratis para siempre con el plan básico, o prueba cualquier plan de pago <strong>14 días gratis con tarjeta</strong>. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa.</p>
 
-    <div class="pricing-toggle" style="display:flex;justify-content:center;margin:0 auto 32px;">
-      <button class="pt-opt is-active" data-interval="month">Mensual</button>
-      <button class="pt-opt" data-interval="semester">Semestral <span class="pt-save">−17%</span></button>
-      <button class="pt-opt" data-interval="year">Anual <span class="pt-save">−25%</span></button>
+    <div class="pricing-toggle" style="justify-content:center;">
+      <button class="pt-opt is-active" data-interval="month" id="ptMonth">Mensual</button>
+      <button class="pt-opt" data-interval="semester" id="ptSem">Semestral <span class="pt-save">−17%</span></button>
+      <button class="pt-opt" data-interval="year"     id="ptYear">Anual <span class="pt-save">−25%</span></button>
     </div>
 
     <div class="pricing-grid" id="pricingGrid">
-      <p style="grid-column: 1 / -1; text-align:center; color: var(--text-soft);">Cargando planes…</p>
+      <p id="pricingLoading" style="grid-column: 1 / -1; text-align:center; color: var(--text-soft);">Cargando planes…</p>
     </div>
     <p id="stripeNote" style="text-align:center;margin-top:24px;font-size:13px;color:var(--text-soft);">
       Pagos procesados de forma segura por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.
@@ -570,35 +464,35 @@
 <!-- FAQ -->
 <section class="section section-light" id="faq">
   <div class="container">
-    <h2 class="section-title">Preguntas frecuentes</h2>
+    <h2 class="section-title" id="faqTitle">Preguntas frecuentes</h2>
     <div class="faq">
       <details class="faq-item">
-        <summary>¿Qué pasa cuando termina el trial de 14 días?</summary>
-        <p>Si no continúas con tu plan de pago, tu cuenta se queda en el <strong>plan Gratis</strong>: 1 usuario, 500 contactos y todas las funciones activas. No pierdes tu trabajo ni tus integraciones. Cuando quieras crecer, suscríbete desde tu panel.</p>
+        <summary id="faq1Q">¿Qué pasa cuando termina el trial de 14 días?</summary>
+        <p id="faq1A">Si no continúas con tu plan de pago, tu cuenta se queda en el <strong>plan Gratis</strong>: 1 usuario, 500 contactos y todas las funciones activas. No pierdes tu trabajo ni tus integraciones. Cuando quieras crecer, suscríbete desde tu panel.</p>
       </details>
       <details class="faq-item">
-        <summary>¿Necesito tener una cuenta de WhatsApp Business API ya configurada?</summary>
-        <p>No es indispensable para arrancar. Puedes empezar conectando tu WhatsApp normal vía QR (modo Lite, sin verificación oficial). Cuando estés listo para volumen alto, te ayudamos a registrar tu WhatsApp Cloud API oficial con Meta.</p>
+        <summary id="faq2Q">¿Necesito tener una cuenta de WhatsApp Business API ya configurada?</summary>
+        <p id="faq2A">No es indispensable para arrancar. Puedes empezar conectando tu WhatsApp normal vía QR (modo Lite, sin verificación oficial). Cuando estés listo para volumen alto, te ayudamos a registrar tu WhatsApp Cloud API oficial con Meta.</p>
       </details>
       <details class="faq-item">
-        <summary>¿Mis contactos están seguros? ¿Pueden ver mis chats otros usuarios?</summary>
-        <p>Tus datos están aislados por workspace. Ningún otro cliente de Wapi101 puede ver tus chats ni tus contactos. Las credenciales (tokens de WhatsApp, API keys) se guardan cifradas con AES-256-GCM. Lee nuestro <a href="/privacy">Aviso de Privacidad</a>.</p>
+        <summary id="faq3Q">¿Mis contactos están seguros? ¿Pueden ver mis chats otros usuarios?</summary>
+        <p id="faq3A">Tus datos están aislados por workspace. Ningún otro cliente de Wapi101 puede ver tus chats ni tus contactos. Las credenciales (tokens de WhatsApp, API keys) se guardan cifradas con AES-256-GCM. Lee nuestro <a href="/privacy">Aviso de Privacidad</a>.</p>
       </details>
       <details class="faq-item">
-        <summary>¿Puedo cancelar en cualquier momento?</summary>
-        <p>Sí, sin penalizaciones. Cancela desde tu panel de cuenta en Wapi101 o directamente en el portal de Stripe. El servicio sigue activo hasta el fin del período pagado.</p>
+        <summary id="faq4Q">¿Puedo cancelar en cualquier momento?</summary>
+        <p id="faq4A">Sí, sin penalizaciones. Cancela desde tu panel de cuenta en Wapi101 o directamente en el portal de Stripe. El servicio sigue activo hasta el fin del período pagado.</p>
       </details>
       <details class="faq-item">
-        <summary>¿Cobran en pesos mexicanos o dólares?</summary>
-        <p>Cobramos en MXN (pesos mexicanos). Pagos procesados de forma segura por Stripe. Si estás fuera de México, Stripe hace la conversión automática desde tu moneda local.</p>
+        <summary id="faq5Q">¿Cobran en pesos mexicanos o dólares?</summary>
+        <p id="faq5A">Cobramos en MXN (pesos mexicanos). Pagos procesados de forma segura por Stripe. Si estás fuera de México, Stripe hace la conversión automática desde tu moneda local.</p>
       </details>
       <details class="faq-item">
-        <summary>¿Tienen versión para Mac/Windows/iOS/Android?</summary>
-        <p>Wapi101 es 100% web. Funciona en cualquier navegador moderno. Es PWA, así que puedes "instalarla" en tu Mac/iPhone/Android desde el navegador y se abre como app nativa.</p>
+        <summary id="faq6Q">¿Tienen versión para Mac/Windows/iOS/Android?</summary>
+        <p id="faq6A">Wapi101 es 100% web. Funciona en cualquier navegador moderno. Es PWA, así que puedes "instalarla" en tu Mac/iPhone/Android desde el navegador y se abre como app nativa.</p>
       </details>
       <details class="faq-item">
-        <summary>¿Puedo importar mis contactos de otro CRM?</summary>
-        <p>Sí, soportamos importación desde Kommo, HubSpot y CSV genérico. Para casos complejos, te ayudamos con la migración manualmente sin costo durante el onboarding.</p>
+        <summary id="faq7Q">¿Puedo importar mis contactos de otro CRM?</summary>
+        <p id="faq7A">Sí, soportamos importación desde Kommo, HubSpot y CSV genérico. Para casos complejos, te ayudamos con la migración manualmente sin costo durante el onboarding.</p>
       </details>
     </div>
   </div>
@@ -607,9 +501,9 @@
 <!-- Final CTA -->
 <section class="container">
   <div class="final-cta">
-    <h2>¿Listo para vender más por WhatsApp?</h2>
-    <p>Empieza gratis hoy. Sin tarjeta. Sin límite de tiempo.</p>
-    <a href="/signup" class="btn btn-primary btn-lg">Crear cuenta gratis →</a>
+    <h2 id="ctaTitle">¿Listo para vender más por WhatsApp?</h2>
+    <p  id="ctaSub">Empieza gratis hoy. Sin tarjeta. Sin límite de tiempo.</p>
+    <a href="/signup" class="btn btn-primary btn-lg" id="ctaBtn">Crear cuenta gratis →</a>
   </div>
 </section>
 
@@ -621,113 +515,276 @@
         <span class="brand-mark">W</span>
         Wapi101
       </a>
-      <p style="margin-top: 12px; font-size: 13px;">CRM multicanal para LATAM. Hecho con cariño en México.</p>
+      <p style="margin-top: 12px; font-size: 13px;" id="footerTagline">CRM multicanal para LATAM. Hecho con cariño en México.</p>
     </div>
     <div>
-      <h4>Producto</h4>
-      <a href="#features">Funcionalidades</a>
-      <a href="#pricing">Precios</a>
-      <a href="/login">Iniciar sesión</a>
-      <a href="/signup">Empezar gratis</a>
+      <h4 id="footerProductTitle">Producto</h4>
+      <a href="#features"      id="footerFeatures">Funcionalidades</a>
+      <a href="#pricingSection" id="footerPricing">Precios</a>
+      <a href="/login"         id="footerLogin">Iniciar sesión</a>
+      <a href="/signup"        id="footerSignup">Empezar gratis</a>
     </div>
     <div>
-      <h4>Recursos</h4>
-      <a href="#faq">FAQ</a>
-      <a href="mailto:soporte@wapi101.com">Contacto</a>
+      <h4 id="footerResourcesTitle">Recursos</h4>
+      <a href="#faq"                      id="footerFaq">FAQ</a>
+      <a href="mailto:soporte@wapi101.com" id="footerContact">Contacto</a>
     </div>
     <div>
-      <h4>Legal</h4>
-      <a href="/privacy">Privacidad</a>
-      <a href="/terms">Términos</a>
+      <h4 id="footerLegalTitle">Legal</h4>
+      <a href="/privacy" id="footerPrivacy">Privacidad</a>
+      <a href="/terms"   id="footerTerms">Términos</a>
     </div>
   </div>
-  <div class="footer-bottom">
+  <div class="footer-bottom" id="copyright">
     © 2026 Wapi101. Todos los derechos reservados.
   </div>
 </footer>
 
 <script>
-// ─── Auto-detect: si ya estás logueado, redirige al app ───
+// ─── Redirect if already logged in ───────────────────────────────────────────
 (function() {
   const token = localStorage.getItem('rh_session') || localStorage.getItem('wapi101_token');
   if (token) { location.replace('/app'); }
 })();
 
-// ─── Detección de idioma ─────────────────────────────────────────────────────
-const _stored = (() => { try { return localStorage.getItem('locale'); } catch { return null; } })();
-const _navLang = (navigator.language || 'es').toLowerCase();
-const _isEn    = _stored ? _stored === 'en' : !_navLang.startsWith('es');
-document.documentElement.lang = _isEn ? 'en' : 'es-MX';
-
+// ─── Translations ─────────────────────────────────────────────────────────────
 const _LP = {
   es: {
-    pricingTitle:   'Precios de lanzamiento',
-    pricingSub:     'Empieza gratis para siempre con el plan básico, o prueba cualquier plan de pago <strong>14 días gratis con tarjeta</strong>. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa.',
-    toggleMonth:    'Mensual',
-    toggleSem:      'Semestral',
-    toggleYear:     'Anual',
-    loading:        'Cargando planes…',
-    stripe:         'Pagos procesados de forma segura por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.',
-    freePriceNote:  'MXN · para siempre',
-    freeCta:        'Empezar gratis — sin tarjeta',
-    custom:         'A medida',
-    contactSales:   'Contactar ventas',
-    tryCta:         (n) => `Probar ${n} gratis 14 días`,
-    trialNote:      'Se requiere tarjeta · Cancela antes del día 14 sin costo',
-    yearNote:       (tot, cur) => `$${tot} ${cur} al año (3 meses gratis)`,
-    semNote:        (tot, cur) => `$${tot} ${cur} cada 6 meses (1 mes gratis)`,
-    monthNote:      (cur) => `${cur} / mes`,
-    launchRibbon:   '🎉 Precio lanzamiento — plazas limitadas',
-    heroTitle:      'El CRM de WhatsApp para PyMEs LATAM',
-    featuresTitle:  'Todo lo que necesitas para vender',
-    stepsTitle:     'Empieza en 5 minutos',
+    // Nav
+    navFeatures: 'Funcionalidades',
+    navPricing:  'Precios',
+    navFaq:      'FAQ',
+    navLogin:    'Iniciar sesión',
+    navCta:      'Empieza gratis',
+    // Hero
+    heroTitle:     'El <em>CRM</em> hecho para WhatsApp Business en LATAM',
+    heroLead:      'Automatiza ventas por WhatsApp con bots visuales, pipelines kanban y plantillas aprobadas por Meta. Multicanal: WhatsApp, Messenger, Instagram y Telegram en una sola bandeja. Diseñado para PyMEs y emprendedores en México y Latinoamérica.',
+    heroCta1:      'Empieza gratis 14 días →',
+    heroCta2:      'Ver cómo funciona',
+    heroTrust:     '⭐ <strong>Sin tarjeta de crédito.</strong> Trial completo del plan Pro. Cancela cuando quieras.',
+    mockupCaption: 'Ejemplo de conversación con bot automatizado',
+    bubble1: 'Hola, ¿tienen disponible el serum facial?',
+    bubble2: '¡Hola! Sí, tenemos en stock. ¿Te mando el catálogo? 🌿',
+    bubble3: 'Sí porfa',
+    bubble4: 'Listo, te enviamos el PDF y un cupón de 15% para primera compra 🎁',
+    bubble5: 'Perfecto, lo reviso 🙌',
+    // Features
+    featuresTitle: 'Todo lo que necesitas para vender',
+    featuresSub:   'Wapi101 reemplaza WhatsApp Web + un CRM clásico + tu hoja de Excel + tus mil chats. Todo en una sola pantalla.',
+    feat1Title: 'Multi-canal',         feat1Desc: 'WhatsApp Cloud API, Messenger, Instagram y Telegram en una sola bandeja unificada.',
+    feat2Title: 'Bots visuales',       feat2Desc: 'Crea flujos automáticos sin código. Mensaje → espera → respuesta → cambio de etapa.',
+    feat3Title: 'Pipelines kanban',    feat3Desc: 'Como Trello pero para tus ventas. Mueve clientes entre etapas con drag-and-drop.',
+    feat4Title: 'Plantillas WA',       feat4Desc: 'Manda plantillas aprobadas por Meta directo desde el CRM. Con imágenes y botones.',
+    feat5Title: 'Alarmas',             feat5Desc: 'Te avisa cuando un lead lleva días estancado. Configura por etapa, hasta múltiples por etapa.',
+    feat6Title: 'Adjuntos',            feat6Desc: 'Manda imagen, audio, PDF, video desde el chat. Adjuntos también en plantillas.',
+    // How it works
+    stepsTitle: 'Empieza en 5 minutos',
+    stepsSub:   'Sin instalación, sin servidor propio, sin curva de aprendizaje empinada.',
+    step1Title: 'Crea tu cuenta',      step1Desc: 'Regístrate gratis con tu email. Trial de 14 días sin tarjeta de crédito.',
+    step2Title: 'Conecta WhatsApp',    step2Desc: 'Vincula tu número de WhatsApp Business en 30 segundos vía Meta o escaneando QR.',
+    step3Title: 'Crea tu primer bot',  step3Desc: 'Diseña un flujo de bienvenida o seguimiento con el editor visual. Listo.',
+    // Pricing
+    pricingTitle: 'Precios de lanzamiento',
+    pricingSub:   'Empieza gratis para siempre con el plan básico, o prueba cualquier plan de pago <strong>14 días gratis con tarjeta</strong>. Los primeros clientes tienen hasta <strong>57% de descuento permanente</strong> mientras mantengan su suscripción activa.',
+    ptMonth: 'Mensual', ptSem: 'Semestral', ptYear: 'Anual',
+    loading: 'Cargando planes…',
+    stripe: 'Pagos procesados de forma segura por <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Datos de tarjeta nunca tocan nuestros servidores.',
+    freePriceNote: 'MXN · para siempre',
+    freeCta:       'Empezar gratis — sin tarjeta',
+    custom:        'A medida',
+    contactSales:  'Contactar ventas',
+    tryCta:        (n) => `Probar ${n} gratis 14 días`,
+    trialNote:     'Se requiere tarjeta · Cancela antes del día 14 sin costo',
+    yearNote:      (tot, cur) => `$${tot} ${cur} al año (3 meses gratis)`,
+    semNote:       (tot, cur) => `$${tot} ${cur} cada 6 meses (1 mes gratis)`,
+    monthNote:     (cur) => `${cur} / mes`,
+    launchRibbon:  '🎉 Precio lanzamiento — plazas limitadas',
+    popularBadge:  'Más popular',
+    // FAQ
+    faqTitle: 'Preguntas frecuentes',
+    faq1Q: '¿Qué pasa cuando termina el trial de 14 días?',
+    faq1A: 'Si no continúas con tu plan de pago, tu cuenta se queda en el <strong>plan Gratis</strong>: 1 usuario, 500 contactos y todas las funciones activas. No pierdes tu trabajo ni tus integraciones. Cuando quieras crecer, suscríbete desde tu panel.',
+    faq2Q: '¿Necesito tener una cuenta de WhatsApp Business API ya configurada?',
+    faq2A: 'No es indispensable para arrancar. Puedes empezar conectando tu WhatsApp normal vía QR (modo Lite, sin verificación oficial). Cuando estés listo para volumen alto, te ayudamos a registrar tu WhatsApp Cloud API oficial con Meta.',
+    faq3Q: '¿Mis contactos están seguros? ¿Pueden ver mis chats otros usuarios?',
+    faq3A: 'Tus datos están aislados por workspace. Ningún otro cliente de Wapi101 puede ver tus chats ni tus contactos. Las credenciales (tokens de WhatsApp, API keys) se guardan cifradas con AES-256-GCM. Lee nuestro <a href="/privacy">Aviso de Privacidad</a>.',
+    faq4Q: '¿Puedo cancelar en cualquier momento?',
+    faq4A: 'Sí, sin penalizaciones. Cancela desde tu panel de cuenta en Wapi101 o directamente en el portal de Stripe. El servicio sigue activo hasta el fin del período pagado.',
+    faq5Q: '¿Cobran en pesos mexicanos o dólares?',
+    faq5A: 'Cobramos en MXN (pesos mexicanos). Pagos procesados de forma segura por Stripe. Si estás fuera de México, Stripe hace la conversión automática desde tu moneda local.',
+    faq6Q: '¿Tienen versión para Mac/Windows/iOS/Android?',
+    faq6A: 'Wapi101 es 100% web. Funciona en cualquier navegador moderno. Es PWA, así que puedes "instalarla" en tu Mac/iPhone/Android desde el navegador y se abre como app nativa.',
+    faq7Q: '¿Puedo importar mis contactos de otro CRM?',
+    faq7A: 'Sí, soportamos importación desde Kommo, HubSpot y CSV genérico. Para casos complejos, te ayudamos con la migración manualmente sin costo durante el onboarding.',
+    // CTA
+    ctaTitle: '¿Listo para vender más por WhatsApp?',
+    ctaSub:   'Empieza gratis hoy. Sin tarjeta. Sin límite de tiempo.',
+    ctaBtn:   'Crear cuenta gratis →',
+    // Footer
+    footerTagline:       'CRM multicanal para LATAM. Hecho con cariño en México.',
+    footerProductTitle:  'Producto',
+    footerResourcesTitle:'Recursos',
+    footerLegalTitle:    'Legal',
+    footerFeatures:      'Funcionalidades',
+    footerPricing:       'Precios',
+    footerLogin:         'Iniciar sesión',
+    footerSignup:        'Empezar gratis',
+    footerFaq:           'FAQ',
+    footerContact:       'Contacto',
+    footerPrivacy:       'Privacidad',
+    footerTerms:         'Términos',
+    copyright:           '© 2026 Wapi101. Todos los derechos reservados.',
   },
   en: {
-    pricingTitle:   'Launch pricing',
-    pricingSub:     'Start free forever with the basic plan, or try any paid plan <strong>free for 14 days with a card</strong>. Early customers get up to <strong>57% permanent discount</strong> as long as their subscription stays active.',
-    toggleMonth:    'Monthly',
-    toggleSem:      'Semester',
-    toggleYear:     'Annual',
-    loading:        'Loading plans…',
-    stripe:         'Payments securely processed by <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Card details never touch our servers.',
-    freePriceNote:  'MXN · forever',
-    freeCta:        'Start free — no card needed',
-    custom:         'Custom',
-    contactSales:   'Contact sales',
-    tryCta:         (n) => `Try ${n} free for 14 days`,
-    trialNote:      'Card required · Cancel before day 14 at no charge',
-    yearNote:       (tot, cur) => `$${tot} ${cur}/year (3 months free)`,
-    semNote:        (tot, cur) => `$${tot} ${cur} / 6 months (1 month free)`,
-    monthNote:      (cur) => `${cur} / month`,
-    launchRibbon:   '🎉 Launch price — limited spots',
-    heroTitle:      'The WhatsApp CRM for LATAM SMBs',
-    featuresTitle:  'Everything you need to sell',
-    stepsTitle:     'Up and running in 5 minutes',
+    // Nav
+    navFeatures: 'Features',
+    navPricing:  'Pricing',
+    navFaq:      'FAQ',
+    navLogin:    'Log in',
+    navCta:      'Start free',
+    // Hero
+    heroTitle:     'The <em>CRM</em> made for WhatsApp Business in LATAM',
+    heroLead:      'Automate WhatsApp sales with visual bots, kanban pipelines and Meta-approved templates. Multichannel: WhatsApp, Messenger, Instagram and Telegram in one unified inbox. Built for SMBs and entrepreneurs in Mexico and Latin America.',
+    heroCta1:      'Start free for 14 days →',
+    heroCta2:      'See how it works',
+    heroTrust:     '⭐ <strong>No credit card.</strong> Full Pro plan trial. Cancel any time.',
+    mockupCaption: 'Example conversation with automated bot',
+    bubble1: 'Hi, do you have the facial serum in stock?',
+    bubble2: 'Hello! Yes, we have it. Want me to send the catalog? 🌿',
+    bubble3: 'Yes please',
+    bubble4: "Done, we're sending the PDF and a 15% coupon for your first order 🎁",
+    bubble5: 'Perfect, I\'ll check it out 🙌',
+    // Features
+    featuresTitle: 'Everything you need to sell',
+    featuresSub:   'Wapi101 replaces WhatsApp Web + a classic CRM + your spreadsheet + a hundred open chats. All in one screen.',
+    feat1Title: 'Multi-channel',     feat1Desc: 'WhatsApp Cloud API, Messenger, Instagram and Telegram in one unified inbox.',
+    feat2Title: 'Visual bots',       feat2Desc: 'Create automated flows with no code. Message → wait → reply → stage change.',
+    feat3Title: 'Kanban pipelines',  feat3Desc: 'Like Trello but for your sales. Move clients between stages with drag-and-drop.',
+    feat4Title: 'WA Templates',      feat4Desc: 'Send Meta-approved templates directly from the CRM. With images and buttons.',
+    feat5Title: 'Alarms',            feat5Desc: 'Get notified when a lead has been stuck for days. Configure per stage, multiple per stage.',
+    feat6Title: 'Attachments',       feat6Desc: 'Send images, audio, PDFs, video from the chat. Attachments in templates too.',
+    // How it works
+    stepsTitle: 'Up and running in 5 minutes',
+    stepsSub:   'No installation, no own server, no steep learning curve.',
+    step1Title: 'Create your account', step1Desc: 'Sign up free with your email. 14-day trial, no credit card.',
+    step2Title: 'Connect WhatsApp',    step2Desc: 'Link your WhatsApp Business number in 30 seconds via Meta or by scanning a QR.',
+    step3Title: 'Build your first bot',step3Desc: 'Design a welcome or follow-up flow with the visual editor. Done.',
+    // Pricing
+    pricingTitle: 'Launch pricing',
+    pricingSub:   'Start free forever with the basic plan, or try any paid plan <strong>free for 14 days with a card</strong>. Early customers get up to <strong>57% permanent discount</strong> as long as their subscription stays active.',
+    ptMonth: 'Monthly', ptSem: 'Semester', ptYear: 'Annual',
+    loading: 'Loading plans…',
+    stripe: 'Payments securely processed by <a href="https://stripe.com" target="_blank" rel="noopener">Stripe</a>. Card details never touch our servers.',
+    freePriceNote: 'MXN · forever',
+    freeCta:       'Start free — no card needed',
+    custom:        'Custom',
+    contactSales:  'Contact sales',
+    tryCta:        (n) => `Try ${n} free for 14 days`,
+    trialNote:     'Card required · Cancel before day 14 at no charge',
+    yearNote:      (tot, cur) => `$${tot} ${cur}/year (3 months free)`,
+    semNote:       (tot, cur) => `$${tot} ${cur} / 6 months (1 month free)`,
+    monthNote:     (cur) => `${cur} / month`,
+    launchRibbon:  '🎉 Launch price — limited spots',
+    popularBadge:  'Most popular',
+    // FAQ
+    faqTitle: 'Frequently asked questions',
+    faq1Q: 'What happens when the 14-day trial ends?',
+    faq1A: "If you don't continue with a paid plan, your account stays on the <strong>Free plan</strong>: 1 user, 500 contacts and all features active. You don't lose your work or integrations. Upgrade from your panel whenever you're ready.",
+    faq2Q: 'Do I need a WhatsApp Business API account set up?',
+    faq2A: "It's not required to get started. You can begin by connecting your regular WhatsApp via QR (Lite mode, no official verification). When you're ready for high volume, we'll help you register your official WhatsApp Cloud API with Meta.",
+    faq3Q: 'Is my data safe? Can other users see my chats?',
+    faq3A: 'Your data is isolated per workspace. No other Wapi101 customer can see your chats or contacts. Credentials (WhatsApp tokens, API keys) are encrypted with AES-256-GCM. Read our <a href="/privacy">Privacy Policy</a>.',
+    faq4Q: 'Can I cancel at any time?',
+    faq4A: 'Yes, no penalties. Cancel from your Wapi101 account panel or directly in the Stripe portal. The service remains active until the end of the paid period.',
+    faq5Q: 'Do you charge in Mexican pesos or dollars?',
+    faq5A: 'We charge in MXN (Mexican pesos). Payments are securely processed by Stripe. If you are outside Mexico, Stripe automatically converts from your local currency.',
+    faq6Q: 'Do you have a Mac/Windows/iOS/Android app?',
+    faq6A: 'Wapi101 is 100% web. Works in any modern browser. It\'s a PWA, so you can "install" it on your Mac/iPhone/Android from the browser and it opens like a native app.',
+    faq7Q: 'Can I import my contacts from another CRM?',
+    faq7A: 'Yes, we support import from Kommo, HubSpot and generic CSV. For complex cases, we help with migration manually at no cost during onboarding.',
+    // CTA
+    ctaTitle: 'Ready to sell more on WhatsApp?',
+    ctaSub:   'Start free today. No card. No time limit.',
+    ctaBtn:   'Create free account →',
+    // Footer
+    footerTagline:       'Multichannel CRM for LATAM. Made with ❤️ in Mexico.',
+    footerProductTitle:  'Product',
+    footerResourcesTitle:'Resources',
+    footerLegalTitle:    'Legal',
+    footerFeatures:      'Features',
+    footerPricing:       'Pricing',
+    footerLogin:         'Log in',
+    footerSignup:        'Start free',
+    footerFaq:           'FAQ',
+    footerContact:       'Contact',
+    footerPrivacy:       'Privacy',
+    footerTerms:         'Terms',
+    copyright:           '© 2026 Wapi101. All rights reserved.',
   },
 };
-const _lp = _isEn ? _LP.en : _LP.es;
 
-// Aplicar traducciones a elementos estáticos identificables
-(function applyLandingLang() {
-  const qs = (sel) => document.querySelector(sel);
-  const set = (sel, html, useHtml) => { const el = qs(sel); if (el) { if (useHtml) el.innerHTML = html; else el.textContent = html; } };
-  set('#pricingSection h2.section-title', _lp.pricingTitle);
-  set('#pricingSection .section-sub', _lp.pricingSub, true);
-  set('#pricingGrid', _lp.loading);
-  set('#stripeNote', _lp.stripe, true);
-  const opts = document.querySelectorAll('.pt-opt');
-  const labels = [_lp.toggleMonth, _lp.toggleSem, _lp.toggleYear];
-  opts.forEach((b, i) => {
-    const save = b.querySelector('.pt-save');
-    const savedText = save ? save.outerHTML : '';
-    b.textContent = labels[i] || b.textContent;
-    if (save) b.innerHTML = labels[i] + ' ' + savedText;
+// ─── Language detection & switching ──────────────────────────────────────────
+const _stored = (() => { try { return localStorage.getItem('locale'); } catch { return null; } })();
+const _navLang = (navigator.language || 'es').toLowerCase();
+let _isEn = _stored ? _stored === 'en' : !_navLang.startsWith('es');
+
+// html elements that use innerHTML (contain tags like <em>, <strong>, <a>)
+const _HTML_KEYS = new Set([
+  'heroTitle','heroTrust','pricingSub','stripe',
+  'faq1A','faq2A','faq3A','faq4A','faq5A','faq6A','faq7A',
+]);
+
+function applyLandingLang() {
+  const lp = _isEn ? _LP.en : _LP.es;
+  document.documentElement.lang = _isEn ? 'en' : 'es-MX';
+
+  // Update all keyed elements
+  Object.keys(lp).forEach(key => {
+    if (typeof lp[key] === 'function') return;
+    const el = document.getElementById(key);
+    if (!el) return;
+    if (_HTML_KEYS.has(key)) el.innerHTML = lp[key];
+    else el.textContent = lp[key];
   });
-})();
 
-// ─── Toggle mensual/semestral/anual + render de planes ───
+  // Pricing toggle buttons keep their save badges
+  const ptMonth = document.getElementById('ptMonth');
+  const ptSem   = document.getElementById('ptSem');
+  const ptYear  = document.getElementById('ptYear');
+  if (ptMonth) ptMonth.textContent = lp.ptMonth;
+  if (ptSem)   ptSem.innerHTML = lp.ptSem + ' <span class="pt-save">−17%</span>';
+  if (ptYear)  ptYear.innerHTML = lp.ptYear + ' <span class="pt-save">−25%</span>';
+
+  // Pricing loading text
+  const loadingEl = document.getElementById('pricingLoading');
+  if (loadingEl) loadingEl.textContent = lp.loading;
+
+  // Language switcher active state
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.lang === (_isEn ? 'en' : 'es'));
+  });
+
+  // Re-render plans if already loaded
+  if (_plans.length) renderPlans();
+}
+
+// Language switcher
+document.getElementById('langSw').addEventListener('click', (e) => {
+  const btn = e.target.closest('.lang-btn');
+  if (!btn) return;
+  _isEn = btn.dataset.lang === 'en';
+  try { localStorage.setItem('locale', _isEn ? 'en' : 'es-MX'); } catch {}
+  applyLandingLang();
+});
+
+// Apply immediately
+applyLandingLang();
+
+// ─── Pricing ──────────────────────────────────────────────────────────────────
 let _interval = 'month';
 let _plans = [];
+
+function lp() { return _isEn ? _LP.en : _LP.es; }
 
 async function loadPlans() {
   try {
@@ -735,52 +792,49 @@ async function loadPlans() {
     const data = await r.json();
     _plans = data.plans || [];
     renderPlans();
-  } catch (e) {
-    document.getElementById('pricingGrid').innerHTML = '<p style="grid-column:1/-1;text-align:center;color:#ef4444">Error cargando planes</p>';
+  } catch {
+    document.getElementById('pricingGrid').innerHTML =
+      '<p style="grid-column:1/-1;text-align:center;color:#ef4444">Error loading plans</p>';
   }
 }
 
 function renderPlans() {
+  const t = lp();
   const grid = document.getElementById('pricingGrid');
   grid.innerHTML = _plans.map(p => {
     const featured = p.featured ? ' featured' : '';
+    const badge    = p.featured ? ` data-badge="${t.popularBadge}"` : '';
     const features = (p.features || []).slice(0, 7).map(f => `<li>${f}</li>`).join('');
 
-    // ── Plan Gratis ──
     if (p.free) {
       return `
         <div class="price-card price-card--free">
           <div><h3>${p.name}</h3><p class="tagline">${p.tagline}</p></div>
           <div>
-            <div class="lp-price-row">
-              <span class="amount">$0</span>
-            </div>
-            <p class="lp-price-note">${_lp.freePriceNote}</p>
+            <div class="lp-price-row"><span class="amount">$0</span></div>
+            <p class="lp-price-note">${t.freePriceNote}</p>
           </div>
           <ul>${features}</ul>
-          <a href="/signup" class="btn-outline">${_lp.freeCta}</a>
+          <a href="/signup" class="btn-outline">${t.freeCta}</a>
         </div>`;
     }
 
-    // ── Plan Ejecutivo (ventas) ──
     if (p.custom) {
       return `
-        <div class="price-card${featured}">
+        <div class="price-card${featured}"${badge}>
           <div><h3>${p.name}</h3><p class="tagline">${p.tagline}</p></div>
-          <div><span class="amount" style="font-size:28px">${_lp.custom}</span></div>
+          <div><span class="amount" style="font-size:28px">${t.custom}</span></div>
           <ul>${features}</ul>
-          <a href="mailto:hola@wapi101.com" class="btn btn-primary">${_lp.contactSales}</a>
+          <a href="mailto:hola@wapi101.com" class="btn btn-primary">${t.contactSales}</a>
         </div>`;
     }
 
-    // ── Planes de pago ──
     let displayPrice, displayUSD, subNote, promoHtml = '';
     const pct = Math.round((1 - p.promoPrice / p.monthlyPrice) * 100);
 
     if (_interval === 'year') {
-      displayPrice = p.annualMonthly;
-      displayUSD   = p.usdAnnualMonthly;
-      subNote = _lp.yearNote(p.annualTotal, p.currency);
+      displayPrice = p.annualMonthly; displayUSD = p.usdAnnualMonthly;
+      subNote = t.yearNote(p.annualTotal, p.currency);
       promoHtml = `
         <div class="lp-price-row">
           <span class="lp-original">$${p.monthlyPrice}</span>
@@ -789,9 +843,8 @@ function renderPlans() {
           <span class="lp-usd">~$${displayUSD} USD</span>
         </div>`;
     } else if (_interval === 'semester') {
-      displayPrice = p.semestralMonthly;
-      displayUSD   = p.usdSemestralMonthly;
-      subNote = _lp.semNote(p.semestralTotal, p.currency);
+      displayPrice = p.semestralMonthly; displayUSD = p.usdSemestralMonthly;
+      subNote = t.semNote(p.semestralTotal, p.currency);
       promoHtml = `
         <div class="lp-price-row">
           <span class="lp-original">$${p.monthlyPrice}</span>
@@ -800,11 +853,10 @@ function renderPlans() {
           <span class="lp-usd">~$${displayUSD} USD</span>
         </div>`;
     } else {
-      displayPrice = p.promoPrice;
-      displayUSD   = p.usdPromoPrice;
-      subNote = _lp.monthNote(p.currency);
+      displayPrice = p.promoPrice; displayUSD = p.usdPromoPrice;
+      subNote = t.monthNote(p.currency);
       promoHtml = `
-        <div class="lp-promo-ribbon">${_lp.launchRibbon}</div>
+        <div class="lp-promo-ribbon">${t.launchRibbon}</div>
         <div class="lp-price-row">
           <span class="lp-original">$${p.monthlyPrice}</span>
           <span class="amount">$${displayPrice}</span>
@@ -814,15 +866,15 @@ function renderPlans() {
     }
 
     return `
-      <div class="price-card${featured}">
+      <div class="price-card${featured}"${badge}>
         <div><h3>${p.name}</h3><p class="tagline">${p.tagline}</p></div>
         <div>
           ${promoHtml}
           <p class="lp-price-note">${subNote}</p>
         </div>
         <ul>${features}</ul>
-        <a href="/signup?plan=${p.key}" class="btn btn-primary">${_lp.tryCta(p.name)}</a>
-        <p class="lp-card-trial-note">${_lp.trialNote}</p>
+        <a href="/signup?plan=${p.key}" class="btn btn-primary">${t.tryCta(p.name)}</a>
+        <p class="lp-card-trial-note">${t.trialNote}</p>
       </div>`;
   }).join('');
 }

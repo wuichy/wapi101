@@ -9304,14 +9304,8 @@ function setupBot() {
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return;
     const data = bbBuildBotJSON();
-    if (!data.steps?.length) {
-      stage.innerHTML = `<div class="bb-visual-empty">Sin pasos. Cambia a Lista para agregar pasos.</div>`;
-      stage.style.width  = '900px';
-      stage.style.height = '600px';
-      return;
-    }
 
-    // Trigger node arriba (siempre visible)
+    // Trigger node arriba (siempre visible — incluso si no hay pasos todavía)
     const triggerY = _VS_PAD;
     const triggerX = _VS_PAD;
     const triggerLabel = (() => {
@@ -9327,6 +9321,26 @@ function setupBot() {
       } catch {}
       return '';
     })();
+
+    // Si no hay pasos, mostrar trigger + hint para arrastrar pasos
+    if (!data.steps?.length) {
+      stage.innerHTML = `
+        <div class="bb-visual-trigger" data-trigger-edit="1" title="Click para editar el disparador" style="left:${triggerX}px;top:${triggerY}px;width:${_VS_NODE_W}px;min-height:${_VS_NODE_H}px">
+          <div class="bb-visual-node-head">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="3 3 17 10 3 17 3 3"/></svg>
+            <span>Disparador</span>
+          </div>
+          <div class="bb-visual-node-summary">${escHtml(triggerLabel)}${triggerSummary ? ' — ' + triggerSummary.replace(/<[^>]+>/g, '') : ''}</div>
+        </div>
+        <div class="bb-visual-empty" style="position:absolute;top:${triggerY + _VS_NODE_H + 60}px;left:${triggerX}px;text-align:left;color:var(--text-muted);font-size:13px">
+          ⬅ Arrastra un paso desde la izquierda para empezar.
+        </div>`;
+      stage.style.width  = '900px';
+      stage.style.height = '500px';
+      _bbVisualNodeMap = {};
+      _bbVisualApplyZoom();
+      return;
+    }
 
     // Layout de los steps debajo del trigger
     const layout = _bbLayoutSteps(data.steps, triggerX, triggerY + _VS_NODE_H + _VS_GAP_Y);
@@ -9456,8 +9470,9 @@ function setupBot() {
     }
   }
 
-  // Helper: dado un id de nodo, devuelve sus dimensiones reales del DOM.
-  // Si no encuentra el elemento, fallback a _VS_NODE_W/H del layout.
+  // Helper: dimensiones reales del nodo medidas con getBoundingClientRect
+  // y traducidas a coords del stage (compensando scroll y zoom). Esto nos da
+  // coordenadas exactas independiente del CSS (transforms, padding, scroll).
   function _bbActualRect(nodeId) {
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return { x: 0, y: 0, w: _VS_NODE_W, h: _VS_NODE_H };
@@ -9468,11 +9483,14 @@ function setupBot() {
       el = stage.querySelector(`[data-step-id="${nodeId}"], [data-node-id="${nodeId}"]`);
     }
     if (!el) return { x: 0, y: 0, w: _VS_NODE_W, h: _VS_NODE_H };
+    const stageRect = stage.getBoundingClientRect();
+    const elRect    = el.getBoundingClientRect();
+    const zoom = _bbVisualZoom || 1;
     return {
-      x: parseFloat(el.style.left) || 0,
-      y: parseFloat(el.style.top)  || 0,
-      w: el.offsetWidth  || _VS_NODE_W,
-      h: el.offsetHeight || _VS_NODE_H,
+      x: (elRect.left - stageRect.left + stage.scrollLeft) / zoom,
+      y: (elRect.top  - stageRect.top  + stage.scrollTop)  / zoom,
+      w: elRect.width  / zoom,
+      h: elRect.height / zoom,
     };
   }
 
@@ -9684,13 +9702,29 @@ function setupBot() {
   }
 
   function bbDeleteStepFromVisual() {
-    if (!_bbEditingTarget) return;
+    console.log('[bb] delete clicked. target=', _bbEditingTarget);
+    if (!_bbEditingTarget) {
+      // Si no hay target activo pero el panel está abierto, intentar
+      // resolverlo del DOM por safety. (defensive)
+      console.warn('[bb] delete sin target activo');
+      return;
+    }
     if (!confirm('¿Eliminar este paso?')) return;
-    const { parentArr, idx } = _bbEditingTarget;
-    parentArr.splice(idx, 1);
-    bbCloseVisualEditor();
-    if (typeof renderStepsFlow === 'function') renderStepsFlow();
-    bbRenderVisualView();
+    try {
+      const { parentArr, idx } = _bbEditingTarget;
+      if (!Array.isArray(parentArr)) {
+        console.error('[bb] delete: parentArr no es array', parentArr);
+        return;
+      }
+      parentArr.splice(idx, 1);
+      bbCloseVisualEditor();
+      if (typeof renderStepsFlow === 'function') renderStepsFlow();
+      bbRenderVisualView();
+      if (typeof toast === 'function') toast('Paso eliminado', 'success');
+    } catch (err) {
+      console.error('[bb] delete error:', err);
+      if (typeof toast === 'function') toast('Error al eliminar: ' + err.message, 'error');
+    }
   }
 
   document.getElementById('bbVisualEditorClose')?.addEventListener('click', bbCloseVisualEditor);

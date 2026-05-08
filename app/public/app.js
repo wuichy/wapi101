@@ -9096,6 +9096,8 @@ function setupBot() {
   // Map global de id → node, poblado en cada render. Usado por drop/click handlers
   // para acceder a parentArr y editar branches sin path-walking.
   let _bbVisualNodeMap = {};
+  // Pan offsets (translate del stage) — se aplican junto con zoom (scale)
+  let _bbPanX = 0, _bbPanY = 0;
   const _VS_GAP_Y = 50, _VS_GAP_X = 60;
   const _VS_PAD = 30;
   let _bbVisualZoom = 1;
@@ -9400,7 +9402,8 @@ function setupBot() {
   function _bbVisualApplyZoom() {
     const stage = document.getElementById('bbVisualStage');
     const label = document.getElementById('bbVisualZoomLabel');
-    if (stage) stage.style.transform = `scale(${_bbVisualZoom})`;
+    // Transform combina pan (translate) + zoom (scale)
+    if (stage) stage.style.transform = `translate(${_bbPanX}px, ${_bbPanY}px) scale(${_bbVisualZoom})`;
     if (label) label.textContent = `${Math.round(_bbVisualZoom * 100)}%`;
   }
 
@@ -9418,15 +9421,17 @@ function setupBot() {
 
     // Click en área vacía (no sobre nodo, trigger, ni dropzone) → pan del canvas
     const onInteractive = e.target.closest('.bb-visual-node, .bb-visual-trigger, .bb-visual-dropzone, .bb-palette-item');
+    console.log('[bb] mousedown target:', e.target.tagName, e.target.className, 'onInteractive:', onInteractive?.className || null);
     if (!onInteractive) {
       _bbPan = {
         startX: e.clientX,
         startY: e.clientY,
-        scrollL: stage.scrollLeft,
-        scrollT: stage.scrollTop,
+        startPanX: _bbPanX,
+        startPanY: _bbPanY,
       };
       stage.classList.add('is-panning');
       e.preventDefault();
+      console.log('[bb] pan started');
       return;
     }
 
@@ -9455,13 +9460,11 @@ function setupBot() {
   }
 
   function _bbVisualMouseMove(e) {
-    // Pan del canvas — actualiza scroll del stage
+    // Pan del canvas — actualiza translate del stage (no scroll)
     if (_bbPan) {
-      const stage = document.getElementById('bbVisualStage');
-      if (stage) {
-        stage.scrollLeft = _bbPan.scrollL - (e.clientX - _bbPan.startX);
-        stage.scrollTop  = _bbPan.scrollT - (e.clientY - _bbPan.startY);
-      }
+      _bbPanX = _bbPan.startPanX + (e.clientX - _bbPan.startX);
+      _bbPanY = _bbPan.startPanY + (e.clientY - _bbPan.startY);
+      _bbVisualApplyZoom();
       return;
     }
     if (!_bbDrag) return;
@@ -9496,9 +9499,9 @@ function setupBot() {
     }
   }
 
-  // Helper: dimensiones reales del nodo medidas con getBoundingClientRect
-  // y traducidas a coords del stage (compensando scroll y zoom). Esto nos da
-  // coordenadas exactas independiente del CSS (transforms, padding, scroll).
+  // Helper: dimensiones reales del nodo. Usamos offsetLeft/Top/Width/Height
+  // que son directos (relativos al offsetParent = stage por position:relative),
+  // sin necesidad de compensar scroll/zoom porque están en coord-space del stage.
   function _bbActualRect(nodeId) {
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return { x: 0, y: 0, w: _VS_NODE_W, h: _VS_NODE_H };
@@ -9509,14 +9512,11 @@ function setupBot() {
       el = stage.querySelector(`[data-step-id="${nodeId}"], [data-node-id="${nodeId}"]`);
     }
     if (!el) return { x: 0, y: 0, w: _VS_NODE_W, h: _VS_NODE_H };
-    const stageRect = stage.getBoundingClientRect();
-    const elRect    = el.getBoundingClientRect();
-    const zoom = _bbVisualZoom || 1;
     return {
-      x: (elRect.left - stageRect.left + stage.scrollLeft) / zoom,
-      y: (elRect.top  - stageRect.top  + stage.scrollTop)  / zoom,
-      w: elRect.width  / zoom,
-      h: elRect.height / zoom,
+      x: el.offsetLeft || 0,
+      y: el.offsetTop  || 0,
+      w: el.offsetWidth  || _VS_NODE_W,
+      h: el.offsetHeight || _VS_NODE_H,
     };
   }
 
@@ -9899,6 +9899,8 @@ function setupBot() {
   });
   document.getElementById('bbVisualZoomReset')?.addEventListener('click', () => {
     _bbVisualZoom = 1;
+    _bbPanX = 0;
+    _bbPanY = 0;
     _bbVisualApplyZoom();
   });
 

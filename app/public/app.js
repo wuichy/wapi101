@@ -4146,6 +4146,9 @@ function bindIntegrationListeners(root) {
       try {
         await api("DELETE", `/api/integrations/${btn.dataset.id}`);
         await loadIntegrations();
+        // Re-evaluar visibilidad del nav 'Comentarios' (puede que se haya
+        // desconectado la única integración FB/IG conectada)
+        applySocialCommentsVisibility().catch(() => {});
         toast("Integración desconectada", "success");
       } catch (err) {
         toast(`Error: ${err.message}`, "error");
@@ -4328,6 +4331,9 @@ async function connectOAuth(providerKey, authType) {
     if (e.data?.type === 'oauth_success') {
       window.removeEventListener('message', handler);
       await loadIntegrations();
+      // Re-evaluar visibilidad del nav 'Comentarios' (puede que recién se
+      // haya conectado FB Page o IG)
+      applySocialCommentsVisibility().catch(() => {});
       toast("Conectado correctamente", "success");
       openRoutingModal(e.data.integrationId);
     } else if (e.data?.type === 'oauth_error') {
@@ -13709,6 +13715,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadMinAdvisors(),
     loadSplitConfig(),
     applyAIConditionalVisibility(),
+    applySocialCommentsVisibility(),
   ]);
   startChatPolling();
   startVersionCheck();
@@ -17410,6 +17417,30 @@ async function applyAIConditionalVisibility() {
   document.querySelectorAll('.sb-step-type-btn[data-type="ai_reply"]').forEach(btn => {
     btn.hidden = !connected;
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// VISIBILIDAD CONDICIONAL — Comentarios FB/IG
+// Solo se muestra el nav 'Comentarios' si hay al menos una integración
+// de Messenger o Instagram conectada (status='connected').
+// ═══════════════════════════════════════════════════════════
+async function applySocialCommentsVisibility() {
+  let connected = false;
+  try {
+    const data = await api('GET', '/api/integrations');
+    const items = data?.items || [];
+    connected = items.some(i =>
+      (i.provider === 'messenger' || i.provider === 'instagram') &&
+      i.status === 'connected'
+    );
+  } catch {}
+  const navItem = document.getElementById('navComments');
+  if (navItem) navItem.hidden = !connected;
+  // Si está oculto y el badge tenía número, también ocultarlo
+  if (!connected) {
+    const badge = document.getElementById('navCommentsBadge');
+    if (badge) badge.hidden = true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

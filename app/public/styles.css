@@ -5238,7 +5238,12 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   border-color: var(--accent);
   border-style: dashed;
   background: rgba(37,99,235,.04);
-  cursor: default;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.bb-visual-trigger:hover {
+  background: rgba(37,99,235,.10);
+  border-style: solid;
 }
 .bb-visual-node-head {
   display: flex;

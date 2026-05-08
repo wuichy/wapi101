@@ -9281,13 +9281,16 @@ function setupBot() {
     </div>`;
   }
 
-  // Construye el path SVG curvo entre dos puntos (cubic bezier).
+  // Construye el path SVG en forma de "Z" ortogonal (líneas rectas con
+  // codos a 90°). Cleaner que bezier para flow diagrams.
   function _bbVisualEdgePath(fromX, fromY, toX, toY) {
-    const dx = toX - fromX;
-    const dy = toY - fromY;
-    const c1y = fromY + Math.max(20, dy / 2);
-    const c2y = toY   - Math.max(20, dy / 2);
-    return `M ${fromX} ${fromY} C ${fromX} ${c1y} ${toX} ${c2y} ${toX} ${toY}`;
+    // Si los nodos están casi alineados verticalmente, recta directa
+    if (Math.abs(toX - fromX) < 4) {
+      return `M ${fromX} ${fromY} L ${toX} ${toY}`;
+    }
+    // Z-shape: baja la mitad del gap, gira horizontal al X target, baja al destino
+    const midY = fromY + Math.max(20, (toY - fromY) / 2);
+    return `M ${fromX} ${fromY} L ${fromX} ${midY} L ${toX} ${midY} L ${toX} ${toY}`;
   }
 
   function bbRenderVisualView() {
@@ -9323,12 +9326,13 @@ function setupBot() {
     const totalWidth  = Math.max(900, layout.maxX + _VS_PAD);
     const totalHeight = Math.max(400, triggerY + _VS_NODE_H + _VS_GAP_Y + layout.height + _VS_PAD);
 
-    // SVG con los edges
+    // SVG con los edges. Cada path lleva data-from y data-to para poder
+    // actualizarlos en tiempo real durante drag (sin re-render del DOM).
     let edgesSvg = `<svg class="bb-visual-edges" viewBox="0 0 ${totalWidth} ${totalHeight}" width="${totalWidth}" height="${totalHeight}">`;
     // Edge desde el trigger hacia el primer step
     if (layout.nodes.length) {
       const first = layout.nodes[0];
-      edgesSvg += `<path d="${_bbVisualEdgePath(triggerX + _VS_NODE_W / 2, triggerY + _VS_NODE_H, first.x + first.w / 2, first.y)}" />`;
+      edgesSvg += `<path data-from="__trigger" data-to="${escHtml(first.id)}" d="${_bbVisualEdgePath(triggerX + _VS_NODE_W / 2, triggerY + _VS_NODE_H, first.x + first.w / 2, first.y)}" />`;
     }
     // Edges entre steps
     const nodeMap = Object.fromEntries(layout.nodes.map(n => [n.id, n]));
@@ -9343,16 +9347,16 @@ function setupBot() {
       const y1 = from.y + from.h;
       const x2 = to.x + to.w / 2;
       const y2 = to.y;
-      edgesSvg += `<path d="${_bbVisualEdgePath(x1, y1, x2, y2)}" />`;
+      edgesSvg += `<path data-from="${escHtml(edge.from)}" data-to="${escHtml(edge.to)}" d="${_bbVisualEdgePath(x1, y1, x2, y2)}" />`;
       if (edge.label) {
         branchLabels.push({ x: (x1 + x2) / 2, y: (y1 + y2) / 2, text: edge.label });
       }
     }
     edgesSvg += '</svg>';
 
-    // Renderizar todo
+    // Renderizar todo. Trigger node clickable → abre editor en Lista
     stage.innerHTML = edgesSvg
-      + `<div class="bb-visual-trigger" style="left:${triggerX}px;top:${triggerY}px;width:${_VS_NODE_W}px;min-height:${_VS_NODE_H}px">
+      + `<div class="bb-visual-trigger" data-trigger-edit="1" title="Click para editar en Lista" style="left:${triggerX}px;top:${triggerY}px;width:${_VS_NODE_W}px;min-height:${_VS_NODE_H}px">
           <div class="bb-visual-node-head">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="3 3 17 10 3 17 3 3"/></svg>
             <span>Disparador</span>
@@ -9419,6 +9423,11 @@ function setupBot() {
     _bbDrag.lastX = newX;
     _bbDrag.lastY = newY;
 
+    // ─── Actualizar edges en tiempo real ───
+    // Buscamos paths donde data-from o data-to coincida con el id del nodo
+    // arrastrado y recalculamos su d= con la posición actual del nodo.
+    _bbUpdateEdgesForNode(_bbDrag.stepId, newX, newY);
+
     // Si es un sub-step de rama, detectar drop zone bajo el cursor para
     // highlight visual. Usamos elementFromPoint con el cursor del mouse.
     if (_bbDrag.isBranchStep) {
@@ -9433,6 +9442,45 @@ function setupBot() {
       const dz = el?.closest?.('.bb-visual-dropzone');
       if (dz) dz.classList.add('is-drag-over');
     }
+  }
+
+  // Helper: recalcula los edges donde el nodo dado es from o to.
+  function _bbUpdateEdgesForNode(nodeId, newX, newY) {
+    const stage = document.getElementById('bbVisualStage');
+    if (!stage) return;
+    const w = _VS_NODE_W;
+    const h = _VS_NODE_H;
+    // Edges donde este nodo es source (sale de su lado inferior)
+    stage.querySelectorAll(`svg.bb-visual-edges path[data-from="${nodeId}"]`).forEach(p => {
+      const toId = p.getAttribute('data-to');
+      const toNode = _bbVisualNodeMap[toId];
+      if (!toNode) return;
+      // Posición visual actual del nodo destino (puede estar también arrastrado)
+      const toEl = stage.querySelector(`[data-step-id="${toId}"], [data-node-id="${toId}"]`);
+      const toX = toEl ? parseFloat(toEl.style.left) || toNode.x : toNode.x;
+      const toY = toEl ? parseFloat(toEl.style.top)  || toNode.y : toNode.y;
+      p.setAttribute('d', _bbVisualEdgePath(newX + w/2, newY + h, toX + toNode.w/2, toY));
+    });
+    // Edges donde este nodo es target (entra por su lado superior)
+    stage.querySelectorAll(`svg.bb-visual-edges path[data-to="${nodeId}"]`).forEach(p => {
+      const fromId = p.getAttribute('data-from');
+      // El trigger es virtual (id="__trigger") — usar posición del trigger node
+      let fromX, fromY;
+      if (fromId === '__trigger') {
+        const trigEl = stage.querySelector('.bb-visual-trigger');
+        fromX = (parseFloat(trigEl?.style.left) || 0) + w / 2;
+        fromY = (parseFloat(trigEl?.style.top)  || 0) + h;
+      } else {
+        const fromNode = _bbVisualNodeMap[fromId];
+        if (!fromNode) return;
+        const fromEl = stage.querySelector(`[data-step-id="${fromId}"], [data-node-id="${fromId}"]`);
+        const fx = fromEl ? parseFloat(fromEl.style.left) || fromNode.x : fromNode.x;
+        const fy = fromEl ? parseFloat(fromEl.style.top)  || fromNode.y : fromNode.y;
+        fromX = fx + fromNode.w / 2;
+        fromY = fy + fromNode.h;
+      }
+      p.setAttribute('d', _bbVisualEdgePath(fromX, fromY, newX + w/2, newY));
+    });
   }
 
   function _bbVisualMouseUp(e) {
@@ -9510,6 +9558,26 @@ function setupBot() {
   }
 
   document.getElementById('bbVisualStage')?.addEventListener('mousedown', _bbVisualMouseDown);
+
+  // Click en el trigger node → switch a Lista y scroll al trigger card
+  document.getElementById('bbVisualStage')?.addEventListener('click', (e) => {
+    const trigEl = e.target.closest('[data-trigger-edit]');
+    if (!trigEl) return;
+    e.preventDefault();
+    bbSwitchView('list');
+    setTimeout(() => {
+      const triggerCard = document.querySelector('.sb-trigger-card:has(#sbTriggerType)') || document.getElementById('sbTriggerType')?.closest('.sb-trigger-card');
+      if (triggerCard) {
+        triggerCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const orig = triggerCard.style.boxShadow;
+        triggerCard.style.transition = 'box-shadow .3s';
+        triggerCard.style.boxShadow = '0 0 0 3px rgba(37,99,235,.4)';
+        setTimeout(() => { triggerCard.style.boxShadow = orig; }, 1200);
+      }
+      // Auto-focus el primer input visible del trigger
+      document.getElementById('sbTriggerType')?.focus();
+    }, 80);
+  });
   document.addEventListener('mousemove', _bbVisualMouseMove);
   document.addEventListener('mouseup', _bbVisualMouseUp);
 

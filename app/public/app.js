@@ -3769,6 +3769,8 @@ function setupSettingsTabs() {
   const AI_DEFAULT_MODELS = { anthropic: 'claude-opus-4-7', openai: 'gpt-4o-mini', google: 'gemini-1.5-flash', ollama: 'gemma2:9b' };
   const AI_KEY_PLACEHOLDERS = { anthropic: 'sk-ant-...', openai: 'sk-...', google: 'AIza...', ollama: '(sin API key)' };
 
+  let _savedAIState = { provider: null, hasKey: false };
+
   function applyAIProviderUI(provider) {
     document.querySelectorAll('.ai-provider').forEach(el => el.classList.remove('is-selected'));
     const radio = document.querySelector(`.ai-provider input[value="${provider}"]`);
@@ -3778,6 +3780,35 @@ function setupSettingsTabs() {
     if (urlField) urlField.disabled = (provider !== 'ollama');
     if (keyField) keyField.placeholder = AI_KEY_PLACEHOLDERS[provider] || 'API Key';
     if (provider === 'ollama' && urlField && !urlField.value) urlField.value = 'http://localhost:11434';
+    updateAIConnectionUI();
+  }
+
+  function renderConnectedBadges() {
+    document.querySelectorAll('.ai-provider-connected-badge').forEach(b => b.remove());
+    if (!_savedAIState.hasKey || !_savedAIState.provider) return;
+    const label = document.querySelector(`.ai-provider input[value="${_savedAIState.provider}"]`)?.closest('.ai-provider');
+    if (label) {
+      const badge = document.createElement('span');
+      badge.className = 'ai-provider-connected-badge';
+      badge.textContent = '✓ Conectado';
+      label.appendChild(badge);
+    }
+  }
+
+  function updateAIConnectionUI() {
+    const selected = document.querySelector('.ai-provider input:checked')?.value;
+    const disconnBtn = document.getElementById('btnDisconnectAI');
+    const isCurrentSavedAndConnected = !!selected && selected === _savedAIState.provider && _savedAIState.hasKey;
+    if (disconnBtn) disconnBtn.hidden = !isCurrentSavedAndConnected;
+    const keyEl = document.getElementById('aiApiKey');
+    if (keyEl) {
+      if (isCurrentSavedAndConnected && !keyEl.value) {
+        keyEl.placeholder = '••••••••••••';
+      } else {
+        keyEl.placeholder = AI_KEY_PLACEHOLDERS[selected] || 'API Key';
+      }
+    }
+    renderConnectedBadges();
   }
 
   document.querySelectorAll('.ai-provider input').forEach(input => {
@@ -3785,6 +3816,8 @@ function setupSettingsTabs() {
       applyAIProviderUI(input.value);
       const modelEl = document.getElementById('aiModel');
       if (modelEl && !modelEl.dataset.userEdited) modelEl.value = AI_DEFAULT_MODELS[input.value] || '';
+      const keyEl = document.getElementById('aiApiKey');
+      if (keyEl) keyEl.value = '';
     });
   });
   document.getElementById('aiModel')?.addEventListener('input', function() { this.dataset.userEdited = '1'; });
@@ -3792,13 +3825,10 @@ function setupSettingsTabs() {
   async function loadAISettings() {
     try {
       const s = await api('GET', '/api/settings/ai');
+      _savedAIState = { provider: s.provider, hasKey: !!s.hasApiKey || s.provider === 'ollama' };
       applyAIProviderUI(s.provider);
       const modelEl = document.getElementById('aiModel');
       if (modelEl) { modelEl.value = s.model || AI_DEFAULT_MODELS[s.provider] || ''; modelEl.dataset.userEdited = ''; }
-      const keyEl = document.getElementById('aiApiKey');
-      if (keyEl) keyEl.placeholder = s.hasApiKey ? '••••••••••••' : (AI_KEY_PLACEHOLDERS[s.provider] || 'API Key');
-      const disconnBtn = document.getElementById('btnDisconnectAI');
-      if (disconnBtn) disconnBtn.hidden = !s.hasApiKey;
       const urlEl = document.getElementById('aiBaseUrl');
       if (urlEl) urlEl.value = s.baseUrl || '';
       const modeEl = document.getElementById('aiMode');
@@ -3807,6 +3837,7 @@ function setupSettingsTabs() {
       if (tempEl) tempEl.value = s.temperature ?? 0.7;
       const tokEl = document.getElementById('aiMaxTokens');
       if (tokEl) tokEl.value = s.maxTokens ?? 2048;
+      updateAIConnectionUI();
     } catch(e) { console.error('loadAISettings', e); }
   }
 
@@ -3818,9 +3849,10 @@ function setupSettingsTabs() {
       await api('PATCH', '/api/settings/ai', { clearApiKey: true });
       const keyEl = document.getElementById('aiApiKey');
       const statusEl = document.getElementById('aiTestStatus');
-      if (keyEl) { keyEl.value = ''; keyEl.placeholder = AI_KEY_PLACEHOLDERS[document.querySelector('.ai-provider input:checked')?.value] || 'API Key'; }
+      if (keyEl) keyEl.value = '';
       if (statusEl) { statusEl.style.color = 'var(--text-muted)'; statusEl.textContent = 'API key eliminado'; setTimeout(() => { statusEl.textContent = ''; }, 2000); }
-      btn.hidden = true;
+      _savedAIState = { provider: _savedAIState.provider, hasKey: false };
+      updateAIConnectionUI();
       applyAIConditionalVisibility();
     } catch(e) {
       alert('Error: ' + e.message);
@@ -3848,10 +3880,9 @@ function setupSettingsTabs() {
       await api('PATCH', '/api/settings/ai', body);
       btn.textContent = 'Guardado ✓';
       if (statusEl) { statusEl.textContent = ''; }
-      if (apiKeyVal && !apiKeyVal.startsWith('•')) {
-        const disconnBtn = document.getElementById('btnDisconnectAI');
-        if (disconnBtn) disconnBtn.hidden = false;
-      }
+      const hasKeyNow = (apiKeyVal && !apiKeyVal.startsWith('•')) || provider === 'ollama' || _savedAIState.hasKey && _savedAIState.provider === provider;
+      _savedAIState = { provider, hasKey: !!hasKeyNow };
+      updateAIConnectionUI();
       applyAIConditionalVisibility();
       setTimeout(() => { btn.textContent = 'Guardar cambios'; btn.disabled = false; }, 1800);
     } catch(e) {

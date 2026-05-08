@@ -498,8 +498,9 @@ module.exports = function createWebhooksRouter(db) {
     }
   }
 
-  // Persiste un comentario de FB Page o IG en social_comments.
-  // FB Page (provider='messenger') value shape: { item, comment_id, post_id, sender_id, sender_name, message, parent_id, ... }
+  // Persiste un comentario de FB Page o IG en social_comments y lo enlaza al
+  // contacto correspondiente (creándolo si es nuevo).
+  // FB Page (provider='messenger') value shape: { item, comment_id, post_id, sender_id, sender_name, message, parent_id, permalink_url, ... }
   // IG (provider='instagram') value shape: { id, text, from: {id, username}, media: {id}, parent_id, ... }
   function processSocialComment(provider, value, _payload, integration) {
     try {
@@ -518,17 +519,67 @@ module.exports = function createWebhooksRouter(db) {
       const fromId          = String(provider === 'instagram' ? (value.from?.id || '')  : (value.sender_id || value.from?.id || '')).trim() || null;
       const fromName        = (provider === 'instagram' ? value.from?.username : (value.sender_name || value.from?.name)) || null;
       const body            = (provider === 'instagram' ? value.text : value.message) || '';
+      const permalinkUrl    = value.permalink_url || null; // FB lo manda; IG no
+
+      // Linkear con contacto existente o crearlo. Misma estrategia que conversations:
+      // (provider, external_id) → contact via conversations table. Si no existe,
+      // creamos una "conversación" del provider + un contacto auto-poblado con el
+      // nombre del payload — así futuros DMs y comentarios del mismo usuario
+      // quedan agrupados bajo el mismo contacto.
+      let contactId = null;
+      if (fromId) {
+        try {
+          const convo = convoSvc.findOrCreate(db, tenantId, {
+            provider,
+            externalId:    fromId,
+            integrationId: integration?.id || null,
+            contactPhone:  null,
+            contactName:   fromName || null,
+          });
+          contactId = convo?.contact_id || null;
+          // Si el contacto no tenía nombre y ahora sí lo tenemos, actualizar
+          if (contactId && fromName) {
+            const c = db.prepare('SELECT first_name FROM contacts WHERE id = ? AND tenant_id = ?').get(contactId, tenantId);
+            if (c && (!c.first_name || c.first_name === fromId)) {
+              db.prepare('UPDATE contacts SET first_name = ? WHERE id = ? AND tenant_id = ?').run(fromName, contactId, tenantId);
+            }
+          }
+        } catch (e) {
+          console.warn(`[webhook ${provider} comment] error linkeando contacto: ${e.message}`);
+        }
+      }
 
       db.prepare(`
         INSERT OR IGNORE INTO social_comments
           (tenant_id, integration_id, provider, post_id, comment_id, parent_comment_id,
-           from_id, from_name, body, meta_json, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', unixepoch())
+           from_id, from_name, body, meta_json, permalink_url, contact_id, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unread', unixepoch())
       `).run(
         tenantId, integration?.id || null, provider, postId, commentId, parentCommentId,
-        fromId, fromName, body, JSON.stringify(value).slice(0, 5000)
+        fromId, fromName, body, JSON.stringify(value).slice(0, 5000),
+        permalinkUrl, contactId
       );
-      console.log(`[webhook ${provider} comment] guardado: id=${commentId} from="${fromName || fromId || '?'}" body="${body.slice(0,50)}"`);
+      console.log(`[webhook ${provider} comment] guardado: id=${commentId} from="${fromName || fromId || '?'}" contact=${contactId || '?'} body="${body.slice(0,50)}"`);
+
+      // Para IG: fetch permalink en background usando Graph API (fire-and-forget).
+      // Lo guardamos cuando llegue. No bloquea el procesamiento del webhook.
+      if (provider === 'instagram' && !permalinkUrl) {
+        const accessToken = integration?.credentials?.accessToken;
+        if (accessToken) {
+          (async () => {
+            try {
+              const r = await fetch(`https://graph.facebook.com/v18.0/${commentId}?fields=permalink&access_token=${encodeURIComponent(accessToken)}`);
+              const d = await r.json().catch(() => null);
+              if (d?.permalink) {
+                db.prepare('UPDATE social_comments SET permalink_url = ? WHERE comment_id = ? AND provider = ?')
+                  .run(d.permalink, commentId, provider);
+              }
+            } catch (e) {
+              console.warn(`[webhook ig permalink] fetch falló: ${e.message}`);
+            }
+          })();
+        }
+      }
     } catch (err) {
       console.error(`[webhook ${provider} comment] error procesando:`, err.message);
     }

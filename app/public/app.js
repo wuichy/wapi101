@@ -3625,7 +3625,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones','mail','copiloto']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones','mail','copiloto','comentarios']);
 
 // Filtro de búsqueda de la vista Aplicaciones (topbar)
 let _appsSearch = '';
@@ -3737,7 +3737,8 @@ function showView(viewName) {
   if (viewName === 'chats') loadConversations();
   if (viewName === 'inicio') loadDashboard();
   if (viewName === 'mail') { loadMailView(); initMailView(); }
-  if (viewName === 'copiloto') initCopiloto();
+  if (viewName === 'copiloto')   initCopiloto();
+  if (viewName === 'comentarios') initComments();
 }
 
 function setupNav() {
@@ -13712,6 +13713,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   startChatPolling();
   startVersionCheck();
   startTasksDuePolling();
+  startCommentsBadgePolling();
   } catch (_bootErr) {
     const box = document.getElementById('_jsErrBox') || (() => {
       const el = document.createElement('div');
@@ -17566,4 +17568,198 @@ function cpRenderMessages(scrollOnly = false) {
 
 function escHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════════════
+// COMENTARIOS REDES SOCIALES (FB Page + Instagram)
+// ═══════════════════════════════════════════════════════════
+let _commentsStatus = 'unread';
+let _commentsInited = false;
+let _commentsActiveId = null;
+let _commentsCountTimer = null;
+
+function initComments() {
+  if (!_commentsInited) {
+    _commentsInited = true;
+    document.querySelectorAll('#commentsTabs .comments-tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('#commentsTabs .comments-tab').forEach(x => x.classList.toggle('is-active', x === t));
+        _commentsStatus = t.dataset.status;
+        loadCommentsList();
+      });
+    });
+    // Reply modal handlers
+    document.getElementById('commentReplyClose')?.addEventListener('click', closeCommentReply);
+    document.getElementById('commentReplyCancel')?.addEventListener('click', closeCommentReply);
+    document.getElementById('commentReplyOverlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'commentReplyOverlay') closeCommentReply();
+    });
+    document.getElementById('commentReplySubmit')?.addEventListener('click', submitCommentReply);
+    // Click delegation en la lista
+    document.getElementById('commentsList')?.addEventListener('click', (e) => {
+      const replyBtn = e.target.closest('[data-comment-reply]');
+      if (replyBtn) {
+        e.preventDefault();
+        openCommentReply(Number(replyBtn.dataset.commentReply));
+        return;
+      }
+      const archiveBtn = e.target.closest('[data-comment-archive]');
+      if (archiveBtn) {
+        e.preventDefault();
+        updateCommentStatus(Number(archiveBtn.dataset.commentArchive), 'archived');
+        return;
+      }
+      const readBtn = e.target.closest('[data-comment-read]');
+      if (readBtn) {
+        e.preventDefault();
+        updateCommentStatus(Number(readBtn.dataset.commentRead), 'read');
+        return;
+      }
+    });
+  }
+  loadCommentsList();
+}
+
+async function loadCommentsList() {
+  const list = document.getElementById('commentsList');
+  if (!list) return;
+  list.innerHTML = '<div class="comments-empty">Cargando…</div>';
+  try {
+    const data = await api('GET', `/api/integrations/comments?status=${_commentsStatus}&limit=200`);
+    const items = data?.items || [];
+    if (!items.length) {
+      const msg = _commentsStatus === 'unread' ? 'No tienes comentarios sin leer.'
+                : _commentsStatus === 'replied' ? 'No has respondido comentarios todavía.'
+                : 'Sin comentarios.';
+      list.innerHTML = `<div class="comments-empty">${msg}</div>`;
+      return;
+    }
+    list.innerHTML = items.map(_renderCommentCard).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="comments-empty">Error: ${escHtml(e.message)}</div>`;
+  }
+  refreshCommentsBadge();
+}
+
+function _renderCommentCard(c) {
+  const fromInitial = (c.from_name || c.from_id || '?').charAt(0).toUpperCase();
+  const avatar = c.contact_avatar_url
+    ? `<img src="${escHtml(c.contact_avatar_url)}" alt="">`
+    : escHtml(fromInitial);
+  const providerCls = c.provider === 'instagram' ? 'is-ig' : 'is-fb';
+  const providerLabel = c.provider === 'instagram' ? 'Instagram' : 'Facebook';
+  const timeAgo = _fmtCommentTime(c.created_at);
+  const contactLink = c.contact_id
+    ? `<a class="comment-card-link" href="#exp-detail" data-contact-id="${c.contact_id}" onclick="event.preventDefault();window.openContactByCommentLink&&openContactByCommentLink(${c.contact_id})">Ver ficha →</a>`
+    : '';
+  const postLink = c.permalink_url
+    ? `<a class="comment-card-link" href="${escHtml(c.permalink_url)}" target="_blank" rel="noopener">Ver post ↗</a>`
+    : '';
+  const isReplied = c.status === 'replied';
+  const repliedTag = isReplied ? `<span class="comment-card-status-replied">✓ Respondido</span>` : '';
+  return `
+    <div class="comment-card" data-comment-id="${c.id}">
+      <div class="comment-card-head">
+        <div class="comment-card-avatar">${avatar}</div>
+        <div class="comment-card-meta">
+          <div class="comment-card-from">${escHtml(c.from_name || c.from_id || 'Anónimo')}</div>
+          <div class="comment-card-context">
+            <span class="comment-card-provider-pill ${providerCls}">${providerLabel}</span>
+            comentó en post${c.parent_comment_id ? ' (responde a otro comentario)' : ''}
+          </div>
+        </div>
+        <div class="comment-card-time">${timeAgo}</div>
+      </div>
+      <div class="comment-card-body">${escHtml(c.body || '(sin texto)')}</div>
+      <div class="comment-card-actions">
+        ${postLink}
+        ${contactLink}
+        ${repliedTag}
+        <div style="flex:1"></div>
+        ${!isReplied ? `<button class="comment-card-btn is-primary" data-comment-reply="${c.id}">📢 Responder</button>` : ''}
+        ${c.status !== 'read' && !isReplied ? `<button class="comment-card-btn" data-comment-read="${c.id}">Marcar leído</button>` : ''}
+        ${c.status !== 'archived' ? `<button class="comment-card-btn" data-comment-archive="${c.id}">Archivar</button>` : ''}
+      </div>
+    </div>`;
+}
+
+function _fmtCommentTime(ts) {
+  if (!ts) return '';
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 60) return 'hace un momento';
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+  if (diff < 86400 * 7) return `hace ${Math.floor(diff / 86400)} d`;
+  return new Date(ts * 1000).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+}
+
+async function updateCommentStatus(id, status) {
+  try {
+    await api('PATCH', `/api/integrations/comments/${id}`, { status });
+    loadCommentsList();
+  } catch (e) {
+    if (typeof toast === 'function') toast('Error: ' + e.message, 'error');
+  }
+}
+
+function openCommentReply(id) {
+  _commentsActiveId = id;
+  // Buscar el comentario en el DOM para poblar el modal
+  const card = document.querySelector(`.comment-card[data-comment-id="${id}"]`);
+  if (!card) return;
+  const fromName  = card.querySelector('.comment-card-from')?.textContent || '?';
+  const body      = card.querySelector('.comment-card-body')?.textContent || '';
+  const provLabel = card.querySelector('.comment-card-provider-pill')?.textContent || '';
+  document.getElementById('commentReplyTitle').textContent  = `Responder a ${fromName}`;
+  document.getElementById('commentReplyProvider').textContent = provLabel;
+  document.getElementById('commentReplyOriginal').innerHTML = `<strong>${escHtml(fromName)}:</strong> ${escHtml(body)}`;
+  document.getElementById('commentReplyText').value = '';
+  document.getElementById('commentReplyOverlay').hidden = false;
+  setTimeout(() => document.getElementById('commentReplyText')?.focus(), 50);
+}
+
+function closeCommentReply() {
+  _commentsActiveId = null;
+  const ov = document.getElementById('commentReplyOverlay');
+  if (ov) ov.hidden = true;
+}
+
+async function submitCommentReply() {
+  if (!_commentsActiveId) return;
+  const text = document.getElementById('commentReplyText')?.value?.trim() || '';
+  if (!text) {
+    if (typeof toast === 'function') toast('Escribe una respuesta', 'error');
+    return;
+  }
+  const btn = document.getElementById('commentReplySubmit');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    await api('POST', `/api/integrations/comments/${_commentsActiveId}/reply`, { text });
+    if (typeof toast === 'function') toast('Respuesta enviada', 'success');
+    closeCommentReply();
+    loadCommentsList();
+  } catch (e) {
+    if (typeof toast === 'function') toast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '📢 Responder públicamente';
+  }
+}
+
+// Badge global de comentarios sin leer (poll cada 60s, similar a tasks)
+async function refreshCommentsBadge() {
+  try {
+    const counts = await api('GET', '/api/integrations/comments/counts');
+    const badge = document.getElementById('navCommentsBadge');
+    if (badge) {
+      const n = Number(counts?.unread || 0);
+      if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.hidden = false; }
+      else       { badge.hidden = true; }
+    }
+  } catch {}
+}
+
+function startCommentsBadgePolling() {
+  if (_commentsCountTimer) return;
+  refreshCommentsBadge();
+  _commentsCountTimer = setInterval(refreshCommentsBadge, 60 * 1000);
 }

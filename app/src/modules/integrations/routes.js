@@ -10,24 +10,80 @@ module.exports = function createIntegrationsRouter(db) {
     try {
       const status = req.query.status || 'unread';
       const limit  = Math.min(Number(req.query.limit) || 100, 500);
+      const contactId = req.query.contactId ? Number(req.query.contactId) : null;
       const VALID = ['unread', 'read', 'replied', 'archived', 'all'];
       if (!VALID.includes(status)) return res.status(400).json({ error: 'status inválido' });
 
-      const conds  = ['tenant_id = ?'];
+      const conds  = ['c.tenant_id = ?'];
       const params = [req.tenantId];
-      if (status !== 'all') { conds.push('status = ?'); params.push(status); }
+      if (status !== 'all') { conds.push('c.status = ?'); params.push(status); }
+      if (contactId)        { conds.push('c.contact_id = ?'); params.push(contactId); }
       params.push(limit);
 
       const rows = db.prepare(`
-        SELECT id, integration_id, provider, post_id, comment_id, parent_comment_id,
-               from_id, from_name, body, status, replied_at, replied_by_advisor, created_at
-          FROM social_comments
+        SELECT c.id, c.integration_id, c.provider, c.post_id, c.comment_id, c.parent_comment_id,
+               c.from_id, c.from_name, c.body, c.status, c.replied_at, c.replied_by_advisor,
+               c.permalink_url, c.contact_id, c.created_at,
+               ct.first_name AS contact_first_name, ct.last_name AS contact_last_name,
+               ct.avatar_url AS contact_avatar_url
+          FROM social_comments c
+          LEFT JOIN contacts ct ON ct.id = c.contact_id AND ct.tenant_id = c.tenant_id
          WHERE ${conds.join(' AND ')}
-         ORDER BY created_at DESC
+         ORDER BY c.created_at DESC
          LIMIT ?
       `).all(...params);
       res.json({ items: rows });
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // POST /api/integrations/comments/:id/reply  body={text}
+  // Manda la respuesta a Meta Graph API y marca el comentario como 'replied'.
+  router.post('/comments/:id/reply', async (req, res) => {
+    try {
+      const id   = Number(req.params.id);
+      const text = String(req.body?.text || '').trim();
+      if (!text) return res.status(400).json({ error: 'text requerido' });
+      if (text.length > 8000) return res.status(400).json({ error: 'text demasiado largo' });
+
+      const comment = db.prepare(`
+        SELECT c.*, i.credentials AS integ_credentials
+          FROM social_comments c
+          LEFT JOIN integrations i ON i.id = c.integration_id
+         WHERE c.id = ? AND c.tenant_id = ?
+      `).get(id, req.tenantId);
+      if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
+
+      const creds = (() => { try { return JSON.parse(comment.integ_credentials || '{}'); } catch { return {}; } })();
+      const accessToken = creds.accessToken;
+      if (!accessToken) return res.status(400).json({ error: 'La integración no tiene access token configurado' });
+
+      // FB Page comment reply: POST /{comment-id}/comments
+      // IG comment reply:      POST /{comment-id}/replies
+      const endpoint = comment.provider === 'instagram'
+        ? `https://graph.facebook.com/v18.0/${comment.comment_id}/replies`
+        : `https://graph.facebook.com/v18.0/${comment.comment_id}/comments`;
+
+      const r = await fetch(endpoint, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:    new URLSearchParams({ message: text, access_token: accessToken }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || data.error) {
+        const msg = data?.error?.message || `HTTP ${r.status}`;
+        console.error(`[reply ${comment.provider}] error:`, msg, data);
+        return res.status(502).json({ error: `Meta: ${msg}` });
+      }
+
+      db.prepare(`
+        UPDATE social_comments SET status = 'replied', replied_at = unixepoch(), replied_by_advisor = ?
+         WHERE id = ?
+      `).run(req.advisor?.id || null, id);
+
+      res.json({ ok: true, replyId: data.id });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // GET /api/integrations/comments/counts → counts por status (para badges)

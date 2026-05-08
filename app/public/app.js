@@ -9083,9 +9083,12 @@ function setupBot() {
     if (view === 'visual')   { _bbBuildPalette(); bbRenderVisualView(); }
   }
 
-  // ─── Visual node graph (Fase A read-only) ───
+  // ─── Visual node graph (Phase A-D) ───
   // Constantes de layout
   const _VS_NODE_W = 200, _VS_NODE_H = 70;
+  // Map global de id → node, poblado en cada render. Usado por drop/click handlers
+  // para acceder a parentArr y editar branches sin path-walking.
+  let _bbVisualNodeMap = {};
   const _VS_GAP_Y = 50, _VS_GAP_X = 60;
   const _VS_PAD = 30;
   let _bbVisualZoom = 1;
@@ -9093,12 +9096,14 @@ function setupBot() {
   // Recursivamente: dado un array de steps, calcula posiciones y devuelve
   // {nodes, edges, width, height}. Para wait_response despliega 4 columnas
   // (una por rama) en un sub-layout horizontal.
-  function _bbLayoutSteps(steps, originX, originY, prefix = '') {
+  function _bbLayoutSteps(steps, originX, originY, prefix = '', parentArr = null) {
     const nodes = [];
     const edges = [];
     let y = originY;
     let prevId = null;
     let maxX = originX + _VS_NODE_W;
+    // Si no se pasó parentArr explícito, usar el array `steps` mismo
+    parentArr = parentArr || steps;
 
     steps.forEach((step, idx) => {
       const id = prefix ? `${prefix}.${idx}` : String(idx);
@@ -9115,70 +9120,116 @@ function setupBot() {
         h: _VS_NODE_H,
         prefix,
         manual: !!step._pos,
+        parentArr,
+        localIdx: idx,
       };
       nodes.push(node);
       if (prevId !== null) edges.push({ from: prevId, to: id });
       prevId = id;
       y += _VS_NODE_H + _VS_GAP_Y;
 
+      // Helper: crea un nodo "drop zone" para una rama (vacía o al final).
+      // El node tiene parentArr (el array de pasos de esa rama) para que el
+      // drop handler pueda push directamente sin path-walking.
+      const makeDropZone = (id, x, y, label, parentArr, parentId, branchInfo = {}) => ({
+        id, x, y, w: _VS_NODE_W, h: _VS_NODE_H,
+        isDropZone: true,
+        label,
+        parentArr,
+        parentId,
+        branchInfo,
+        prefix: id.split('.').slice(0, -1).join('.'),
+      });
+
       // branch step (multi-case): expandir cases + default como columnas hacia abajo
-      if (step.type === 'branch' && (Array.isArray(step.config?.cases) || Array.isArray(step.config?.default))) {
-        const cases = step.config.cases || [];
+      if (step.type === 'branch') {
+        // Asegurar que cases y default existen
+        if (!step.config) step.config = {};
+        if (!Array.isArray(step.config.cases))   step.config.cases   = [];
+        if (!Array.isArray(step.config.default)) step.config.default = [];
+        const cases = step.config.cases;
+        const numCols = cases.length + 1; // siempre incluye default
+        const branchY = y;
+        let bx = node.x - ((numCols - 1) * (_VS_NODE_W + _VS_GAP_X)) / 2;
         const branchSubLayouts = [];
-        const numCols = cases.length + (Array.isArray(step.config.default) && step.config.default.length ? 1 : 0);
-        if (numCols > 0) {
-          const branchY = y;
-          let bx = node.x - ((numCols - 1) * (_VS_NODE_W + _VS_GAP_X)) / 2;
-          cases.forEach((cs, ci) => {
-            const bSteps = Array.isArray(cs.branch) ? cs.branch : [];
-            const colX = bx + ci * (_VS_NODE_W + _VS_GAP_X);
-            if (!bSteps.length) return;
-            const sub = _bbLayoutSteps(bSteps, colX, branchY, `${id}.case${ci}`);
-            if (sub.nodes.length) {
-              const label = `${cs.field === 'tag' ? '🏷' : '💬'} ${cs.value || '?'}`;
-              edges.push({ from: id, to: sub.nodes[0].id, label });
-            }
+
+        cases.forEach((cs, ci) => {
+          if (!Array.isArray(cs.branch)) cs.branch = [];
+          const bSteps = cs.branch;
+          const colX = bx + ci * (_VS_NODE_W + _VS_GAP_X);
+          const colPrefix = `${id}.case${ci}`;
+          const label = `${cs.field === 'tag' ? '🏷' : '💬'} ${cs.value || '?'}`;
+          if (bSteps.length) {
+            const sub = _bbLayoutSteps(bSteps, colX, branchY, colPrefix, bSteps);
+            edges.push({ from: id, to: sub.nodes[0].id, label });
+            // Drop zone al final de la rama
+            const lastY = sub.nodes[sub.nodes.length - 1].y + _VS_NODE_H;
+            sub.nodes.push(makeDropZone(`${colPrefix}.dz`, colX, lastY + _VS_GAP_Y, '+ Soltar paso aquí', bSteps, sub.nodes[sub.nodes.length - 1].id));
+            sub.height = (lastY + _VS_GAP_Y + _VS_NODE_H) - branchY;
             branchSubLayouts.push(sub);
-          });
-          if (Array.isArray(step.config.default) && step.config.default.length) {
-            const colX = bx + cases.length * (_VS_NODE_W + _VS_GAP_X);
-            const sub = _bbLayoutSteps(step.config.default, colX, branchY, `${id}.default`);
-            if (sub.nodes.length) {
-              edges.push({ from: id, to: sub.nodes[0].id, label: 'default' });
-            }
-            branchSubLayouts.push(sub);
+          } else {
+            // Rama vacía: solo drop zone con label del case
+            const dz = makeDropZone(`${colPrefix}.dz`, colX, branchY, label + ' (arrastra paso)', bSteps, id, { isCase: true, caseIndex: ci });
+            edges.push({ from: id, to: dz.id, label });
+            branchSubLayouts.push({ nodes: [dz], edges: [], height: _VS_NODE_H, maxX: colX + _VS_NODE_W });
           }
-          if (branchSubLayouts.length) {
-            const maxBottom = Math.max(...branchSubLayouts.map(s => s.height + branchY));
-            y = maxBottom + _VS_GAP_Y;
-            prevId = null;
-            for (const sub of branchSubLayouts) {
-              nodes.push(...sub.nodes);
-              edges.push(...sub.edges);
-              maxX = Math.max(maxX, sub.maxX);
-            }
+        });
+        // Default
+        const defArr = step.config.default;
+        const colX = bx + cases.length * (_VS_NODE_W + _VS_GAP_X);
+        const defPrefix = `${id}.default`;
+        if (defArr.length) {
+          const sub = _bbLayoutSteps(defArr, colX, branchY, defPrefix, defArr);
+          edges.push({ from: id, to: sub.nodes[0].id, label: 'default' });
+          const lastY = sub.nodes[sub.nodes.length - 1].y + _VS_NODE_H;
+          sub.nodes.push(makeDropZone(`${defPrefix}.dz`, colX, lastY + _VS_GAP_Y, '+ Soltar paso aquí', defArr, sub.nodes[sub.nodes.length - 1].id));
+          sub.height = (lastY + _VS_GAP_Y + _VS_NODE_H) - branchY;
+          branchSubLayouts.push(sub);
+        } else {
+          const dz = makeDropZone(`${defPrefix}.dz`, colX, branchY, 'default (arrastra paso)', defArr, id, { isDefault: true });
+          edges.push({ from: id, to: dz.id, label: 'default' });
+          branchSubLayouts.push({ nodes: [dz], edges: [], height: _VS_NODE_H, maxX: colX + _VS_NODE_W });
+        }
+
+        if (branchSubLayouts.length) {
+          const maxBottom = Math.max(...branchSubLayouts.map(s => s.height + branchY));
+          y = maxBottom + _VS_GAP_Y;
+          prevId = null;
+          for (const sub of branchSubLayouts) {
+            nodes.push(...sub.nodes);
+            edges.push(...sub.edges);
+            maxX = Math.max(maxX, sub.maxX);
           }
         }
       }
 
       // wait_response: expandir ramas como columnas hacia abajo
-      if (step.type === 'wait_response' && step.config?.branches) {
+      if (step.type === 'wait_response') {
+        if (!step.config) step.config = {};
+        if (!step.config.branches) step.config.branches = {};
         const branches = step.config.branches;
         const branchKeys = Object.keys(SB_BRANCH_LABELS);
         const branchY = y;
-        let bx = originX - ((branchKeys.length - 1) * (_VS_NODE_W + _VS_GAP_X)) / 2;
+        let bx = node.x - ((branchKeys.length - 1) * (_VS_NODE_W + _VS_GAP_X)) / 2;
         const branchSubLayouts = [];
 
         branchKeys.forEach((bKey, bi) => {
-          const bSteps = Array.isArray(branches[bKey]) ? branches[bKey] : [];
+          if (!Array.isArray(branches[bKey])) branches[bKey] = [];
+          const bSteps = branches[bKey];
           const colX = bx + bi * (_VS_NODE_W + _VS_GAP_X);
-          if (bSteps.length === 0) return; // rama vacía, no la dibujamos
-          const sub = _bbLayoutSteps(bSteps, colX, branchY, `${id}.${bKey}`);
-          // Conectar el wait_response al primer node de cada rama
-          if (sub.nodes.length) {
+          const colPrefix = `${id}.${bKey}`;
+          if (bSteps.length) {
+            const sub = _bbLayoutSteps(bSteps, colX, branchY, colPrefix, bSteps);
             edges.push({ from: id, to: sub.nodes[0].id, label: SB_BRANCH_LABELS[bKey] });
+            const lastY = sub.nodes[sub.nodes.length - 1].y + _VS_NODE_H;
+            sub.nodes.push(makeDropZone(`${colPrefix}.dz`, colX, lastY + _VS_GAP_Y, '+ Soltar paso aquí', bSteps, sub.nodes[sub.nodes.length - 1].id));
+            sub.height = (lastY + _VS_GAP_Y + _VS_NODE_H) - branchY;
+            branchSubLayouts.push(sub);
+          } else {
+            const dz = makeDropZone(`${colPrefix}.dz`, colX, branchY, SB_BRANCH_LABELS[bKey] + ' (arrastra)', bSteps, id, { isWaitBranch: true, branchKey: bKey });
+            edges.push({ from: id, to: dz.id, label: SB_BRANCH_LABELS[bKey] });
+            branchSubLayouts.push({ nodes: [dz], edges: [], height: _VS_NODE_H, maxX: colX + _VS_NODE_W });
           }
-          branchSubLayouts.push(sub);
         });
 
         if (branchSubLayouts.length) {
@@ -9207,11 +9258,20 @@ function setupBot() {
   }
 
   function _bbVisualNodeHTML(node) {
+    // Drop zone (rama vacía o final de rama)
+    if (node.isDropZone) {
+      return `<div class="bb-visual-dropzone" data-node-id="${escHtml(node.id)}" style="left:${node.x}px;top:${node.y}px;width:${node.w}px;min-height:${node.h}px">
+        <span class="bb-visual-dropzone-icon">+</span>
+        <span class="bb-visual-dropzone-label">${escHtml(node.label)}</span>
+      </div>`;
+    }
     const { step, idx, x, y, w, h, id } = node;
     const def = BOT_STEP_REGISTRY[step.type];
     const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || step.type) : step.type;
     const summary = def?.summary ? (def.summary(step) || '') : '';
-    return `<div class="bb-visual-node" data-step-id="${escHtml(id)}" data-step-index="${idx}" style="left:${x}px;top:${y}px;width:${w}px;min-height:${h}px">
+    // Si es step de rama (id contiene punto), mostrar visualmente distinto
+    const isBranchStep = id.includes('.');
+    return `<div class="bb-visual-node ${isBranchStep ? 'is-branch-step' : ''}" data-step-id="${escHtml(id)}" data-step-index="${idx}" data-node-id="${escHtml(id)}" style="left:${x}px;top:${y}px;width:${w}px;min-height:${h}px">
       <div class="bb-visual-node-head">
         <span class="bb-visual-node-num">${idx + 1}</span>
         ${stepIcon(step.type, 14)}
@@ -9272,6 +9332,8 @@ function setupBot() {
     }
     // Edges entre steps
     const nodeMap = Object.fromEntries(layout.nodes.map(n => [n.id, n]));
+    // Guardar map global para que drop/click handlers tengan acceso a parentArr
+    _bbVisualNodeMap = nodeMap;
     const branchLabels = [];
     for (const edge of layout.edges) {
       const from = nodeMap[edge.from];
@@ -9321,8 +9383,7 @@ function setupBot() {
     const nodeEl = e.target.closest('.bb-visual-node');
     if (!nodeEl) return;
     const stepId = nodeEl.dataset.stepId || '';
-    // Solo arrastramos steps del flujo principal por ahora
-    if (stepId.includes('.')) return;
+    const isBranchStep = stepId.includes('.');
 
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return;
@@ -9333,6 +9394,7 @@ function setupBot() {
       idx,
       nodeEl,
       stepId,
+      isBranchStep,
       startMouseX: e.clientX,
       startMouseY: e.clientY,
       startX,
@@ -9340,8 +9402,9 @@ function setupBot() {
       zoom: _bbVisualZoom,
     };
     _bbDragMoved = false;
-    nodeEl.classList.add('is-dragging');
-    document.body.style.cursor = 'grabbing';
+    // Solo agregar la clase visual a top-level (los de rama no se mueven)
+    if (!isBranchStep) nodeEl.classList.add('is-dragging');
+    document.body.style.cursor = isBranchStep ? 'pointer' : 'grabbing';
     e.preventDefault();
   }
 
@@ -9350,6 +9413,9 @@ function setupBot() {
     const dx = (e.clientX - _bbDrag.startMouseX) / _bbDrag.zoom;
     const dy = (e.clientY - _bbDrag.startMouseY) / _bbDrag.zoom;
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) _bbDragMoved = true;
+    // Sub-steps de rama no se mueven visualmente — solo registramos el "move"
+    // para diferenciar click vs drag, pero no actualizamos posición
+    if (_bbDrag.isBranchStep) return;
     const newX = Math.max(0, _bbDrag.startX + dx);
     const newY = Math.max(0, _bbDrag.startY + dy);
     _bbDrag.nodeEl.style.left = newX + 'px';
@@ -9365,17 +9431,22 @@ function setupBot() {
     drag.nodeEl.classList.remove('is-dragging');
     document.body.style.cursor = '';
 
-    if (_bbDragMoved && Number.isFinite(drag.lastX) && Number.isFinite(drag.lastY)) {
-      // Persistir posición en el step.config — sbSteps[idx]._pos
+    if (_bbDragMoved && Number.isFinite(drag.lastX) && Number.isFinite(drag.lastY) && !drag.isBranchStep) {
+      // Persistir posición SOLO para top-level steps (sub-steps de rama mantienen
+      // auto-layout dentro de su columna)
       const step = sbSteps[drag.idx];
       if (step) {
         step._pos = { x: Math.round(drag.lastX), y: Math.round(drag.lastY) };
-        // Re-render del visual para actualizar las edges (líneas)
         bbRenderVisualView();
       }
     } else {
       // Click sin drag → abrir editor del step
-      bbOpenVisualEditor(drag.idx);
+      const node = _bbVisualNodeMap[drag.stepId];
+      if (node?.parentArr) {
+        bbOpenVisualEditorByRef(node.parentArr, node.localIdx);
+      } else {
+        bbOpenVisualEditor(drag.idx);
+      }
     }
   }
 
@@ -9383,13 +9454,24 @@ function setupBot() {
   document.addEventListener('mousemove', _bbVisualMouseMove);
   document.addEventListener('mouseup', _bbVisualMouseUp);
 
-  // ─── Editor panel lateral (Phase B) ───
-  let _bbEditingIdx = null;
+  // ─── Editor panel lateral (Phase B + D2) ───
+  // Estado: { parentArr, idx } — funciona tanto para top-level como para sub-steps de rama
+  let _bbEditingTarget = null;
 
   function bbOpenVisualEditor(idx) {
-    const step = sbSteps[idx];
+    bbOpenVisualEditorByRef(sbSteps, idx);
+  }
+
+  function bbOpenVisualEditorByRef(parentArr, idx) {
+    const step = parentArr?.[idx];
     if (!step) return;
-    _bbEditingIdx = idx;
+    // Asegurar que el step tiene _id (para que collectStepConfig pueda leer
+    // sus inputs por data-sid)
+    if (!step._id) {
+      sbStepCounter++;
+      step._id = `s${sbStepCounter}`;
+    }
+    _bbEditingTarget = { parentArr, idx };
     const def = BOT_STEP_REGISTRY[step.type];
     const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || step.type) : step.type;
 
@@ -9407,19 +9489,17 @@ function setupBot() {
 
   function bbCloseVisualEditor() {
     document.getElementById('bbVisualEditor').hidden = true;
-    _bbEditingIdx = null;
+    _bbEditingTarget = null;
   }
 
   function bbSaveVisualEditor() {
-    if (_bbEditingIdx === null) return;
-    const step = sbSteps[_bbEditingIdx];
+    if (!_bbEditingTarget) return;
+    const { parentArr, idx } = _bbEditingTarget;
+    const step = parentArr[idx];
     if (!step) return;
-    // Recolectar el config desde los inputs del editor body
     if (typeof collectStepConfig === 'function') {
       try {
-        // collectStepConfig lee inputs por data-sid="X" — el body del editor los tiene
         const newConfig = collectStepConfig(step._id);
-        // Preservar _pos si existía
         if (step._pos) newConfig._pos = step._pos;
         step.config = newConfig;
       } catch (e) {
@@ -9433,11 +9513,11 @@ function setupBot() {
   }
 
   function bbDeleteStepFromVisual() {
-    if (_bbEditingIdx === null) return;
+    if (!_bbEditingTarget) return;
     if (!confirm('¿Eliminar este paso?')) return;
-    sbSteps.splice(_bbEditingIdx, 1);
+    const { parentArr, idx } = _bbEditingTarget;
+    parentArr.splice(idx, 1);
     bbCloseVisualEditor();
-    // Re-render Lista también para mantener consistencia
     if (typeof renderStepsFlow === 'function') renderStepsFlow();
     bbRenderVisualView();
   }
@@ -9508,17 +9588,51 @@ function setupBot() {
     if (_bbPaletteDrag) e.preventDefault(); // permite drop
   });
 
+  // Highlight visual al pasar sobre drop zones de rama
+  document.getElementById('bbVisualStage')?.addEventListener('dragenter', (e) => {
+    if (!_bbPaletteDrag) return;
+    const dz = e.target.closest('.bb-visual-dropzone');
+    if (dz) dz.classList.add('is-drag-over');
+  });
+  document.getElementById('bbVisualStage')?.addEventListener('dragleave', (e) => {
+    const dz = e.target.closest('.bb-visual-dropzone');
+    if (dz) dz.classList.remove('is-drag-over');
+  });
+
   document.getElementById('bbVisualStage')?.addEventListener('drop', (e) => {
     if (!_bbPaletteDrag) return;
     e.preventDefault();
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return;
-    // Calcular posición relativa al stage (compensando scroll y zoom)
+
+    // ¿Cayó sobre una drop zone de rama?
+    const dzEl = e.target.closest('.bb-visual-dropzone');
+    if (dzEl) {
+      const nodeId = dzEl.dataset.nodeId;
+      const dzNode = _bbVisualNodeMap[nodeId];
+      if (dzNode?.parentArr) {
+        sbStepCounter++;
+        const newStep = {
+          _id: `s${sbStepCounter}`,
+          type: _bbPaletteDrag.type,
+          config: {},
+        };
+        dzNode.parentArr.push(newStep);
+        if (typeof renderStepsFlow === 'function') renderStepsFlow();
+        bbRenderVisualView();
+        // Abrir editor del nuevo step en la rama
+        setTimeout(() => bbOpenVisualEditorByRef(dzNode.parentArr, dzNode.parentArr.length - 1), 100);
+        _bbPaletteDrag = null;
+        if (_bbPaletteGhost) { _bbPaletteGhost.remove(); _bbPaletteGhost = null; }
+        return;
+      }
+    }
+
+    // Si no, se agrega al flujo principal (top-level)
     const rect = stage.getBoundingClientRect();
     const x = (e.clientX - rect.left + stage.scrollLeft) / _bbVisualZoom - _VS_NODE_W / 2;
     const y = (e.clientY - rect.top  + stage.scrollTop)  / _bbVisualZoom - _VS_NODE_H / 2;
 
-    // Crear nuevo step
     sbStepCounter++;
     const newStep = {
       _id: `s${sbStepCounter}`,
@@ -9528,11 +9642,8 @@ function setupBot() {
     };
     sbSteps.push(newStep);
 
-    // Re-render lista (para mantener consistencia) y visual
     if (typeof renderStepsFlow === 'function') renderStepsFlow();
     bbRenderVisualView();
-
-    // Abrir editor del nuevo step automáticamente
     setTimeout(() => bbOpenVisualEditor(sbSteps.length - 1), 100);
 
     _bbPaletteDrag = null;

@@ -18171,7 +18171,12 @@ function cpRenderMessages(scrollOnly = false) {
 }
 
 function escHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // Coerción a string para tolerar numbers, null, undefined, etc.
+  // Esta es la 3ra declaración con el mismo nombre — function hoisting hace
+  // que esta gane. Las otras dos versiones (líneas ~8125 y ~14038) ya hacían
+  // String(str) pero esta no, lo que rompía a callers que pasaban números
+  // (ej. buildAlarmRowHtml pasa amount como Number).
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ═══════════════════════════════════════════════════════════

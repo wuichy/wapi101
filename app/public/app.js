@@ -9402,9 +9402,8 @@ function setupBot() {
       zoom: _bbVisualZoom,
     };
     _bbDragMoved = false;
-    // Solo agregar la clase visual a top-level (los de rama no se mueven)
-    if (!isBranchStep) nodeEl.classList.add('is-dragging');
-    document.body.style.cursor = isBranchStep ? 'pointer' : 'grabbing';
+    nodeEl.classList.add('is-dragging');
+    document.body.style.cursor = 'grabbing';
     e.preventDefault();
   }
 
@@ -9413,15 +9412,27 @@ function setupBot() {
     const dx = (e.clientX - _bbDrag.startMouseX) / _bbDrag.zoom;
     const dy = (e.clientY - _bbDrag.startMouseY) / _bbDrag.zoom;
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) _bbDragMoved = true;
-    // Sub-steps de rama no se mueven visualmente — solo registramos el "move"
-    // para diferenciar click vs drag, pero no actualizamos posición
-    if (_bbDrag.isBranchStep) return;
     const newX = Math.max(0, _bbDrag.startX + dx);
     const newY = Math.max(0, _bbDrag.startY + dy);
     _bbDrag.nodeEl.style.left = newX + 'px';
     _bbDrag.nodeEl.style.top  = newY + 'px';
     _bbDrag.lastX = newX;
     _bbDrag.lastY = newY;
+
+    // Si es un sub-step de rama, detectar drop zone bajo el cursor para
+    // highlight visual. Usamos elementFromPoint con el cursor del mouse.
+    if (_bbDrag.isBranchStep) {
+      // Limpiar highlights previos
+      document.querySelectorAll('.bb-visual-dropzone.is-drag-over').forEach(el => el.classList.remove('is-drag-over'));
+      // Ocultar temporalmente el nodo arrastrado para que elementFromPoint
+      // detecte el elemento de abajo
+      const prevPe = _bbDrag.nodeEl.style.pointerEvents;
+      _bbDrag.nodeEl.style.pointerEvents = 'none';
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      _bbDrag.nodeEl.style.pointerEvents = prevPe;
+      const dz = el?.closest?.('.bb-visual-dropzone');
+      if (dz) dz.classList.add('is-drag-over');
+    }
   }
 
   function _bbVisualMouseUp(e) {
@@ -9431,21 +9442,69 @@ function setupBot() {
     drag.nodeEl.classList.remove('is-dragging');
     document.body.style.cursor = '';
 
-    if (_bbDragMoved && Number.isFinite(drag.lastX) && Number.isFinite(drag.lastY) && !drag.isBranchStep) {
-      // Persistir posición SOLO para top-level steps (sub-steps de rama mantienen
-      // auto-layout dentro de su columna)
-      const step = sbSteps[drag.idx];
-      if (step) {
-        step._pos = { x: Math.round(drag.lastX), y: Math.round(drag.lastY) };
-        bbRenderVisualView();
-      }
-    } else {
+    // Limpiar todos los highlights de drop zones
+    document.querySelectorAll('.bb-visual-dropzone.is-drag-over').forEach(el => el.classList.remove('is-drag-over'));
+
+    if (!_bbDragMoved) {
       // Click sin drag → abrir editor del step
       const node = _bbVisualNodeMap[drag.stepId];
       if (node?.parentArr) {
         bbOpenVisualEditorByRef(node.parentArr, node.localIdx);
       } else {
         bbOpenVisualEditor(drag.idx);
+      }
+      return;
+    }
+
+    // Detectar drop target via elementFromPoint
+    const prevPe = drag.nodeEl.style.pointerEvents;
+    drag.nodeEl.style.pointerEvents = 'none';
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    drag.nodeEl.style.pointerEvents = prevPe;
+    const dz = el?.closest?.('.bb-visual-dropzone');
+
+    if (dz) {
+      // Drop sobre drop zone → mover el step al parentArr de esa drop zone
+      const targetNode = _bbVisualNodeMap[dz.dataset.nodeId];
+      const sourceNode = _bbVisualNodeMap[drag.stepId];
+      if (targetNode?.parentArr && sourceNode?.parentArr) {
+        // Verificar que no sea drop a la misma posición
+        const sameArr = targetNode.parentArr === sourceNode.parentArr;
+        const isLastInSame = sameArr && sourceNode.localIdx === sourceNode.parentArr.length - 1;
+        if (!isLastInSame) {
+          // Quitar del source array
+          const [moved] = sourceNode.parentArr.splice(sourceNode.localIdx, 1);
+          // Limpiar _pos al moverse a una rama (auto-layout)
+          if (sameArr) {
+            // Reordenar dentro de la misma rama: insertar al final
+            targetNode.parentArr.push(moved);
+          } else {
+            delete moved._pos;
+            targetNode.parentArr.push(moved);
+          }
+          if (typeof renderStepsFlow === 'function') renderStepsFlow();
+          bbRenderVisualView();
+          if (typeof toast === 'function') toast('Paso movido', 'success');
+          return;
+        }
+      }
+      // Si llegamos aquí, no se movió nada — re-render para revertir
+      bbRenderVisualView();
+      return;
+    }
+
+    if (drag.isBranchStep) {
+      // Sub-step de rama soltado fuera de drop zone → revertir
+      bbRenderVisualView();
+      return;
+    }
+
+    // Top-level step soltado en stage → guardar nueva posición
+    if (Number.isFinite(drag.lastX) && Number.isFinite(drag.lastY)) {
+      const step = sbSteps[drag.idx];
+      if (step) {
+        step._pos = { x: Math.round(drag.lastX), y: Math.round(drag.lastY) };
+        bbRenderVisualView();
       }
     }
   }

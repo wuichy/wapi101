@@ -5100,9 +5100,9 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .bb-visual-node:hover .bb-visual-node-edit-hint { opacity: 1; }
 
-/* Sub-steps dentro de ramas (no draggables) */
+/* Sub-steps dentro de ramas (draggables entre ramas) */
 .bb-visual-node.is-branch-step {
-  cursor: pointer;
+  cursor: grab;
   border-style: dashed;
   background: rgba(255,255,255,.7);
 }
@@ -5110,6 +5110,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   background: #fff;
   border-style: solid;
 }
+.bb-visual-node.is-branch-step:active { cursor: grabbing; }
 
 /* Drop zones para ramas vacías o final de rama */
 .bb-visual-dropzone {

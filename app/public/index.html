@@ -1618,6 +1618,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M3 5h6M5 10h6M7 15h6"/></svg>
                 <span>Árbol</span>
               </button>
+              <button type="button" class="bb-view-tab" data-view="visual">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="5" cy="15" r="2"/><circle cx="15" cy="15" r="2"/><path d="M7 5h6M5 7v6M15 7v6M7 15h6"/></svg>
+                <span>Visual</span>
+              </button>
               <button type="button" class="bb-view-tab" data-view="code">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><polyline points="7 6 3 10 7 14"/><polyline points="13 6 17 10 13 14"/></svg>
                 <span>Código</span>
@@ -1802,6 +1806,23 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <span class="bb-code-hint">Vista de solo lectura. Click en un paso para editarlo en la Lista.</span>
               </div>
               <div class="bb-tree" id="bbTreeContent"></div>
+            </div>
+
+            <!-- Vista: Visual (diagrama de nodos, read-only) -->
+            <div class="bb-view-content" data-view="visual" hidden>
+              <div class="bb-visual-toolbar">
+                <span class="bb-code-hint">Vista de solo lectura. Click en un paso para editarlo en la Lista.</span>
+                <div class="bb-visual-zoom">
+                  <button type="button" class="bb-zoom-btn" id="bbVisualZoomOut" title="Alejar">−</button>
+                  <span id="bbVisualZoomLabel">100%</span>
+                  <button type="button" class="bb-zoom-btn" id="bbVisualZoomIn" title="Acercar">+</button>
+                  <button type="button" class="bb-zoom-btn" id="bbVisualZoomReset" title="Reset">⟲</button>
+                </div>
+              </div>
+              <div class="bb-visual-canvas" id="bbVisualCanvas">
+                <div class="bb-visual-stage" id="bbVisualStage"></div>
+              </div>
+              <p class="bb-visual-mobile-hint">El visual funciona mejor en pantallas grandes. En móvil usa la vista <strong>Árbol</strong>.</p>
             </div>
 
             <!-- Vista: Código -->

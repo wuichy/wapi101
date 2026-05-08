@@ -8680,7 +8680,227 @@ function setupBot() {
     });
     if (view === 'code')     bbRenderCodeView();
     if (view === 'indented') bbRenderIndentedView();
+    if (view === 'visual')   bbRenderVisualView();
   }
+
+  // ─── Visual node graph (Fase A read-only) ───
+  // Constantes de layout
+  const _VS_NODE_W = 200, _VS_NODE_H = 70;
+  const _VS_GAP_Y = 50, _VS_GAP_X = 60;
+  const _VS_PAD = 30;
+  let _bbVisualZoom = 1;
+
+  // Recursivamente: dado un array de steps, calcula posiciones y devuelve
+  // {nodes, edges, width, height}. Para wait_response despliega 4 columnas
+  // (una por rama) en un sub-layout horizontal.
+  function _bbLayoutSteps(steps, originX, originY, prefix = '') {
+    const nodes = [];
+    const edges = [];
+    let y = originY;
+    let prevId = null;
+    let maxX = originX + _VS_NODE_W;
+
+    steps.forEach((step, idx) => {
+      const id = prefix ? `${prefix}.${idx}` : String(idx);
+      const node = {
+        id, step, idx,
+        x: originX,
+        y,
+        w: _VS_NODE_W,
+        h: _VS_NODE_H,
+        prefix,
+      };
+      nodes.push(node);
+      if (prevId !== null) edges.push({ from: prevId, to: id });
+      prevId = id;
+      y += _VS_NODE_H + _VS_GAP_Y;
+
+      // wait_response: expandir ramas como columnas hacia abajo
+      if (step.type === 'wait_response' && step.config?.branches) {
+        const branches = step.config.branches;
+        const branchKeys = Object.keys(SB_BRANCH_LABELS);
+        const branchY = y;
+        let bx = originX - ((branchKeys.length - 1) * (_VS_NODE_W + _VS_GAP_X)) / 2;
+        const branchSubLayouts = [];
+
+        branchKeys.forEach((bKey, bi) => {
+          const bSteps = Array.isArray(branches[bKey]) ? branches[bKey] : [];
+          const colX = bx + bi * (_VS_NODE_W + _VS_GAP_X);
+          if (bSteps.length === 0) return; // rama vacía, no la dibujamos
+          const sub = _bbLayoutSteps(bSteps, colX, branchY, `${id}.${bKey}`);
+          // Conectar el wait_response al primer node de cada rama
+          if (sub.nodes.length) {
+            edges.push({ from: id, to: sub.nodes[0].id, label: SB_BRANCH_LABELS[bKey] });
+          }
+          branchSubLayouts.push(sub);
+        });
+
+        if (branchSubLayouts.length) {
+          // y avanza al maxBottom de las ramas
+          const maxBottom = Math.max(...branchSubLayouts.map(s => s.height + branchY));
+          y = maxBottom + _VS_GAP_Y;
+          // Tras las ramas, el flujo principal "se rompe" — no conectamos al
+          // siguiente step principal porque las ramas son autocontenidas
+          prevId = null;
+          for (const sub of branchSubLayouts) {
+            nodes.push(...sub.nodes);
+            edges.push(...sub.edges);
+            maxX = Math.max(maxX, sub.maxX);
+          }
+        }
+      }
+    });
+
+    return {
+      nodes,
+      edges,
+      width:  maxX - originX,
+      height: y - originY,
+      maxX,
+    };
+  }
+
+  function _bbVisualNodeHTML(node) {
+    const { step, idx, x, y, w, h, id } = node;
+    const def = BOT_STEP_REGISTRY[step.type];
+    const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || step.type) : step.type;
+    const summary = def?.summary ? (def.summary(step) || '') : '';
+    return `<div class="bb-visual-node" data-step-id="${escHtml(id)}" data-step-index="${idx}" style="left:${x}px;top:${y}px;width:${w}px;min-height:${h}px">
+      <div class="bb-visual-node-head">
+        <span class="bb-visual-node-num">${idx + 1}</span>
+        ${stepIcon(step.type, 14)}
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(label)}</span>
+      </div>
+      ${summary ? `<div class="bb-visual-node-summary">${escHtml(summary)}</div>` : ''}
+    </div>`;
+  }
+
+  // Construye el path SVG curvo entre dos puntos (cubic bezier).
+  function _bbVisualEdgePath(fromX, fromY, toX, toY) {
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const c1y = fromY + Math.max(20, dy / 2);
+    const c2y = toY   - Math.max(20, dy / 2);
+    return `M ${fromX} ${fromY} C ${fromX} ${c1y} ${toX} ${c2y} ${toX} ${toY}`;
+  }
+
+  function bbRenderVisualView() {
+    const stage = document.getElementById('bbVisualStage');
+    if (!stage) return;
+    const data = bbBuildBotJSON();
+    if (!data.steps?.length) {
+      stage.innerHTML = `<div class="bb-visual-empty">Sin pasos. Cambia a Lista para agregar pasos.</div>`;
+      stage.style.width  = '900px';
+      stage.style.height = '600px';
+      return;
+    }
+
+    // Trigger node arriba (siempre visible)
+    const triggerY = _VS_PAD;
+    const triggerX = _VS_PAD;
+    const triggerLabel = (() => {
+      const def = BOT_TRIGGER_REGISTRY[data.trigger_type];
+      return def ? (def.label?.[_botRegistryLang()] || def.label?.es || data.trigger_type) : data.trigger_type;
+    })();
+    const triggerSummary = (() => {
+      const def = BOT_TRIGGER_REGISTRY[data.trigger_type];
+      try {
+        if (def?.summaryHtml) {
+          return (def.summaryHtml({ trigger_type: data.trigger_type, trigger_value: data.trigger_value }) || '').replace(/^:\s*/, '');
+        }
+      } catch {}
+      return '';
+    })();
+
+    // Layout de los steps debajo del trigger
+    const layout = _bbLayoutSteps(data.steps, triggerX, triggerY + _VS_NODE_H + _VS_GAP_Y);
+    const totalWidth  = Math.max(900, layout.maxX + _VS_PAD);
+    const totalHeight = Math.max(400, triggerY + _VS_NODE_H + _VS_GAP_Y + layout.height + _VS_PAD);
+
+    // SVG con los edges
+    let edgesSvg = `<svg class="bb-visual-edges" viewBox="0 0 ${totalWidth} ${totalHeight}" width="${totalWidth}" height="${totalHeight}">`;
+    // Edge desde el trigger hacia el primer step
+    if (layout.nodes.length) {
+      const first = layout.nodes[0];
+      edgesSvg += `<path d="${_bbVisualEdgePath(triggerX + _VS_NODE_W / 2, triggerY + _VS_NODE_H, first.x + first.w / 2, first.y)}" />`;
+    }
+    // Edges entre steps
+    const nodeMap = Object.fromEntries(layout.nodes.map(n => [n.id, n]));
+    const branchLabels = [];
+    for (const edge of layout.edges) {
+      const from = nodeMap[edge.from];
+      const to   = nodeMap[edge.to];
+      if (!from || !to) continue;
+      const x1 = from.x + from.w / 2;
+      const y1 = from.y + from.h;
+      const x2 = to.x + to.w / 2;
+      const y2 = to.y;
+      edgesSvg += `<path d="${_bbVisualEdgePath(x1, y1, x2, y2)}" />`;
+      if (edge.label) {
+        branchLabels.push({ x: (x1 + x2) / 2, y: (y1 + y2) / 2, text: edge.label });
+      }
+    }
+    edgesSvg += '</svg>';
+
+    // Renderizar todo
+    stage.innerHTML = edgesSvg
+      + `<div class="bb-visual-trigger" style="left:${triggerX}px;top:${triggerY}px;width:${_VS_NODE_W}px;min-height:${_VS_NODE_H}px">
+          <div class="bb-visual-node-head">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="3 3 17 10 3 17 3 3"/></svg>
+            <span>Disparador</span>
+          </div>
+          <div class="bb-visual-node-summary">${escHtml(triggerLabel)}${triggerSummary ? ' — ' + triggerSummary.replace(/<[^>]+>/g, '') : ''}</div>
+         </div>`
+      + layout.nodes.map(_bbVisualNodeHTML).join('')
+      + branchLabels.map(b => `<span class="bb-visual-branch-label" style="left:${b.x - 30}px;top:${b.y - 8}px">${escHtml(b.text)}</span>`).join('');
+
+    stage.style.width  = totalWidth + 'px';
+    stage.style.height = totalHeight + 'px';
+    _bbVisualApplyZoom();
+  }
+
+  function _bbVisualApplyZoom() {
+    const stage = document.getElementById('bbVisualStage');
+    const label = document.getElementById('bbVisualZoomLabel');
+    if (stage) stage.style.transform = `scale(${_bbVisualZoom})`;
+    if (label) label.textContent = `${Math.round(_bbVisualZoom * 100)}%`;
+  }
+
+  // Click en un node del visual → vuelve a Lista y scrollea
+  document.getElementById('bbVisualStage')?.addEventListener('click', (e) => {
+    const nodeEl = e.target.closest('.bb-visual-node');
+    if (!nodeEl) return;
+    const stepId = nodeEl.dataset.stepId || '';
+    // Solo navegamos a steps del flujo principal (sin "." en el id)
+    if (stepId.includes('.')) return;
+    const idx = Number(nodeEl.dataset.stepIndex);
+    bbSwitchView('list');
+    setTimeout(() => {
+      const flow = document.getElementById('sbStepsFlow');
+      const target = flow?.children?.[idx];
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const orig = target.style.backgroundColor;
+        target.style.transition = 'background-color .3s';
+        target.style.backgroundColor = 'rgba(37,99,235,.12)';
+        setTimeout(() => { target.style.backgroundColor = orig; }, 800);
+      }
+    }, 50);
+  });
+
+  // Zoom
+  document.getElementById('bbVisualZoomIn')?.addEventListener('click', () => {
+    _bbVisualZoom = Math.min(_bbVisualZoom + 0.1, 1.5);
+    _bbVisualApplyZoom();
+  });
+  document.getElementById('bbVisualZoomOut')?.addEventListener('click', () => {
+    _bbVisualZoom = Math.max(_bbVisualZoom - 0.1, 0.4);
+    _bbVisualApplyZoom();
+  });
+  document.getElementById('bbVisualZoomReset')?.addEventListener('click', () => {
+    _bbVisualZoom = 1;
+    _bbVisualApplyZoom();
+  });
 
   // Click en un paso del árbol → volver a la vista Lista y scrollear al paso
   document.getElementById('bbTreeContent')?.addEventListener('click', (e) => {

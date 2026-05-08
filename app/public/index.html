@@ -1614,6 +1614,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><line x1="3" y1="6" x2="17" y2="6"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="14" x2="17" y2="14"/></svg>
                 <span>Lista</span>
               </button>
+              <button type="button" class="bb-view-tab" data-view="indented">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M3 5h6M5 10h6M7 15h6"/></svg>
+                <span>Árbol</span>
+              </button>
               <button type="button" class="bb-view-tab" data-view="code">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><polyline points="7 6 3 10 7 14"/><polyline points="13 6 17 10 13 14"/></svg>
                 <span>Código</span>
@@ -1721,6 +1725,14 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </div>
             </div>
             </div><!-- /bb-view-content data-view=list -->
+
+            <!-- Vista: Árbol indentado -->
+            <div class="bb-view-content" data-view="indented" hidden>
+              <div class="bb-tree-toolbar">
+                <span class="bb-code-hint">Vista de solo lectura. Click en un paso para editarlo en la Lista.</span>
+              </div>
+              <div class="bb-tree" id="bbTreeContent"></div>
+            </div>
 
             <!-- Vista: Código -->
             <div class="bb-view-content" data-view="code" hidden>

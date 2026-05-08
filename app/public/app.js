@@ -7933,6 +7933,79 @@ function setupBot() {
     }
   }
 
+  function bbStepSummaryFor(step) {
+    if (typeof stepSummary === 'function') {
+      try { return stepSummary(step) || ''; } catch { return ''; }
+    }
+    return '';
+  }
+
+  function bbStepIconFor(type) {
+    if (typeof stepIconSvg === 'function') {
+      try { return stepIconSvg(type) || ''; } catch { return ''; }
+    }
+    return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><circle cx="10" cy="10" r="6"/></svg>';
+  }
+
+  function bbTriggerSummaryHTML(type, value) {
+    const label = (typeof SB_TRIGGER_LABELS === 'object' && SB_TRIGGER_LABELS[type]) ? SB_TRIGGER_LABELS[type] : type;
+    let detail = '';
+    if (type === 'keyword' && value) detail = ` — "${escHtml(String(value))}"`;
+    else if (type === 'pipeline_stage' && value) {
+      const stageId = Number(value);
+      const pl = (typeof PIPELINES !== 'undefined' && PIPELINES) ? PIPELINES.find(p => p.stages?.some(s => s.id === stageId)) : null;
+      const stage = pl?.stages?.find(s => s.id === stageId);
+      if (stage) detail = ` — ${escHtml(pl.name)} / ${escHtml(stage.name)}`;
+    }
+    return `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="3 3 17 10 3 17 3 3"/></svg>
+            <span>Disparador: ${escHtml(label)}${detail}</span>`;
+  }
+
+  function bbRenderStepNode(step, idx) {
+    const type    = step.type;
+    const summary = bbStepSummaryFor(step);
+    const typeLabel = (typeof SB_STEP_LABELS === 'object' && SB_STEP_LABELS[type]) ? SB_STEP_LABELS[type] : type;
+    let html = `
+      <div class="bb-tree-step" data-step-index="${idx}">
+        <div class="bb-tree-step-num">${idx + 1}</div>
+        <div class="bb-tree-step-icon">${bbStepIconFor(type)}</div>
+        <div class="bb-tree-step-body">
+          <div class="bb-tree-step-type">${escHtml(typeLabel)}</div>
+          ${summary ? `<div class="bb-tree-step-summary">${escHtml(summary)}</div>` : ''}
+        </div>
+      </div>`;
+    // wait_response: render branches
+    if (type === 'wait_response' && step.config?.branches) {
+      const branches = step.config.branches;
+      const parts = ['<div class="bb-tree-branches">'];
+      for (const [key, label] of Object.entries(SB_BRANCH_LABELS)) {
+        const branchSteps = Array.isArray(branches[key]) ? branches[key] : [];
+        parts.push(`<div class="bb-tree-branch-label">${escHtml(label)}</div>`);
+        if (branchSteps.length === 0) {
+          parts.push(`<div class="bb-tree-branch-empty">— sin pasos —</div>`);
+        } else {
+          branchSteps.forEach((s, i) => parts.push(bbRenderStepNode(s, i)));
+        }
+      }
+      parts.push('</div>');
+      html += parts.join('');
+    }
+    return html;
+  }
+
+  function bbRenderIndentedView() {
+    const container = document.getElementById('bbTreeContent');
+    if (!container) return;
+    const data  = bbBuildBotJSON();
+    const trig  = `<div class="bb-tree-trigger">${bbTriggerSummaryHTML(data.trigger_type, data.trigger_value)}</div>`;
+    if (!data.steps.length) {
+      container.innerHTML = trig + '<div class="bb-tree-empty">Aún no hay pasos. Cambia a Lista para agregar pasos.</div>';
+      return;
+    }
+    const stepsHtml = data.steps.map((s, i) => bbRenderStepNode(s, i)).join('');
+    container.innerHTML = trig + stepsHtml;
+  }
+
   function bbSwitchView(view) {
     document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(t => {
       t.classList.toggle('is-active', t.dataset.view === view);
@@ -7940,8 +8013,28 @@ function setupBot() {
     document.querySelectorAll('.bb-view-content').forEach(c => {
       c.hidden = c.dataset.view !== view;
     });
-    if (view === 'code') bbRenderCodeView();
+    if (view === 'code')     bbRenderCodeView();
+    if (view === 'indented') bbRenderIndentedView();
   }
+
+  // Click en un paso del árbol → volver a la vista Lista y scrollear al paso
+  document.getElementById('bbTreeContent')?.addEventListener('click', (e) => {
+    const stepEl = e.target.closest('.bb-tree-step');
+    if (!stepEl) return;
+    const idx = Number(stepEl.dataset.stepIndex);
+    bbSwitchView('list');
+    setTimeout(() => {
+      const flow = document.getElementById('sbStepsFlow');
+      const target = flow?.children?.[idx];
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.style.transition = 'background-color .3s';
+        const original = target.style.backgroundColor;
+        target.style.backgroundColor = 'rgba(37,99,235,.12)';
+        setTimeout(() => { target.style.backgroundColor = original; }, 800);
+      }
+    }, 50);
+  });
 
   document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(tab => {
     tab.addEventListener('click', () => bbSwitchView(tab.dataset.view));

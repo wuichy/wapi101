@@ -1980,7 +1980,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   </label>
                   <label class="form-field">
                     <span>API Key</span>
-                    <input type="password" id="aiApiKey" placeholder="sk-ant-..." />
+                    <div style="display:flex;gap:6px;align-items:center">
+                      <input type="password" id="aiApiKey" placeholder="sk-ant-..." style="flex:1;min-width:0" />
+                      <button type="button" class="btn btn--danger-ghost btn--sm" id="btnDisconnectAI" hidden title="Eliminar API key guardada">Desconectar</button>
+                    </div>
                   </label>
                   <label class="form-field form-field--full">
                     <span>URL del servicio (solo para Ollama / Custom)</span>

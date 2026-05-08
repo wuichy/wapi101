@@ -9014,8 +9014,10 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 /* ═══════ Fuentes de Conocimiento (IA) ═══════ */
 .kb-header {
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 16px; margin-bottom: 16px;
+  gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
 }
+.kb-header > div { flex: 1; min-width: 0; }
+.kb-header .btn { flex-shrink: 0; align-self: flex-start; white-space: nowrap; }
 .kb-list {
   display: flex; flex-direction: column; gap: 8px;
 }

@@ -3797,6 +3797,8 @@ function setupSettingsTabs() {
       if (modelEl) { modelEl.value = s.model || AI_DEFAULT_MODELS[s.provider] || ''; modelEl.dataset.userEdited = ''; }
       const keyEl = document.getElementById('aiApiKey');
       if (keyEl) keyEl.placeholder = s.hasApiKey ? '••••••••••••' : (AI_KEY_PLACEHOLDERS[s.provider] || 'API Key');
+      const disconnBtn = document.getElementById('btnDisconnectAI');
+      if (disconnBtn) disconnBtn.hidden = !s.hasApiKey;
       const urlEl = document.getElementById('aiBaseUrl');
       if (urlEl) urlEl.value = s.baseUrl || '';
       const modeEl = document.getElementById('aiMode');
@@ -3807,6 +3809,24 @@ function setupSettingsTabs() {
       if (tokEl) tokEl.value = s.maxTokens ?? 2048;
     } catch(e) { console.error('loadAISettings', e); }
   }
+
+  document.getElementById('btnDisconnectAI')?.addEventListener('click', async () => {
+    if (!confirm('¿Eliminar el API key guardado? Tendrás que volver a conectar la IA.')) return;
+    const btn = document.getElementById('btnDisconnectAI');
+    btn.disabled = true; btn.textContent = 'Desconectando…';
+    try {
+      await api('PATCH', '/api/settings/ai', { clearApiKey: true });
+      const keyEl = document.getElementById('aiApiKey');
+      const statusEl = document.getElementById('aiTestStatus');
+      if (keyEl) { keyEl.value = ''; keyEl.placeholder = AI_KEY_PLACEHOLDERS[document.querySelector('.ai-provider input:checked')?.value] || 'API Key'; }
+      if (statusEl) { statusEl.style.color = 'var(--text-muted)'; statusEl.textContent = 'API key eliminado'; setTimeout(() => { statusEl.textContent = ''; }, 2000); }
+      btn.hidden = true;
+    } catch(e) {
+      alert('Error: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Desconectar';
+    }
+  });
 
   document.getElementById('btnSaveAI')?.addEventListener('click', async () => {
     const btn = document.getElementById('btnSaveAI');
@@ -3827,6 +3847,10 @@ function setupSettingsTabs() {
       await api('PATCH', '/api/settings/ai', body);
       btn.textContent = 'Guardado ✓';
       if (statusEl) { statusEl.textContent = ''; }
+      if (apiKeyVal && !apiKeyVal.startsWith('•')) {
+        const disconnBtn = document.getElementById('btnDisconnectAI');
+        if (disconnBtn) disconnBtn.hidden = false;
+      }
       setTimeout(() => { btn.textContent = 'Guardar cambios'; btn.disabled = false; }, 1800);
     } catch(e) {
       btn.textContent = 'Guardar cambios'; btn.disabled = false;

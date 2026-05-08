@@ -420,7 +420,8 @@ app.patch('/api/settings/ai', (req, res) => {
   if (b.temperature !== undefined) updated.temperature = Number(b.temperature);
   if (b.maxTokens !== undefined)   updated.maxTokens   = Number(b.maxTokens);
   if (b.mode)         updated.mode        = b.mode;
-  if (b.apiKey && !b.apiKey.startsWith('•')) updated.apiKey = b.apiKey;
+  if (b.clearApiKey) { delete updated.apiKey; }
+  else if (b.apiKey && !b.apiKey.startsWith('•')) updated.apiKey = b.apiKey;
   db.prepare(`
     INSERT INTO app_settings (tenant_id, key, value, updated_at) VALUES (?, 'ai_settings', ?, unixepoch())
     ON CONFLICT(tenant_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at

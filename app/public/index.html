@@ -213,6 +213,10 @@
         </div>
         <!-- Extras: Bots -->
         <div class="topbar-bot-extras" id="topbarBotExtras" hidden>
+          <button class="btn btn--ghost" id="botTemplatesBtn">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" style="margin-right:6px;vertical-align:-2px"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg>
+            Plantillas
+          </button>
           <button class="btn btn--primary" id="botCreateBtn" data-i18n="bot.create">+ Crear bot</button>
         </div>
         <!-- Extras: Plantillas -->
@@ -1582,7 +1586,13 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <circle cx="42" cy="36" r="2" fill="currentColor" stroke="none"/>
             </svg>
             <p data-i18n="bot.empty.desc">Aún no tienes bots.<br>Crea el primero para automatizar tus conversaciones.</p>
-            <button class="btn btn--primary" id="botCreateBtn2" data-i18n="bot.create">+ Crear bot</button>
+            <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+              <button class="btn btn--ghost" id="botTemplatesBtn2">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" style="margin-right:6px;vertical-align:-2px"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/></svg>
+                Ver plantillas
+              </button>
+              <button class="btn btn--primary" id="botCreateBtn2" data-i18n="bot.create">+ Crear bot</button>
+            </div>
           </div>
         </div>
 
@@ -1839,6 +1849,22 @@ Ana, , ana@hotmail.com, 5551112222</pre>
           </div>
         </div>
       </section>
+
+      <!-- ─── Modal: Galería de plantillas de bot ─── -->
+      <div class="modal-backdrop" id="botTemplatesModal" hidden>
+        <div class="modal-box" style="max-width:880px">
+          <header class="modal-header">
+            <h2>Plantillas de bot</h2>
+            <button class="modal-close" id="botTemplatesClose">×</button>
+          </header>
+          <div class="modal-body" id="botTemplatesBody">
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px;line-height:1.5">
+              Plantillas pre-armadas para casos comunes de venta. Click en una para abrirla en el editor — puedes personalizarla antes de guardar.
+            </p>
+            <div class="bot-templates-grid" id="botTemplatesGrid"></div>
+          </div>
+        </div>
+      </div>
 
       <!-- ─── VISTA: AJUSTES ─── -->
       <section class="view view-settings" data-view="ajustes" hidden>

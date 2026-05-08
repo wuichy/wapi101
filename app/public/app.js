@@ -8152,6 +8152,222 @@ function setupBot() {
     document.getElementById(id)?.addEventListener('click', () => openBotBuilder(null));
   });
 
+  // ─── Galería de plantillas de bot ───
+  // Cada plantilla es un bot completo (name, trigger, steps) que se carga
+  // en el editor. El usuario puede modificarlo antes de guardar (sin id =
+  // insert nuevo). Cero acoplamiento con DB — son plain JSON.
+  const BOT_TEMPLATES = [
+    {
+      id: 'welcome',
+      icon: '👋',
+      name: 'Bienvenida nuevo contacto',
+      desc: 'Saluda y pregunta el motivo de contacto cuando alguien escribe por primera vez.',
+      categories: ['Bienvenida'],
+      bot: {
+        name: 'Bienvenida',
+        enabled: 0,
+        trigger_type: 'new_contact',
+        trigger_value: '',
+        steps: [
+          { type: 'message', config: { text: '¡Hola {{nombre}}! 👋 Gracias por escribirnos. Para atenderte mejor, ¿qué te trajo aquí hoy?' } },
+          { type: 'wait_response', config: { timeoutMinutes: 1440, branches: { on_text_reply: [], on_button_click: [], on_timeout: [], on_delivery_fail: [] } } },
+          { type: 'tag', config: { tag: 'nuevo-lead' } },
+        ],
+      },
+    },
+    {
+      id: 'followup_quote',
+      icon: '📋',
+      name: 'Follow-up de cotización',
+      desc: 'Secuencia de 3 mensajes en 7 días tras enviar una cotización para que el lead no se enfríe.',
+      categories: ['Seguimiento'],
+      bot: {
+        name: 'Follow-up cotización',
+        enabled: 0,
+        trigger_type: 'no_response',
+        trigger_value: String(48 * 60), // 48 horas
+        steps: [
+          { type: 'message', config: { text: 'Hola {{nombre}}, sigo a tus órdenes con la cotización que te envié. ¿Hay algo que te frene para avanzar?' } },
+          { type: 'timer',   config: { days: 3, hours: 0, minutes: 0, seconds: 0 } },
+          { type: 'message', config: { text: '{{nombre}}, ¿pudiste revisar la propuesta? Me encantaría resolverte cualquier duda.' } },
+          { type: 'timer',   config: { days: 4, hours: 0, minutes: 0, seconds: 0 } },
+          { type: 'message', config: { text: '{{nombre}}, último mensaje de mi parte. ¿Sigues interesado o cerramos el caso por ahora?' } },
+          { type: 'tag',     config: { tag: 'reactivacion-fallida' } },
+        ],
+      },
+    },
+    {
+      id: 'reactivation',
+      icon: '🔥',
+      name: 'Reactivación lead frío',
+      desc: 'Para leads que no responden hace tiempo: secuencia de 3 mensajes con tono distinto cada uno.',
+      categories: ['Reactivación'],
+      bot: {
+        name: 'Reactivación lead frío',
+        enabled: 0,
+        trigger_type: 'tag_added',
+        trigger_value: 'frio',
+        steps: [
+          { type: 'message', config: { text: 'Hola {{nombre}} 👋 Hace tiempo no platicamos. ¿Sigues interesado en lo que platicamos?' } },
+          { type: 'wait_response', config: { timeoutMinutes: 4320, branches: { on_text_reply: [{ type: 'tag', config: { tag: 'caliente' } }], on_button_click: [], on_timeout: [{ type: 'message', config: { text: 'Te dejo este beneficio especial 🎁: ¿te gustaría hablar?' } }], on_delivery_fail: [] } } },
+        ],
+      },
+    },
+    {
+      id: 'appointment_reminder',
+      icon: '📅',
+      name: 'Recordatorio de cita 24h antes',
+      desc: 'Envía recordatorio automático un día antes de cualquier cita en el campo "fecha_cita".',
+      categories: ['Recordatorios'],
+      bot: {
+        name: 'Recordatorio cita 24h',
+        enabled: 0,
+        trigger_type: 'scheduled_field',
+        // El usuario tendrá que seleccionar el campo en el editor
+        trigger_value: '',
+        steps: [
+          { type: 'message', config: { text: 'Hola {{nombre}}, te recuerdo que tienes cita mañana. Confirma con un 👍 o reagenda escribiendo "reagendar".' } },
+          { type: 'wait_response', config: { timeoutMinutes: 720, branches: { on_text_reply: [], on_button_click: [], on_timeout: [], on_delivery_fail: [] } } },
+        ],
+      },
+    },
+    {
+      id: 'post_sale_nps',
+      icon: '⭐',
+      name: 'Post-venta / NPS',
+      desc: 'Envía encuesta de satisfacción cuando un lead llega a la etapa "Ganado".',
+      categories: ['Post-venta'],
+      bot: {
+        name: 'Encuesta post-venta',
+        enabled: 0,
+        trigger_type: 'pipeline_stage',
+        // El usuario debe seleccionar la etapa "Ganado" en el editor
+        trigger_value: '',
+        steps: [
+          { type: 'timer',   config: { days: 1, hours: 0, minutes: 0, seconds: 0 } },
+          { type: 'message', config: { text: '¡Gracias por confiar en nosotros, {{nombre}}! 🙌 ¿Del 1 al 10, qué tan probable es que nos recomiendes?' } },
+          { type: 'wait_response', config: { timeoutMinutes: 4320, branches: { on_text_reply: [], on_button_click: [], on_timeout: [], on_delivery_fail: [] } } },
+        ],
+      },
+    },
+    {
+      id: 'capture_info',
+      icon: '📝',
+      name: 'Captura de info inicial',
+      desc: 'Pregunta nombre/empresa/presupuesto en una conversación. Útil para leads de marketing.',
+      categories: ['Captura'],
+      bot: {
+        name: 'Captura info inicial',
+        enabled: 0,
+        trigger_type: 'keyword',
+        trigger_value: 'info',
+        steps: [
+          { type: 'message', config: { text: '¡Perfecto! Te paso info en un momento. Para personalizarlo, ¿podrías decirme tu empresa?' } },
+          { type: 'wait_response', config: { timeoutMinutes: 60, branches: { on_text_reply: [{ type: 'message', config: { text: 'Excelente. ¿Y aproximadamente cuál es el presupuesto que manejan?' } }], on_button_click: [], on_timeout: [], on_delivery_fail: [] } } },
+          { type: 'tag', config: { tag: 'info-completa' } },
+        ],
+      },
+    },
+    {
+      id: 'handover_human',
+      icon: '🎧',
+      name: 'Pasar a humano por keyword',
+      desc: 'Cuando el cliente escribe "humano" o "agente", pausa el bot y notifica al equipo.',
+      categories: ['Soporte'],
+      bot: {
+        name: 'Pasar a humano',
+        enabled: 0,
+        trigger_type: 'keyword',
+        trigger_value: 'humano',
+        steps: [
+          { type: 'message',  config: { text: 'Claro {{nombre}}, te paso con un asesor en un momento.' } },
+          { type: 'handover', config: { addTag: 'necesita-humano', note: 'Cliente solicitó humano vía keyword' } },
+        ],
+      },
+    },
+    {
+      id: 'webhook_zapier',
+      icon: '⚡',
+      name: 'Notificar a Zapier en lead nuevo',
+      desc: 'Manda los datos del lead a un webhook (Zapier, n8n, Sheets) cada vez que entra a "Cotización".',
+      categories: ['Integraciones'],
+      bot: {
+        name: 'Notificar a Zapier',
+        enabled: 0,
+        trigger_type: 'pipeline_stage',
+        trigger_value: '', // usuario elige etapa
+        steps: [
+          { type: 'http', config: { method: 'POST', url: 'https://hooks.zapier.com/hooks/catch/XXX/YYY/', body: '', timeoutSec: 10 } },
+        ],
+      },
+    },
+  ];
+
+  function _renderBotTemplatesGrid() {
+    const grid = document.getElementById('botTemplatesGrid');
+    if (!grid) return;
+    grid.innerHTML = BOT_TEMPLATES.map(tpl => {
+      const stepCount = tpl.bot.steps?.length || 0;
+      const triggerDef = BOT_TRIGGER_REGISTRY[tpl.bot.trigger_type];
+      const triggerLabel = triggerDef?.shortLabel || tpl.bot.trigger_type;
+      return `<div class="bot-template-card" data-tpl-id="${escHtml(tpl.id)}">
+        <div class="bot-template-card-icon">${tpl.icon}</div>
+        <div class="bot-template-card-name">${escHtml(tpl.name)}</div>
+        <div class="bot-template-card-desc">${escHtml(tpl.desc)}</div>
+        <div class="bot-template-card-meta">
+          ${tpl.categories.map(c => `<span class="bot-template-card-tag bot-template-card-tag--cat">${escHtml(c)}</span>`).join('')}
+          <span class="bot-template-card-tag">${stepCount} pasos</span>
+          <span class="bot-template-card-tag">${escHtml(triggerLabel)}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function _openBotTemplatesModal() {
+    _renderBotTemplatesGrid();
+    const modal = document.getElementById('botTemplatesModal');
+    if (modal) modal.hidden = false;
+  }
+
+  function _closeBotTemplatesModal() {
+    const modal = document.getElementById('botTemplatesModal');
+    if (modal) modal.hidden = true;
+  }
+
+  ['botTemplatesBtn', 'botTemplatesBtn2'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', _openBotTemplatesModal);
+  });
+  document.getElementById('botTemplatesClose')?.addEventListener('click', _closeBotTemplatesModal);
+  document.getElementById('botTemplatesModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'botTemplatesModal') _closeBotTemplatesModal();
+  });
+
+  // Click en una plantilla → abre el builder con esa plantilla cargada
+  document.getElementById('botTemplatesGrid')?.addEventListener('click', (e) => {
+    const card = e.target.closest('.bot-template-card');
+    if (!card) return;
+    const tpl = BOT_TEMPLATES.find(t => t.id === card.dataset.tplId);
+    if (!tpl) return;
+    _closeBotTemplatesModal();
+    // Abrir el builder con la plantilla. NO incluir id ni enabled=1 — siempre
+    // se guarda como bot nuevo para que el usuario pueda preview-editar antes.
+    // Le agregamos los _id internos a los steps para que el editor los maneje.
+    const synthBot = JSON.parse(JSON.stringify(tpl.bot));
+    let counter = 0;
+    const _addIds = (steps) => {
+      if (!Array.isArray(steps)) return;
+      for (const s of steps) {
+        s._id = `s${++counter}_${Math.random().toString(36).slice(2, 6)}`;
+        if (s.config?.branches) {
+          for (const branch of Object.values(s.config.branches)) _addIds(branch);
+        }
+      }
+    };
+    _addIds(synthBot.steps);
+    // sbCurrentId queda null porque no pasamos id → guarda como nuevo
+    openBotBuilder(synthBot);
+  });
+
   // Open existing bot on row click
   document.getElementById('botList')?.addEventListener('click', (e) => {
     // No abrir el builder si el usuario clickeó alguno de los botones de acciones

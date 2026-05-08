@@ -18001,10 +18001,14 @@ async function applySocialCommentsVisibility() {
   let connected = false;
   try {
     const data = await api('GET', '/api/integrations');
-    const items = data?.items || [];
-    connected = items.some(i =>
-      (i.provider === 'messenger' || i.provider === 'instagram') &&
-      i.status === 'connected'
+    // El endpoint devuelve un array de providers; cada provider tiene
+    // su propio array .integrations con las instancias conectadas.
+    // Ej: [{ key:'messenger', integrations:[{id, status, ...}] }, ...]
+    const providers = data?.items || [];
+    connected = providers.some(p =>
+      (p.key === 'messenger' || p.key === 'instagram') &&
+      Array.isArray(p.integrations) &&
+      p.integrations.some(i => i.status === 'connected')
     );
   } catch {}
   const navItem = document.getElementById('navComments');

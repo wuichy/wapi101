@@ -1017,6 +1017,148 @@ async function resumeWaitsForContact(db, contactId, branch, extraCtx = {}) {
   }
 }
 
+// ─── Disparadores programados (Fase 3) ───
+
+function _safeParseJSON(str, fallback = {}) {
+  try { return str ? JSON.parse(str) : fallback; } catch { return fallback; }
+}
+
+function _scheduledFireForContacts(db, bot, contacts, scopeKey, extraCtx = {}) {
+  for (const row of contacts) {
+    try {
+      // Dedup: ¿ya disparamos este bot a este contacto con este scope?
+      const prev = db.prepare(
+        'SELECT 1 FROM bot_schedule_runs WHERE bot_id = ? AND contact_id = ? AND scope_key = ?'
+      ).get(bot.id, row.contact_id, scopeKey);
+      if (prev) continue;
+      db.prepare(`
+        INSERT OR IGNORE INTO bot_schedule_runs (tenant_id, bot_id, contact_id, scope_key, fired_at)
+        VALUES (?, ?, ?, ?, unixepoch())
+      `).run(bot.tenant_id, bot.id, row.contact_id, scopeKey);
+      const convoRow = db.prepare(
+        'SELECT id, provider, integration_id FROM conversations WHERE contact_id = ? AND tenant_id = ? ORDER BY last_message_at DESC LIMIT 1'
+      ).get(row.contact_id, bot.tenant_id);
+      runAsync(db, bot, {
+        convoId:       convoRow?.id || null,
+        contactId:     row.contact_id,
+        messageBody:   '',
+        provider:      convoRow?.provider || null,
+        integrationId: convoRow?.integration_id || null,
+        expedientId:   row.expedient_id || null,
+        tenantId:      bot.tenant_id,
+        ...extraCtx,
+      });
+    } catch (e) {
+      _log('error', `scheduledFireForContacts error en contacto ${row.contact_id}: ${e.message}`);
+    }
+  }
+}
+
+// Devuelve los expedientes activos (con stage) de un tenant. Audiencia base
+// para los broadcasts (one_time / daily). Limita a 5000 por seguridad.
+function _activeExpedientsForTenant(db, tenantId) {
+  return db.prepare(`
+    SELECT e.id AS expedient_id, e.contact_id
+      FROM expedients e
+     WHERE e.tenant_id = ? AND e.contact_id IS NOT NULL AND e.stage_id IS NOT NULL
+     LIMIT 5000
+  `).all(tenantId);
+}
+
+function _checkScheduledOneTime(db, bot, now) {
+  const cfg = _safeParseJSON(bot.trigger_value, {});
+  const dt = cfg.datetime; // ISO local: "2026-05-15T09:00"
+  if (!dt) return;
+  const target = Math.floor(new Date(dt).getTime() / 1000);
+  if (!Number.isFinite(target) || target > now) return;
+  // Si ya disparó cualquier vez para este bot, no repetir (one_time real).
+  const fired = db.prepare('SELECT 1 FROM bot_schedule_runs WHERE bot_id = ? LIMIT 1').get(bot.id);
+  if (fired) return;
+  const audience = _activeExpedientsForTenant(db, bot.tenant_id);
+  _log('info', `scheduled_one_time → bot=${bot.id} target=${dt} audience=${audience.length}`);
+  _scheduledFireForContacts(db, bot, audience, '');
+}
+
+function _checkScheduledDaily(db, bot, now) {
+  const cfg = _safeParseJSON(bot.trigger_value, {});
+  const hour = cfg.hour; // "09:00"
+  const weekdays = Array.isArray(cfg.weekdays) ? cfg.weekdays : [1,1,1,1,1,1,1];
+  if (!hour) return;
+  const date = new Date(now * 1000);
+  // weekdays: 0=Mon..6=Sun (lo definimos así)
+  const dow = (date.getDay() + 6) % 7;
+  if (!weekdays[dow]) return;
+  const [hh, mm] = hour.split(':').map(Number);
+  const sched = new Date(date);
+  sched.setHours(hh || 0, mm || 0, 0, 0);
+  const schedTs = Math.floor(sched.getTime() / 1000);
+  if (schedTs > now) return;
+  // Solo disparar si han pasado < 5 min desde la hora programada (evita
+  // que un poller que despertó tarde arrastre disparos viejos)
+  if (now - schedTs > 300) return;
+  const dateKey = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+  const audience = _activeExpedientsForTenant(db, bot.tenant_id);
+  _log('info', `scheduled_daily → bot=${bot.id} ${hour} dow=${dow} audience=${audience.length} key=${dateKey}`);
+  _scheduledFireForContacts(db, bot, audience, dateKey);
+}
+
+function _checkScheduledField(db, bot, now) {
+  const cfg = _safeParseJSON(bot.trigger_value, {});
+  const fieldId = Number(cfg.fieldId);
+  const offsetMin = Number(cfg.offsetMinutes); // negativo = antes, positivo = después
+  if (!fieldId || !Number.isFinite(offsetMin)) return;
+  // Buscar expedientes con valor en ese campo
+  const rows = db.prepare(`
+    SELECT e.id AS expedient_id, e.contact_id, cfv.value
+      FROM expedients e
+      JOIN custom_field_values cfv ON cfv.entity = 'expedient' AND cfv.record_id = e.id AND cfv.field_id = ?
+     WHERE e.tenant_id = ? AND e.contact_id IS NOT NULL AND cfv.value IS NOT NULL AND cfv.value <> ''
+     LIMIT 5000
+  `).all(fieldId, bot.tenant_id);
+  for (const row of rows) {
+    try {
+      // value es ISO-like: "2026-05-15" o "2026-05-15T09:00:00"
+      const fieldTs = Math.floor(new Date(row.value).getTime() / 1000);
+      if (!Number.isFinite(fieldTs)) continue;
+      const fireTs = fieldTs + offsetMin * 60;
+      if (fireTs > now) continue;
+      // Solo dispara si pasó la hora pero hace < 1 hora (no arrastrar viejos)
+      if (now - fireTs > 3600) continue;
+      const scopeKey = `${fieldId}:${row.value}`;
+      _scheduledFireForContacts(db, bot, [row], scopeKey, { fieldId, fieldValue: row.value });
+    } catch (e) {
+      _log('error', `scheduled_field error en exp ${row.expedient_id}: ${e.message}`);
+    }
+  }
+}
+
+let _scheduledTimer = null;
+function startScheduledPoller(db) {
+  if (_scheduledTimer) return;
+  const tick = () => {
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const bots = db.prepare(
+        "SELECT * FROM salsbots WHERE enabled = 1 AND trigger_type IN ('scheduled_one_time','scheduled_daily','scheduled_field')"
+      ).all().map(r => ({ ...r, steps: JSON.parse(r.steps || '[]') }));
+      for (const bot of bots) {
+        try {
+          if      (bot.trigger_type === 'scheduled_one_time') _checkScheduledOneTime(db, bot, now);
+          else if (bot.trigger_type === 'scheduled_daily')    _checkScheduledDaily(db, bot, now);
+          else if (bot.trigger_type === 'scheduled_field')    _checkScheduledField(db, bot, now);
+        } catch (e) {
+          _log('error', `scheduledPoller bot ${bot.id} error: ${e.message}`);
+        }
+      }
+    } catch (err) {
+      console.error('[bot] scheduledPoller error:', err.message);
+    }
+  };
+  _scheduledTimer = setInterval(tick, 60_000);
+  _scheduledTimer.unref?.();
+  console.log('[bot] startScheduledPoller iniciado (cada 60s)');
+}
+
 // Poller que cada 60s busca conversaciones cuyo último mensaje es saliente
 // y lleva más de N minutos sin respuesta. Dispara bots con trigger_type='no_response'.
 let _noResponseTimer = null;
@@ -1154,6 +1296,8 @@ module.exports = {
   triggerPipelineStageLeave, triggerAssigneeChanged, triggerTagAdded,
   // Disparadores nuevos (Fase 2):
   triggerMessageRead, triggerNoResponse, startNoResponsePoller,
+  // Disparadores nuevos (Fase 3 — programados):
+  startScheduledPoller,
   getLogs, clearLogs, killRun, pauseRun, resumeRun,
   // Sistema de wait_response (Opción A — branching):
   resumeWait, resumeWaitsForContact, startWaitTimeoutPoller,

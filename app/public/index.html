@@ -1653,6 +1653,11 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     <option value="tag_added" data-i18n="bot.trigger.tag_added">Etiqueta agregada al lead</option>
                     <option value="assignee_changed" data-i18n="bot.trigger.assignee_changed">Cambio de asesor responsable</option>
                   </optgroup>
+                  <optgroup label="Programado">
+                    <option value="scheduled_one_time" data-i18n="bot.trigger.scheduled_one_time">Una sola vez (fecha + hora)</option>
+                    <option value="scheduled_daily" data-i18n="bot.trigger.scheduled_daily">Diariamente a una hora</option>
+                    <option value="scheduled_field" data-i18n="bot.trigger.scheduled_field">Antes/después de un campo de fecha</option>
+                  </optgroup>
                 </select>
                 <input type="text" id="sbTriggerValue" placeholder='p.ej. "precio", "hola", "info"' />
                 <div id="sbTriggerNoResponseWrap" hidden style="display:flex;align-items:center;gap:8px;margin-top:6px">
@@ -1664,6 +1669,48 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     <option value="d">días</option>
                   </select>
                   <span style="font-size:13px;color:var(--text-muted)">sin respuesta</span>
+                </div>
+                <div id="sbTriggerOneTimeWrap" hidden style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px">
+                  <span style="font-size:13px;color:var(--text-muted)">Disparar el</span>
+                  <input type="date" id="sbTriggerOneTimeDate" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px" />
+                  <span style="font-size:13px;color:var(--text-muted)">a las</span>
+                  <input type="time" id="sbTriggerOneTimeTime" value="09:00" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px" />
+                  <p style="flex-basis:100%;font-size:11px;color:var(--text-muted);margin:4px 0 0">Se dispara una sola vez en el momento exacto, para todos los leads activos.</p>
+                </div>
+                <div id="sbTriggerDailyWrap" hidden style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:13px;color:var(--text-muted)">Cada día a las</span>
+                    <input type="time" id="sbTriggerDailyTime" value="09:00" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px" />
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:12px">
+                    <label class="bb-weekday"><input type="checkbox" data-weekday="0" checked> Lun</label>
+                    <label class="bb-weekday"><input type="checkbox" data-weekday="1" checked> Mar</label>
+                    <label class="bb-weekday"><input type="checkbox" data-weekday="2" checked> Mié</label>
+                    <label class="bb-weekday"><input type="checkbox" data-weekday="3" checked> Jue</label>
+                    <label class="bb-weekday"><input type="checkbox" data-weekday="4" checked> Vie</label>
+                    <label class="bb-weekday"><input type="checkbox" data-weekday="5"> Sáb</label>
+                    <label class="bb-weekday"><input type="checkbox" data-weekday="6"> Dom</label>
+                  </div>
+                </div>
+                <div id="sbTriggerFieldWrap" hidden style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span style="font-size:13px;color:var(--text-muted)">Campo de fecha</span>
+                    <select id="sbTriggerFieldId" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;min-width:200px">
+                      <option value="">— Selecciona campo —</option>
+                    </select>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <input type="number" id="sbTriggerFieldAmount" min="0" value="24" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:6px" />
+                    <select id="sbTriggerFieldUnit" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px">
+                      <option value="m">minutos</option>
+                      <option value="h" selected>horas</option>
+                      <option value="d">días</option>
+                    </select>
+                    <select id="sbTriggerFieldDir" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px">
+                      <option value="before" selected>antes del campo</option>
+                      <option value="after">después del campo</option>
+                    </select>
+                  </div>
                 </div>
                 <div id="sbTriggerStageWrap" hidden style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
                   <select id="sbTriggerPipeline"><option value="">— Pipeline —</option></select>

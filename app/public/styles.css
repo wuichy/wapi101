@@ -4900,6 +4900,21 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   font-size: 13px;
 }
 
+/* Weekday checkboxes para scheduled_daily */
+.bb-weekday {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  cursor: pointer;
+  user-select: none;
+}
+.bb-weekday:hover { border-color: var(--accent); }
+.bb-weekday input[type="checkbox"] { margin: 0; }
+
 /* ── Trigger card ── */
 .sb-trigger-card {
   width: 100%;

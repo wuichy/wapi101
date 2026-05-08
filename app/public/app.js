@@ -365,6 +365,9 @@ const I18N_TRANSLATIONS = {
     'bot.trigger.always': 'Cualquier mensaje entrante',
     'bot.trigger.no_response': 'Sin respuesta en X tiempo',
     'bot.trigger.message_read': 'Mensaje saliente leído',
+    'bot.trigger.scheduled_one_time': 'Una sola vez (fecha + hora)',
+    'bot.trigger.scheduled_daily': 'Diariamente a una hora',
+    'bot.trigger.scheduled_field': 'Antes/después de un campo de fecha',
     'bot.step.message': 'Enviar mensaje',
     'bot.step.template': 'Enviar plantilla (WhatsApp API)',
     'bot.step.timer': 'Temporizador',
@@ -882,6 +885,9 @@ const I18N_TRANSLATIONS = {
     'bot.trigger.always': 'Any incoming message',
     'bot.trigger.no_response': 'No response in X time',
     'bot.trigger.message_read': 'Outgoing message read',
+    'bot.trigger.scheduled_one_time': 'One-time (date + time)',
+    'bot.trigger.scheduled_daily': 'Daily at a time',
+    'bot.trigger.scheduled_field': 'Before/after a date field',
     'bot.step.message': 'Send message',
     'bot.step.template': 'Send template (WhatsApp API)',
     'bot.step.timer': 'Timer',
@@ -5156,6 +5162,9 @@ async function renderExpDetailBots() {
     always:               'Cualquier mensaje',
     no_response:          'Sin respuesta',
     message_read:         'Mensaje leído',
+    scheduled_one_time:   'Programado una vez',
+    scheduled_daily:      'Programado diario',
+    scheduled_field:      'Programado por campo',
   };
 
   function fmtDuration(startedAt, finishedAt) {
@@ -6547,6 +6556,9 @@ const SB_TRIGGER_LABELS = {
   get always()               { return t('bot.trigger.always'); },
   get no_response()          { return t('bot.trigger.no_response'); },
   get message_read()         { return t('bot.trigger.message_read'); },
+  get scheduled_one_time()   { return t('bot.trigger.scheduled_one_time'); },
+  get scheduled_daily()      { return t('bot.trigger.scheduled_daily'); },
+  get scheduled_field()      { return t('bot.trigger.scheduled_field'); },
 };
 
 async function loadSalsbots() {
@@ -6659,6 +6671,31 @@ function botTriggerHtml(bot) {
     const unitLabel = unit === 'd' ? 'día' : unit === 'h' ? 'hora' : 'min';
     const plural = (amount !== 1 && unit !== 'm') ? 's' : '';
     return `${escHtml(label)}: ${amount} ${unitLabel}${plural}`;
+  }
+  if (bot.trigger_type === 'scheduled_one_time' && bot.trigger_value) {
+    try {
+      const cfg = JSON.parse(bot.trigger_value);
+      return `${escHtml(label)}: ${escHtml((cfg.datetime || '').replace('T', ' '))}`;
+    } catch { return escHtml(label); }
+  }
+  if (bot.trigger_type === 'scheduled_daily' && bot.trigger_value) {
+    try {
+      const cfg = JSON.parse(bot.trigger_value);
+      const dayLabels = ['L','M','X','J','V','S','D'];
+      const days = (cfg.weekdays || []).map((on, i) => on ? dayLabels[i] : '').filter(Boolean).join(',');
+      return `${escHtml(label)}: ${escHtml(cfg.hour || '')} (${days || 'todos'})`;
+    } catch { return escHtml(label); }
+  }
+  if (bot.trigger_type === 'scheduled_field' && bot.trigger_value) {
+    try {
+      const cfg = JSON.parse(bot.trigger_value);
+      const off = Number(cfg.offsetMinutes) || 0;
+      const { amount, unit } = noRespFromMinutes(Math.abs(off));
+      const unitLabel = unit === 'd' ? 'día' : unit === 'h' ? 'hora' : 'min';
+      const plural = (amount !== 1 && unit !== 'm') ? 's' : '';
+      const dir = off < 0 ? 'antes' : 'después';
+      return `${escHtml(label)}: ${amount} ${unitLabel}${plural} ${dir} (campo #${escHtml(String(cfg.fieldId || '?'))})`;
+    } catch { return escHtml(label); }
   }
   return escHtml(label);
 }
@@ -6851,6 +6888,46 @@ function openBotBuilder(bot, returnTo = null) {
     if (amtEl)  amtEl.value  = amount;
     if (unitEl) unitEl.value = unit;
   }
+  // Disparadores programados — el trigger_value es JSON
+  if (bot?.trigger_type === 'scheduled_one_time' && bot.trigger_value) {
+    try {
+      const cfg = JSON.parse(bot.trigger_value);
+      if (cfg.datetime) {
+        const [date, time] = cfg.datetime.split('T');
+        const dEl = document.getElementById('sbTriggerOneTimeDate');
+        const tEl = document.getElementById('sbTriggerOneTimeTime');
+        if (dEl) dEl.value = date || '';
+        if (tEl) tEl.value = (time || '09:00').slice(0,5);
+      }
+    } catch {}
+  }
+  if (bot?.trigger_type === 'scheduled_daily' && bot.trigger_value) {
+    try {
+      const cfg = JSON.parse(bot.trigger_value);
+      const tEl = document.getElementById('sbTriggerDailyTime');
+      if (tEl) tEl.value = cfg.hour || '09:00';
+      const wd = Array.isArray(cfg.weekdays) ? cfg.weekdays : [1,1,1,1,1,1,1];
+      document.querySelectorAll('#sbTriggerDailyWrap input[data-weekday]').forEach(cb => {
+        cb.checked = !!wd[Number(cb.dataset.weekday)];
+      });
+    } catch {}
+  }
+  if (bot?.trigger_type === 'scheduled_field' && bot.trigger_value) {
+    try {
+      const cfg = JSON.parse(bot.trigger_value);
+      populateTriggerDateFields(cfg.fieldId);
+      const off = Number(cfg.offsetMinutes) || 0;
+      const abs = Math.abs(off);
+      const dir = off < 0 ? 'before' : 'after';
+      const dirEl = document.getElementById('sbTriggerFieldDir');
+      if (dirEl) dirEl.value = dir;
+      const { amount, unit } = noRespFromMinutes(abs);
+      const aEl = document.getElementById('sbTriggerFieldAmount');
+      const uEl = document.getElementById('sbTriggerFieldUnit');
+      if (aEl) aEl.value = abs ? amount : 24;
+      if (uEl) uEl.value = abs ? unit   : 'h';
+    } catch {}
+  }
   renderStepsFlow();
 }
 
@@ -6865,12 +6942,21 @@ function updateTriggerValueVisibility() {
   const valInput = document.getElementById('sbTriggerValue');
   const stageWrap = document.getElementById('sbTriggerStageWrap');
   const noRespWrap = document.getElementById('sbTriggerNoResponseWrap');
+  const oneTimeWrap = document.getElementById('sbTriggerOneTimeWrap');
+  const dailyWrap   = document.getElementById('sbTriggerDailyWrap');
+  const fieldWrap   = document.getElementById('sbTriggerFieldWrap');
   const isStage    = type === 'pipeline_stage' || type === 'pipeline_stage_leave';
   const isNoResp   = type === 'no_response';
-  const hideValue  = ['always', 'new_contact', 'pipeline_stage', 'pipeline_stage_leave', 'no_response', 'message_read'].includes(type);
+  const isOneTime  = type === 'scheduled_one_time';
+  const isDaily    = type === 'scheduled_daily';
+  const isField    = type === 'scheduled_field';
+  const hideValue  = ['always', 'new_contact', 'pipeline_stage', 'pipeline_stage_leave', 'no_response', 'message_read', 'scheduled_one_time', 'scheduled_daily', 'scheduled_field'].includes(type);
   valInput.hidden = hideValue;
-  if (stageWrap)  stageWrap.hidden  = !isStage;
-  if (noRespWrap) noRespWrap.hidden = !isNoResp;
+  if (stageWrap)   stageWrap.hidden   = !isStage;
+  if (noRespWrap)  noRespWrap.hidden  = !isNoResp;
+  if (oneTimeWrap) oneTimeWrap.hidden = !isOneTime;
+  if (dailyWrap)   dailyWrap.hidden   = !isDaily;
+  if (fieldWrap)   fieldWrap.hidden   = !isField;
   // Placeholder según tipo
   if (type === 'tag_added') {
     valInput.placeholder = 'Etiqueta exacta (ej: "VIP"). Vacío = cualquier etiqueta';
@@ -6880,6 +6966,23 @@ function updateTriggerValueVisibility() {
     valInput.placeholder = 'p.ej. "precio", "hola", "info"';
   }
   if (isStage) populateTriggerPipelines();
+  if (isField) populateTriggerDateFields();
+}
+
+// Carga campos custom de tipo fecha en el dropdown del trigger scheduled_field
+async function populateTriggerDateFields(selectedFieldId) {
+  const sel = document.getElementById('sbTriggerFieldId');
+  if (!sel) return;
+  try {
+    const data = await api('GET', '/api/expedients/field-defs');
+    const dateTypes = new Set(['date', 'datetime', 'birthday']);
+    const items = (data?.items || []).filter(f => dateTypes.has(f.field_type));
+    sel.innerHTML = '<option value="">— Selecciona campo —</option>' +
+      items.map(f => `<option value="${f.id}" ${selectedFieldId == f.id ? 'selected' : ''}>${escHtml(f.label)}</option>`).join('');
+  } catch (e) {
+    console.error('populateTriggerDateFields', e);
+    sel.innerHTML = '<option value="">— Error cargando campos —</option>';
+  }
 }
 
 // Convierte (amount, unit) → minutos. unit: m=minutos, h=horas, d=días.
@@ -7969,6 +8072,28 @@ function setupBot() {
       const unit = document.getElementById('sbTriggerNoRespUnit')?.value;
       trigger_value = String(noRespToMinutes(amt, unit));
     }
+    if (trigger_type === 'scheduled_one_time') {
+      const d = document.getElementById('sbTriggerOneTimeDate')?.value;
+      const t = document.getElementById('sbTriggerOneTimeTime')?.value || '09:00';
+      trigger_value = d ? JSON.stringify({ datetime: `${d}T${t}` }) : '';
+    }
+    if (trigger_type === 'scheduled_daily') {
+      const hour = document.getElementById('sbTriggerDailyTime')?.value || '09:00';
+      const weekdays = [0,1,2,3,4,5,6].map(d => {
+        const cb = document.querySelector(`#sbTriggerDailyWrap input[data-weekday="${d}"]`);
+        return cb?.checked ? 1 : 0;
+      });
+      trigger_value = JSON.stringify({ hour, weekdays });
+    }
+    if (trigger_type === 'scheduled_field') {
+      const fieldId = Number(document.getElementById('sbTriggerFieldId')?.value || 0);
+      const amt     = Number(document.getElementById('sbTriggerFieldAmount')?.value || 0);
+      const unit    = document.getElementById('sbTriggerFieldUnit')?.value || 'h';
+      const dir     = document.getElementById('sbTriggerFieldDir')?.value || 'before';
+      const sign    = dir === 'before' ? -1 : 1;
+      const offsetMinutes = sign * noRespToMinutes(amt, unit);
+      trigger_value = fieldId ? JSON.stringify({ fieldId, offsetMinutes }) : '';
+    }
     return {
       name:         document.getElementById('botBuilderName')?.value?.trim() || '',
       enabled:      document.getElementById('botBuilderEnabled')?.checked ? 1 : 0,
@@ -8140,6 +8265,31 @@ function setupBot() {
       const amt = document.getElementById('sbTriggerNoRespAmount')?.value;
       const unit = document.getElementById('sbTriggerNoRespUnit')?.value;
       trigger_value = String(noRespToMinutes(amt, unit));
+    }
+    if (trigger_type === 'scheduled_one_time') {
+      const d = document.getElementById('sbTriggerOneTimeDate')?.value;
+      const tt = document.getElementById('sbTriggerOneTimeTime')?.value || '09:00';
+      if (!d) { toast('Selecciona la fecha del disparador', 'error'); return; }
+      trigger_value = JSON.stringify({ datetime: `${d}T${tt}` });
+    }
+    if (trigger_type === 'scheduled_daily') {
+      const hour = document.getElementById('sbTriggerDailyTime')?.value || '09:00';
+      const weekdays = [0,1,2,3,4,5,6].map(d => {
+        const cb = document.querySelector(`#sbTriggerDailyWrap input[data-weekday="${d}"]`);
+        return cb?.checked ? 1 : 0;
+      });
+      if (weekdays.every(x => !x)) { toast('Selecciona al menos un día de la semana', 'error'); return; }
+      trigger_value = JSON.stringify({ hour, weekdays });
+    }
+    if (trigger_type === 'scheduled_field') {
+      const fieldId = Number(document.getElementById('sbTriggerFieldId')?.value || 0);
+      const amt     = Number(document.getElementById('sbTriggerFieldAmount')?.value || 0);
+      const unit    = document.getElementById('sbTriggerFieldUnit')?.value || 'h';
+      const dir     = document.getElementById('sbTriggerFieldDir')?.value || 'before';
+      const sign    = dir === 'before' ? -1 : 1;
+      const offsetMinutes = sign * noRespToMinutes(amt, unit);
+      if (!fieldId) { toast('Selecciona un campo de fecha', 'error'); return; }
+      trigger_value = JSON.stringify({ fieldId, offsetMinutes });
     }
     const steps = collectAllSteps().map(({ _id, ...rest }) => rest);
     try {

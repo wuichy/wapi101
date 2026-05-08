@@ -16737,7 +16737,7 @@ async function refreshTaskCounts() {
   } catch (_) {}
 }
 
-function fmtDuration(min) {
+function fmtTaskMinutes(min) {
   if (!min) return '';
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60), m = min % 60;
@@ -16801,7 +16801,7 @@ function renderTaskList() {
       ? `<span class="task-meta-item">👤 ${escapeHtml(t.assignedAdvisorName)}</span>`
       : '<span class="task-meta-item" style="color:#94a3b8">Sin asignar</span>';
     const durHtml = t.durationMinutes
-      ? `<span class="task-duration-badge">${fmtDuration(t.durationMinutes)}</span>`
+      ? `<span class="task-duration-badge">${fmtTaskMinutes(t.durationMinutes)}</span>`
       : '';
     return `
       <div class="${itemClass}" data-task-id="${t.id}">

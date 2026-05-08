@@ -461,6 +461,28 @@ module.exports = function createWebhooksRouter(db) {
             }
           } catch (_) {}
         }
+
+        // Disparador 'message_read' — sólo cuando es la PRIMERA vez que pasa
+        // a 'read' (cur < 3 antes del UPDATE). Solo para mensajes outgoing.
+        if (status === 'read' && cur < 3) {
+          try {
+            const ctxRow = db.prepare(`
+              SELECT m.direction, m.conversation_id, c.contact_id
+                FROM messages m
+                JOIN conversations c ON c.id = m.conversation_id
+               WHERE m.id = ?
+            `).get(msg.id);
+            if (ctxRow?.direction === 'outgoing' && ctxRow.contact_id) {
+              botEngine.triggerMessageRead(db, {
+                messageId:      msg.id,
+                conversationId: ctxRow.conversation_id,
+                contactId:      ctxRow.contact_id,
+              });
+            }
+          } catch (e) {
+            console.error('[webhook status] error en message_read trigger:', e.message);
+          }
+        }
       } catch (err) {
         console.error('[webhook status] error procesando status:', err.message);
       }

@@ -363,6 +363,8 @@ const I18N_TRANSLATIONS = {
     'bot.trigger.tag_added': 'Etiqueta agregada al lead',
     'bot.trigger.assignee_changed': 'Cambio de asesor responsable',
     'bot.trigger.always': 'Cualquier mensaje entrante',
+    'bot.trigger.no_response': 'Sin respuesta en X tiempo',
+    'bot.trigger.message_read': 'Mensaje saliente leído',
     'bot.step.message': 'Enviar mensaje',
     'bot.step.template': 'Enviar plantilla (WhatsApp API)',
     'bot.step.timer': 'Temporizador',
@@ -878,6 +880,8 @@ const I18N_TRANSLATIONS = {
     'bot.trigger.tag_added': 'Tag added to lead',
     'bot.trigger.assignee_changed': 'Lead assignee changed',
     'bot.trigger.always': 'Any incoming message',
+    'bot.trigger.no_response': 'No response in X time',
+    'bot.trigger.message_read': 'Outgoing message read',
     'bot.step.message': 'Send message',
     'bot.step.template': 'Send template (WhatsApp API)',
     'bot.step.timer': 'Timer',
@@ -5150,6 +5154,8 @@ async function renderExpDetailBots() {
     tag_added:            'Etiqueta agregada',
     assignee_changed:     'Cambio de asesor',
     always:               'Cualquier mensaje',
+    no_response:          'Sin respuesta',
+    message_read:         'Mensaje leído',
   };
 
   function fmtDuration(startedAt, finishedAt) {
@@ -6539,6 +6545,8 @@ const SB_TRIGGER_LABELS = {
   get tag_added()            { return t('bot.trigger.tag_added'); },
   get assignee_changed()     { return t('bot.trigger.assignee_changed'); },
   get always()               { return t('bot.trigger.always'); },
+  get no_response()          { return t('bot.trigger.no_response'); },
+  get message_read()         { return t('bot.trigger.message_read'); },
 };
 
 async function loadSalsbots() {
@@ -6645,6 +6653,12 @@ function botTriggerHtml(bot) {
   if (bot.trigger_type === 'assignee_changed' && bot.trigger_value) {
     const adv = (typeof ADVISORS !== 'undefined' ? ADVISORS : []).find(a => Number(a.id) === Number(bot.trigger_value));
     return `${escHtml(label)}: → ${escHtml(adv?.name || `asesor #${bot.trigger_value}`)}`;
+  }
+  if (bot.trigger_type === 'no_response' && bot.trigger_value) {
+    const { amount, unit } = noRespFromMinutes(Number(bot.trigger_value));
+    const unitLabel = unit === 'd' ? 'día' : unit === 'h' ? 'hora' : 'min';
+    const plural = (amount !== 1 && unit !== 'm') ? 's' : '';
+    return `${escHtml(label)}: ${amount} ${unitLabel}${plural}`;
   }
   return escHtml(label);
 }
@@ -6829,6 +6843,14 @@ function openBotBuilder(bot, returnTo = null) {
     const pl = (PIPELINES || []).find(p => p.stages?.some(s => s.id === stageId));
     if (pl) populateTriggerPipelines(pl.id, stageId);
   }
+  // Si el trigger es no_response, restaurar amount + unit del trigger_value (minutos)
+  if (bot?.trigger_type === 'no_response') {
+    const { amount, unit } = noRespFromMinutes(Number(bot.trigger_value || 1440));
+    const amtEl  = document.getElementById('sbTriggerNoRespAmount');
+    const unitEl = document.getElementById('sbTriggerNoRespUnit');
+    if (amtEl)  amtEl.value  = amount;
+    if (unitEl) unitEl.value = unit;
+  }
   renderStepsFlow();
 }
 
@@ -6842,10 +6864,13 @@ function updateTriggerValueVisibility() {
   const type = document.getElementById('sbTriggerType').value;
   const valInput = document.getElementById('sbTriggerValue');
   const stageWrap = document.getElementById('sbTriggerStageWrap');
-  const isStage = type === 'pipeline_stage' || type === 'pipeline_stage_leave';
-  const hideValue = ['always', 'new_contact', 'pipeline_stage', 'pipeline_stage_leave'].includes(type);
+  const noRespWrap = document.getElementById('sbTriggerNoResponseWrap');
+  const isStage    = type === 'pipeline_stage' || type === 'pipeline_stage_leave';
+  const isNoResp   = type === 'no_response';
+  const hideValue  = ['always', 'new_contact', 'pipeline_stage', 'pipeline_stage_leave', 'no_response', 'message_read'].includes(type);
   valInput.hidden = hideValue;
-  if (stageWrap) stageWrap.hidden = !isStage;
+  if (stageWrap)  stageWrap.hidden  = !isStage;
+  if (noRespWrap) noRespWrap.hidden = !isNoResp;
   // Placeholder según tipo
   if (type === 'tag_added') {
     valInput.placeholder = 'Etiqueta exacta (ej: "VIP"). Vacío = cualquier etiqueta';
@@ -6855,6 +6880,21 @@ function updateTriggerValueVisibility() {
     valInput.placeholder = 'p.ej. "precio", "hola", "info"';
   }
   if (isStage) populateTriggerPipelines();
+}
+
+// Convierte (amount, unit) → minutos. unit: m=minutos, h=horas, d=días.
+function noRespToMinutes(amount, unit) {
+  const n = Math.max(1, Number(amount) || 0);
+  if (unit === 'd') return n * 1440;
+  if (unit === 'h') return n * 60;
+  return n;
+}
+// Convierte minutos → {amount, unit} preservando la unidad más natural.
+function noRespFromMinutes(minutes) {
+  const m = Number(minutes) || 0;
+  if (m && m % 1440 === 0) return { amount: m / 1440, unit: 'd' };
+  if (m && m % 60   === 0) return { amount: m / 60,   unit: 'h' };
+  return { amount: m || 24*60, unit: m ? 'm' : 'h' };
 }
 
 function populateTriggerPipelines(selectedPipelineId, selectedStageId) {
@@ -7924,6 +7964,11 @@ function setupBot() {
     if (trigger_type === 'pipeline_stage' || trigger_type === 'pipeline_stage_leave') {
       trigger_value = document.getElementById('sbTriggerStage')?.value || '';
     }
+    if (trigger_type === 'no_response') {
+      const amt = document.getElementById('sbTriggerNoRespAmount')?.value;
+      const unit = document.getElementById('sbTriggerNoRespUnit')?.value;
+      trigger_value = String(noRespToMinutes(amt, unit));
+    }
     return {
       name:         document.getElementById('botBuilderName')?.value?.trim() || '',
       enabled:      document.getElementById('botBuilderEnabled')?.checked ? 1 : 0,
@@ -8090,6 +8135,11 @@ function setupBot() {
     let trigger_value = document.getElementById('sbTriggerValue').value.trim();
     if (trigger_type === 'pipeline_stage' || trigger_type === 'pipeline_stage_leave') {
       trigger_value = document.getElementById('sbTriggerStage')?.value || '';
+    }
+    if (trigger_type === 'no_response') {
+      const amt = document.getElementById('sbTriggerNoRespAmount')?.value;
+      const unit = document.getElementById('sbTriggerNoRespUnit')?.value;
+      trigger_value = String(noRespToMinutes(amt, unit));
     }
     const steps = collectAllSteps().map(({ _id, ...rest }) => rest);
     try {

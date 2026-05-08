@@ -224,6 +224,75 @@ function triggerAssigneeChanged(db, { expedientId, contactId, oldAdvisorId, newA
 }
 
 /**
+ * triggerMessageRead — fires when an outgoing WhatsApp message turns ✓✓ blue.
+ * trigger_value: empty (always fires when a sent message is read).
+ */
+function triggerMessageRead(db, { messageId, conversationId, contactId }) {
+  const tenantId = _tenantFromContact(db, contactId);
+  if (!tenantId) { _log('warn', `triggerMessageRead: contacto ${contactId} sin tenant — abortando`); return; }
+  const bots = enabledBots(db, tenantId);
+  if (!bots.some(b => b.trigger_type === 'message_read')) return;
+  const convoRow = db.prepare(
+    'SELECT id, provider, integration_id FROM conversations WHERE id = ? AND tenant_id = ?'
+  ).get(conversationId, tenantId);
+  for (const bot of bots) {
+    if (bot.trigger_type !== 'message_read') continue;
+    runAsync(db, bot, {
+      convoId:       convoRow?.id || null,
+      contactId,
+      messageBody:   '',
+      provider:      convoRow?.provider || null,
+      integrationId: convoRow?.integration_id || null,
+      messageId,
+      tenantId,
+    });
+  }
+}
+
+/**
+ * triggerNoResponse — fires when the last message in a conversation is outgoing
+ * and was sent more than N minutes ago. Called from poller, deduped by table
+ * bot_no_response_fires (evita disparar 2 veces al mismo outgoing message).
+ */
+function triggerNoResponse(db, { tenantId, contactId, conversationId, lastOutgoingId, minutesSince }) {
+  const bots = enabledBots(db, tenantId);
+  const candidates = bots.filter(b => b.trigger_type === 'no_response');
+  if (!candidates.length) return;
+
+  const convoRow = db.prepare(
+    'SELECT id, provider, integration_id FROM conversations WHERE id = ? AND tenant_id = ?'
+  ).get(conversationId, tenantId);
+
+  for (const bot of candidates) {
+    const requiredMin = Number(bot.trigger_value || 0);
+    if (!requiredMin || minutesSince < requiredMin) continue;
+
+    // Dedup: ¿ya disparamos para este bot+conversación+outgoing actual?
+    const prev = db.prepare(
+      'SELECT last_outgoing_id FROM bot_no_response_fires WHERE bot_id = ? AND conversation_id = ?'
+    ).get(bot.id, conversationId);
+    if (prev && prev.last_outgoing_id === lastOutgoingId) continue;
+
+    db.prepare(`
+      INSERT INTO bot_no_response_fires (tenant_id, bot_id, conversation_id, last_outgoing_id, fired_at)
+      VALUES (?, ?, ?, ?, unixepoch())
+      ON CONFLICT(bot_id, conversation_id) DO UPDATE SET
+        last_outgoing_id = excluded.last_outgoing_id,
+        fired_at         = unixepoch()
+    `).run(tenantId, bot.id, conversationId, lastOutgoingId);
+
+    runAsync(db, bot, {
+      convoId:       convoRow?.id || null,
+      contactId,
+      messageBody:   '',
+      provider:      convoRow?.provider || null,
+      integrationId: convoRow?.integration_id || null,
+      tenantId,
+    });
+  }
+}
+
+/**
  * triggerTagAdded — fires when a tag is added to an expedient (lead).
  * trigger_value: exact tag name to match. Empty = matches any tag added.
  */
@@ -948,6 +1017,50 @@ async function resumeWaitsForContact(db, contactId, branch, extraCtx = {}) {
   }
 }
 
+// Poller que cada 60s busca conversaciones cuyo último mensaje es saliente
+// y lleva más de N minutos sin respuesta. Dispara bots con trigger_type='no_response'.
+let _noResponseTimer = null;
+function startNoResponsePoller(db) {
+  if (_noResponseTimer) return;
+  const tick = () => {
+    try {
+      // Conversaciones donde el último mensaje es outgoing
+      const candidates = db.prepare(`
+        SELECT c.id AS conversation_id, c.tenant_id, c.contact_id,
+               m.id AS last_outgoing_id,
+               (unixepoch() - m.created_at) / 60 AS minutes_since
+          FROM conversations c
+          JOIN messages m ON m.id = (
+            SELECT id FROM messages WHERE conversation_id = c.id
+             ORDER BY created_at DESC LIMIT 1
+          )
+         WHERE m.direction = 'outgoing'
+           AND m.created_at <= unixepoch() - 60
+           AND COALESCE(c.archived, 0) = 0
+         LIMIT 500
+      `).all();
+      for (const row of candidates) {
+        try {
+          triggerNoResponse(db, {
+            tenantId:        row.tenant_id,
+            contactId:       row.contact_id,
+            conversationId:  row.conversation_id,
+            lastOutgoingId:  row.last_outgoing_id,
+            minutesSince:    Number(row.minutes_since) || 0,
+          });
+        } catch (e) {
+          _log('error', `noResponsePoller error en convo ${row.conversation_id}: ${e.message}`);
+        }
+      }
+    } catch (err) {
+      console.error('[bot] noResponsePoller error:', err.message);
+    }
+  };
+  _noResponseTimer = setInterval(tick, 60_000);
+  _noResponseTimer.unref?.();
+  console.log('[bot] startNoResponsePoller iniciado (cada 60s)');
+}
+
 // Poller que cada 60s busca waits expirados y los resume en rama on_timeout.
 let _waitTimeoutTimer = null;
 function startWaitTimeoutPoller(db) {
@@ -1039,6 +1152,8 @@ module.exports = {
   triggerMessage, triggerPipelineStage, triggerNewContact,
   // Disparadores nuevos (Fase 1):
   triggerPipelineStageLeave, triggerAssigneeChanged, triggerTagAdded,
+  // Disparadores nuevos (Fase 2):
+  triggerMessageRead, triggerNoResponse, startNoResponsePoller,
   getLogs, clearLogs, killRun, pauseRun, resumeRun,
   // Sistema de wait_response (Opción A — branching):
   resumeWait, resumeWaitsForContact, startWaitTimeoutPoller,

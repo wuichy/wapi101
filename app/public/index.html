@@ -1639,6 +1639,8 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   <optgroup label="Mensajes">
                     <option value="keyword" data-i18n="bot.trigger.keyword">Palabra clave en mensaje</option>
                     <option value="always" data-i18n="bot.trigger.always">Cualquier mensaje entrante</option>
+                    <option value="no_response" data-i18n="bot.trigger.no_response">Sin respuesta en X tiempo</option>
+                    <option value="message_read" data-i18n="bot.trigger.message_read">Mensaje saliente leído</option>
                   </optgroup>
                   <optgroup label="Contactos">
                     <option value="new_contact" data-i18n="bot.trigger.new_contact">Nuevo contacto creado</option>
@@ -1653,6 +1655,16 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   </optgroup>
                 </select>
                 <input type="text" id="sbTriggerValue" placeholder='p.ej. "precio", "hola", "info"' />
+                <div id="sbTriggerNoResponseWrap" hidden style="display:flex;align-items:center;gap:8px;margin-top:6px">
+                  <span style="font-size:13px;color:var(--text-muted)">Disparar después de</span>
+                  <input type="number" id="sbTriggerNoRespAmount" min="1" value="24" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:6px" />
+                  <select id="sbTriggerNoRespUnit" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px">
+                    <option value="m">minutos</option>
+                    <option value="h" selected>horas</option>
+                    <option value="d">días</option>
+                  </select>
+                  <span style="font-size:13px;color:var(--text-muted)">sin respuesta</span>
+                </div>
                 <div id="sbTriggerStageWrap" hidden style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
                   <select id="sbTriggerPipeline"><option value="">— Pipeline —</option></select>
                   <div style="position:relative;display:flex;align-items:center">

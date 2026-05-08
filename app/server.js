@@ -693,6 +693,11 @@ app.listen(config.port, config.host, () => {
   try { require('./src/modules/bot/engine').startWaitTimeoutPoller(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar wait timeout poller:', err.message);
   }
+  // Iniciar poller que cada 60s busca conversaciones sin respuesta y dispara
+  // bots con trigger_type='no_response'.
+  try { require('./src/modules/bot/engine').startNoResponsePoller(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar no-response poller:', err.message);
+  }
   // Iniciar poller IMAP para integraciones de email
   try { require('./src/modules/email/poller').start(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar email poller:', err.message);

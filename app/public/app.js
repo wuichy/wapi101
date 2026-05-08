@@ -11087,6 +11087,9 @@ function setupPipelines() {
       try {
         await api('DELETE', `/api/pipelines/stages/${delBtn.dataset.delStage}`);
         await loadPipelinesKanban();
+        // Refrescar bots: pueden haber quedado con issues "missing_stage" o
+        // "missing_trigger_stage" al borrar una etapa que referenciaban.
+        loadSalsbots().catch(() => {});
         const updated = PIPELINES.find(p => p.id === PL_MANAGE_ID);
         if (updated) renderStagesList(updated.stages);
         toast('Etapa eliminada', 'success');
@@ -11256,6 +11259,9 @@ function setupPipelines() {
       PL_MANAGE_ID = null;
       closeManageModal();
       await loadPipelinesKanban();
+      // Refrescar bots: pueden haber quedado con issues "missing_pipeline" o
+      // "missing_stage" al borrar el pipeline.
+      loadSalsbots().catch(() => {});
       toast('Pipeline eliminado', 'success');
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -15448,6 +15454,8 @@ function setupTemplates() {
         await api('DELETE', `/api/templates/${id}`);
         _tplItems = _tplItems.filter(t => t.id !== id);
         renderTemplates();
+        // Refrescar bots: pueden haber quedado con issues "missing_template"
+        loadSalsbots().catch(() => {});
         toast('Plantilla eliminada', 'success');
       } catch (e) { toast(e.message, 'error'); }
     } else if (e.target.classList.contains('tpl-submit-btn')) {

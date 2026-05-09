@@ -8001,8 +8001,17 @@ function renderStepsFlow() {
 
   flow.innerHTML = triggerBanner + sbSteps.map((step, i) => {
     const prevIsStop = i > 0 && (sbSteps[i - 1].type === 'stop_bot' || sbSteps[i - 1].type === 'stop_and_start');
+    const prevIsBranch = i > 0 && (sbSteps[i - 1].type === 'branch' || sbSteps[i - 1].type === 'condition');
     const insertAfterTarget = i === 0 ? '__top__' : sbSteps[i - 1]._id;
     const showInsert = i === 0 || !prevIsStop;
+    // Nota explicativa cuando el step viene justo después de un Condición/Branch:
+    // los pasos top-level que siguen a una rama solo corren cuando ninguna rama
+    // matcheó (fallback). Sin esta nota, el list view es engañoso.
+    const fallbackNote = prevIsBranch
+      ? `<div class="sb-fallback-note" title="Estos pasos solo se ejecutan si ninguna rama del paso anterior matcheó. Para que un paso se ejecute cuando matchea una rama, agrégalo dentro de la rama desde el flujo visual.">
+          <span class="sb-fallback-arrow">↳</span> Si ninguna rama matcheó, continúa aquí
+        </div>`
+      : '';
     // Issues específicas de este step (matchean por stepId === step._id)
     const stepIssues = sbCurrentIssues.filter(it => it.stepId === step._id);
     const errors = stepIssues.filter(it => it.severity === 'error');
@@ -8022,6 +8031,7 @@ function renderStepsFlow() {
       : '';
     return `
     <div class="sb-step-wrap">
+      ${fallbackNote}
       <div class="sb-step-connector">
         ${showInsert ? `<button class="sb-insert-between" data-insert-after="${insertAfterTarget}" title="Insertar módulo aquí">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>

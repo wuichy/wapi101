@@ -5833,6 +5833,21 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 #sbStepsFlow { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 560px; }
 
 .sb-step-wrap { display: flex; flex-direction: column; align-items: center; width: 100%; }
+.sb-fallback-note {
+  margin: 8px 0 -4px;
+  padding: 6px 12px;
+  background: #fef3c7;
+  border: 1px dashed #d97706;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: help;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sb-fallback-arrow { font-size: 14px; color: #d97706; }
 .sb-step-connector {
   width: 2px; height: 28px; background: var(--border);
   position: relative; display: flex; align-items: center; justify-content: center;

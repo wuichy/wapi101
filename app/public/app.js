@@ -1554,13 +1554,8 @@ function updateChatsNavBadge(count) {
   const badge = document.getElementById('navChatsBadge');
   if (!badge) return;
   const n = Number(count) || 0;
-  if (n <= 0) {
-    badge.hidden = true;
-    badge.textContent = '';
-  } else {
-    badge.hidden = false;
-    badge.textContent = n > 99 ? '99+' : String(n);
-  }
+  badge.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : '';
+  badge.style.display = n > 0 ? '' : 'none';
 }
 
 function decrementUnreadBadge(convoId) {
@@ -14741,13 +14736,8 @@ async function _fetchOverdueTasks() {
 function _updateCalendarBadge(count) {
   const badge = document.getElementById('navCalendarBadge');
   if (!badge) return;
-  if (count > 0) {
-    badge.textContent = count > 99 ? '99+' : String(count);
-    badge.hidden = false;
-  } else {
-    badge.hidden = true;
-    badge.textContent = '';
-  }
+  badge.textContent = count > 0 ? (count > 99 ? '99+' : String(count)) : '';
+  badge.style.display = count > 0 ? '' : 'none';
 }
 
 function _showTaskDueToast(newOverdue) {
@@ -18102,7 +18092,7 @@ function updateMailUnreadBadge() {
   const badge = document.getElementById('mailInboxBadge');
   if (badge) { badge.textContent = unread || ''; badge.hidden = !unread; }
   const navBadge = document.getElementById('navMailBadge');
-  if (navBadge) { navBadge.textContent = unread || ''; navBadge.hidden = !unread; }
+  if (navBadge) { navBadge.textContent = unread > 0 ? String(unread) : ''; navBadge.style.display = unread > 0 ? '' : 'none'; }
 }
 
 function mailFilteredConvos() {
@@ -18775,8 +18765,8 @@ async function refreshCommentsBadge() {
     const badge = document.getElementById('navCommentsBadge');
     if (badge) {
       const n = Number(counts?.unread || 0);
-      if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.hidden = false; }
-      else       { badge.textContent = ''; badge.hidden = true; }
+      badge.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : '';
+      badge.style.display = n > 0 ? '' : 'none';
     }
   } catch {}
 }

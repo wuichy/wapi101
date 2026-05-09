@@ -10757,16 +10757,17 @@ let EXP_FILTERS = { q: '', searchIn: 'all', tags: [], fieldValues: {} };
 
 async function loadPipelinesKanban() {
   try {
-    const [plData, expData] = await Promise.all([
-      api('GET', '/api/pipelines'),
-      api('GET', '/api/expedients?pageSize=500'),
-    ]);
+    const plData = await api('GET', '/api/pipelines');
     PIPELINES = plData.items;
-    PL_EXP_CACHE = expData.items || [];
     if (!PL_ACTIVE_ID && PIPELINES.length) {
       const savedId = Number(localStorage.getItem('lastPipelineId'));
       PL_ACTIVE_ID = (savedId && PIPELINES.some(p => p.id === savedId)) ? savedId : PIPELINES[0].id;
     }
+    // Filtrar por pipeline activo + pageSize alto para soportar pipelines grandes
+    const expData = PL_ACTIVE_ID
+      ? await api('GET', `/api/expedients?pipelineId=${PL_ACTIVE_ID}&pageSize=5000`)
+      : { items: [] };
+    PL_EXP_CACHE = expData.items || [];
     renderPipelineTabs();
     renderPipelinesBoard();
   } catch (e) { console.error('loadPipelinesKanban', e); }
@@ -11729,13 +11730,14 @@ function setupPipelines() {
     setPipelineViewMode(mode);
   });
 
-  // Tab switch
+  // Tab switch — re-fetch porque ahora el cache filtra por pipeline
   document.getElementById('plTabs')?.addEventListener('click', e => {
     const btn = e.target.closest('[data-pl-id]');
     if (!btn) return;
     PL_ACTIVE_ID = Number(btn.dataset.plId);
+    localStorage.setItem('lastPipelineId', String(PL_ACTIVE_ID));
     renderPipelineTabs();
-    renderPipelinesBoard();
+    loadPipelinesKanban();
   });
 
   // Tab drag-to-reorder: mousedown on handle → enable draggable, then handle dragstart/end

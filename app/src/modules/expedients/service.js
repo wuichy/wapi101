@@ -132,8 +132,8 @@ const BASE_SELECT = `
   ) conv ON conv.contact_id = e.contact_id AND conv.tenant_id = e.tenant_id
 `;
 
-function list(db, tenantId, { search = '', page = 1, pageSize = 50, sortBy = 'createdAt', sortDir = 'desc', tags = [], fieldFilters = {}, contactId = null } = {}) {
-  pageSize = [10, 25, 50, 100, 200].includes(Number(pageSize)) ? Number(pageSize) : 50;
+function list(db, tenantId, { search = '', page = 1, pageSize = 50, sortBy = 'createdAt', sortDir = 'desc', tags = [], fieldFilters = {}, contactId = null, pipelineId = null } = {}) {
+  pageSize = [10, 25, 50, 100, 200, 500, 1000, 5000].includes(Number(pageSize)) ? Number(pageSize) : 50;
   page = Math.max(1, Number(page) || 1);
   const sortCol = VALID_SORT[sortBy] || VALID_SORT.createdAt;
   const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
@@ -144,6 +144,11 @@ function list(db, tenantId, { search = '', page = 1, pageSize = 50, sortBy = 'cr
   if (contactId) {
     conditions.push('e.contact_id = ?');
     params.push(Number(contactId));
+  }
+
+  if (pipelineId) {
+    conditions.push('e.pipeline_id = ?');
+    params.push(Number(pipelineId));
   }
 
   if (search) {

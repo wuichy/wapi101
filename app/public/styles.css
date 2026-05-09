@@ -5335,6 +5335,10 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .bb-visual-stage.df-host .connection {
   z-index: 0;
 }
+/* Drawflow pinta selected en rojo por default — override */
+.bb-visual-stage.df-host .drawflow-node.selected {
+  background: var(--surface, #fff) !important;
+}
 
 /* Conexiones (líneas curvas entre nodos) */
 .bb-visual-stage.df-host .connection .main-path {
@@ -5348,26 +5352,16 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   stroke: #000;
   stroke-width: 3;
 }
-/* Puntos de conexión — círculos visibles pegados al borde del nodo */
-.bb-visual-stage.df-host .input,
-.bb-visual-stage.df-host .output {
-  width: 12px;
-  height: 12px;
-  background: #fff;
-  border: 2px solid #94a3b8;
+/* Puntos de conexión — invisibles, líneas llegan pegadas al nodo */
+.bb-visual-stage.df-host .drawflow-node .input,
+.bb-visual-stage.df-host .drawflow-node .output {
+  width: 10px;
+  height: 10px;
+  background: transparent !important;
+  border: none !important;
   border-radius: 50%;
-  opacity: 1;
-  transition: border-color .15s, background .15s;
-  z-index: 3;
+  opacity: 0;
 }
-.bb-visual-stage.df-host .input:hover,
-.bb-visual-stage.df-host .output:hover {
-  background: #e0e7ff;
-  border-color: #6366f1;
-}
-/* Fix posición: input en borde izquierdo, output en borde derecho */
-.bb-visual-stage.df-host .input  { left: -6px !important; }
-.bb-visual-stage.df-host .output { right: -6px !important; }
 
 /* reminder_timer: label en cada puerto output */
 .bb-visual-stage.df-host .output { position: relative; }

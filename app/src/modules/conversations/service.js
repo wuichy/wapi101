@@ -90,6 +90,9 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
   } else {
     // Email conversations belong to the Mail view, not the main chat
     conditions.push("c.provider NOT IN ('email','gmail','outlook','icloud_mail','yahoo_mail')");
+    // Excluir conversaciones ghost creadas como efecto secundario de comentarios FB/IG
+    // (no tienen mensajes reales — last_message_at es NULL)
+    conditions.push('c.last_message_at IS NOT NULL');
   }
   if (unreadOnly) { conditions.push('c.unread_count > 0'); }
   if (contactId) { conditions.push('c.contact_id = ?'); params.push(contactId); }

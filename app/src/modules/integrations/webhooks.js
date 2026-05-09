@@ -527,26 +527,41 @@ module.exports = function createWebhooksRouter(db) {
       // FB feed: el permalink puede venir directo en value o en value.post.permalink_url
       const permalinkUrl    = value.permalink_url || value.post?.permalink_url || null;
 
-      // Linkear con contacto existente o crearlo. Misma estrategia que conversations:
-      // (provider, external_id) → contact via conversations table. Si no existe,
-      // creamos una "conversación" del provider + un contacto auto-poblado con el
-      // nombre del payload — así futuros DMs y comentarios del mismo usuario
-      // quedan agrupados bajo el mismo contacto.
+      // Linkear con contacto existente o crearlo SIN crear conversación.
+      // Los comentarios van a social_comments, NO al chat — no deben generar
+      // una entrada en conversations que aparezca en la bandeja de chats.
       let contactId = null;
       if (fromId) {
         try {
-          const convo = convoSvc.findOrCreate(db, tenantId, {
-            provider,
-            externalId:    fromId,
-            integrationId: integration?.id || null,
-            contactPhone:  null,
-            contactName:   fromName || null,
-          });
-          contactId = convo?.contact_id || null;
-          // Si el contacto no tenía nombre y ahora sí lo tenemos, actualizar
+          // 1. Si ya existe una conversación de DM con este usuario, reusar su contacto
+          const existingConvo = db.prepare(
+            'SELECT contact_id FROM conversations WHERE provider = ? AND external_id = ? AND tenant_id = ? LIMIT 1'
+          ).get(provider, String(fromId), tenantId);
+          if (existingConvo?.contact_id) {
+            contactId = existingConvo.contact_id;
+          } else {
+            // 2. Si ya existen comentarios previos del mismo usuario, reusar su contacto
+            const prevComment = db.prepare(
+              'SELECT contact_id FROM social_comments WHERE provider = ? AND from_id = ? AND tenant_id = ? AND contact_id IS NOT NULL LIMIT 1'
+            ).get(provider, String(fromId), tenantId);
+            if (prevComment?.contact_id) {
+              contactId = prevComment.contact_id;
+            } else {
+              // 3. Crear contacto básico (sin conversación)
+              const name   = (fromName || '').trim();
+              const parts  = name.split(/\s+/).filter(Boolean);
+              const first  = parts[0] || `Usuario ${String(fromId).slice(0, 8)}`;
+              const last   = parts.slice(1).join(' ') || null;
+              const r = db.prepare(
+                'INSERT INTO contacts (tenant_id, first_name, last_name) VALUES (?, ?, ?)'
+              ).run(tenantId, first, last);
+              contactId = r.lastInsertRowid;
+            }
+          }
+          // Actualizar nombre si el contacto tenía un placeholder
           if (contactId && fromName) {
             const c = db.prepare('SELECT first_name FROM contacts WHERE id = ? AND tenant_id = ?').get(contactId, tenantId);
-            if (c && (!c.first_name || c.first_name === fromId)) {
+            if (c && (!c.first_name || c.first_name === String(fromId).slice(0, 8) || c.first_name.startsWith('Usuario '))) {
               db.prepare('UPDATE contacts SET first_name = ? WHERE id = ? AND tenant_id = ?').run(fromName, contactId, tenantId);
             }
           }

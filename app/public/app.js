@@ -7959,38 +7959,16 @@ function buildStepBody(step) {
           ${branchHtml}
         </div>`;
     }
-    case 'book_appointment': {
-      const advisorOpts = (_advisors || []).map(a =>
-        `<option value="${a.id}" ${Number(c.advisorId) === a.id ? 'selected' : ''}>${escHtml(a.name)}</option>`
-      ).join('');
+    case 'book_appointment':
       return `
-        <div class="sb-appt-grid">
-          <div>
-            <label>Días desde hoy</label>
-            <input type="number" data-field="offsetDays" data-sid="${sid}" min="0" max="365" value="${Number(c.offsetDays ?? 1)}" />
-          </div>
-          <div>
-            <label>Hora (HH:MM)</label>
-            <input type="time" data-field="time" data-sid="${sid}" value="${escHtml(c.time || '10:00')}" />
-          </div>
-          <div>
-            <label>Duración (min)</label>
-            <input type="number" data-field="durationMin" data-sid="${sid}" min="5" max="480" value="${Number(c.durationMin || 30)}" />
-          </div>
-        </div>
-        <label style="margin-top:10px">Asesor asignado (opcional)</label>
-        <select data-field="advisorId" data-sid="${sid}">
-          <option value="">— Sin asignar —</option>
-          ${advisorOpts}
-        </select>
-        <label style="margin-top:10px">Mensaje de confirmación</label>
-        <textarea data-field="confirmMessage" data-sid="${sid}" rows="3" placeholder="Tu cita ha sido agendada para el {fecha_cita} a las {hora_cita}.">${escHtml(c.confirmMessage || '')}</textarea>
-        <p class="sb-hint">Variables: {nombre} {fecha_cita} {hora_cita} {apellido} {telefono}</p>
-        <label style="margin-top:10px">Recordatorio (minutos antes, 0 = sin recordatorio)</label>
-        <input type="number" data-field="reminderMinutes" data-sid="${sid}" min="0" value="${Number(c.reminderMinutes || 0)}" />
-        <label style="margin-top:8px">Mensaje del recordatorio (opcional)</label>
-        <textarea data-field="reminderMessage" data-sid="${sid}" rows="2" placeholder="Recordatorio: tienes una cita el {fecha_cita} a las {hora_cita}.">${escHtml(c.reminderMessage || '')}</textarea>`;
-    }
+        <div class="sb-info-box">
+          <p>📅 <strong>Agendar Cita</strong></p>
+          <p style="margin-top:6px;font-size:12px;color:var(--text-secondary)">
+            Cuando el bot llega a este paso, envía una notificación al asesor asignado para que abra el
+            modal de agendado. El asesor elige fecha, hora y duración directamente en la interfaz.
+            No se requiere configuración adicional aquí.
+          </p>
+        </div>`;
     case 'cancel_appointment':
       return `
         <label>Mensaje de cancelación</label>
@@ -8024,6 +8002,8 @@ function buildStepBody(step) {
         <textarea data-field="message" data-sid="${sid}" rows="3" placeholder="Tu cita ha sido reagendada para el {fecha_cita} a las {hora_cita}.">${escHtml(c.message || '')}</textarea>
         <p class="sb-hint">Variables: {nombre} {fecha_cita} {hora_cita}</p>`;
     }
+    case 'reminder_timer':
+      return _renderReminderTimerEditor(sid, c);
     default: return '';
   }
 }
@@ -8221,6 +8201,24 @@ function collectStepConfig(sid) {
     const defaultText = body.querySelector('.sb-branch-default-text')?.value?.trim() || '';
     cfg.default = defaultText ? [{ type: 'message', config: { text: defaultText, channelId: 'auto' } }] : [];
   }
+
+  // reminder_timer — recolectar reminders[]
+  const reminderBranches = body.querySelectorAll('.sb-reminder-branch[data-rid]');
+  if (reminderBranches.length) {
+    cfg.reminders = [];
+    reminderBranches.forEach(branch => {
+      const rid  = branch.dataset.rid;
+      const mode = branch.querySelector(`select[data-field="rem_mode"]`)?.value || 'before';
+      const val  = Number(branch.querySelector(`[data-field="rem_value"]`)?.value) || 30;
+      const unit = branch.querySelector(`select[data-field="rem_unit"]`)?.value || 'min';
+      const time = branch.querySelector(`input[data-field="rem_time"]`)?.value || '20:00';
+      cfg.reminders.push(mode === 'day_before_at'
+        ? { id: rid, mode, value: val, time }
+        : { id: rid, mode, value: val, unit }
+      );
+    });
+  }
+
   return cfg;
 }
 
@@ -8783,6 +8781,52 @@ function setupBot() {
       _refreshBranchStepBody(sid);
       return;
     }
+
+    // ── reminder_timer: agregar recordatorio ──
+    const addRemBtn = e.target.closest('.sb-reminder-add-btn');
+    if (addRemBtn) {
+      e.preventDefault();
+      const sid = addRemBtn.dataset.sid;
+      const step = sbSteps.find(s => s._id === sid);
+      if (!step) return;
+      step.config = collectStepConfig(sid);
+      if (!Array.isArray(step.config.reminders)) step.config.reminders = [];
+      step.config.reminders.push({ id: `r${Date.now()}`, mode: 'before', value: 30, unit: 'min' });
+      _refreshBranchStepBody(sid);
+      // re-open the body
+      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      return;
+    }
+
+    // ── reminder_timer: eliminar recordatorio ──
+    const delRemBtn = e.target.closest('.sb-reminder-del-btn');
+    if (delRemBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const rid = delRemBtn.dataset.delRid;
+      const body = delRemBtn.closest('[data-body-sid]');
+      if (!body) return;
+      const sid = body.dataset.bodySid;
+      const step = sbSteps.find(s => s._id === sid);
+      if (!step) return;
+      step.config = collectStepConfig(sid);
+      step.config.reminders = (step.config.reminders || []).filter(r => r.id !== rid);
+      _refreshBranchStepBody(sid);
+      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      return;
+    }
+  });
+
+  // ── reminder_timer: cambio de modo (before ↔ day_before_at) ──
+  document.getElementById('sbStepsFlow')?.addEventListener('change', (e) => {
+    const modeSel = e.target.closest('select[data-field="rem_mode"]');
+    if (!modeSel) return;
+    const sid = modeSel.dataset.sid;
+    const step = sbSteps.find(s => s._id === sid);
+    if (!step) return;
+    step.config = collectStepConfig(sid);
+    _refreshBranchStepBody(sid);
+    document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
   });
 
   document.getElementById('sbStepsFlow')?.addEventListener('click', (e) => {

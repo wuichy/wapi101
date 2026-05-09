@@ -3625,7 +3625,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','aplicaciones','mail','copiloto','comentarios']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','mail','copiloto','comentarios']);
 
 // Filtro de búsqueda de la vista Aplicaciones (topbar)
 let _appsSearch = '';
@@ -3702,17 +3702,13 @@ function showView(viewName) {
   } else if (viewName === 'plantillas') {
     if (searchInput) { searchInput.placeholder = 'Buscar plantilla…'; searchInput.value = (typeof _tplFilter !== 'undefined' ? _tplFilter : '') || ''; }
     if (plExtras) plExtras.hidden = true;
-  } else if (viewName === 'aplicaciones') {
-    if (searchInput) { searchInput.placeholder = 'Buscar aplicación…'; searchInput.value = _appsSearch || ''; }
-    if (plExtras) plExtras.hidden = true;
-    filterAppsList(_appsSearch || '');
   } else {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
   }
   const cleanTopbar = (viewName === 'contactos');
   if (title) title.hidden = cleanTopbar;
-  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'aplicaciones' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail' || viewName === 'copiloto';
+  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail' || viewName === 'copiloto';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
   if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta' || viewName === 'copiloto');
@@ -3722,8 +3718,6 @@ function showView(viewName) {
   if (expExtras) expExtras.hidden = (viewName !== 'expedientes');
   const calExtras = document.getElementById('topbarCalExtras');
   if (calExtras) calExtras.hidden = (viewName !== 'calendario');
-  const appsExtras = document.getElementById('topbarAppsExtras');
-  if (appsExtras) appsExtras.hidden = (viewName !== 'aplicaciones');
   const tplExtras = document.getElementById('topbarTplExtras');
   if (tplExtras) tplExtras.hidden = (viewName !== 'plantillas');
   const botExtras = document.getElementById('topbarBotExtras');
@@ -17175,8 +17169,8 @@ function setupTasksView() {
     renderTaskList();
   });
 
-  // Tabs de aplicaciones
-  document.getElementById('topbarAppsExtras')?.addEventListener('click', (e) => {
+  // Tabs de aplicaciones (dentro del settings-pane)
+  document.querySelector('.settings-pane[data-settings="aplicaciones"]')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.apps-tab-btn');
     if (!btn) return;
     document.querySelectorAll('.apps-tab-btn').forEach(b => b.classList.toggle('is-active', b === btn));
@@ -17184,13 +17178,6 @@ function setupTasksView() {
     document.getElementById('appsTabInstalled').hidden = (tab !== 'installed');
     document.getElementById('appsTabAvailable').hidden  = (tab !== 'available');
     filterAppsList(_appsSearch || '');
-  });
-
-  // Búsqueda de aplicaciones desde topbar (cuando estamos en aplicaciones)
-  document.getElementById('topbarSearchInput')?.addEventListener('input', (e) => {
-    if (document.body.dataset.viewActive !== 'aplicaciones') return;
-    _appsSearch = e.target.value;
-    filterAppsList(_appsSearch);
   });
 
   // Cargar al entrar a la vista unificada

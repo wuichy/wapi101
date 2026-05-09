@@ -9941,7 +9941,7 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 
 /* Tabs aplicaciones */
-.topbar-apps-extras { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.apps-subtabs { display: flex; align-items: center; gap: 6px; }
 .apps-tab-btn {
   padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);
   background: transparent; font-size: 13px; font-weight: 500;

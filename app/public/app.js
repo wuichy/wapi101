@@ -9478,7 +9478,9 @@ function setupBot() {
     const items = [];
     const edges = [];
 
-    const tree = _bbBuildBotTree(data.steps || [], data.steps || []);
+    // Usar sbSteps (referencias vivas) — NO data.steps (copia sin _id que rompe edición y botones +)
+    const liveSteps = (typeof sbSteps !== 'undefined' && Array.isArray(sbSteps)) ? sbSteps : [];
+    const tree = _bbBuildBotTree(liveSteps, liveSteps);
     if (tree.length > 0) _bbMeasure(tree);
 
     const totalContentW = tree.length > 0

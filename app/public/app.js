@@ -8026,7 +8026,8 @@ function buildStageOptionsWithColor(pipelineId, selectedStageId) {
   ).join('');
 }
 
-let _sbInsertAfter = null; // sid tras el cual insertar, null = al final
+let _sbInsertAfter     = null; // sid tras el cual insertar, null = al final
+let _reminderStepCtx  = null; // { parentSid, rid } cuando se añade un step a una rama reminder
 
 function renderStepsFlow() {
   const flow = document.getElementById('sbStepsFlow');
@@ -8212,8 +8213,13 @@ function collectStepConfig(sid) {
       const val  = Number(branch.querySelector(`[data-field="rem_value"]`)?.value) || 30;
       const unit = branch.querySelector(`select[data-field="rem_unit"]`)?.value || 'min';
       const time = branch.querySelector(`input[data-field="rem_time"]`)?.value || '20:00';
-      const msg  = branch.querySelector(`textarea[data-field="rem_message"]`)?.value?.trim() || '';
-      const steps = msg ? [{ type: 'message', config: { text: msg, channelId: 'auto' } }] : [];
+      // Sub-steps: leer config de cada sub-step del DOM
+      const steps = [];
+      branch.querySelectorAll('[data-substep-id]').forEach(ssEl => {
+        const subSid = ssEl.dataset.substepId;
+        const type   = ssEl.dataset.substepType || 'message';
+        steps.push({ _id: subSid, type, config: collectStepConfig(subSid) });
+      });
       cfg.reminders.push(mode === 'day_before_at'
         ? { id: rid, mode, value: val, time, steps }
         : { id: rid, mode, value: val, unit, steps }
@@ -8657,6 +8663,24 @@ function setupBot() {
     sbStepCounter++;
     const newStep = { _id: `s${sbStepCounter}`, type, config: {} };
 
+    // ── Si estamos añadiendo a una rama reminder, insertar ahí ──
+    if (_reminderStepCtx) {
+      const { parentSid, rid } = _reminderStepCtx;
+      _reminderStepCtx = null;
+      const parentStep = sbSteps.find(s => s._id === parentSid);
+      if (parentStep) {
+        parentStep.config = collectStepConfig(parentSid);
+        const rem = (parentStep.config.reminders || []).find(r => r.id === rid);
+        if (rem) {
+          if (!Array.isArray(rem.steps)) rem.steps = [];
+          rem.steps.push(newStep);
+          _refreshBranchStepBody(parentSid);
+          document.querySelector(`[data-body-sid="${parentSid}"]`)?.classList.add('is-open');
+        }
+      }
+      return;
+    }
+
     if (_sbInsertAfter === '__top__') {
       sbSteps.unshift(newStep);
       _sbInsertAfter = null;
@@ -8688,8 +8712,10 @@ function setupBot() {
     if (picker.contains(e.target)) return;
     if (e.target.closest('.sb-add-step-wrap')) return;
     if (e.target.closest('.sb-insert-between')) return;
+    if (e.target.closest('.sb-rem-add-step-btn')) return;
     _restoreSbStepPicker();
     _sbInsertAfter = null;
+    _reminderStepCtx = null;
   });
 
   // Toggle step body open/close
@@ -8700,6 +8726,14 @@ function setupBot() {
       const sid = delBtn.dataset.delSid;
       sbSteps = sbSteps.filter(s => s._id !== sid);
       renderStepsFlow();
+      return;
+    }
+
+    // Toggle de sub-step dentro de una rama reminder
+    const subHeader = e.target.closest('[data-toggle-sub]');
+    if (subHeader && !e.target.closest('.sb-rem-substep-del')) {
+      const subBody = subHeader.closest('.sb-rem-substep')?.querySelector('[data-body-sid]');
+      if (subBody) subBody.classList.toggle('is-open');
       return;
     }
 
@@ -8781,6 +8815,58 @@ function setupBot() {
         step.config.cases.splice(ci, 1);
       }
       _refreshBranchStepBody(sid);
+      return;
+    }
+
+    // ── reminder_timer: eliminar sub-step de una rama ──
+    const delSubBtn = e.target.closest('.sb-rem-substep-del');
+    if (delSubBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const parentSid = delSubBtn.dataset.parentSid;
+      const rid       = delSubBtn.dataset.parentRid;
+      const subSid    = delSubBtn.dataset.delSubstep;
+      const parentStep = sbSteps.find(s => s._id === parentSid);
+      if (!parentStep) return;
+      parentStep.config = collectStepConfig(parentSid);
+      const rem = (parentStep.config.reminders || []).find(r => r.id === rid);
+      if (rem && Array.isArray(rem.steps)) {
+        rem.steps = rem.steps.filter(ss => ss._id !== subSid);
+      }
+      _refreshBranchStepBody(parentSid);
+      document.querySelector(`[data-body-sid="${parentSid}"]`)?.classList.add('is-open');
+      return;
+    }
+
+    // ── reminder_timer: abrir picker para agregar step a una rama ──
+    const addSubBtn = e.target.closest('.sb-rem-add-step-btn');
+    if (addSubBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const parentSid = addSubBtn.dataset.parentSid;
+      const rid       = addSubBtn.dataset.parentRid;
+      _reminderStepCtx = { parentSid, rid };
+      const picker = document.getElementById('sbStepPicker');
+      if (!picker) return;
+      // Mover picker al body para evitar clipping
+      if (picker.parentElement !== document.body) {
+        picker.dataset.originalParent = '1';
+        document.body.appendChild(picker);
+      }
+      picker.style.position = 'fixed';
+      picker.style.transform = 'none';
+      picker.style.zIndex = '9999';
+      picker.hidden = false;
+      const btnRect = addSubBtn.getBoundingClientRect();
+      const pickerW = picker.offsetWidth || 320;
+      const pickerH = picker.offsetHeight || 200;
+      const margin  = 8;
+      let left = btnRect.left + btnRect.width / 2 - pickerW / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - pickerW - margin));
+      let top = btnRect.bottom + 6;
+      if (top + pickerH > window.innerHeight - margin) top = Math.max(margin, btnRect.top - pickerH - 6);
+      picker.style.left = `${left}px`;
+      picker.style.top  = `${top}px`;
       return;
     }
 
@@ -19183,13 +19269,33 @@ function _checkAndOpenApptModal(expId, stageId) {
 // BUILDER reminder_timer UI
 // ═══════════════════════════════════════════════════════════════════
 
+function _renderSubStepCard(parentSid, rid, subStep) {
+  const label = (typeof SB_STEP_LABELS !== 'undefined' && SB_STEP_LABELS[subStep.type]) || subStep.type;
+  const iconHtml = typeof stepIconSvg === 'function' ? stepIconSvg(subStep.type) : '';
+  const bodyHtml = typeof buildStepBody === 'function' ? buildStepBody(subStep) : '';
+  return `
+    <div class="sb-rem-substep" data-substep-id="${escHtml(subStep._id)}" data-substep-type="${escHtml(subStep.type)}">
+      <div class="sb-rem-substep-header" data-toggle-sub="${escHtml(subStep._id)}">
+        <div class="sb-step-icon type-${subStep.type}" style="width:24px;height:24px;min-width:24px">${iconHtml}</div>
+        <span class="sb-rem-substep-label">${escHtml(label)}</span>
+        <button type="button" class="sb-rem-substep-del"
+          data-del-substep="${escHtml(subStep._id)}"
+          data-parent-sid="${escHtml(parentSid)}"
+          data-parent-rid="${escHtml(rid)}"
+          title="Eliminar paso">×</button>
+      </div>
+      <div class="sb-step-body is-open" data-body-sid="${escHtml(subStep._id)}">
+        ${bodyHtml}
+      </div>
+    </div>`;
+}
+
 function _renderReminderTimerEditor(sid, c) {
   const reminders = Array.isArray(c.reminders) ? c.reminders : [];
   const branches  = reminders.map((rem, i) => {
-    const rid = rem.id || `r${i}`;
-    // Obtener el mensaje guardado (primer step de tipo message)
-    const firstStep = Array.isArray(rem.steps) ? rem.steps[0] : null;
-    const msgText = firstStep?.config?.text || '';
+    const rid      = rem.id || `r${i}`;
+    const subSteps = Array.isArray(rem.steps) ? rem.steps : [];
+    const subStepsHtml = subSteps.map(ss => _renderSubStepCard(sid, rid, ss)).join('');
     return `
       <div class="sb-reminder-branch" data-rid="${escHtml(rid)}">
         <div class="sb-reminder-branch-header">
@@ -19214,17 +19320,20 @@ function _renderReminderTimerEditor(sid, c) {
           `}
           <button type="button" class="sb-reminder-del-btn" data-del-rid="${escHtml(rid)}" title="Eliminar recordatorio">×</button>
         </div>
-        <label style="font-size:12px;font-weight:600;display:block;margin:8px 0 4px">Mensaje a enviar *</label>
-        <textarea class="sb-reminder-msg" data-field="rem_message" data-sid="${sid}" data-rid="${escHtml(rid)}"
-          rows="3" placeholder="Ej: Hola {nombre}, te recordamos tu cita de mañana 📅. ¿Confirmas tu asistencia?"
-          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit">${escHtml(msgText)}</textarea>
-        <p class="sb-hint">Variables: {nombre} {apellido} {telefono} {email} {fecha_cita} {hora_cita}</p>
+        <div class="sb-rem-substeps">
+          ${subStepsHtml}
+        </div>
+        <button type="button" class="sb-rem-add-step-btn"
+          data-parent-sid="${escHtml(sid)}" data-parent-rid="${escHtml(rid)}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+          Agregar paso
+        </button>
       </div>
     `;
   }).join('');
 
   return `
-    ${reminders.length ? '' : '<p class="sb-hint" style="margin-bottom:8px">Sin recordatorios. Agrega uno para programar mensajes automáticos antes de la cita.</p>'}
+    ${reminders.length ? '' : '<p class="sb-hint" style="margin-bottom:8px">Sin recordatorios configurados. Agrega uno para definir qué pasos ejecutar antes de la cita.</p>'}
     ${branches}
     <button type="button" class="sb-reminder-add-btn" data-sid="${sid}" data-add-reminder>
       + Agregar recordatorio

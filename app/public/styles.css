@@ -6412,6 +6412,30 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .sb-info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 14px; }
 .sb-info-box p { margin: 0; font-size: 13px; line-height: 1.5; }
 
+/* reminder_timer sub-steps */
+.sb-rem-substeps { margin: 8px 0 6px; display: flex; flex-direction: column; gap: 6px; }
+.sb-rem-substep { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; overflow: hidden; }
+.sb-rem-substep-header {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  cursor: pointer; user-select: none; background: #f8fafc;
+}
+.sb-rem-substep-header:hover { background: #f1f5f9; }
+.sb-rem-substep-label { flex: 1; font-size: 13px; font-weight: 500; color: var(--text); }
+.sb-rem-substep-del {
+  background: none; border: none; cursor: pointer; color: #94a3b8;
+  font-size: 18px; line-height: 1; padding: 0 2px; flex-shrink: 0;
+}
+.sb-rem-substep-del:hover { color: #ef4444; }
+.sb-rem-substep .sb-step-body { padding: 10px 12px; border-top: 1px solid #e2e8f0; }
+.sb-rem-substep .sb-step-body:not(.is-open) { display: none; }
+.sb-rem-add-step-btn {
+  display: flex; align-items: center; gap: 6px; padding: 5px 10px; width: 100%;
+  background: #f0fdf4; border: 1px dashed #86efac; border-radius: 7px;
+  color: #16a34a; font-size: 12px; cursor: pointer; justify-content: center;
+  margin-top: 4px;
+}
+.sb-rem-add-step-btn:hover { background: #dcfce7; }
+
 /* ── Add step button + picker ── */
 .sb-add-step-wrap {
   display: flex;

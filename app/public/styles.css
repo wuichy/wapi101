@@ -5225,17 +5225,14 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .bb-visual-stage.df-host .drawflow-node {
   background: var(--surface, #fff);
-  border: 1.5px solid #cbd5e1;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   padding: 0;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
   min-width: 220px;
   font-size: 13px;
   color: var(--text);
   cursor: grab;
-  overflow: visible;
-  position: relative;
-  z-index: 2;
   transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
 .bb-visual-stage.df-host .drawflow-node:hover {
@@ -5244,7 +5241,6 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   transform: translateY(-1px);
 }
 .bb-visual-stage.df-host .drawflow-node.selected {
-  background: var(--surface, #fff) !important;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(37,99,235,.18), 0 4px 12px rgba(37,99,235,.12);
 }
@@ -5329,18 +5325,6 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   overflow: hidden;
 }
 
-/* SVG de conexiones detrás de los nodos */
-.bb-visual-stage.df-host svg {
-  z-index: 0 !important;
-}
-.bb-visual-stage.df-host .connection {
-  z-index: 0;
-}
-/* Drawflow pinta selected en rojo por default — override */
-.bb-visual-stage.df-host .drawflow-node.selected {
-  background: var(--surface, #fff) !important;
-}
-
 /* Conexiones (líneas curvas entre nodos) */
 .bb-visual-stage.df-host .connection .main-path {
   stroke: #94a3b8;
@@ -5353,15 +5337,19 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   stroke: var(--accent, #2563eb);
   stroke-width: 3.5px;
 }
-/* Puntos de conexión — invisibles, líneas llegan pegadas al nodo */
-.bb-visual-stage.df-host .drawflow-node .input,
-.bb-visual-stage.df-host .drawflow-node .output {
-  width: 10px;
-  height: 10px;
-  background: transparent !important;
-  border: none !important;
-  border-radius: 50%;
-  opacity: 0;
+/* Puntos de conexión — círculos blancos con borde accent */
+.bb-visual-stage.df-host .input,
+.bb-visual-stage.df-host .output {
+  background: #fff;
+  border: 2.5px solid var(--accent);
+  width: 14px;
+  height: 14px;
+  transition: transform .12s ease, background .12s ease;
+}
+.bb-visual-stage.df-host .input:hover,
+.bb-visual-stage.df-host .output:hover {
+  background: var(--accent);
+  transform: scale(1.25);
 }
 
 /* reminder_timer: label en cada puerto output */

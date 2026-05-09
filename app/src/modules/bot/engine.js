@@ -1031,9 +1031,13 @@ async function executeStep(db, step, ctx) {
     }
 
     case 'condition': {
-      // Basic condition: if false, skip remaining steps
+      // Si tiene formato v2 (cases[]), delegar completamente a la lógica branch
+      if (Array.isArray(c.cases) && c.cases.length) {
+        return executeStep(db, { ...step, type: 'branch' }, ctx);
+      }
+      // Formato viejo: si condition falla, detener el flow
       const passes = evaluateCondition(db, c, ctx);
-      return !passes; // return true (stop) if condition fails
+      return !passes;
     }
 
     case 'branch': {
@@ -1771,6 +1775,45 @@ function evaluateRule(db, rule, ctx) {
       ).get(ctx.contactId, Number(rule.value), ctx.tenantId);
       const has = !!exp;
       return (op === 'not_contains' || op === 'not_equals') ? !has : has;
+    }
+
+    if (field === 'stage') {
+      const exp = db.prepare(
+        'SELECT stage_id FROM expedients WHERE contact_id = ? AND tenant_id = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(ctx.contactId, ctx.tenantId);
+      const has = exp && String(exp.stage_id) === String(rule.value);
+      return (op === 'not_equals' || op === 'not_contains') ? !has : !!has;
+    }
+
+    if (field === 'contact_name') {
+      const contact = db.prepare('SELECT first_name, last_name FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
+      const name = String(contact ? `${contact.first_name || ''} ${contact.last_name || ''}`.trim() : '').toLowerCase();
+      if (op === 'equals')       return name === value;
+      if (op === 'not_equals')   return name !== value;
+      if (op === 'starts_with')  return name.startsWith(value);
+      if (op === 'ends_with')    return name.endsWith(value);
+      if (op === 'not_contains') return !name.includes(value);
+      if (op === 'matches_any') {
+        const list = value.split(',').map(s => s.trim()).filter(Boolean);
+        return list.some(v => name.includes(v));
+      }
+      return name.includes(value);
+    }
+
+    if (field === 'phone') {
+      const contact = db.prepare('SELECT phone FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
+      const phone = String(contact?.phone || ctx.messageBody || '').replace(/\D/g, '');
+      const cleanValue = value.replace(/\D/g, '');
+      if (op === 'equals')       return phone === cleanValue;
+      if (op === 'not_equals')   return phone !== cleanValue;
+      if (op === 'starts_with')  return phone.startsWith(cleanValue);
+      if (op === 'ends_with')    return phone.endsWith(cleanValue);
+      if (op === 'not_contains') return !phone.includes(cleanValue);
+      if (op === 'matches_any') {
+        const list = cleanValue.split(',').map(s => s.trim()).filter(Boolean);
+        return list.some(v => phone.includes(v));
+      }
+      return phone.includes(cleanValue);
     }
   } catch (err) {
     _log('error', `evaluateRule (${rule.field} ${rule.op} "${rule.value}"): ${err.message}`);

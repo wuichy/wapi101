@@ -6594,17 +6594,19 @@ const BOT_STEP_REGISTRY = {
     },
   },
   condition: {
-    group: 'Flujo',
-    label:   { es: 'Condición', en: 'Condition' },
-    icon:    '<path d="M10 3v14M3 10h14"/><circle cx="10" cy="10" r="3"/>',
+    hidden: true, // obsoleto — redirige a branch v2 en buildStepBody y collectAllSteps
+    label:   { es: 'Condición / Ramas', en: 'Condition / Branch' },
+    icon:    '<path d="M5 3v6"/><path d="M5 9c0 5 5 5 5 8"/><path d="M15 3v6"/><path d="M15 9c0 5-5 5-5 8"/><circle cx="5" cy="3" r="1.5"/><circle cx="15" cy="3" r="1.5"/><circle cx="10" cy="17" r="1.5"/>',
     summary: (step) => {
       const c = step.config || {};
-      return c.field ? `Si ${c.field} = "${c.value || ''}"` : 'Sin condición';
+      const n = Array.isArray(c.cases) ? c.cases.length : 0;
+      if (!n) return c.field ? `Si ${c.field} = "${c.value || ''}"` : 'Sin ramas';
+      return `${n} rama${n !== 1 ? 's' : ''}${Array.isArray(c.default) && c.default.length ? ' + default' : ''}`;
     },
   },
   branch: {
     group: 'Flujo',
-    label:   { es: 'Condición / Ramificar', en: 'Condition / Branch' },
+    label:   { es: 'Condición / Ramas', en: 'Condition / Branch' },
     icon:    '<path d="M5 3v6"/><path d="M5 9c0 5 5 5 5 8"/><path d="M15 3v6"/><path d="M15 9c0 5-5 5-5 8"/><circle cx="5" cy="3" r="1.5"/><circle cx="15" cy="3" r="1.5"/><circle cx="10" cy="17" r="1.5"/>',
     summary: (step) => {
       const c = step.config || {};
@@ -6792,6 +6794,7 @@ function stepIcon(type, size = 17) {
 function buildBotStepPickerHTML() {
   const lang = _botRegistryLang();
   return Object.entries(BOT_STEP_REGISTRY).map(([type, def]) => {
+    if (def.hidden) return ''; // ocultar tipos obsoletos del picker
     const featureAttr = def.feature ? ` data-feature="${escHtml(def.feature)}" hidden` : '';
     const label = (def.label?.[lang] || def.label?.es || type);
     return `<button class="sb-step-type-btn" data-type="${escHtml(type)}"${featureAttr}>
@@ -7650,15 +7653,7 @@ function buildStepBody(step) {
         </div>`;
     }
     case 'condition':
-      return `
-        <label>Campo</label>
-        <select data-field="field" data-sid="${sid}">
-          <option value="tag"      ${c.field==='tag'      ?'selected':''}>Tiene etiqueta</option>
-          <option value="pipeline" ${c.field==='pipeline' ?'selected':''}>Está en pipeline</option>
-          <option value="message"  ${c.field==='message'  ?'selected':''}>Mensaje contiene</option>
-        </select>
-        <label>Valor</label>
-        <input type="text" data-field="value" data-sid="${sid}" value="${escHtml(c.value||'')}" placeholder="Valor a comparar" />`;
+      return _renderBranchEditor(sid, c);
     case 'stage': {
       const _curPl = (PIPELINES || []).find(p => p.id == c.pipelineId);
       const _curStage = _curPl?.stages?.find(s => s.id == c.stageId);
@@ -8200,10 +8195,12 @@ function collectStepConfig(sid) {
 }
 
 function collectAllSteps() {
-  return sbSteps.map(step => ({
-    ...step,
-    config: collectStepConfig(step._id),
-  }));
+  return sbSteps.map(step => {
+    const config = collectStepConfig(step._id);
+    // Auto-migrar condition viejo → branch cuando ya tiene el formato v2
+    const type = (step.type === 'condition' && Array.isArray(config.cases)) ? 'branch' : step.type;
+    return { ...step, type, config };
+  });
 }
 
 function setupBot() {
@@ -9006,6 +9003,26 @@ function setupBot() {
       document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
       return;
     }
+  });
+
+  // ── branch v2: al cambiar el campo, re-renderizar la fila para actualizar ops/value ──
+  document.body.addEventListener('change', (e) => {
+    const fieldSel = e.target.closest('.sb-branch-rule-field');
+    if (!fieldSel) return;
+    const sid      = fieldSel.dataset.sid;
+    const caseId   = fieldSel.dataset.caseId;
+    const ruleIdx  = Number(fieldSel.dataset.ruleIdx);
+    const step     = sbSteps.find(s => s._id === sid);
+    if (!step) return;
+    step.config = collectStepConfig(sid);
+    const cs = (step.config.cases || []).find(c => c.id === caseId);
+    if (cs && cs.rules[ruleIdx]) {
+      cs.rules[ruleIdx].field = fieldSel.value;
+      cs.rules[ruleIdx].op    = _branchFieldOps(fieldSel.value)[0]?.[0] || 'contains';
+      cs.rules[ruleIdx].value = '';
+    }
+    _refreshBranchStepBody(sid);
+    document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
   });
 
   // ── reminder_timer: cambio de modo (before ↔ day_before_at) ──
@@ -18935,25 +18952,67 @@ function _checkAndOpenApptModal(expId, stageId) {
 // BUILDER branch v2 UI — multi-regla AND/OR + sub-flujo por rama
 // ═══════════════════════════════════════════════════════════════════
 
+// Ops según el tipo de campo
+function _branchFieldOps(field) {
+  if (['tag', 'pipeline', 'stage'].includes(field)) {
+    return [
+      ['equals',     'tiene / es'],
+      ['not_equals', 'no tiene / no es'],
+    ];
+  }
+  return [
+    ['contains',     'contiene'],
+    ['not_contains', 'no contiene'],
+    ['equals',       'es exactamente'],
+    ['not_equals',   'no es'],
+    ['starts_with',  'empieza con'],
+    ['ends_with',    'termina con'],
+    ['matches_any',  'es cualquiera de (coma)'],
+  ];
+}
+
+// Input/select de valor según el campo
+function _branchRuleValueHtml(sid, caseId, ruleIdx, field, value) {
+  const attrs = `class="sb-branch-rule-value" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}"`;
+  if (field === 'pipeline') {
+    const opts = (typeof PIPELINES !== 'undefined' ? PIPELINES : [])
+      .map(p => `<option value="${p.id}" ${String(value) == String(p.id) ? 'selected' : ''}>${escHtml(p.name)}</option>`)
+      .join('');
+    return `<select ${attrs}><option value="">— Pipeline —</option>${opts}</select>`;
+  }
+  if (field === 'stage') {
+    const allStages = (typeof PIPELINES !== 'undefined' ? PIPELINES : [])
+      .flatMap(p => (p.stages || []).map(s => ({ id: s.id, label: `${p.name} › ${s.name}` })));
+    const opts = allStages.map(s => `<option value="${s.id}" ${String(value) == String(s.id) ? 'selected' : ''}>${escHtml(s.label)}</option>`).join('');
+    return `<select ${attrs}><option value="">— Etapa —</option>${opts}</select>`;
+  }
+  const placeholder = field === 'tag' ? 'nombre de la etiqueta'
+    : field === 'phone'        ? 'número o parte del teléfono'
+    : field === 'contact_name' ? 'nombre o parte del nombre'
+    : 'valor (o lista separada por coma)';
+  return `<input type="text" ${attrs} value="${escHtml(value || '')}" placeholder="${placeholder}" />`;
+}
+
 function _renderBranchRuleRow(sid, caseId, ruleIdx, rule) {
   const field = rule.field || 'message';
   const op    = rule.op    || 'contains';
+  const ops   = _branchFieldOps(field);
+  const opsHtml = ops.map(([v, label]) => `<option value="${v}" ${op === v ? 'selected' : ''}>${label}</option>`).join('');
+  const valueHtml = _branchRuleValueHtml(sid, caseId, ruleIdx, field, rule.value);
   return `
     <div class="sb-branch-rule" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}">
       <select class="sb-branch-rule-field" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}">
-        <option value="message"  ${field === 'message'  ? 'selected' : ''}>Mensaje</option>
-        <option value="tag"      ${field === 'tag'      ? 'selected' : ''}>Etiqueta</option>
-        <option value="pipeline" ${field === 'pipeline' ? 'selected' : ''}>En pipeline</option>
+        <option value="message"      ${field === 'message'      ? 'selected' : ''}>Mensaje</option>
+        <option value="tag"          ${field === 'tag'          ? 'selected' : ''}>Tiene etiqueta</option>
+        <option value="pipeline"     ${field === 'pipeline'     ? 'selected' : ''}>Está en pipeline</option>
+        <option value="stage"        ${field === 'stage'        ? 'selected' : ''}>Está en etapa</option>
+        <option value="contact_name" ${field === 'contact_name' ? 'selected' : ''}>Nombre del contacto</option>
+        <option value="phone"        ${field === 'phone'        ? 'selected' : ''}>Teléfono</option>
       </select>
       <select class="sb-branch-rule-op" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}">
-        <option value="contains"     ${op === 'contains'     ? 'selected' : ''}>contiene</option>
-        <option value="not_contains" ${op === 'not_contains' ? 'selected' : ''}>no contiene</option>
-        <option value="equals"       ${op === 'equals'       ? 'selected' : ''}>es exactamente</option>
-        <option value="starts_with"  ${op === 'starts_with'  ? 'selected' : ''}>empieza con</option>
-        <option value="matches_any"  ${op === 'matches_any'  ? 'selected' : ''}>es cualquiera de</option>
+        ${opsHtml}
       </select>
-      <input type="text" class="sb-branch-rule-value" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}"
-        value="${escHtml(rule.value || '')}" placeholder='valor (o lista separada por coma)' />
+      ${valueHtml}
       <button type="button" class="sb-branch-rule-del" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}" title="Eliminar condición">×</button>
     </div>`;
 }
@@ -18980,8 +19039,11 @@ function _renderBranchSubStepCard(parentSid, caseId, subStep) {
 }
 
 function _renderBranchEditor(sid, c) {
-  // Normalizar casos (compat con formato viejo field/op/value/branch)
-  const rawCases = Array.isArray(c.cases) ? c.cases : [];
+  // Normalizar casos (compat con formato viejo field/op/value/branch Y condition antiguo)
+  let rawCases = Array.isArray(c.cases) ? c.cases : [];
+  if (!rawCases.length && c.field) {
+    rawCases = [{ rules: [{ field: c.field, op: c.op || 'contains', value: c.value || '' }], steps: [] }];
+  }
   const cases = rawCases.map((cs, i) => {
     if (!cs.id) cs.id = `bc_${Date.now()}_${i}`;
     if (!Array.isArray(cs.rules)) {

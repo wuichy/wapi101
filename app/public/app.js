@@ -9302,7 +9302,189 @@ function setupBot() {
     return `M ${fromX} ${fromY} L ${fromX} ${midY} L ${toX} ${midY} L ${toX} ${toY}`;
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // Visual con Drawflow (reemplaza el SVG custom anterior)
+  // ═══════════════════════════════════════════════════════════
+  let _bbDF = null;        // instancia de Drawflow
+  let _bbDFSyncing = false; // flag para prevenir loops en eventos
+
+  function _bbInitDrawflow() {
+    if (_bbDF) return _bbDF;
+    if (typeof Drawflow === 'undefined') {
+      console.error('[bb] Drawflow no está cargado');
+      return null;
+    }
+    const stage = document.getElementById('bbVisualStage');
+    if (!stage) return null;
+    // Limpiar contenido custom anterior
+    stage.innerHTML = '';
+    stage.classList.add('df-host');
+    // Limpiar transform/style residuales del approach anterior
+    stage.style.transform = '';
+    stage.style.width = '';
+    stage.style.height = '';
+    const editor = new Drawflow(stage);
+    editor.reroute = true;             // permite curvas en líneas
+    editor.reroute_fix_curvature = true;
+    editor.curvature = 0.5;            // suavidad de las curvas
+    editor.editor_mode = 'edit';
+    editor.start();
+
+    // Click en un nodo → abrir editor lateral
+    editor.on('click', (e) => {
+      const nodeEl = e?.target?.closest?.('.drawflow-node');
+      if (!nodeEl) return;
+      const nodeId = nodeEl.id?.replace('node-', '');
+      if (!nodeId) return;
+      const node = editor.getNodeFromId(nodeId);
+      const data = node?.data || {};
+      if (data.type === 'trigger') {
+        bbOpenTriggerEditorInline();
+        return;
+      }
+      // Resolver step en sbSteps usando refPath
+      if (Array.isArray(data.refPath)) {
+        const ref = _bbResolveRefPath(data.refPath);
+        if (ref) bbOpenVisualEditorByRef(ref.parentArr, ref.idx);
+      }
+    });
+
+    // Cuando user mueve un nodo: persistir _pos en el step correspondiente
+    editor.on('nodeMoved', (id) => {
+      if (_bbDFSyncing) return;
+      const node = editor.getNodeFromId(id);
+      if (!node?.data?.refPath) return;
+      const ref = _bbResolveRefPath(node.data.refPath);
+      if (!ref) return;
+      ref.parentArr[ref.idx]._pos = { x: Math.round(node.pos_x), y: Math.round(node.pos_y) };
+    });
+
+    return editor;
+  }
+
+  // Resuelve un refPath del estilo ['top', 2] o ['branch', stepId, 'on_text_reply', 0]
+  // contra sbSteps. Devuelve { parentArr, idx } para edición.
+  function _bbResolveRefPath(path) {
+    if (!Array.isArray(path) || !path.length) return null;
+    if (path[0] === 'top') {
+      return { parentArr: sbSteps, idx: path[1] };
+    }
+    if (path[0] === 'branch') {
+      const [, stepId, branchKey, subIdx] = path;
+      const parent = sbSteps.find(s => s._id === stepId);
+      if (!parent?.config) return null;
+      // wait_response: branches[bKey]
+      if (parent.type === 'wait_response') {
+        const arr = parent.config.branches?.[branchKey];
+        if (Array.isArray(arr)) return { parentArr: arr, idx: subIdx };
+      }
+      // branch step: cases[index].branch o default
+      if (parent.type === 'branch') {
+        if (branchKey === 'default') {
+          if (Array.isArray(parent.config.default)) return { parentArr: parent.config.default, idx: subIdx };
+        } else if (branchKey.startsWith('case_')) {
+          const ci = Number(branchKey.slice(5));
+          const arr = parent.config.cases?.[ci]?.branch;
+          if (Array.isArray(arr)) return { parentArr: arr, idx: subIdx };
+        }
+      }
+    }
+    return null;
+  }
+
+  // Construye el HTML del nodo según el tipo del step
+  function _bbDFNodeHTML(label, summary, isTrigger = false) {
+    const cls = isTrigger ? 'df-node-trigger' : '';
+    return `
+      <div class="df-node-content ${cls}">
+        <div class="df-node-title">${escHtml(label)}</div>
+        ${summary ? `<div class="df-node-summary">${escHtml(summary)}</div>` : ''}
+      </div>`;
+  }
+
+  // Calcula qué outputs/inputs tiene un node según el type del step
+  function _bbDFPortsFor(step) {
+    if (step.type === 'wait_response') {
+      // 4 outputs (uno por rama). El orden importa: usamos las keys de SB_BRANCH_LABELS
+      return { inputs: 1, outputs: 4 };
+    }
+    if (step.type === 'branch') {
+      const cases = Array.isArray(step.config?.cases) ? step.config.cases : [];
+      const hasDefault = Array.isArray(step.config?.default);
+      return { inputs: 1, outputs: Math.max(1, cases.length + (hasDefault ? 1 : 0)) };
+    }
+    if (step.type === 'stop_bot') return { inputs: 1, outputs: 0 };
+    return { inputs: 1, outputs: 1 };
+  }
+
   function bbRenderVisualView() {
+    const editor = _bbInitDrawflow();
+    if (!editor) return;
+    const data = bbBuildBotJSON();
+
+    _bbDFSyncing = true;
+    editor.clear();
+
+    // Trigger node
+    const triggerLabel = (() => {
+      const def = BOT_TRIGGER_REGISTRY[data.trigger_type];
+      return def ? (def.label?.[_botRegistryLang()] || def.label?.es || data.trigger_type) : data.trigger_type;
+    })();
+    const triggerSummary = (() => {
+      const def = BOT_TRIGGER_REGISTRY[data.trigger_type];
+      try {
+        if (def?.summaryHtml) {
+          return (def.summaryHtml({ trigger_type: data.trigger_type, trigger_value: data.trigger_value }) || '').replace(/^:\s*/, '').replace(/<[^>]+>/g, '');
+        }
+      } catch {}
+      return '';
+    })();
+    const trigNodeId = editor.addNode(
+      'trigger', 0, 1, 50, 50, 'df-trigger',
+      { type: 'trigger' },
+      _bbDFNodeHTML(`▶ ${triggerLabel}`, triggerSummary, true)
+    );
+
+    // Top-level steps en línea recta vertical
+    let prevId = trigNodeId;
+    let y = 200;
+    const x = 50;
+
+    (data.steps || []).forEach((step, idx) => {
+      const def = BOT_STEP_REGISTRY[step.type];
+      const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || step.type) : step.type;
+      const summary = def?.summary ? (def.summary(step) || '') : '';
+      const ports = _bbDFPortsFor(step);
+      // Posición: respeta _pos si existe, sino auto top-down
+      const pos = (step._pos && Number.isFinite(step._pos.x) && Number.isFinite(step._pos.y))
+        ? step._pos
+        : { x, y };
+      const nodeId = editor.addNode(
+        `step_${idx}`,
+        ports.inputs,
+        ports.outputs,
+        pos.x,
+        pos.y,
+        `df-step df-step-${step.type}`,
+        { type: step.type, refPath: ['top', idx], stepId: step._id },
+        _bbDFNodeHTML(label, summary)
+      );
+      // Conectar previous → este
+      if (prevId !== null && ports.inputs > 0) {
+        try { editor.addConnection(prevId, nodeId, 'output_1', 'input_1'); } catch (e) { console.warn('connect fail:', e); }
+      }
+      prevId = (ports.outputs > 0) ? nodeId : null;
+      if (!step._pos) y += 130;
+    });
+
+    _bbDFSyncing = false;
+
+    // El zoom y pan los maneja Drawflow internamente con scroll/pinch
+  }
+
+  // Función legacy — la dejo aquí como _LEGACY por si necesito rollback rápido.
+  // Será eliminada cuando confirme que Drawflow funciona bien.
+  function bbRenderVisualView_LEGACY() {
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return;
     const data = bbBuildBotJSON();

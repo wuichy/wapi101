@@ -18,8 +18,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
 
-  <link rel="stylesheet" href="/vendor/drawflow/drawflow.min.css" />
-  <link rel="stylesheet" href="/styles.css?v=20260508c" />
+  <link rel="stylesheet" href="/styles.css?v=20260509a" />
 </head>
 <body>
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
@@ -1844,23 +1843,11 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <!-- Vista: Visual (diagrama de nodos, read-only) -->
             <div class="bb-view-content" data-view="visual" hidden>
               <div class="bb-visual-toolbar">
-                <span class="bb-code-hint">Vista de solo lectura. Click en un paso para editarlo en la Lista.</span>
-                <div class="bb-visual-zoom">
-                  <button type="button" class="bb-zoom-btn" id="bbVisualZoomOut" title="Alejar">−</button>
-                  <span id="bbVisualZoomLabel">100%</span>
-                  <button type="button" class="bb-zoom-btn" id="bbVisualZoomIn" title="Acercar">+</button>
-                  <button type="button" class="bb-zoom-btn" id="bbVisualZoomReset" title="Reset">⟲</button>
-                </div>
+                <span class="bb-code-hint">Vista de solo lectura. Click en un nodo para editarlo.</span>
               </div>
               <div class="bb-visual-canvas" id="bbVisualCanvas">
-                <!-- Palette de pasos draggables (Phase C) -->
-                <aside class="bb-visual-palette" id="bbVisualPalette">
-                  <div class="bb-visual-palette-head">Pasos</div>
-                  <div class="bb-visual-palette-list" id="bbVisualPaletteList"></div>
-                </aside>
                 <div class="bb-visual-stage" id="bbVisualStage"></div>
 
-                <!-- Panel lateral para editar trigger (Phase D refinements) -->
                 <aside class="bb-visual-editor bb-visual-trigger-editor" id="bbVisualTriggerEditor" hidden>
                   <header class="bb-visual-editor-head">
                     <div class="bb-visual-editor-title">
@@ -1869,16 +1856,13 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     </div>
                     <button type="button" class="modal-close" id="bbVisualTriggerEditorClose" title="Cerrar">×</button>
                   </header>
-                  <div class="bb-visual-editor-body" id="bbVisualTriggerEditorSlot">
-                    <!-- El trigger card de la vista Lista se mueve aquí al abrir y vuelve a su sitio al cerrar -->
-                  </div>
+                  <div class="bb-visual-editor-body" id="bbVisualTriggerEditorSlot"></div>
                   <footer class="bb-visual-editor-foot">
                     <p style="margin:0;font-size:11px;color:var(--text-muted);flex:1">Los cambios se aplican al cerrar.</p>
                     <button type="button" class="btn btn--primary" id="bbVisualTriggerEditorDone">Listo</button>
                   </footer>
                 </aside>
 
-                <!-- Panel lateral para editar step (Phase B) -->
                 <aside class="bb-visual-editor" id="bbVisualEditor" hidden>
                   <header class="bb-visual-editor-head">
                     <div class="bb-visual-editor-title">
@@ -3184,8 +3168,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
     </div>
   </div>
 
-  <script src="/vendor/drawflow/drawflow.min.js"></script>
-  <script src="/app.js?v=20260508c"></script>
+  <script src="/app.js?v=20260509a"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

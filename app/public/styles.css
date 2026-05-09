@@ -5050,247 +5050,117 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   font-size: 13px;
 }
 
-/* ── Visual node graph (Fase A read-only) ── */
+/* ═══════════════════════════════════════════════════
+   Visual bot builder — rewrite 2026-05-09
+   Read-only top→bottom flow with branches.
+   ═══════════════════════════════════════════════════ */
+
 .bb-visual-toolbar {
-  width: 100%;
-  max-width: 900px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.bb-visual-zoom {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.bb-zoom-btn {
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--border);
-  background: var(--surface, #fff);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text);
-  padding: 0;
-}
-.bb-zoom-btn:hover { background: var(--bg-2); border-color: var(--accent); }
-.bb-visual-canvas {
-  width: 100%;
-  max-width: 100%;          /* full-width — sin límite de 1100px */
-  height: calc(100vh - 200px); /* ocupa la mayor parte de la pantalla */
-  min-height: 500px;
-  background: var(--bg-2);
-  background-image:
-    linear-gradient(rgba(0,0,0,.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,0,0,.04) 1px, transparent 1px);
-  background-size: 20px 20px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  position: relative;
-  display: flex;
-}
-
-/* Palette de pasos draggables (Phase C) */
-.bb-visual-palette {
-  width: 180px;
-  flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  z-index: 5;
-}
-.bb-visual-palette-head {
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  color: var(--text-muted);
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-2);
-}
-.bb-visual-palette-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.bb-palette-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #fff;
-  cursor: grab;
+  background: var(--surface);
   font-size: 12px;
-  color: var(--text);
-  user-select: none;
-  transition: border-color .12s, transform .12s, box-shadow .12s;
-}
-.bb-palette-item:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.bb-palette-item:active { cursor: grabbing; }
-.bb-palette-item-icon {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--accent);
-}
-.bb-palette-group-label {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
   color: var(--text-muted);
-  padding: 8px 10px 4px;
 }
-/* Ghost node mientras arrastras */
-.bb-palette-ghost {
-  position: fixed;
-  pointer-events: none;
-  z-index: 9999;
-  background: var(--accent);
-  color: #fff;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 8px 24px rgba(37,99,235,.4);
-  opacity: 0.95;
-}
-.bb-visual-stage {
-  flex: 1;
-  overflow: auto;
-}
-.bb-visual-stage {
+
+.bb-visual-canvas {
   position: relative;
   flex: 1;
+  display: flex;
   overflow: hidden;
-  background: var(--bg-2);
-  background-image:
-    linear-gradient(rgba(0,0,0,.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,0,0,.04) 1px, transparent 1px);
-  background-size: 20px 20px;
 }
 
-/* ── Drawflow integración pulida con estilo de Wapi101 ── */
-.bb-visual-stage.df-host {
-  cursor: grab;
+.bb-visual-stage {
+  flex: 1;
+  position: relative;
+  overflow: auto;
+  background:
+    radial-gradient(circle, rgba(15,23,42,.06) 1px, transparent 1px) 0 0 / 22px 22px,
+    var(--bg-2);
 }
 
-/* Drawflow inyecta .parent-drawflow y .drawflow adentro del stage. Estos
-   elementos cubren toda el área. Hay que:
-   1. Hacerlos transparentes para que el grid del .bb-visual-stage siempre se vea
-   2. Mantener cursor: grab en TODA el área (no solo el stage outer) */
-.bb-visual-stage.df-host .parent-drawflow,
-.bb-visual-stage.df-host .drawflow {
-  background: transparent !important;
-  cursor: grab;
-  width: 100%;
-  height: 100%;
-  min-width: 100%;
-  min-height: 100%;
+.bb-canvas {
+  position: relative;
+  margin: 0 auto;
 }
-.bb-visual-stage.df-host .parent-drawflow:active,
-.bb-visual-stage.df-host .drawflow:active {
-  cursor: grabbing;
+
+/* SVG con conectores ortogonales detrás de los nodos */
+.bb-edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
 }
-/* Drawflow agrega .drawflow.move al hacer drag — cursor grabbing */
-.bb-visual-stage.df-host .drawflow.move,
-.bb-visual-stage.df-host .parent-drawflow.move {
-  cursor: grabbing !important;
+
+.bb-edge {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
-.bb-visual-stage.df-host .drawflow-node {
+
+.bb-edge-label rect {
+  fill: var(--surface, #fff);
+  stroke: #cbd5e1;
+  stroke-width: 1;
+}
+.bb-edge-label text {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── Nodes ── */
+.bb-node {
+  position: absolute;
   background: var(--surface, #fff);
-  border: 1px solid var(--border);
+  border: 1.5px solid #cbd5e1;
   border-radius: 12px;
-  padding: 0;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
-  min-width: 220px;
-  font-size: 13px;
-  color: var(--text);
-  cursor: grab;
-  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 1px 2px rgba(15, 23, 42, .04);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+  z-index: 2;
+  box-sizing: border-box;
+  overflow: hidden;
 }
-.bb-visual-stage.df-host .drawflow-node:hover {
+.bb-node:hover {
   border-color: var(--accent);
-  box-shadow: 0 8px 24px rgba(37,99,235,.15), 0 2px 6px rgba(15,23,42,.06);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, .15), 0 2px 4px rgba(15, 23, 42, .06);
   transform: translateY(-1px);
 }
-.bb-visual-stage.df-host .drawflow-node.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(37,99,235,.18), 0 4px 12px rgba(37,99,235,.12);
-}
 
-/* Trigger node — distintivo con gradient azul */
-.bb-visual-stage.df-host .drawflow-node.df-trigger {
-  border: 2px dashed var(--accent);
-  background: linear-gradient(135deg, rgba(37,99,235,0.06) 0%, rgba(37,99,235,0.02) 100%);
-  min-width: 240px;
-}
-
-/* Nodo de step normal — border-left coloreado por grupo */
-.bb-visual-stage.df-host .drawflow-node.df-step {
-  border-left-width: 4px;
-  border-left-style: solid;
-}
-.bb-visual-stage.df-host .drawflow-node.df-grp-comunicacion { border-left-color: #2563eb; }
-.bb-visual-stage.df-host .drawflow-node.df-grp-flujo        { border-left-color: #9333ea; }
-.bb-visual-stage.df-host .drawflow-node.df-grp-lead         { border-left-color: #16a34a; }
-.bb-visual-stage.df-host .drawflow-node.df-grp-citas        { border-left-color: #f59e0b; }
-.bb-visual-stage.df-host .drawflow-node.df-grp-integraciones{ border-left-color: #06b6d4; }
-
-/* Contenido interno del nodo */
-.bb-visual-stage.df-host .df-node-content {
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  pointer-events: none; /* clicks pasan al wrapper */
-}
-.bb-visual-stage.df-host .df-node-head {
+.bb-node__head {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
 }
-.bb-visual-stage.df-host .df-node-num {
+
+.bb-node__num {
   flex-shrink: 0;
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
   font-size: 11px;
   font-weight: 700;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.bb-visual-stage.df-host .df-node-icon {
+
+.bb-node__icon {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -5299,12 +5169,8 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   height: 22px;
   color: var(--accent);
 }
-.bb-visual-stage.df-host .df-trigger-play {
-  background: var(--accent);
-  color: #fff;
-  border-radius: 999px;
-}
-.bb-visual-stage.df-host .df-node-title {
+
+.bb-node__title {
   font-weight: 600;
   font-size: 13px;
   color: var(--text);
@@ -5313,195 +5179,61 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.bb-visual-stage.df-host .df-node-summary {
+
+.bb-node__summary {
   font-size: 11.5px;
   color: var(--text-muted);
-  line-height: 1.45;
-  word-break: break-word;
-  padding-left: 2px;
+  line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-/* Conexiones (líneas curvas entre nodos) */
-.bb-visual-stage.df-host .connection .main-path {
-  stroke: #94a3b8;
-  stroke-width: 2.5px;
-  fill: none;
-  transition: stroke .15s ease, stroke-width .15s ease;
+/* Trigger node — distinto: gradient azul + dashed border */
+.bb-node--trigger {
+  border: 2px dashed var(--accent);
+  background: linear-gradient(135deg, rgba(37, 99, 235, .07) 0%, rgba(37, 99, 235, .02) 100%);
 }
-.bb-visual-stage.df-host .connection:hover .main-path,
-.bb-visual-stage.df-host .connection.selected .main-path {
-  stroke: var(--accent, #2563eb);
-  stroke-width: 3.5px;
-}
-/* Puntos de conexión — círculos blancos con borde accent */
-.bb-visual-stage.df-host .input,
-.bb-visual-stage.df-host .output {
-  background: #fff;
-  border: 2.5px solid var(--accent);
-  width: 14px;
-  height: 14px;
-  transition: transform .12s ease, background .12s ease;
-}
-.bb-visual-stage.df-host .input:hover,
-.bb-visual-stage.df-host .output:hover {
-  background: var(--accent);
-  transform: scale(1.25);
-}
-
-/* reminder_timer: label en cada puerto output */
-.bb-visual-stage.df-host .output { position: relative; }
-.bb-visual-stage.df-host .df-port-label {
-  position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
-  font-size: 10px; font-weight: 600; color: var(--text-muted);
-  white-space: nowrap; pointer-events: none;
-  background: var(--surface, #fff); padding: 1px 4px;
-  border-radius: 4px; border: 1px solid var(--border);
-}
-
-/* reminder_timer sub-step nodes */
-.bb-visual-stage.df-host .drawflow-node.df-rem-sub {
-  border-left-color: #f59e0b;
-  opacity: .95;
-}
-.bb-visual-stage.df-host .df-rem-timing-badge {
-  display: inline-block; background: #fef3c7; color: #92400e;
-  font-size: 10px; font-weight: 700; padding: 2px 6px;
-  border-radius: 4px; margin-bottom: 5px; letter-spacing: .3px;
-}
-.bb-visual-stage.df-host .drawflow-node.df-rem-empty {
-  border-left: 3px solid #fcd34d; opacity: .7;
-  min-width: 160px;
-}
-.bb-visual-stage.df-host .df-rem-empty-content { padding: 6px 4px; }
-.bb-visual-stage.is-panning,
-.bb-visual-stage.is-panning * {
-  cursor: grabbing !important;
-  user-select: none;
-}
-/* Mientras paneamos, deshabilitar transition de los nodos para que no
-   "lag" la sensación de movimiento del canvas */
-.bb-visual-stage.is-panning .bb-visual-node {
-  transition: none;
-}
-.bb-visual-stage svg.bb-visual-edges {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  width: 100%;
-  height: 100%;
-}
-.bb-visual-stage svg.bb-visual-edges path {
-  fill: none;
-  stroke: var(--text-muted);
-  stroke-width: 2;
-  opacity: .5;
-}
-.bb-visual-trigger,
-.bb-visual-node {
-  position: absolute;
-  background: var(--surface, #fff);
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  width: 200px;
-  min-height: 64px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.06);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  cursor: grab;
-  transition: border-color .12s, box-shadow .12s;
-  font-size: 12px;
-  z-index: 2;
-  user-select: none;
-}
-.bb-visual-node:active { cursor: grabbing; }
-.bb-visual-node.is-dragging {
-  cursor: grabbing;
-  border-color: var(--accent);
-  box-shadow: 0 8px 24px rgba(37,99,235,.25);
-  z-index: 100;
-  transition: none;
-}
-.bb-visual-node:hover {
-  border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(37,99,235,.15);
-}
-.bb-visual-node-edit-hint {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  font-size: 10px;
-  color: var(--text-muted);
-  opacity: 0;
-  transition: opacity .12s;
-}
-.bb-visual-node:hover .bb-visual-node-edit-hint { opacity: 1; }
-
-/* Sub-steps dentro de ramas (draggables entre ramas) */
-.bb-visual-node.is-branch-step {
-  cursor: grab;
-  border-style: dashed;
-  background: rgba(255,255,255,.7);
-}
-.bb-visual-node.is-branch-step:hover {
-  background: #fff;
-  border-style: solid;
-}
-.bb-visual-node.is-branch-step:active { cursor: grabbing; }
-
-/* Drop zones para ramas vacías o final de rama */
-.bb-visual-dropzone {
-  position: absolute;
-  border: 2px dashed var(--border);
-  border-radius: 10px;
-  background: rgba(0,0,0,.02);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 10px;
-  z-index: 1;
-  transition: border-color .12s, background .12s, color .12s;
-  user-select: none;
-}
-.bb-visual-dropzone-icon {
-  font-size: 18px;
-  font-weight: 700;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--bg-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.bb-visual-dropzone-label {
-  font-weight: 500;
-  word-break: break-word;
-}
-.bb-visual-dropzone:hover,
-.bb-visual-dropzone.is-drag-over {
-  border-color: var(--accent);
-  background: rgba(37,99,235,.08);
-  color: var(--accent);
-}
-.bb-visual-dropzone:hover .bb-visual-dropzone-icon,
-.bb-visual-dropzone.is-drag-over .bb-visual-dropzone-icon {
+.bb-node--trigger .bb-node__icon {
   background: var(--accent);
   color: #fff;
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+}
+.bb-node--trigger .bb-node__title {
+  color: var(--accent);
 }
 
-/* Editor panel lateral */
+/* Step node — coloreado por grupo (border-left) */
+.bb-node--step {
+  border-left-width: 4px;
+}
+.bb-node--grp-comunicacion  { border-left-color: #2563eb; }
+.bb-node--grp-flujo         { border-left-color: #9333ea; }
+.bb-node--grp-lead          { border-left-color: #16a34a; }
+.bb-node--grp-citas         { border-left-color: #f59e0b; }
+.bb-node--grp-integraciones { border-left-color: #06b6d4; }
+
+/* Empty branch placeholder */
+.bb-node--empty {
+  border: 1.5px dashed #cbd5e1;
+  background: var(--bg-2);
+  opacity: .8;
+  cursor: default;
+}
+.bb-node--empty:hover {
+  transform: none;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+}
+.bb-node--empty .bb-node__title {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ── Side editor panel (preserved) ── */
 .bb-visual-editor {
   position: absolute;
   top: 0;
@@ -5510,44 +5242,42 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   height: 100%;
   background: var(--surface, #fff);
   border-left: 1px solid var(--border);
+  box-shadow: -4px 0 12px rgba(15, 23, 42, .06);
   display: flex;
   flex-direction: column;
-  z-index: 200;
-  box-shadow: -4px 0 16px rgba(0,0,0,.08);
-  animation: bbVisualEditorSlide .15s ease-out;
+  z-index: 10;
 }
 .bb-visual-editor[hidden] { display: none; }
-@keyframes bbVisualEditorSlide {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
+
+.bb-visual-trigger-editor { width: 380px; }
+
 .bb-visual-editor-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
 }
 .bb-visual-editor-title {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
   font-weight: 600;
   font-size: 14px;
 }
 .bb-visual-editor-title svg { color: var(--accent); }
+
 .bb-visual-editor-body {
   flex: 1;
-  overflow-y: auto;
-  padding: 14px 16px;
+  overflow: auto;
+  padding: 14px;
 }
 .bb-visual-editor-body label {
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-muted);
   margin: 8px 0 4px;
 }
 .bb-visual-editor-body input[type="text"],
@@ -5560,98 +5290,34 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 13px;
-  font-family: inherit;
-  box-sizing: border-box;
-  background: #fff;
+  background: var(--surface, #fff);
   color: var(--text);
+  box-sizing: border-box;
 }
-.bb-visual-editor-body textarea { resize: vertical; min-height: 60px; }
+.bb-visual-editor-body textarea {
+  resize: vertical;
+  min-height: 60px;
+}
 .bb-visual-editor-foot {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
 }
 .bb-visual-editor-foot .btn--ghost { color: var(--text); }
-#bbVisualEditorDelete { color: #dc2626; }
-#bbVisualEditorDelete:hover { background: rgba(220,38,38,.08); }
-.bb-visual-trigger {
-  border-color: var(--accent);
-  border-style: dashed;
-  background: rgba(37,99,235,.04);
-  cursor: pointer;
-  transition: background .12s, border-color .12s;
-}
-.bb-visual-trigger:hover {
-  background: rgba(37,99,235,.10);
-  border-style: solid;
-}
-.bb-visual-node-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  color: var(--text);
-}
-.bb-visual-node-head svg {
-  flex-shrink: 0;
-  color: var(--accent);
-}
-.bb-visual-node-num {
-  font-size: 10px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 1px 6px;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-.bb-visual-node-summary {
-  font-size: 11px;
-  color: var(--text-muted);
-  line-height: 1.4;
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.bb-visual-branch-label {
-  position: absolute;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  color: var(--text-muted);
-  background: var(--bg-2);
-  padding: 2px 6px;
-  border-radius: 4px;
-  pointer-events: none;
-  z-index: 3;
-}
-.bb-visual-empty {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 13px;
-}
+
 .bb-visual-mobile-hint {
   display: none;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 8px 0 0;
   text-align: center;
-  width: 100%;
-  max-width: 900px;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 @media (max-width: 768px) {
   .bb-visual-mobile-hint { display: block; }
   .bb-visual-canvas { height: 400px; }
+  .bb-visual-editor { width: 100%; }
 }
 
 /* ═══════ Vista de Comentarios Redes Sociales ═══════ */

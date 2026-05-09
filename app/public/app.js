@@ -9217,954 +9217,385 @@ function setupBot() {
     });
     if (view === 'code')     bbRenderCodeView();
     if (view === 'indented') bbRenderIndentedView();
-    if (view === 'visual')   { _bbBuildPalette(); bbRenderVisualView(); }
+    if (view === 'visual')   { bbRenderVisualView(); }
   }
 
-  // ─── Visual node graph (Phase A-D) ───
-  // Constantes de layout
-  const _VS_NODE_W = 200, _VS_NODE_H = 70;
-  // Map global de id → node, poblado en cada render. Usado por drop/click handlers
-  // para acceder a parentArr y editar branches sin path-walking.
-  let _bbVisualNodeMap = {};
-  // Pan offsets (translate del stage) — se aplican junto con zoom (scale)
-  let _bbPanX = 0, _bbPanY = 0;
-  const _VS_GAP_Y = 50, _VS_GAP_X = 60;
-  const _VS_PAD = 30;
-  let _bbVisualZoom = 1;
+  // ─── Visual node graph (rewrite 2026-05-09) ───
+  // Top→bottom auto-layout. Branches spread horizontally below parent.
+  // Read-only canvas — click a node to open the side editor.
+  const _BB_NODE_W = 240;
+  const _BB_NODE_H = 88;
+  const _BB_GAP_X  = 36;
+  const _BB_GAP_Y  = 60;
+  const _BB_PAD    = 32;
 
-  // Recursivamente: dado un array de steps, calcula posiciones y devuelve
-  // {nodes, edges, width, height}. Para wait_response despliega 4 columnas
-  // (una por rama) en un sub-layout horizontal.
-  function _bbLayoutSteps(steps, originX, originY, prefix = '', parentArr = null) {
-    const nodes = [];
-    const edges = [];
-    let y = originY;
-    let prevId = null;
-    let maxX = originX + _VS_NODE_W;
-    // Si no se pasó parentArr explícito, usar el array `steps` mismo
+  // State
+  let _bbTriggerCardOrigParent = null;
+  let _bbTriggerCardPlaceholder = null;
+  let _bbEditingTarget = null;
+
+  // Stub para compatibilidad — palette eliminada en el rewrite
+  function _bbBuildPalette() {}
+
+  // ── Build a tree representation from flat steps[] ──
+  function _bbBuildBotTree(steps, parentArr) {
     parentArr = parentArr || steps;
-
-    steps.forEach((step, idx) => {
-      const id = prefix ? `${prefix}.${idx}` : String(idx);
-      // Si el step tiene posición manual guardada (_pos), respetarla.
-      // Si no, usar layout automático top-down.
-      const pos = step._pos && Number.isFinite(step._pos.x) && Number.isFinite(step._pos.y)
-        ? step._pos
-        : { x: originX, y };
-      const node = {
-        id, step, idx,
-        x: pos.x,
-        y: pos.y,
-        w: _VS_NODE_W,
-        h: _VS_NODE_H,
-        prefix,
-        manual: !!step._pos,
+    return steps.map((step, idx) => {
+      const tNode = {
+        kind: 'step',
+        step,
         parentArr,
-        localIdx: idx,
+        idx,
+        children: [],
+        mainContinues: false,
       };
-      nodes.push(node);
-      if (prevId !== null) edges.push({ from: prevId, to: id });
-      prevId = id;
-      y += _VS_NODE_H + _VS_GAP_Y;
+      if (step.type === 'branch' && step.config) {
+        if (!Array.isArray(step.config.cases))   step.config.cases = [];
+        if (!Array.isArray(step.config.default)) step.config.default = [];
+        step.config.cases.forEach((cs) => {
+          if (!Array.isArray(cs.branch)) cs.branch = [];
+          const labelText = `${cs.field === 'tag' ? '🏷' : '💬'} ${cs.value || '?'}`;
+          tNode.children.push({
+            label: labelText,
+            subtree: _bbBuildBotTree(cs.branch, cs.branch),
+            targetArr: cs.branch,
+          });
+        });
+        tNode.children.push({
+          label: 'Default',
+          subtree: _bbBuildBotTree(step.config.default, step.config.default),
+          targetArr: step.config.default,
+        });
+      } else if (step.type === 'wait_response' && step.config) {
+        if (!step.config.branches || typeof step.config.branches !== 'object') step.config.branches = {};
+        const branches = step.config.branches;
+        const keys = (typeof SB_BRANCH_LABELS === 'object' && SB_BRANCH_LABELS)
+          ? Object.keys(SB_BRANCH_LABELS)
+          : Object.keys(branches);
+        keys.forEach((bKey) => {
+          if (!Array.isArray(branches[bKey])) branches[bKey] = [];
+          tNode.children.push({
+            label: (SB_BRANCH_LABELS && SB_BRANCH_LABELS[bKey]) || bKey,
+            subtree: _bbBuildBotTree(branches[bKey], branches[bKey]),
+            targetArr: branches[bKey],
+          });
+        });
+      } else if (step.type === 'reminder_timer' && step.config) {
+        if (!Array.isArray(step.config.reminders)) step.config.reminders = [];
+        step.config.reminders.forEach((rem) => {
+          if (!Array.isArray(rem.sub_steps)) rem.sub_steps = [];
+          const m = Number(rem.minutes_before) || 0;
+          tNode.children.push({
+            label: `${m} min antes`,
+            subtree: _bbBuildBotTree(rem.sub_steps, rem.sub_steps),
+            targetArr: rem.sub_steps,
+          });
+        });
+        tNode.mainContinues = true;
+      }
+      return tNode;
+    });
+  }
 
-      // Helper: crea un nodo "drop zone" para una rama (vacía o al final).
-      // El node tiene parentArr (el array de pasos de esa rama) para que el
-      // drop handler pueda push directamente sin path-walking.
-      const makeDropZone = (id, x, y, label, parentArr, parentId, branchInfo = {}) => ({
-        id, x, y, w: _VS_NODE_W, h: _VS_NODE_H,
-        isDropZone: true,
-        label,
-        parentArr,
-        parentId,
-        branchInfo,
-        prefix: id.split('.').slice(0, -1).join('.'),
+  // ── Measure subtree widths recursively (sets _width on each tree node + child) ──
+  function _bbMeasure(treeNodes) {
+    let maxWidth = _BB_NODE_W;
+    treeNodes.forEach((node) => {
+      if (node.children.length === 0) {
+        node._width = _BB_NODE_W;
+      } else {
+        let sumChildWidths = 0;
+        node.children.forEach((child) => {
+          let cw = _BB_NODE_W;
+          if (child.subtree.length > 0) {
+            const dims = _bbMeasure(child.subtree);
+            cw = dims.width;
+          }
+          child._width = cw;
+          sumChildWidths += cw;
+        });
+        const total = sumChildWidths + _BB_GAP_X * (node.children.length - 1);
+        node._width = Math.max(_BB_NODE_W, total);
+      }
+      maxWidth = Math.max(maxWidth, node._width);
+    });
+    return { width: maxWidth };
+  }
+
+  // ── Position tree nodes recursively → push to items[] / edges[] ──
+  function _bbPosition(treeNodes, originX, originY, items, edges, prevId, prevEdgeLabel) {
+    let y = originY;
+    let curPrev = prevId;
+    let curLabel = prevEdgeLabel;
+
+    treeNodes.forEach((node) => {
+      const myWidth = node._width;
+      const nodeX = originX + (myWidth - _BB_NODE_W) / 2;
+      const nodeId = `n${items.length}`;
+
+      items.push({
+        id: nodeId,
+        kind: 'step',
+        step: node.step,
+        parentArr: node.parentArr,
+        idx: node.idx,
+        x: nodeX,
+        y,
+        w: _BB_NODE_W,
+        h: _BB_NODE_H,
       });
 
-      // branch step (multi-case): expandir cases + default como columnas hacia abajo
-      if (step.type === 'branch') {
-        // Asegurar que cases y default existen
-        if (!step.config) step.config = {};
-        if (!Array.isArray(step.config.cases))   step.config.cases   = [];
-        if (!Array.isArray(step.config.default)) step.config.default = [];
-        const cases = step.config.cases;
-        const numCols = cases.length + 1; // siempre incluye default
-        const branchY = y;
-        let bx = node.x - ((numCols - 1) * (_VS_NODE_W + _VS_GAP_X)) / 2;
-        const branchSubLayouts = [];
-
-        cases.forEach((cs, ci) => {
-          if (!Array.isArray(cs.branch)) cs.branch = [];
-          const bSteps = cs.branch;
-          const colX = bx + ci * (_VS_NODE_W + _VS_GAP_X);
-          const colPrefix = `${id}.case${ci}`;
-          const label = `${cs.field === 'tag' ? '🏷' : '💬'} ${cs.value || '?'}`;
-          if (bSteps.length) {
-            const sub = _bbLayoutSteps(bSteps, colX, branchY, colPrefix, bSteps);
-            edges.push({ from: id, to: sub.nodes[0].id, label });
-            // Drop zone al final de la rama
-            const lastY = sub.nodes[sub.nodes.length - 1].y + _VS_NODE_H;
-            sub.nodes.push(makeDropZone(`${colPrefix}.dz`, colX, lastY + _VS_GAP_Y, '+ Soltar paso aquí', bSteps, sub.nodes[sub.nodes.length - 1].id));
-            sub.height = (lastY + _VS_GAP_Y + _VS_NODE_H) - branchY;
-            branchSubLayouts.push(sub);
-          } else {
-            // Rama vacía: solo drop zone con label del case
-            const dz = makeDropZone(`${colPrefix}.dz`, colX, branchY, label + ' (arrastra paso)', bSteps, id, { isCase: true, caseIndex: ci });
-            edges.push({ from: id, to: dz.id, label });
-            branchSubLayouts.push({ nodes: [dz], edges: [], height: _VS_NODE_H, maxX: colX + _VS_NODE_W });
-          }
-        });
-        // Default
-        const defArr = step.config.default;
-        const colX = bx + cases.length * (_VS_NODE_W + _VS_GAP_X);
-        const defPrefix = `${id}.default`;
-        if (defArr.length) {
-          const sub = _bbLayoutSteps(defArr, colX, branchY, defPrefix, defArr);
-          edges.push({ from: id, to: sub.nodes[0].id, label: 'default' });
-          const lastY = sub.nodes[sub.nodes.length - 1].y + _VS_NODE_H;
-          sub.nodes.push(makeDropZone(`${defPrefix}.dz`, colX, lastY + _VS_GAP_Y, '+ Soltar paso aquí', defArr, sub.nodes[sub.nodes.length - 1].id));
-          sub.height = (lastY + _VS_GAP_Y + _VS_NODE_H) - branchY;
-          branchSubLayouts.push(sub);
-        } else {
-          const dz = makeDropZone(`${defPrefix}.dz`, colX, branchY, 'default (arrastra paso)', defArr, id, { isDefault: true });
-          edges.push({ from: id, to: dz.id, label: 'default' });
-          branchSubLayouts.push({ nodes: [dz], edges: [], height: _VS_NODE_H, maxX: colX + _VS_NODE_W });
-        }
-
-        if (branchSubLayouts.length) {
-          const maxBottom = Math.max(...branchSubLayouts.map(s => s.height + branchY));
-          y = maxBottom + _VS_GAP_Y;
-          prevId = null;
-          for (const sub of branchSubLayouts) {
-            nodes.push(...sub.nodes);
-            edges.push(...sub.edges);
-            maxX = Math.max(maxX, sub.maxX);
-          }
-        }
+      if (curPrev !== null) {
+        edges.push({ from: curPrev, to: nodeId, label: curLabel || undefined });
       }
 
-      // wait_response: expandir ramas como columnas hacia abajo
-      if (step.type === 'wait_response') {
-        if (!step.config) step.config = {};
-        if (!step.config.branches) step.config.branches = {};
-        const branches = step.config.branches;
-        const branchKeys = Object.keys(SB_BRANCH_LABELS);
-        const branchY = y;
-        let bx = node.x - ((branchKeys.length - 1) * (_VS_NODE_W + _VS_GAP_X)) / 2;
-        const branchSubLayouts = [];
+      if (node.children.length > 0) {
+        const branchY = y + _BB_NODE_H + _BB_GAP_Y;
+        let bx = originX;
+        let maxBranchBottom = branchY;
 
-        branchKeys.forEach((bKey, bi) => {
-          if (!Array.isArray(branches[bKey])) branches[bKey] = [];
-          const bSteps = branches[bKey];
-          const colX = bx + bi * (_VS_NODE_W + _VS_GAP_X);
-          const colPrefix = `${id}.${bKey}`;
-          if (bSteps.length) {
-            const sub = _bbLayoutSteps(bSteps, colX, branchY, colPrefix, bSteps);
-            edges.push({ from: id, to: sub.nodes[0].id, label: SB_BRANCH_LABELS[bKey] });
-            const lastY = sub.nodes[sub.nodes.length - 1].y + _VS_NODE_H;
-            sub.nodes.push(makeDropZone(`${colPrefix}.dz`, colX, lastY + _VS_GAP_Y, '+ Soltar paso aquí', bSteps, sub.nodes[sub.nodes.length - 1].id));
-            sub.height = (lastY + _VS_GAP_Y + _VS_NODE_H) - branchY;
-            branchSubLayouts.push(sub);
+        node.children.forEach((child) => {
+          if (child.subtree.length > 0) {
+            const subFirstId = `n${items.length}`;
+            _bbPosition(child.subtree, bx, branchY, items, edges, null, undefined);
+            edges.push({ from: nodeId, to: subFirstId, label: child.label });
+            const lastItem = items[items.length - 1];
+            maxBranchBottom = Math.max(maxBranchBottom, lastItem.y + lastItem.h);
           } else {
-            const dz = makeDropZone(`${colPrefix}.dz`, colX, branchY, SB_BRANCH_LABELS[bKey] + ' (arrastra)', bSteps, id, { isWaitBranch: true, branchKey: bKey });
-            edges.push({ from: id, to: dz.id, label: SB_BRANCH_LABELS[bKey] });
-            branchSubLayouts.push({ nodes: [dz], edges: [], height: _VS_NODE_H, maxX: colX + _VS_NODE_W });
+            const dzId = `n${items.length}`;
+            const dzX = bx + (child._width - _BB_NODE_W) / 2;
+            items.push({
+              id: dzId,
+              kind: 'empty',
+              label: child.label,
+              x: dzX,
+              y: branchY,
+              w: _BB_NODE_W,
+              h: _BB_NODE_H,
+            });
+            edges.push({ from: nodeId, to: dzId, label: child.label });
+            maxBranchBottom = Math.max(maxBranchBottom, branchY + _BB_NODE_H);
           }
+          bx += child._width + _BB_GAP_X;
         });
 
-        if (branchSubLayouts.length) {
-          // y avanza al maxBottom de las ramas
-          const maxBottom = Math.max(...branchSubLayouts.map(s => s.height + branchY));
-          y = maxBottom + _VS_GAP_Y;
-          // Tras las ramas, el flujo principal "se rompe" — no conectamos al
-          // siguiente step principal porque las ramas son autocontenidas
-          prevId = null;
-          for (const sub of branchSubLayouts) {
-            nodes.push(...sub.nodes);
-            edges.push(...sub.edges);
-            maxX = Math.max(maxX, sub.maxX);
-          }
+        y = maxBranchBottom + _BB_GAP_Y;
+        if (node.mainContinues) {
+          curPrev = nodeId;
+          curLabel = 'Continúa';
+        } else {
+          curPrev = null;
+          curLabel = undefined;
         }
+      } else {
+        y += _BB_NODE_H + _BB_GAP_Y;
+        curPrev = nodeId;
+        curLabel = undefined;
       }
     });
-
-    return {
-      nodes,
-      edges,
-      width:  maxX - originX,
-      height: y - originY,
-      maxX,
-    };
   }
 
-  function _bbVisualNodeHTML(node) {
-    // Drop zone (rama vacía o final de rama)
-    if (node.isDropZone) {
-      return `<div class="bb-visual-dropzone" data-node-id="${escHtml(node.id)}" style="left:${node.x}px;top:${node.y}px;width:${node.w}px;min-height:${node.h}px">
-        <span class="bb-visual-dropzone-icon">+</span>
-        <span class="bb-visual-dropzone-label">${escHtml(node.label)}</span>
+  // ── Orthogonal Z-shape SVG path between two points ──
+  function _bbEdgePath(x1, y1, x2, y2) {
+    if (Math.abs(x2 - x1) < 4) {
+      return `M ${x1} ${y1} L ${x2} ${y2}`;
+    }
+    const midY = y1 + (y2 - y1) / 2;
+    return `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+  }
+
+  // ── Render a node card as HTML ──
+  function _bbRenderNodeHtml(item) {
+    if (item.kind === 'trigger') {
+      const summaryHtml = item.summary ? `<div class="bb-node__summary">${escHtml(item.summary)}</div>` : '';
+      return `<div class="bb-node bb-node--trigger" data-action="edit-trigger" style="left:${item.x}px;top:${item.y}px;width:${item.w}px;height:${item.h}px">
+        <div class="bb-node__head">
+          <span class="bb-node__icon"><svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><polygon points="3 3 17 10 3 17 3 3"/></svg></span>
+          <span class="bb-node__title">${escHtml(item.label)}</span>
+        </div>
+        ${summaryHtml}
       </div>`;
     }
-    const { step, idx, x, y, w, h, id } = node;
-    const def = BOT_STEP_REGISTRY[step.type];
-    const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || step.type) : step.type;
-    const summary = def?.summary ? (def.summary(step) || '') : '';
-    // Si es step de rama (id contiene punto), mostrar visualmente distinto
-    const isBranchStep = id.includes('.');
-    return `<div class="bb-visual-node ${isBranchStep ? 'is-branch-step' : ''}" data-step-id="${escHtml(id)}" data-step-index="${idx}" data-node-id="${escHtml(id)}" style="left:${x}px;top:${y}px;width:${w}px;min-height:${h}px">
-      <div class="bb-visual-node-head">
-        <span class="bb-visual-node-num">${idx + 1}</span>
-        ${stepIcon(step.type, 14)}
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(label)}</span>
+    if (item.kind === 'empty') {
+      return `<div class="bb-node bb-node--empty" style="left:${item.x}px;top:${item.y}px;width:${item.w}px;height:${item.h}px">
+        <div class="bb-node__head">
+          <span class="bb-node__icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="10" cy="10" r="6"/></svg></span>
+          <span class="bb-node__title">${escHtml(item.label)}</span>
+        </div>
+        <div class="bb-node__summary">Sin pasos configurados</div>
+      </div>`;
+    }
+    const step = item.step;
+    const reg = (typeof BOT_STEP_REGISTRY === 'object' && BOT_STEP_REGISTRY) ? BOT_STEP_REGISTRY[step.type] : null;
+    const lang = (typeof _botRegistryLang === 'function') ? _botRegistryLang() : 'es';
+    const label = reg ? (reg.label?.[lang] || reg.label?.es || step.type) : step.type;
+    const summary = (typeof bbStepSummaryFor === 'function' ? bbStepSummaryFor(step) : '') || '';
+    const grpClass = reg?.group ? `bb-node--grp-${reg.group}` : '';
+    const num = item.idx != null ? (item.idx + 1) : '';
+    const summaryHtml = summary ? `<div class="bb-node__summary">${escHtml(summary)}</div>` : '';
+    const iconHtml = (typeof stepIcon === 'function') ? (stepIcon(step.type, 16) || '') : '';
+    return `<div class="bb-node bb-node--step ${grpClass}" data-action="edit-step" data-node-id="${item.id}" style="left:${item.x}px;top:${item.y}px;width:${item.w}px;height:${item.h}px">
+      <div class="bb-node__head">
+        ${num !== '' ? `<span class="bb-node__num">${num}</span>` : ''}
+        <span class="bb-node__icon">${iconHtml}</span>
+        <span class="bb-node__title">${escHtml(label)}</span>
       </div>
-      ${summary ? `<div class="bb-visual-node-summary">${escHtml(summary)}</div>` : ''}
+      ${summaryHtml}
     </div>`;
   }
 
-  // Construye el path SVG en forma de "Z" ortogonal (líneas rectas con
-  // codos a 90°). Cleaner que bezier para flow diagrams.
-  function _bbVisualEdgePath(fromX, fromY, toX, toY) {
-    // Si los nodos están casi alineados verticalmente, recta directa
-    if (Math.abs(toX - fromX) < 4) {
-      return `M ${fromX} ${fromY} L ${toX} ${toY}`;
-    }
-    // Z-shape: baja la mitad del gap, gira horizontal al X target, baja al destino
-    const midY = fromY + Math.max(20, (toY - fromY) / 2);
-    return `M ${fromX} ${fromY} L ${fromX} ${midY} L ${toX} ${midY} L ${toX} ${toY}`;
-  }
-
-  // ═══════════════════════════════════════════════════════════
-  // Visual con Drawflow (reemplaza el SVG custom anterior)
-  // ═══════════════════════════════════════════════════════════
-  let _bbDF = null;        // instancia de Drawflow
-  let _bbDFSyncing = false; // flag para prevenir loops en eventos
-
-  function _bbInitDrawflow() {
-    if (_bbDF) return _bbDF;
-    if (typeof Drawflow === 'undefined') {
-      console.error('[bb] Drawflow no está cargado');
-      return null;
-    }
-    const stage = document.getElementById('bbVisualStage');
-    if (!stage) return null;
-    // Limpiar contenido custom anterior
-    stage.innerHTML = '';
-    stage.classList.add('df-host');
-    // Limpiar transform/style residuales del approach anterior
-    stage.style.transform = '';
-    stage.style.width = '';
-    stage.style.height = '';
-    const editor = new Drawflow(stage);
-    editor.reroute = false;
-    editor.curvature = 0;
-    editor.editor_mode = 'edit';
-    editor.start();
-
-    // Click en un nodo → abrir editor lateral
-    editor.on('click', (e) => {
-      const nodeEl = e?.target?.closest?.('.drawflow-node');
-      if (!nodeEl) return;
-      const nodeId = nodeEl.id?.replace('node-', '');
-      if (!nodeId) return;
-      const node = editor.getNodeFromId(nodeId);
-      const data = node?.data || {};
-      if (data.type === 'trigger') {
-        bbOpenTriggerEditorInline();
-        return;
-      }
-      // Resolver step en sbSteps usando refPath
-      if (Array.isArray(data.refPath)) {
-        const ref = _bbResolveRefPath(data.refPath);
-        if (ref) bbOpenVisualEditorByRef(ref.parentArr, ref.idx);
-      }
-    });
-
-    // Cuando user mueve un nodo: persistir _pos en el step correspondiente
-    editor.on('nodeMoved', (id) => {
-      if (_bbDFSyncing) return;
-      const node = editor.getNodeFromId(id);
-      if (!node?.data?.refPath) return;
-      const ref = _bbResolveRefPath(node.data.refPath);
-      if (!ref) return;
-      ref.parentArr[ref.idx]._pos = { x: Math.round(node.pos_x), y: Math.round(node.pos_y) };
-    });
-
-    return editor;
-  }
-
-  // Resuelve un refPath del estilo ['top', 2] o ['branch', stepId, 'on_text_reply', 0]
-  // contra sbSteps. Devuelve { parentArr, idx } para edición.
-  function _bbResolveRefPath(path) {
-    if (!Array.isArray(path) || !path.length) return null;
-    if (path[0] === 'top') {
-      return { parentArr: sbSteps, idx: path[1] };
-    }
-    if (path[0] === 'branch') {
-      const [, stepId, branchKey, subIdx] = path;
-      const parent = sbSteps.find(s => s._id === stepId);
-      if (!parent?.config) return null;
-      // wait_response: branches[bKey]
-      if (parent.type === 'wait_response') {
-        const arr = parent.config.branches?.[branchKey];
-        if (Array.isArray(arr)) return { parentArr: arr, idx: subIdx };
-      }
-      // branch step: cases[index].branch o default
-      if (parent.type === 'branch') {
-        if (branchKey === 'default') {
-          if (Array.isArray(parent.config.default)) return { parentArr: parent.config.default, idx: subIdx };
-        } else if (branchKey.startsWith('case_')) {
-          const ci = Number(branchKey.slice(5));
-          const arr = parent.config.cases?.[ci]?.branch;
-          if (Array.isArray(arr)) return { parentArr: arr, idx: subIdx };
-        }
-      }
-    }
-    // reminder_timer sub-steps: ['reminder', stepId, remIdx, subIdx]
-    if (path[0] === 'reminder') {
-      const [, stepId, remIdx, subIdx] = path;
-      const parent = sbSteps.find(s => s._id === stepId);
-      if (!parent?.config) return null;
-      const rem = parent.config.reminders?.[remIdx];
-      if (!rem || !Array.isArray(rem.steps)) return null;
-      return { parentArr: rem.steps, idx: subIdx };
-    }
-    return null;
-  }
-
-  // Construye el HTML del nodo según el tipo del step. Diseño rico:
-  // - Trigger: play icon + label + summary, border dashed azul
-  // - Step: número + ícono del registry + label + summary, border-left por grupo
-  function _bbDFNodeHTML(opts) {
-    if (opts.isTrigger) {
-      return `
-        <div class="df-node-content df-node-trigger">
-          <div class="df-node-head">
-            <span class="df-node-icon df-trigger-play">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><polygon points="4 3 17 10 4 17 4 3"/></svg>
-            </span>
-            <span class="df-node-title">Disparador</span>
-          </div>
-          <div class="df-node-summary"><strong>${escHtml(opts.label)}</strong>${opts.summary ? '<br>' + escHtml(opts.summary) : ''}</div>
-        </div>`;
-    }
-    const stepNum = opts.num != null ? `<span class="df-node-num">${opts.num}</span>` : '';
-    const iconHtml = (typeof stepIcon === 'function') ? stepIcon(opts.type, 16) : '';
-    return `
-      <div class="df-node-content">
-        <div class="df-node-head">
-          ${stepNum}
-          <span class="df-node-icon">${iconHtml}</span>
-          <span class="df-node-title">${escHtml(opts.label)}</span>
-        </div>
-        ${opts.summary ? `<div class="df-node-summary">${escHtml(opts.summary)}</div>` : ''}
-      </div>`;
-  }
-
-  // Mapea un step type a su grupo (Comunicación / Flujo / Lead / Citas / Integraciones)
-  // para colorear el border-left del nodo.
-  function _bbDFGroupClass(stepType) {
-    const def = BOT_STEP_REGISTRY[stepType];
-    if (!def?.group) return '';
-    const slug = def.group.toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-');
-    return `df-grp-${slug}`;
-  }
-
-  // Calcula qué outputs/inputs tiene un node según el type del step
-  function _bbDFPortsFor(step) {
-    if (step.type === 'wait_response') {
-      // 4 outputs (uno por rama). El orden importa: usamos las keys de SB_BRANCH_LABELS
-      return { inputs: 1, outputs: 4 };
-    }
-    if (step.type === 'branch') {
-      const cases = Array.isArray(step.config?.cases) ? step.config.cases : [];
-      const hasDefault = Array.isArray(step.config?.default);
-      return { inputs: 1, outputs: Math.max(1, cases.length + (hasDefault ? 1 : 0)) };
-    }
-    if (step.type === 'reminder_timer') {
-      const n = Array.isArray(step.config?.reminders) ? step.config.reminders.length : 0;
-      // output_1 = flujo principal, output_2..N+1 = una por recordatorio
-      return { inputs: 1, outputs: 1 + n };
-    }
-    if (step.type === 'stop_bot') return { inputs: 1, outputs: 0 };
-    return { inputs: 1, outputs: 1 };
-  }
-
+  // ── Main render ──
   function bbRenderVisualView() {
-    const editor = _bbInitDrawflow();
-    if (!editor) return;
-    const data = bbBuildBotJSON();
-
-    _bbDFSyncing = true;
-    editor.clear();
-
-    // Trigger node
-    const triggerLabel = (() => {
-      const def = BOT_TRIGGER_REGISTRY[data.trigger_type];
-      return def ? (def.label?.[_botRegistryLang()] || def.label?.es || data.trigger_type) : data.trigger_type;
-    })();
-    const triggerSummary = (() => {
-      const def = BOT_TRIGGER_REGISTRY[data.trigger_type];
-      try {
-        if (def?.summaryHtml) {
-          return (def.summaryHtml({ trigger_type: data.trigger_type, trigger_value: data.trigger_value }) || '').replace(/^:\s*/, '').replace(/<[^>]+>/g, '');
-        }
-      } catch {}
-      return '';
-    })();
-    const trigNodeId = editor.addNode(
-      'trigger', 0, 1, 50, 50, 'df-trigger',
-      { type: 'trigger' },
-      _bbDFNodeHTML({ isTrigger: true, label: triggerLabel, summary: triggerSummary })
-    );
-
-    // Top-level steps en línea recta vertical
-    let prevId = trigNodeId;
-    let y = 200;
-    const x = 50;
-
-    (data.steps || []).forEach((step, idx) => {
-      const def = BOT_STEP_REGISTRY[step.type];
-      const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || step.type) : step.type;
-      const summary = def?.summary ? (def.summary(step) || '') : '';
-      const ports = _bbDFPortsFor(step);
-      // Posición: respeta _pos si existe, sino auto top-down
-      const pos = (step._pos && Number.isFinite(step._pos.x) && Number.isFinite(step._pos.y))
-        ? step._pos
-        : { x, y };
-      const nodeId = editor.addNode(
-        `step_${idx}`,
-        ports.inputs,
-        ports.outputs,
-        pos.x,
-        pos.y,
-        `df-step df-step-${step.type} ${_bbDFGroupClass(step.type)}`,
-        { type: step.type, refPath: ['top', idx], stepId: step._id },
-        _bbDFNodeHTML({ type: step.type, label, summary, num: idx + 1 })
-      );
-      // Conectar previous → este (siempre por output_1 = flujo principal)
-      if (prevId !== null && ports.inputs > 0) {
-        try { editor.addConnection(prevId, nodeId, 'output_1', 'input_1'); } catch (e) { console.warn('connect fail:', e); }
-      }
-      prevId = (ports.outputs > 0) ? nodeId : null;
-      if (!step._pos) y += 130;
-
-      // ── reminder_timer: renderizar cadenas de sub-steps por rama ──
-      if (step.type === 'reminder_timer') {
-        const reminders = Array.isArray(step.config?.reminders) ? step.config.reminders : [];
-        const COL_W = 230; // ancho de columna por rama
-        const START_X = pos.x + 270; // a la derecha del nodo principal
-        reminders.forEach((rem, remIdx) => {
-          const colX = START_X + remIdx * COL_W;
-          let subY = pos.y;
-          let prevSubId   = nodeId;
-          let prevSubPort = `output_${remIdx + 2}`; // output_2 para primer reminder
-
-          // Etiqueta de tiempo para la rama
-          const timingLabel = rem.mode === 'day_before_at'
-            ? `${rem.value || 1}d antes ${rem.time || '20:00'}`
-            : `${rem.value || 30} ${rem.unit === 'hour' ? 'h' : rem.unit === 'day' ? 'd' : 'min'} antes`;
-
-          // Nodo "ancla" de la rama (sin steps muestra solo la etiqueta)
-          const subSteps = Array.isArray(rem.steps) ? rem.steps : [];
-          if (!subSteps.length) {
-            // Nodo vacío de recordatorio
-            const emptyId = editor.addNode(
-              `rem_${idx}_${remIdx}_empty`, 1, 0,
-              colX, subY + 130,
-              'df-step df-rem-empty',
-              { type: '_rem_empty', refPath: null },
-              `<div class="df-node-content df-rem-empty-content">
-                 <div class="df-node-head"><span class="df-rem-timing-badge">${escHtml(timingLabel)}</span></div>
-                 <div class="df-node-summary" style="color:var(--text-muted);font-size:11px">Sin pasos configurados</div>
-               </div>`
-            );
-            try { editor.addConnection(nodeId, emptyId, prevSubPort, 'input_1'); } catch(e) {}
-            return;
-          }
-
-          subSteps.forEach((subStep, subIdx) => {
-            const subDef = (typeof BOT_STEP_REGISTRY !== 'undefined') ? BOT_STEP_REGISTRY[subStep.type] : null;
-            const subLabel   = subDef ? (subDef.label?.[_botRegistryLang()] || subDef.label?.es || subStep.type) : subStep.type;
-            const subSummary = subDef?.summary ? (subDef.summary(subStep) || '') : '';
-            // En la cabeza del primero, mostrar badge de timing
-            const extraClass = subIdx === 0 ? 'df-rem-first-sub' : '';
-            const timingBadgeHtml = subIdx === 0
-              ? `<div class="df-rem-timing-badge">${escHtml(timingLabel)}</div>`
-              : '';
-            const subNodeHTML = `
-              <div class="df-node-content">
-                ${timingBadgeHtml}
-                <div class="df-node-head">
-                  <span class="df-node-icon">${typeof stepIcon === 'function' ? stepIcon(subStep.type, 16) : ''}</span>
-                  <span class="df-node-title">${escHtml(subLabel)}</span>
-                </div>
-                ${subSummary ? `<div class="df-node-summary">${escHtml(subSummary)}</div>` : ''}
-              </div>`;
-            const subNodeId = editor.addNode(
-              `rem_${idx}_${remIdx}_${subIdx}`, 1, 1,
-              colX, subY + 130 + subIdx * 120,
-              `df-step df-step-${subStep.type} ${_bbDFGroupClass(subStep.type)} df-rem-sub ${extraClass}`,
-              { type: subStep.type, refPath: ['reminder', step._id, remIdx, subIdx] },
-              subNodeHTML
-            );
-            try { editor.addConnection(prevSubId, subNodeId, prevSubPort, 'input_1'); } catch(e) {}
-            prevSubId   = subNodeId;
-            prevSubPort = 'output_1';
-          });
-        });
-      }
-    });
-
-    // Post-proceso: añadir labels a los puertos de reminder_timer
-    _bbLabelReminderPorts(editor, data.steps || []);
-
-    _bbDFSyncing = false;
-
-    // El zoom y pan los maneja Drawflow internamente con scroll/pinch
-  }
-
-  // Añade texto a los puertos output de nodos reminder_timer para mostrar el timing
-  function _bbLabelReminderPorts(editor, steps) {
-    steps.forEach((step, idx) => {
-      if (step.type !== 'reminder_timer') return;
-      const reminders = Array.isArray(step.config?.reminders) ? step.config.reminders : [];
-      if (!reminders.length) return;
-      // Encontrar el nodo Drawflow por nombre
-      const nodeId = Object.keys(editor.drawflow.drawflow.Home.data || {}).find(id => {
-        return editor.drawflow.drawflow.Home.data[id]?.name === `step_${idx}`;
-      });
-      if (!nodeId) return;
-      const nodeEl = document.getElementById(`node-${nodeId}`);
-      if (!nodeEl) return;
-      // output_1 = "Continúa", output_2..N+1 = recordatorios
-      const outputEls = nodeEl.querySelectorAll('.output');
-      outputEls.forEach((portEl, portIdx) => {
-        let lbl = '';
-        if (portIdx === 0) {
-          lbl = 'Continúa';
-        } else {
-          const rem = reminders[portIdx - 1];
-          if (rem) {
-            lbl = rem.mode === 'day_before_at'
-              ? `${rem.value || 1}d antes ${rem.time || ''}`
-              : `${rem.value || 30}${rem.unit === 'hour' ? 'h' : rem.unit === 'day' ? 'd' : 'min'} antes`;
-          }
-        }
-        if (lbl) {
-          let labelEl = portEl.querySelector('.df-port-label');
-          if (!labelEl) {
-            labelEl = document.createElement('span');
-            labelEl.className = 'df-port-label';
-            portEl.appendChild(labelEl);
-          }
-          labelEl.textContent = lbl;
-        }
-      });
-    });
-  }
-
-  // Función legacy — la dejo aquí como _LEGACY por si necesito rollback rápido.
-  // Será eliminada cuando confirme que Drawflow funciona bien.
-  function bbRenderVisualView_LEGACY() {
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return;
     const data = bbBuildBotJSON();
 
-    // Trigger node arriba (siempre visible — incluso si no hay pasos todavía)
-    const triggerY = _VS_PAD;
-    const triggerX = _VS_PAD;
     const triggerLabel = (() => {
-      const def = BOT_TRIGGER_REGISTRY[data.trigger_type];
-      return def ? (def.label?.[_botRegistryLang()] || def.label?.es || data.trigger_type) : data.trigger_type;
+      const def = (typeof BOT_TRIGGER_REGISTRY === 'object' && BOT_TRIGGER_REGISTRY) ? BOT_TRIGGER_REGISTRY[data.trigger_type] : null;
+      const lang = (typeof _botRegistryLang === 'function') ? _botRegistryLang() : 'es';
+      return def ? (def.label?.[lang] || def.label?.es || data.trigger_type) : (data.trigger_type || 'Disparador');
     })();
     const triggerSummary = (() => {
-      const def = BOT_TRIGGER_REGISTRY[data.trigger_type];
+      const def = (typeof BOT_TRIGGER_REGISTRY === 'object' && BOT_TRIGGER_REGISTRY) ? BOT_TRIGGER_REGISTRY[data.trigger_type] : null;
       try {
         if (def?.summaryHtml) {
-          return (def.summaryHtml({ trigger_type: data.trigger_type, trigger_value: data.trigger_value }) || '').replace(/^:\s*/, '');
+          const raw = def.summaryHtml({ trigger_type: data.trigger_type, trigger_value: data.trigger_value }) || '';
+          return raw.replace(/<[^>]+>/g, '').replace(/^:\s*/, '').trim();
         }
       } catch {}
       return '';
     })();
 
-    // Si no hay pasos, mostrar trigger + hint para arrastrar pasos
-    if (!data.steps?.length) {
-      stage.innerHTML = `
-        <div class="bb-visual-trigger" data-trigger-edit="1" title="Click para editar el disparador" style="left:${triggerX}px;top:${triggerY}px;width:${_VS_NODE_W}px;min-height:${_VS_NODE_H}px">
-          <div class="bb-visual-node-head">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="3 3 17 10 3 17 3 3"/></svg>
-            <span>Disparador</span>
-          </div>
-          <div class="bb-visual-node-summary">${escHtml(triggerLabel)}${triggerSummary ? ' — ' + triggerSummary.replace(/<[^>]+>/g, '') : ''}</div>
-        </div>
-        <div class="bb-visual-empty" style="position:absolute;top:${triggerY + _VS_NODE_H + 60}px;left:${triggerX}px;text-align:left;color:var(--text-muted);font-size:13px">
-          ⬅ Arrastra un paso desde la izquierda para empezar.
-        </div>`;
-      stage.style.width  = '900px';
-      stage.style.height = '500px';
-      _bbVisualNodeMap = {};
-      _bbVisualApplyZoom();
-      return;
+    const items = [];
+    const edges = [];
+
+    const tree = _bbBuildBotTree(data.steps || [], data.steps || []);
+    if (tree.length > 0) _bbMeasure(tree);
+
+    const totalContentW = tree.length > 0
+      ? tree.reduce((acc, n) => Math.max(acc, n._width), _BB_NODE_W)
+      : _BB_NODE_W;
+
+    const triggerX = _BB_PAD + (totalContentW - _BB_NODE_W) / 2;
+    const triggerY = _BB_PAD;
+    items.push({
+      id: 'trigger',
+      kind: 'trigger',
+      label: triggerLabel,
+      summary: triggerSummary,
+      x: triggerX,
+      y: triggerY,
+      w: _BB_NODE_W,
+      h: _BB_NODE_H,
+    });
+
+    if (tree.length > 0) {
+      _bbPosition(tree, _BB_PAD, triggerY + _BB_NODE_H + _BB_GAP_Y, items, edges, 'trigger', undefined);
     }
 
-    // Layout de los steps debajo del trigger
-    const layout = _bbLayoutSteps(data.steps, triggerX, triggerY + _VS_NODE_H + _VS_GAP_Y);
-    const totalWidth  = Math.max(900, layout.maxX + _VS_PAD);
-    const totalHeight = Math.max(400, triggerY + _VS_NODE_H + _VS_GAP_Y + layout.height + _VS_PAD);
+    let maxX = 0, maxY = 0;
+    items.forEach(it => {
+      if (it.x + it.w > maxX) maxX = it.x + it.w;
+      if (it.y + it.h > maxY) maxY = it.y + it.h;
+    });
+    const stageW = maxX + _BB_PAD;
+    const stageH = maxY + _BB_PAD;
 
-    // SVG con los edges. Cada path lleva data-from y data-to para poder
-    // actualizarlos en tiempo real durante drag (sin re-render del DOM).
-    let edgesSvg = `<svg class="bb-visual-edges" viewBox="0 0 ${totalWidth} ${totalHeight}" width="${totalWidth}" height="${totalHeight}">`;
-    // Edge desde el trigger hacia el primer step
-    if (layout.nodes.length) {
-      const first = layout.nodes[0];
-      edgesSvg += `<path data-from="__trigger" data-to="${escHtml(first.id)}" d="${_bbVisualEdgePath(triggerX + _VS_NODE_W / 2, triggerY + _VS_NODE_H, first.x + first.w / 2, first.y)}" />`;
-    }
-    // Edges entre steps
-    const nodeMap = Object.fromEntries(layout.nodes.map(n => [n.id, n]));
-    // Guardar map global para que drop/click handlers tengan acceso a parentArr
-    _bbVisualNodeMap = nodeMap;
-    const branchLabels = [];
-    for (const edge of layout.edges) {
-      const from = nodeMap[edge.from];
-      const to   = nodeMap[edge.to];
-      if (!from || !to) continue;
+    let html = `<div class="bb-canvas" style="width:${stageW}px;height:${stageH}px">`;
+    html += `<svg class="bb-edges" width="${stageW}" height="${stageH}" viewBox="0 0 ${stageW} ${stageH}" xmlns="http://www.w3.org/2000/svg">`;
+
+    const edgePaths = [];
+    const labelEls = [];
+    const itemMap = {};
+    items.forEach(it => { itemMap[it.id] = it; });
+    edges.forEach((edge) => {
+      const from = itemMap[edge.from];
+      const to   = itemMap[edge.to];
+      if (!from || !to) return;
       const x1 = from.x + from.w / 2;
       const y1 = from.y + from.h;
       const x2 = to.x + to.w / 2;
       const y2 = to.y;
-      edgesSvg += `<path data-from="${escHtml(edge.from)}" data-to="${escHtml(edge.to)}" d="${_bbVisualEdgePath(x1, y1, x2, y2)}" />`;
+      edgePaths.push(`<path class="bb-edge" d="${_bbEdgePath(x1, y1, x2, y2)}" />`);
       if (edge.label) {
-        branchLabels.push({ x: (x1 + x2) / 2, y: (y1 + y2) / 2, text: edge.label });
+        const lx = (x1 + x2) / 2;
+        const ly = y1 + (y2 - y1) / 2;
+        const text = String(edge.label);
+        const display = text.length > 22 ? text.slice(0, 21) + '…' : text;
+        const labelW = Math.min(180, Math.max(60, display.length * 7 + 18));
+        labelEls.push(
+          `<g class="bb-edge-label" transform="translate(${lx} ${ly})">` +
+            `<rect x="${-labelW/2}" y="-11" width="${labelW}" height="22" rx="11" />` +
+            `<text x="0" y="4" text-anchor="middle">${escHtml(display)}</text>` +
+          `</g>`
+        );
       }
-    }
-    edgesSvg += '</svg>';
+    });
+    html += edgePaths.join('');
+    html += labelEls.join('');
+    html += `</svg>`;
 
-    // Renderizar todo. Trigger node clickable → abre editor en Lista
-    stage.innerHTML = edgesSvg
-      + `<div class="bb-visual-trigger" data-trigger-edit="1" title="Click para editar en Lista" style="left:${triggerX}px;top:${triggerY}px;width:${_VS_NODE_W}px;min-height:${_VS_NODE_H}px">
-          <div class="bb-visual-node-head">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="3 3 17 10 3 17 3 3"/></svg>
-            <span>Disparador</span>
-          </div>
-          <div class="bb-visual-node-summary">${escHtml(triggerLabel)}${triggerSummary ? ' — ' + triggerSummary.replace(/<[^>]+>/g, '') : ''}</div>
-         </div>`
-      + layout.nodes.map(_bbVisualNodeHTML).join('')
-      + branchLabels.map(b => `<span class="bb-visual-branch-label" style="left:${b.x - 30}px;top:${b.y - 8}px">${escHtml(b.text)}</span>`).join('');
+    items.forEach(item => { html += _bbRenderNodeHtml(item); });
+    html += `</div>`;
 
-    stage.style.width  = totalWidth + 'px';
-    stage.style.height = totalHeight + 'px';
-    _bbVisualApplyZoom();
+    stage.innerHTML = html;
 
-    // Tras el render, los nodos ya tienen dimensiones reales en el DOM (puede
-    // que la altura calculada con _VS_NODE_H sea distinta). Recomputamos edges
-    // midiendo offsetHeight/offsetWidth para que las líneas conecten exactos.
-    requestAnimationFrame(() => _bbRecomputeAllEdges());
-  }
-
-  function _bbVisualApplyZoom() {
-    const stage = document.getElementById('bbVisualStage');
-    const label = document.getElementById('bbVisualZoomLabel');
-    // Transform combina pan (translate) + zoom (scale)
-    if (stage) stage.style.transform = `translate(${_bbPanX}px, ${_bbPanY}px) scale(${_bbVisualZoom})`;
-    if (label) label.textContent = `${Math.round(_bbVisualZoom * 100)}%`;
-  }
-
-  // ─── Drag & edit en el Visual (Phase B) ───
-  // State del drag
-  let _bbDrag = null;
-  let _bbDragMoved = false;
-
-  // Pan del canvas — click en área vacía del grid + drag mueve el scroll
-  let _bbPan = null;
-
-  function _bbVisualMouseDown(e) {
-    const stage = document.getElementById('bbVisualStage');
-    if (!stage) return;
-
-    // Click en área vacía (no sobre nodo, trigger, ni dropzone) → pan del canvas
-    const onInteractive = e.target.closest('.bb-visual-node, .bb-visual-trigger, .bb-visual-dropzone, .bb-palette-item');
-    console.log('[bb] mousedown target:', e.target.tagName, e.target.className, 'onInteractive:', onInteractive?.className || null);
-    if (!onInteractive) {
-      _bbPan = {
-        startX: e.clientX,
-        startY: e.clientY,
-        startPanX: _bbPanX,
-        startPanY: _bbPanY,
-      };
-      stage.classList.add('is-panning');
-      e.preventDefault();
-      console.log('[bb] pan started');
-      return;
-    }
-
-    const nodeEl = e.target.closest('.bb-visual-node');
-    if (!nodeEl) return;
-    const stepId = nodeEl.dataset.stepId || '';
-    const isBranchStep = stepId.includes('.');
-    const idx = Number(nodeEl.dataset.stepIndex);
-    const startX = parseFloat(nodeEl.style.left) || 0;
-    const startY = parseFloat(nodeEl.style.top)  || 0;
-    _bbDrag = {
-      idx,
-      nodeEl,
-      stepId,
-      isBranchStep,
-      startMouseX: e.clientX,
-      startMouseY: e.clientY,
-      startX,
-      startY,
-      zoom: _bbVisualZoom,
-    };
-    _bbDragMoved = false;
-    nodeEl.classList.add('is-dragging');
-    document.body.style.cursor = 'grabbing';
-    e.preventDefault();
-  }
-
-  function _bbVisualMouseMove(e) {
-    // Pan del canvas — actualiza translate del stage (no scroll)
-    if (_bbPan) {
-      _bbPanX = _bbPan.startPanX + (e.clientX - _bbPan.startX);
-      _bbPanY = _bbPan.startPanY + (e.clientY - _bbPan.startY);
-      _bbVisualApplyZoom();
-      return;
-    }
-    if (!_bbDrag) return;
-    const dx = (e.clientX - _bbDrag.startMouseX) / _bbDrag.zoom;
-    const dy = (e.clientY - _bbDrag.startMouseY) / _bbDrag.zoom;
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) _bbDragMoved = true;
-    const newX = Math.max(0, _bbDrag.startX + dx);
-    const newY = Math.max(0, _bbDrag.startY + dy);
-    _bbDrag.nodeEl.style.left = newX + 'px';
-    _bbDrag.nodeEl.style.top  = newY + 'px';
-    _bbDrag.lastX = newX;
-    _bbDrag.lastY = newY;
-
-    // ─── Actualizar edges en tiempo real ───
-    // Buscamos paths donde data-from o data-to coincida con el id del nodo
-    // arrastrado y recalculamos su d= con la posición actual del nodo.
-    _bbUpdateEdgesForNode(_bbDrag.stepId, newX, newY);
-
-    // Si es un sub-step de rama, detectar drop zone bajo el cursor para
-    // highlight visual. Usamos elementFromPoint con el cursor del mouse.
-    if (_bbDrag.isBranchStep) {
-      // Limpiar highlights previos
-      document.querySelectorAll('.bb-visual-dropzone.is-drag-over').forEach(el => el.classList.remove('is-drag-over'));
-      // Ocultar temporalmente el nodo arrastrado para que elementFromPoint
-      // detecte el elemento de abajo
-      const prevPe = _bbDrag.nodeEl.style.pointerEvents;
-      _bbDrag.nodeEl.style.pointerEvents = 'none';
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      _bbDrag.nodeEl.style.pointerEvents = prevPe;
-      const dz = el?.closest?.('.bb-visual-dropzone');
-      if (dz) dz.classList.add('is-drag-over');
-    }
-  }
-
-  // Helper: dimensiones reales del nodo. Usamos offsetLeft/Top/Width/Height
-  // que son directos (relativos al offsetParent = stage por position:relative),
-  // sin necesidad de compensar scroll/zoom porque están en coord-space del stage.
-  function _bbActualRect(nodeId) {
-    const stage = document.getElementById('bbVisualStage');
-    if (!stage) return { x: 0, y: 0, w: _VS_NODE_W, h: _VS_NODE_H };
-    let el = null;
-    if (nodeId === '__trigger') {
-      el = stage.querySelector('.bb-visual-trigger');
-    } else {
-      el = stage.querySelector(`[data-step-id="${nodeId}"], [data-node-id="${nodeId}"]`);
-    }
-    if (!el) return { x: 0, y: 0, w: _VS_NODE_W, h: _VS_NODE_H };
-    return {
-      x: el.offsetLeft || 0,
-      y: el.offsetTop  || 0,
-      w: el.offsetWidth  || _VS_NODE_W,
-      h: el.offsetHeight || _VS_NODE_H,
-    };
-  }
-
-  // Recalcula todas las edges del SVG midiendo del DOM. Si dragId está dado,
-  // ese nodo usa newX/newY (durante drag) en lugar del style.left/top actual.
-  function _bbRecomputeAllEdges(dragId, newX, newY) {
-    const stage = document.getElementById('bbVisualStage');
-    if (!stage) return;
-    stage.querySelectorAll('svg.bb-visual-edges path').forEach(p => {
-      const fromId = p.getAttribute('data-from');
-      const toId   = p.getAttribute('data-to');
-      const f = _bbActualRect(fromId);
-      const t = _bbActualRect(toId);
-      if (dragId === fromId) { f.x = newX; f.y = newY; }
-      if (dragId === toId)   { t.x = newX; t.y = newY; }
-      p.setAttribute('d', _bbVisualEdgePath(f.x + f.w/2, f.y + f.h, t.x + t.w/2, t.y));
+    stage.querySelectorAll('[data-action="edit-trigger"]').forEach(el => {
+      el.addEventListener('click', (e) => { e.preventDefault(); bbOpenTriggerEditorInline(); });
+    });
+    stage.querySelectorAll('[data-action="edit-step"]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        const id = el.getAttribute('data-node-id');
+        const item = itemMap[id];
+        if (item && item.parentArr && typeof item.idx === 'number') {
+          bbOpenVisualEditorByRef(item.parentArr, item.idx);
+        }
+      });
     });
   }
 
-  // Wrapper para drag — actualiza edges relativas al nodo arrastrado
-  function _bbUpdateEdgesForNode(nodeId, newX, newY) {
-    _bbRecomputeAllEdges(nodeId, newX, newY);
-  }
-
-  function _bbVisualMouseUp(e) {
-    // Fin del pan del canvas
-    if (_bbPan) {
-      _bbPan = null;
-      const stage = document.getElementById('bbVisualStage');
-      stage?.classList.remove('is-panning');
-      return;
-    }
-    if (!_bbDrag) return;
-    const drag = _bbDrag;
-    _bbDrag = null;
-    drag.nodeEl.classList.remove('is-dragging');
-    document.body.style.cursor = '';
-
-    // Limpiar todos los highlights de drop zones
-    document.querySelectorAll('.bb-visual-dropzone.is-drag-over').forEach(el => el.classList.remove('is-drag-over'));
-
-    if (!_bbDragMoved) {
-      // Click sin drag → abrir editor del step
-      const node = _bbVisualNodeMap[drag.stepId];
-      if (node?.parentArr) {
-        bbOpenVisualEditorByRef(node.parentArr, node.localIdx);
-      } else {
-        bbOpenVisualEditor(drag.idx);
-      }
-      return;
-    }
-
-    // Detectar drop target via elementFromPoint
-    const prevPe = drag.nodeEl.style.pointerEvents;
-    drag.nodeEl.style.pointerEvents = 'none';
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    drag.nodeEl.style.pointerEvents = prevPe;
-    const dz = el?.closest?.('.bb-visual-dropzone');
-
-    if (dz) {
-      // Drop sobre drop zone → mover el step al parentArr de esa drop zone
-      const targetNode = _bbVisualNodeMap[dz.dataset.nodeId];
-      const sourceNode = _bbVisualNodeMap[drag.stepId];
-      if (targetNode?.parentArr && sourceNode?.parentArr) {
-        // Verificar que no sea drop a la misma posición
-        const sameArr = targetNode.parentArr === sourceNode.parentArr;
-        const isLastInSame = sameArr && sourceNode.localIdx === sourceNode.parentArr.length - 1;
-        if (!isLastInSame) {
-          // Quitar del source array
-          const [moved] = sourceNode.parentArr.splice(sourceNode.localIdx, 1);
-          // Limpiar _pos al moverse a una rama (auto-layout)
-          if (sameArr) {
-            // Reordenar dentro de la misma rama: insertar al final
-            targetNode.parentArr.push(moved);
-          } else {
-            delete moved._pos;
-            targetNode.parentArr.push(moved);
-          }
-          if (typeof renderStepsFlow === 'function') renderStepsFlow();
-          bbRenderVisualView();
-          if (typeof toast === 'function') toast('Paso movido', 'success');
-          return;
-        }
-      }
-      // Si llegamos aquí, no se movió nada — re-render para revertir
-      bbRenderVisualView();
-      return;
-    }
-
-    if (drag.isBranchStep) {
-      // Sub-step de rama soltado fuera de drop zone → revertir
-      bbRenderVisualView();
-      return;
-    }
-
-    // Top-level step soltado en stage → guardar nueva posición
-    if (Number.isFinite(drag.lastX) && Number.isFinite(drag.lastY)) {
-      const step = sbSteps[drag.idx];
-      if (step) {
-        step._pos = { x: Math.round(drag.lastX), y: Math.round(drag.lastY) };
-        bbRenderVisualView();
-      }
-    }
-  }
-
-  document.getElementById('bbVisualStage')?.addEventListener('mousedown', _bbVisualMouseDown);
-
-  // ─── Editor inline del trigger en el Visual (reparenting de la trigger card) ───
-  // En lugar de duplicar el form (que tiene IDs únicos como sbTriggerType,
-  // sbTriggerNoRespAmount, etc.), MUEVE la trigger card original al modal
-  // del visual y la regresa a su lugar al cerrar. Single source of truth, no
-  // ID conflicts, todos los widgets custom (no_response, scheduled_field, etc.)
-  // funcionan idéntico.
-  let _bbTriggerCardOrigParent = null;
-  let _bbTriggerCardPlaceholder = null;
-
+  // ─── Trigger inline editor ───
   function bbOpenTriggerEditorInline() {
     const card = document.getElementById('sbTriggerType')?.closest('.sb-trigger-card');
     if (!card) return;
     const slot = document.getElementById('bbVisualTriggerEditorSlot');
     if (!slot) return;
-    // Recordar dónde estaba para devolverla
     _bbTriggerCardOrigParent = card.parentNode;
     _bbTriggerCardPlaceholder = document.createElement('div');
     _bbTriggerCardPlaceholder.style.display = 'none';
     _bbTriggerCardOrigParent.insertBefore(_bbTriggerCardPlaceholder, card);
-    // Mover al modal del visual
     slot.appendChild(card);
     document.getElementById('bbVisualTriggerEditor').hidden = false;
   }
-
   function bbCloseTriggerEditorInline() {
     const slot = document.getElementById('bbVisualTriggerEditorSlot');
     const card = slot?.querySelector('.sb-trigger-card');
     if (card && _bbTriggerCardOrigParent && _bbTriggerCardPlaceholder) {
-      // Devolver a su lugar original
       _bbTriggerCardOrigParent.insertBefore(card, _bbTriggerCardPlaceholder);
       _bbTriggerCardPlaceholder.remove();
       _bbTriggerCardPlaceholder = null;
       _bbTriggerCardOrigParent = null;
     }
     document.getElementById('bbVisualTriggerEditor').hidden = true;
-    // Re-render el visual para reflejar el cambio del trigger
     bbRenderVisualView();
   }
 
-  // Click en el trigger node → abre editor inline
-  document.getElementById('bbVisualStage')?.addEventListener('click', (e) => {
-    const trigEl = e.target.closest('[data-trigger-edit]');
-    if (!trigEl) return;
-    e.preventDefault();
-    bbOpenTriggerEditorInline();
-  });
-
-  document.getElementById('bbVisualTriggerEditorClose')?.addEventListener('click', bbCloseTriggerEditorInline);
-  document.getElementById('bbVisualTriggerEditorDone')?.addEventListener('click', bbCloseTriggerEditorInline);
-  document.addEventListener('mousemove', _bbVisualMouseMove);
-  document.addEventListener('mouseup', _bbVisualMouseUp);
-
-  // ─── Editor panel lateral (Phase B + D2) ───
-  // Estado: { parentArr, idx } — funciona tanto para top-level como para sub-steps de rama
-  let _bbEditingTarget = null;
-
-  function bbOpenVisualEditor(idx) {
-    bbOpenVisualEditorByRef(sbSteps, idx);
-  }
-
+  // ─── Side editor for steps ───
+  function bbOpenVisualEditor(idx) { bbOpenVisualEditorByRef(sbSteps, idx); }
   function bbOpenVisualEditorByRef(parentArr, idx) {
     const step = parentArr?.[idx];
     if (!step) return;
-    // Asegurar que el step tiene _id (para que collectStepConfig pueda leer
-    // sus inputs por data-sid)
     if (!step._id) {
       sbStepCounter++;
       step._id = `s${sbStepCounter}`;
     }
     _bbEditingTarget = { parentArr, idx };
     const def = BOT_STEP_REGISTRY[step.type];
-    const label = def ? (def.label?.[_botRegistryLang()] || def.label?.es || step.type) : step.type;
-
-    document.getElementById('bbVisualEditorIcon').innerHTML = stepIcon(step.type, 18);
+    const lang = (typeof _botRegistryLang === 'function') ? _botRegistryLang() : 'es';
+    const label = def ? (def.label?.[lang] || def.label?.es || step.type) : step.type;
+    document.getElementById('bbVisualEditorIcon').innerHTML = stepIcon(step.type, 18) || '';
     document.getElementById('bbVisualEditorLabel').textContent = label;
-
-    // Reusa el form de la vista Lista
     const body = document.getElementById('bbVisualEditorBody');
     if (body && typeof buildStepBody === 'function') {
       try { body.innerHTML = buildStepBody(step); }
@@ -10172,12 +9603,10 @@ function setupBot() {
     }
     document.getElementById('bbVisualEditor').hidden = false;
   }
-
   function bbCloseVisualEditor() {
     document.getElementById('bbVisualEditor').hidden = true;
     _bbEditingTarget = null;
   }
-
   function bbSaveVisualEditor() {
     if (!_bbEditingTarget) return;
     const { parentArr, idx } = _bbEditingTarget;
@@ -10194,179 +9623,33 @@ function setupBot() {
       }
     }
     bbCloseVisualEditor();
+    if (typeof renderStepsFlow === 'function') renderStepsFlow();
     bbRenderVisualView();
     if (typeof toast === 'function') toast('Cambios aplicados (recuerda Guardar el bot)', 'success');
   }
-
   function bbDeleteStepFromVisual() {
-    console.log('[bb] delete clicked. target=', _bbEditingTarget);
-    if (!_bbEditingTarget) {
-      // Si no hay target activo pero el panel está abierto, intentar
-      // resolverlo del DOM por safety. (defensive)
-      console.warn('[bb] delete sin target activo');
-      return;
-    }
+    if (!_bbEditingTarget) return;
     if (!confirm('¿Eliminar este paso?')) return;
     try {
       const { parentArr, idx } = _bbEditingTarget;
-      if (!Array.isArray(parentArr)) {
-        console.error('[bb] delete: parentArr no es array', parentArr);
-        return;
-      }
+      if (!Array.isArray(parentArr)) return;
       parentArr.splice(idx, 1);
       bbCloseVisualEditor();
       if (typeof renderStepsFlow === 'function') renderStepsFlow();
       bbRenderVisualView();
       if (typeof toast === 'function') toast('Paso eliminado', 'success');
     } catch (err) {
-      console.error('[bb] delete error:', err);
       if (typeof toast === 'function') toast('Error al eliminar: ' + err.message, 'error');
     }
   }
 
+  // Wire side editor buttons
   document.getElementById('bbVisualEditorClose')?.addEventListener('click', bbCloseVisualEditor);
   document.getElementById('bbVisualEditorCancel')?.addEventListener('click', bbCloseVisualEditor);
   document.getElementById('bbVisualEditorSave')?.addEventListener('click', bbSaveVisualEditor);
   document.getElementById('bbVisualEditorDelete')?.addEventListener('click', bbDeleteStepFromVisual);
-
-  // ─── Palette de pasos draggables (Phase C) ───
-  function _bbBuildPalette() {
-    const list = document.getElementById('bbVisualPaletteList');
-    if (!list) return;
-    const groups = {};
-    for (const [type, def] of Object.entries(BOT_STEP_REGISTRY)) {
-      // Filtrar steps gated por feature (ej: appointments)
-      if (def.feature === 'appointments' && typeof isAppointmentsEnabled === 'function' && !isAppointmentsEnabled()) continue;
-      const g = def.group || 'Otros';
-      if (!groups[g]) groups[g] = [];
-      groups[g].push({ type, def });
-    }
-    let html = '';
-    for (const [groupName, items] of Object.entries(groups)) {
-      html += `<div class="bb-palette-group-label">${escHtml(groupName)}</div>`;
-      for (const { type, def } of items) {
-        const lang = _botRegistryLang();
-        const label = def.label?.[lang] || def.label?.es || type;
-        html += `<div class="bb-palette-item" draggable="true" data-step-type="${escHtml(type)}">
-          <span class="bb-palette-item-icon">${stepIcon(type, 14)}</span>
-          <span>${escHtml(label)}</span>
-        </div>`;
-      }
-    }
-    list.innerHTML = html;
-  }
-
-  // Drag desde palette al stage
-  let _bbPaletteDrag = null;
-  let _bbPaletteGhost = null;
-
-  document.getElementById('bbVisualPaletteList')?.addEventListener('dragstart', (e) => {
-    const item = e.target.closest('.bb-palette-item');
-    if (!item) return;
-    _bbPaletteDrag = { type: item.dataset.stepType };
-    e.dataTransfer.effectAllowed = 'copy';
-    // Necesario para que el drag funcione, aunque no lo usemos
-    e.dataTransfer.setData('text/plain', item.dataset.stepType);
-    // Crear ghost para feedback visual
-    _bbPaletteGhost = document.createElement('div');
-    _bbPaletteGhost.className = 'bb-palette-ghost';
-    _bbPaletteGhost.innerHTML = item.innerHTML;
-    document.body.appendChild(_bbPaletteGhost);
-  });
-
-  document.addEventListener('dragend', () => {
-    _bbPaletteDrag = null;
-    if (_bbPaletteGhost) { _bbPaletteGhost.remove(); _bbPaletteGhost = null; }
-  });
-
-  document.addEventListener('drag', (e) => {
-    if (_bbPaletteGhost && e.clientX > 0) {
-      _bbPaletteGhost.style.left = (e.clientX + 10) + 'px';
-      _bbPaletteGhost.style.top  = (e.clientY + 10) + 'px';
-    }
-  });
-
-  document.getElementById('bbVisualStage')?.addEventListener('dragover', (e) => {
-    if (_bbPaletteDrag) e.preventDefault(); // permite drop
-  });
-
-  // Highlight visual al pasar sobre drop zones de rama
-  document.getElementById('bbVisualStage')?.addEventListener('dragenter', (e) => {
-    if (!_bbPaletteDrag) return;
-    const dz = e.target.closest('.bb-visual-dropzone');
-    if (dz) dz.classList.add('is-drag-over');
-  });
-  document.getElementById('bbVisualStage')?.addEventListener('dragleave', (e) => {
-    const dz = e.target.closest('.bb-visual-dropzone');
-    if (dz) dz.classList.remove('is-drag-over');
-  });
-
-  document.getElementById('bbVisualStage')?.addEventListener('drop', (e) => {
-    if (!_bbPaletteDrag) return;
-    e.preventDefault();
-    const stage = document.getElementById('bbVisualStage');
-    if (!stage) return;
-
-    // ¿Cayó sobre una drop zone de rama?
-    const dzEl = e.target.closest('.bb-visual-dropzone');
-    if (dzEl) {
-      const nodeId = dzEl.dataset.nodeId;
-      const dzNode = _bbVisualNodeMap[nodeId];
-      if (dzNode?.parentArr) {
-        sbStepCounter++;
-        const newStep = {
-          _id: `s${sbStepCounter}`,
-          type: _bbPaletteDrag.type,
-          config: {},
-        };
-        dzNode.parentArr.push(newStep);
-        if (typeof renderStepsFlow === 'function') renderStepsFlow();
-        bbRenderVisualView();
-        // Abrir editor del nuevo step en la rama
-        setTimeout(() => bbOpenVisualEditorByRef(dzNode.parentArr, dzNode.parentArr.length - 1), 100);
-        _bbPaletteDrag = null;
-        if (_bbPaletteGhost) { _bbPaletteGhost.remove(); _bbPaletteGhost = null; }
-        return;
-      }
-    }
-
-    // Si no, se agrega al flujo principal (top-level)
-    const rect = stage.getBoundingClientRect();
-    const x = (e.clientX - rect.left + stage.scrollLeft) / _bbVisualZoom - _VS_NODE_W / 2;
-    const y = (e.clientY - rect.top  + stage.scrollTop)  / _bbVisualZoom - _VS_NODE_H / 2;
-
-    sbStepCounter++;
-    const newStep = {
-      _id: `s${sbStepCounter}`,
-      type: _bbPaletteDrag.type,
-      config: {},
-      _pos: { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) },
-    };
-    sbSteps.push(newStep);
-
-    if (typeof renderStepsFlow === 'function') renderStepsFlow();
-    bbRenderVisualView();
-    setTimeout(() => bbOpenVisualEditor(sbSteps.length - 1), 100);
-
-    _bbPaletteDrag = null;
-    if (_bbPaletteGhost) { _bbPaletteGhost.remove(); _bbPaletteGhost = null; }
-  });
-
-  // Zoom
-  document.getElementById('bbVisualZoomIn')?.addEventListener('click', () => {
-    _bbVisualZoom = Math.min(_bbVisualZoom + 0.1, 1.5);
-    _bbVisualApplyZoom();
-  });
-  document.getElementById('bbVisualZoomOut')?.addEventListener('click', () => {
-    _bbVisualZoom = Math.max(_bbVisualZoom - 0.1, 0.4);
-    _bbVisualApplyZoom();
-  });
-  document.getElementById('bbVisualZoomReset')?.addEventListener('click', () => {
-    _bbVisualZoom = 1;
-    _bbPanX = 0;
-    _bbPanY = 0;
-    _bbVisualApplyZoom();
-  });
+  document.getElementById('bbVisualTriggerEditorClose')?.addEventListener('click', bbCloseTriggerEditorInline);
+  document.getElementById('bbVisualTriggerEditorDone')?.addEventListener('click', bbCloseTriggerEditorInline);
 
   // Click en un paso del árbol → volver a la vista Lista y scrollear al paso
   document.getElementById('bbTreeContent')?.addEventListener('click', (e) => {

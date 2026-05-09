@@ -5244,6 +5244,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   transform: translateY(-1px);
 }
 .bb-visual-stage.df-host .drawflow-node.selected {
+  background: var(--surface, #fff) !important;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(37,99,235,.18), 0 4px 12px rgba(37,99,235,.12);
 }

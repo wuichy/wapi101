@@ -3690,8 +3690,12 @@ function showView(viewName) {
     renderPipelineViewSwitch();
     renderPipelinesBoard();
   } else if (viewName === 'integraciones') {
-    if (searchInput) { searchInput.placeholder = 'Buscar integración…'; searchInput.value = ''; }
-    if (plExtras) plExtras.hidden = true;
+    // Integraciones ahora vive dentro de Ajustes — redirigir
+    showView('ajustes');
+    setTimeout(() => {
+      document.querySelector('.settings-tab[data-settings="integraciones"]')?.click();
+    }, 0);
+    return;
   } else if (viewName === 'bot') {
     if (searchInput) { searchInput.placeholder = 'Buscar bots, plantilla, pipeline o etapa…'; searchInput.value = _botSearch || ''; }
     if (plExtras) plExtras.hidden = true;
@@ -3774,6 +3778,7 @@ function setupSettingsTabs() {
       if (target === 'negocio') loadBusinessHours();
       if (target === 'suscripcion') loadBilling();
       if (target === 'ia') loadAISettings();
+      if (target === 'integraciones') loadIntegrations();
     });
   });
 

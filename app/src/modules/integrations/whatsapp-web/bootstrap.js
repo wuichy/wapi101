@@ -141,12 +141,15 @@ function init(db) {
       try {
         const { tenantId } = getIntegrationContext(db, integrationId);
         const row = db.prepare("SELECT display_name, external_id FROM integrations WHERE id = ?").get(integrationId);
+        const displayName = row?.display_name || 'WhatsApp Lite';
+        let notifBody;
         if (info.loggedOut) {
           db.prepare(`UPDATE integrations SET status = 'disconnected', last_error = ?, updated_at = unixepoch() WHERE id = ?`)
             .run('Sesión cerrada en el dispositivo', integrationId);
+          notifBody = `${displayName} cerró sesión. Reconecta escaneando QR de nuevo.`;
           pushSvc.sendToAll(db, tenantId, {
             title: '⚠️ WhatsApp desconectado',
-            body:  `${row?.display_name || 'WhatsApp Lite'} cerró sesión. Reconecta escaneando QR de nuevo.`,
+            body:  notifBody,
             tag:   `wa-${integrationId}-logout`,
             url:   '/?view=integraciones',
           }, { kind: 'integration_down', cooldownKey: String(integrationId), cooldownMs: 5 * 60_000 })
@@ -154,13 +157,32 @@ function init(db) {
         } else {
           db.prepare(`UPDATE integrations SET last_error = ?, updated_at = unixepoch() WHERE id = ?`)
             .run(info.message || 'Desconectado', integrationId);
+          notifBody = `${displayName} perdió conexión. Reintentando…`;
           pushSvc.sendToAll(db, tenantId, {
             title: '⚠️ WhatsApp desconectado',
-            body:  `${row?.display_name || 'WhatsApp Lite'} perdió conexión. Reintentando…`,
+            body:  notifBody,
             tag:   `wa-${integrationId}-down`,
             url:   '/?view=integraciones',
           }, { kind: 'integration_down', cooldownKey: String(integrationId), cooldownMs: 10 * 60_000 })
             .catch(err => console.warn('[push] disconnect:', err.message));
+        }
+        // In-app bell: notificar a todos los asesores del tenant
+        if (tenantId) {
+          try {
+            const advisors = db.prepare('SELECT id FROM advisors WHERE tenant_id = ?').all(tenantId);
+            for (const adv of advisors) {
+              pushSvc.createNotification(db, {
+                tenantId,
+                advisorId: adv.id,
+                type:  'general',
+                title: '⚠️ Integración desconectada',
+                body:  notifBody,
+                link:  '/?view=integraciones',
+              });
+            }
+          } catch (ne) {
+            console.warn('[wa-web] in-app notif error:', ne.message);
+          }
         }
       } catch (err) {
         console.error(`[wa-web ${integrationId}] onDisconnected DB error:`, err.message);

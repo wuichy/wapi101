@@ -99,10 +99,6 @@
           <span>Comentarios</span>
           <span class="nav-badge" id="navCommentsBadge" style="display:none"></span>
         </a>
-        <a href="#integraciones" class="nav-item" data-view="integraciones" data-i18n="nav.integraciones">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11h-1V9a3 3 0 00-3-3h-2V5a3 3 0 00-6 0v1H5a3 3 0 00-3 3v3h1a2 2 0 010 4H2v3a3 3 0 003 3h3v-1a2 2 0 014 0v1h3a3 3 0 003-3v-2h1a3 3 0 000-6z"/></svg>
-          <span>Integraciones</span>
-        </a>
         <a href="#ajustes" class="nav-item" data-view="ajustes" data-i18n="nav.ajustes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Configuración</span>
@@ -1425,39 +1421,6 @@ Ana, , ana@hotmail.com, 5551112222</pre>
       </div>
 
       <!-- ─── VISTA: INTEGRACIONES ─── -->
-      <section class="view view-integrations" data-view="integraciones" hidden>
-        <div class="int-tabs">
-          <button class="int-tab int-tab--active" data-tab="connected" data-i18n="int.tab.connected">Mis integraciones</button>
-          <button class="int-tab" data-tab="vote" data-i18n="int.tab.vote">Solicitar integración</button>
-        </div>
-
-        <!-- Tab: Mis integraciones -->
-        <div id="intTabConnected">
-          <div class="integrations-intro">
-            <p>Conecta tus canales de mensajería para recibir y responder desde Wapi101. Las credenciales se guardan cifradas (AES-256-GCM) y nunca se exponen al navegador después de guardarlas.</p>
-          </div>
-          <div class="integrations-grid" id="integrationsGrid"><!-- JS render --></div>
-        </div>
-
-        <!-- Tab: Solicitar integración -->
-        <div id="intTabVote" hidden>
-          <div class="vote-header">
-            <p class="vote-desc">¿Qué integración quieres que agreguemos? Vota por tu favorita — la más pedida se construye primero. Puedes votar una vez cada 15 días.</p>
-            <div id="voteStatus"></div>
-          </div>
-          <div class="vote-search-wrap">
-            <input type="text" id="voteSearch" placeholder="Buscar integración..." class="form-input" autocomplete="off">
-          </div>
-          <div class="vote-grid" id="voteGrid"><!-- JS render --></div>
-          <div class="vote-custom-wrap">
-            <p class="vote-custom-label">¿No encuentras la que buscas?</p>
-            <div class="vote-custom-row">
-              <input type="text" id="voteCustomName" placeholder="Escribe el nombre (ej: Zendesk, Freshdesk...)" class="form-input" maxlength="80">
-              <button class="btn btn--primary" id="voteCustomBtn" data-i18n="int.vote.suggest">Sugerir y votar</button>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <!-- ─── MODAL: Configurar integración manual ─── -->
       <div class="modal" id="integrationModal" hidden>
@@ -1945,6 +1908,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <button class="settings-tab" data-settings="tokens-maquina" data-admin-only hidden data-i18n="settings.tab.tokens">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
               <span>Tokens de máquina</span>
+            </button>
+            <button class="settings-tab" data-settings="integraciones">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 11h-1V9a3 3 0 00-3-3h-2V5a3 3 0 00-6 0v1H5a3 3 0 00-3 3v3h1a2 2 0 010 4H2v3a3 3 0 003 3h3v-1a2 2 0 014 0v1h3a3 3 0 003-3v-2h1a3 3 0 000-6z"/></svg>
+              <span>Integraciones</span>
             </button>
           </aside>
 
@@ -2675,6 +2642,40 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   <div></div>
                 </div>
                 <div class="mt-empty" id="mtEmpty" hidden data-i18n="mt.empty">No hay tokens generados.</div>
+              </div>
+            </div>
+
+            <!-- ─── Integraciones ─── -->
+            <div class="settings-pane" data-settings="integraciones">
+              <div class="settings-head">
+                <div>
+                  <h2>Integraciones</h2>
+                  <p>Conecta tus canales de mensajería. Las credenciales se guardan cifradas (AES-256-GCM) y nunca se exponen al navegador.</p>
+                </div>
+              </div>
+              <div class="int-tabs">
+                <button class="int-tab int-tab--active" data-tab="connected" data-i18n="int.tab.connected">Mis integraciones</button>
+                <button class="int-tab" data-tab="vote" data-i18n="int.tab.vote">Solicitar integración</button>
+              </div>
+              <div id="intTabConnected">
+                <div class="integrations-grid" id="integrationsGrid"><!-- JS render --></div>
+              </div>
+              <div id="intTabVote" hidden>
+                <div class="vote-header">
+                  <p class="vote-desc">¿Qué integración quieres que agreguemos? Vota por tu favorita — la más pedida se construye primero. Puedes votar una vez cada 15 días.</p>
+                  <div id="voteStatus"></div>
+                </div>
+                <div class="vote-search-wrap">
+                  <input type="text" id="voteSearch" placeholder="Buscar integración..." class="form-input" autocomplete="off">
+                </div>
+                <div class="vote-grid" id="voteGrid"><!-- JS render --></div>
+                <div class="vote-custom-wrap">
+                  <p class="vote-custom-label">¿No encuentras la que buscas?</p>
+                  <div class="vote-custom-row">
+                    <input type="text" id="voteCustomName" placeholder="Escribe el nombre (ej: Zendesk, Freshdesk...)" class="form-input" maxlength="80">
+                    <button class="btn btn--primary" id="voteCustomBtn" data-i18n="int.vote.suggest">Sugerir y votar</button>
+                  </div>
+                </div>
               </div>
             </div>
 

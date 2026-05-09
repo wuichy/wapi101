@@ -93,7 +93,7 @@ module.exports = function createAuthRouter(db) {
     }
 
     const scopeMap = {
-      messenger:      'pages_show_list,pages_messaging,pages_read_engagement,pages_manage_metadata,pages_manage_engagement,pages_read_user_content',
+      messenger:      'pages_show_list,pages_messaging,pages_read_engagement,pages_manage_metadata,pages_manage_engagement',
       facebook:       'pages_show_list,pages_read_engagement',
       'whatsapp-lite':'whatsapp_business_management,whatsapp_business_messaging',
     };

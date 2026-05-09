@@ -6395,8 +6395,8 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;
 }
 .sb-reminder-del-btn {
-  position: absolute; top: 8px; right: 8px;
-  background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 16px; line-height: 1;
+  margin-left: auto; flex-shrink: 0;
+  background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 18px; line-height: 1; padding: 0 2px;
 }
 .sb-reminder-del-btn:hover { color: #ef4444; }
 .sb-reminder-add-btn {

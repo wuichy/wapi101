@@ -8212,9 +8212,11 @@ function collectStepConfig(sid) {
       const val  = Number(branch.querySelector(`[data-field="rem_value"]`)?.value) || 30;
       const unit = branch.querySelector(`select[data-field="rem_unit"]`)?.value || 'min';
       const time = branch.querySelector(`input[data-field="rem_time"]`)?.value || '20:00';
+      const msg  = branch.querySelector(`textarea[data-field="rem_message"]`)?.value?.trim() || '';
+      const steps = msg ? [{ type: 'message', config: { text: msg, channelId: 'auto' } }] : [];
       cfg.reminders.push(mode === 'day_before_at'
-        ? { id: rid, mode, value: val, time }
-        : { id: rid, mode, value: val, unit }
+        ? { id: rid, mode, value: val, time, steps }
+        : { id: rid, mode, value: val, unit, steps }
       );
     });
   }
@@ -19185,9 +19187,11 @@ function _renderReminderTimerEditor(sid, c) {
   const reminders = Array.isArray(c.reminders) ? c.reminders : [];
   const branches  = reminders.map((rem, i) => {
     const rid = rem.id || `r${i}`;
+    // Obtener el mensaje guardado (primer step de tipo message)
+    const firstStep = Array.isArray(rem.steps) ? rem.steps[0] : null;
+    const msgText = firstStep?.config?.text || '';
     return `
       <div class="sb-reminder-branch" data-rid="${escHtml(rid)}">
-        <button type="button" class="sb-reminder-del-btn" data-del-rid="${escHtml(rid)}">×</button>
         <div class="sb-reminder-branch-header">
           <select data-field="rem_mode" data-sid="${sid}" data-rid="${escHtml(rid)}">
             <option value="before"       ${rem.mode==='before'?'selected':''}>Antes de la cita</option>
@@ -19196,7 +19200,7 @@ function _renderReminderTimerEditor(sid, c) {
           ${rem.mode === 'day_before_at' ? `
             <input type="number" value="${rem.value||1}" min="1" max="30"
               data-field="rem_value" data-sid="${sid}" data-rid="${escHtml(rid)}" style="width:52px" />
-            <span style="font-size:12px">día(s) antes a las</span>
+            <span style="font-size:12px;white-space:nowrap">día(s) antes a las</span>
             <input type="time" value="${rem.time||'20:00'}"
               data-field="rem_time" data-sid="${sid}" data-rid="${escHtml(rid)}" />
           ` : `
@@ -19208,13 +19212,19 @@ function _renderReminderTimerEditor(sid, c) {
               <option value="day"  ${rem.unit==='day'?'selected':''}>días antes</option>
             </select>
           `}
+          <button type="button" class="sb-reminder-del-btn" data-del-rid="${escHtml(rid)}" title="Eliminar recordatorio">×</button>
         </div>
-        <p class="sb-hint">Los pasos debajo de este recordatorio se ejecutarán en el tiempo indicado.</p>
+        <label style="font-size:12px;font-weight:600;display:block;margin:8px 0 4px">Mensaje a enviar *</label>
+        <textarea class="sb-reminder-msg" data-field="rem_message" data-sid="${sid}" data-rid="${escHtml(rid)}"
+          rows="3" placeholder="Ej: Hola {nombre}, te recordamos tu cita de mañana 📅. ¿Confirmas tu asistencia?"
+          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;font-family:inherit">${escHtml(msgText)}</textarea>
+        <p class="sb-hint">Variables: {nombre} {apellido} {telefono} {email} {fecha_cita} {hora_cita}</p>
       </div>
     `;
   }).join('');
 
   return `
+    ${reminders.length ? '' : '<p class="sb-hint" style="margin-bottom:8px">Sin recordatorios. Agrega uno para programar mensajes automáticos antes de la cita.</p>'}
     ${branches}
     <button type="button" class="sb-reminder-add-btn" data-sid="${sid}" data-add-reminder>
       + Agregar recordatorio

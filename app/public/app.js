@@ -9590,7 +9590,7 @@ function setupBot() {
     return { inputs: 1, outputs: 1 };
   }
 
-  function bbRenderVisualView_DRAWFLOW() {
+  function bbRenderVisualView() {
     const editor = _bbInitDrawflow();
     if (!editor) return;
     const data = bbBuildBotJSON();
@@ -9766,7 +9766,7 @@ function setupBot() {
 
   // Función legacy — la dejo aquí como _LEGACY por si necesito rollback rápido.
   // Será eliminada cuando confirme que Drawflow funciona bien.
-  function bbRenderVisualView() {
+  function bbRenderVisualView_LEGACY() {
     const stage = document.getElementById('bbVisualStage');
     if (!stage) return;
     const data = bbBuildBotJSON();

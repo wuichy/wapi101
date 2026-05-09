@@ -70,11 +70,21 @@ svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; 
   color: var(--text-sidebar);
 }
 
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  position: relative;
+}
+body:not(.nav-collapsed) .sidebar-top,
+body.nav-expanded .sidebar-top { justify-content: space-between; }
+
 .brand {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 4px;
   height: 48px;
 }
 .brand-mark {
@@ -287,46 +297,40 @@ body.nav-expanded .brand { justify-content: flex-start; padding-left: 8px; }
 /* Forced-collapsed: arrow flips */
 body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
 
-/* ═══════ Notificaciones in-app (campana sidebar) ═══════ */
+/* ═══════ Notificaciones in-app (campana sidebar top) ═══════ */
 .nav-notif-btn {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 12px;
-  margin-bottom: 2px;
-  background: none;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,.08);
   border: none;
-  border-radius: var(--radius);
+  border-radius: 10px;
   color: var(--text-sidebar);
   cursor: pointer;
   transition: background 150ms, color 150ms;
-  text-align: left;
 }
-.nav-notif-btn:hover { background: rgba(255,255,255,.06); color: #fff; }
-.nav-notif-btn svg { flex-shrink: 0; }
-.nav-notif-label {
-  display: none;
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-body:not(.nav-collapsed) .nav-notif-label,
-body.nav-expanded .nav-notif-label { display: inline !important; }
+.nav-notif-btn:hover { background: rgba(255,255,255,.15); color: #fff; }
 
 /* Badge en la campana */
 .nav-notif-btn .nav-badge {
   position: absolute;
-  top: 6px;
-  left: 22px;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+  padding: 0 4px;
 }
 
-/* Panel de notificaciones */
+/* Panel de notificaciones — se abre debajo del botón */
 .nav-notif-panel {
   position: fixed;
-  bottom: 80px;
-  left: 72px;
+  top: 68px;
+  left: 12px;
   width: 320px;
   max-height: 420px;
   background: #fff;
@@ -339,8 +343,6 @@ body.nav-expanded .nav-notif-label { display: inline !important; }
   z-index: 999;
 }
 .nav-notif-panel[hidden] { display: none; }
-body.nav-expanded .nav-notif-panel,
-body:not(.nav-collapsed) .nav-notif-panel { left: 248px; }
 
 .nav-notif-header {
   display: flex;

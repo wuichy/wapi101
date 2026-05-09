@@ -597,7 +597,12 @@ app.use('/uploads', express.static(config.uploadsDir, {
 // con el path por default.
 
 const _sendFile = (file) => (_req, res) => {
-  res.set('Cache-Control', 'no-cache, must-revalidate');
+  // SPA HTML: no-store evita que browsers/Cloudflare retengan HTML stale
+  // (la pelea con cache que veniamos teniendo). El HTML es chico, asi que
+  // re-fetch en cada navegación no impacta perf.
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   if (_htmlCache[file]) return res.type('html').send(_htmlCache[file]);
   res.sendFile(path.join(__dirname, 'public', file));
 };
@@ -610,6 +615,34 @@ app.get('/app',      _sendFile('index.html'));
 // cualquier subpath bajo /app y lo manda al index.html del SPA.
 app.get('/app/*splat', _sendFile('index.html'));
 
+// /reset — endpoint de "borra todo lo cacheado" para usuarios atrapados con
+// service workers o cache stale. Manda Clear-Site-Data header que el browser
+// honra borrando cache+cookies+storage+SW para todo el origen, y luego
+// redirige al login. Util para desbloquear bugs de cache sin tener que
+// explicarle a usuarios cómo abrir DevTools.
+app.get('/reset', (_req, res) => {
+  res.set('Clear-Site-Data', '"cache", "storage", "executionContexts"');
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.type('html').send(`<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<title>Limpiando…</title>
+<meta http-equiv="refresh" content="2;url=/login">
+<style>body{font:14px/1.5 system-ui,sans-serif;max-width:480px;margin:80px auto;padding:0 20px;color:#0f172a;text-align:center}h1{font-size:18px;color:#dc2626}p{color:#64748b}</style>
+</head><body>
+<h1>🧹 Limpiando caché del navegador…</h1>
+<p>Esto borra cookies, cache y service workers de Wapi101.<br>Te redirige al login en 2 segundos.</p>
+<script>
+(async () => {
+  try { if ('caches' in window) { const k = await caches.keys(); await Promise.all(k.map(x => caches.delete(x))); } } catch(_) {}
+  try { if ('serviceWorker' in navigator) { const r = await navigator.serviceWorker.getRegistrations(); await Promise.all(r.map(x => x.unregister())); } } catch(_) {}
+  try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
+  setTimeout(() => location.replace('/login'), 1500);
+})();
+</script>
+</body></html>`);
+});
+
 // Estáticos — HTML/CSS/JS sin caché agresivo (always revalidate via ETag).
 // Imágenes/fonts mantienen el comportamiento default de express.static.
 // Esto evita que Safari/Cloudflare retengan versiones viejas tras un deploy:
@@ -621,7 +654,14 @@ app.use(express.static(path.join(__dirname, 'public'), {
   index: false,
   setHeaders: (res, filePath) => {
     if (/\.(html|css|js|json|map)$/i.test(filePath)) {
-      res.set('Cache-Control', 'no-cache, must-revalidate');
+      // no-store: nunca guardar — fuerza re-download en cada visit. Es la
+      // única forma de garantizar que un deploy se vea inmediato sin pelear
+      // con browsers que ignoran no-cache+ETag (Safari, mobile webviews).
+      // Como app.js es ~600KB minified pasa por gzip de Cloudflare a ~120KB,
+      // un re-download por sesión es aceptable.
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
     }
   },
 }));

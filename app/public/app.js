@@ -16540,10 +16540,7 @@ function urlBase64ToUint8(base64) {
 }
 
 function pushSupported() {
-  // Push deshabilitado — el SW se eliminó para evitar cache hell.
-  // Cuando volvamos a meter push, registrar un SW nuevo con SOLO el handler
-  // 'push' (sin caching de assets) y restaurar el check original.
-  return false;
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
 // Detección de plataforma para guiar al usuario sobre cómo activar push.
@@ -16559,27 +16556,29 @@ function _detectPushPlatform() {
 }
 
 async function registerServiceWorker() {
-  // PWA deshabilitada — el SW solo causaba problemas de cache stale.
-  // En su lugar, desregistramos cualquier SW existente y borramos sus caches.
-  // Cuando agreguemos push notifications en el futuro, registramos un SW nuevo
-  // con SOLO el handler 'push' (sin caching de assets).
+  // SW mínimo (sw-push.js) — SOLO push notifications, sin caching de assets.
+  // El sw.js viejo se autodesinstala (legacy file por si algun browser lo
+  // tenia instalado de la version anterior). El nuevo es sw-push.js.
   if (!('serviceWorker' in navigator)) return;
   try {
+    // 1) Cleanup: desregistrar SW viejos que NO sean sw-push.js
     const regs = await navigator.serviceWorker.getRegistrations();
-    if (regs.length === 0) return;
-    // Forzar fetch del nuevo /sw.js (que se autodesinstala) — esto activa el
-    // unregister + cache cleanup. Si el SW viejo todavia controla la pagina,
-    // el browser detecta el cambio y dispara install/activate del nuevo.
     for (const r of regs) {
-      try { await r.update(); } catch (_) {}
-      try { await r.unregister(); } catch (_) {}
+      const swUrl = r.active?.scriptURL || r.installing?.scriptURL || r.waiting?.scriptURL || '';
+      if (!swUrl.endsWith('/sw-push.js')) {
+        try { await r.unregister(); } catch (_) {}
+      }
     }
+    // 2) Borrar caches de SW viejos (el nuevo no cachea nada de todos modos)
     if ('caches' in window) {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k).catch(() => {})));
     }
+    // 3) Registrar el SW nuevo
+    _swReg = await navigator.serviceWorker.register('/sw-push.js');
+    try { await _swReg.update(); } catch (_) {}
   } catch (err) {
-    console.warn('[sw] cleanup failed:', err.message);
+    console.warn('[sw] register failed:', err.message);
   }
 }
 

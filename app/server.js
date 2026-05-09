@@ -585,7 +585,14 @@ app.get('/chat', (_req, res) => {
   let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
   html = html
     .replace('href="/manifest.json"', 'href="/manifest-chat.json"')
-    .replace('content="Wapi101"', 'content="Wapi101 Chat"');
+    .replace(
+      /<meta name="apple-mobile-web-app-title" content="[^"]*"/,
+      '<meta name="apple-mobile-web-app-title" content="Wapi101 Chat"'
+    )
+    .replace(
+      /<meta name="application-name" content="[^"]*"/,
+      '<meta name="application-name" content="Wapi101 Chat"'
+    );
   res.type('html').send(html);
 });
 

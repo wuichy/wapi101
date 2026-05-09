@@ -5219,22 +5219,27 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .bb-node--grp-citas         { border-left-color: #f59e0b; }
 .bb-node--grp-integraciones { border-left-color: #06b6d4; }
 
-/* Empty branch placeholder — compacto, sutil */
+/* Empty branch placeholder — compacto, clickeable para agregar paso */
 .bb-node--empty {
   border: 1px dashed #cbd5e1;
   background: transparent;
-  opacity: .65;
-  cursor: default;
+  opacity: .7;
+  cursor: pointer;
   padding: 8px 12px;
   border-radius: 8px;
   box-shadow: none;
   justify-content: center;
 }
 .bb-node--empty:hover {
+  border: 1px dashed var(--accent, #2563eb);
+  background: rgba(37, 99, 235, .04);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+  opacity: 1;
   transform: none;
-  border-color: #94a3b8;
-  box-shadow: none;
-  opacity: .8;
+}
+.bb-node--empty:hover .bb-node__title,
+.bb-node--empty:hover .bb-node__icon {
+  color: var(--accent, #2563eb);
 }
 .bb-node--empty .bb-node__title {
   color: var(--text-muted);

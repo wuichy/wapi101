@@ -8024,6 +8024,7 @@ function buildStageOptionsWithColor(pipelineId, selectedStageId) {
 
 let _sbInsertAfter     = null; // sid tras el cual insertar, null = al final
 let _reminderStepCtx  = null; // { parentSid, rid } cuando se añade un step a una rama reminder
+let _visualBranchCtx  = null; // { targetArr, parentSid } para añadir step a rama desde visual
 
 function renderStepsFlow() {
   const flow = document.getElementById('sbStepsFlow');
@@ -8659,6 +8660,16 @@ function setupBot() {
     sbStepCounter++;
     const newStep = { _id: `s${sbStepCounter}`, type, config: {} };
 
+    // ── Si estamos añadiendo a una rama desde la vista visual ──
+    if (_visualBranchCtx) {
+      const { targetArr } = _visualBranchCtx;
+      _visualBranchCtx = null;
+      if (Array.isArray(targetArr)) targetArr.push(newStep);
+      if (typeof renderStepsFlow === 'function') renderStepsFlow();
+      try { bbRenderVisualView(); } catch (_) {}
+      return;
+    }
+
     // ── Si estamos añadiendo a una rama reminder, insertar ahí ──
     if (_reminderStepCtx) {
       const { parentSid, rid } = _reminderStepCtx;
@@ -9256,12 +9267,14 @@ function setupBot() {
             label: labelText,
             subtree: _bbBuildBotTree(cs.branch, cs.branch),
             targetArr: cs.branch,
+            parentStep: step,
           });
         });
         tNode.children.push({
           label: 'Default',
           subtree: _bbBuildBotTree(step.config.default, step.config.default),
           targetArr: step.config.default,
+          parentStep: step,
         });
       } else if (step.type === 'wait_response' && step.config) {
         if (!step.config.branches || typeof step.config.branches !== 'object') step.config.branches = {};
@@ -9275,6 +9288,7 @@ function setupBot() {
             label: (SB_BRANCH_LABELS && SB_BRANCH_LABELS[bKey]) || bKey,
             subtree: _bbBuildBotTree(branches[bKey], branches[bKey]),
             targetArr: branches[bKey],
+            parentStep: step,
           });
         });
       } else if (step.type === 'reminder_timer' && step.config) {
@@ -9293,6 +9307,7 @@ function setupBot() {
             label,
             subtree: _bbBuildBotTree(rem.steps, rem.steps),
             targetArr: rem.steps,
+            parentStep: step,
           });
         });
         tNode.mainContinues = true;
@@ -9348,6 +9363,7 @@ function setupBot() {
         parentArr: node.parentArr,
         idx: node.idx,
         mainFlow: depth === 0,
+        hasChildren: node.children.length > 0,
         x: nodeX,
         y,
         w: _BB_NODE_W,
@@ -9379,6 +9395,8 @@ function setupBot() {
               id: dzId,
               kind: 'empty',
               label: child.label,
+              targetArr: child.targetArr,
+              parentStep: child.parentStep,
               x: dzX,
               y: branchY,
               w: _BB_NODE_W,
@@ -9429,7 +9447,7 @@ function setupBot() {
     }
     if (item.kind === 'empty') {
       const shortLabel = item.label && item.label.length > 20 ? item.label.slice(0, 19) + '…' : (item.label || '');
-      return `<div class="bb-node bb-node--empty" style="left:${item.x}px;top:${item.y}px;width:${item.w}px;height:${item.h}px">
+      return `<div class="bb-node bb-node--empty" data-action="add-to-branch" data-node-id="${item.id}" title="Agregar paso a esta rama" style="left:${item.x}px;top:${item.y}px;width:${item.w}px;height:${item.h}px">
         <div class="bb-node__head">
           <span class="bb-node__icon" style="width:16px;height:16px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px"><circle cx="8" cy="8" r="5"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/></svg></span>
           <span class="bb-node__title" style="font-size:11.5px">${escHtml(shortLabel)}</span>
@@ -9611,9 +9629,9 @@ function setupBot() {
       _bbAddBtn((x1 + x2) / 2, (y1 + y2) / 2, insertAfter);
     });
 
-    // Botón "+" al final del último nodo del flujo principal
+    // Botón "+" al final del último nodo del flujo principal — solo si NO ramifica
     const lastMain = items.filter(it => it.mainFlow).sort((a, b) => (b.y + b.h) - (a.y + a.h))[0];
-    if (lastMain) {
+    if (lastMain && !lastMain.hasChildren) {
       const endX = lastMain.x + lastMain.w / 2;
       const endY = lastMain.y + lastMain.h + _BB_GAP_Y / 2;
       _bbAddBtn(endX, endY, lastMain.step?._id || null);
@@ -9634,6 +9652,21 @@ function setupBot() {
         if (item && item.parentArr && typeof item.idx === 'number') {
           bbOpenVisualEditorByRef(item.parentArr, item.idx);
         }
+      });
+    });
+    // Click en placeholder vacío de rama → agregar paso a ESA rama
+    canvas.querySelectorAll('[data-action="add-to-branch"]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = el.getAttribute('data-node-id');
+        const item = itemMap[id];
+        if (!item || !Array.isArray(item.targetArr)) return;
+        _visualBranchCtx = {
+          targetArr: item.targetArr,
+          parentSid: item.parentStep?._id || null,
+        };
+        _bbOpenPicker(null);
       });
     });
   }

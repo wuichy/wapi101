@@ -9522,12 +9522,14 @@ function setupBot() {
     stage.appendChild(canvas);
 
     // SVG con createElementNS (innerHTML no parsea bien SVG nested)
+    // NOTA: inline style sobreescribe la regla global "svg { width:20px; height:20px }"
     const SVG_NS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', 'bb-edges');
-    svg.setAttribute('width', stageW);
-    svg.setAttribute('height', stageH);
     svg.setAttribute('viewBox', `0 0 ${stageW} ${stageH}`);
+    svg.style.width  = stageW + 'px';
+    svg.style.height = stageH + 'px';
+    svg.style.overflow = 'visible';
     canvas.appendChild(svg);
 
     edges.forEach((edge) => {
@@ -9591,6 +9593,46 @@ function setupBot() {
     const tmpWrap = document.createElement('div');
     tmpWrap.innerHTML = nodesHtml;
     while (tmpWrap.firstChild) canvas.appendChild(tmpWrap.firstChild);
+
+    // Botones "+" en el punto medio de cada arista
+    edges.forEach((edge) => {
+      const from = itemMap[edge.from];
+      const to   = itemMap[edge.to];
+      if (!from || !to || to.kind === 'empty') return;
+
+      const x1 = from.x + from.w / 2;
+      const y1 = from.y + from.h;
+      const x2 = to.x + to.w / 2;
+      const y2 = to.y;
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2;
+
+      const insertAfter = edge.from === 'trigger' ? '__top__' : (from.step?._id || null);
+      if (!insertAfter) return;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bb-add-btn';
+      btn.title = 'Insertar paso aquí';
+      btn.textContent = '+';
+      btn.style.left = (mx - 12) + 'px';
+      btn.style.top  = (my - 12) + 'px';
+      btn.dataset.insertAfter = insertAfter;
+      canvas.appendChild(btn);
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _sbInsertAfter = btn.dataset.insertAfter;
+        bbSwitchView('list');
+        const picker = document.getElementById('sbStepPicker');
+        if (!picker) return;
+        if (picker.dataset.originalParent) {
+          const wrap = document.querySelector('.sb-add-step-wrap');
+          if (wrap && picker.parentElement !== wrap) { wrap.appendChild(picker); delete picker.dataset.originalParent; picker.style.cssText = ''; }
+        }
+        picker.hidden = false;
+        picker.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+      });
+    });
 
     canvas.querySelectorAll('[data-action="edit-trigger"]').forEach(el => {
       el.addEventListener('click', (e) => { e.preventDefault(); bbOpenTriggerEditorInline(); });

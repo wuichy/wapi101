@@ -5085,12 +5085,15 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 
 /* SVG con conectores ortogonales detrás de los nodos */
+/* width/height set via JS inline styles to override global "svg{width:20px;height:20px}" */
 .bb-edges {
   position: absolute;
   top: 0;
   left: 0;
   pointer-events: none;
   z-index: 1;
+  overflow: visible;
+  flex-shrink: 0;
 }
 
 .bb-edge {
@@ -5231,6 +5234,38 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .bb-node--empty .bb-node__title {
   color: var(--text-muted);
   font-weight: 500;
+}
+
+/* ── Add-step button on edges ── */
+.bb-add-btn {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface, #fff);
+  border: 1.5px solid #94a3b8;
+  color: #64748b;
+  font-size: 17px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 4;
+  padding: 0;
+  opacity: 0;
+  transition: opacity .15s, transform .15s, border-color .15s, color .15s;
+  transform: scale(0.8);
+}
+.bb-canvas:hover .bb-add-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+.bb-add-btn:hover {
+  border-color: var(--accent, #2563eb);
+  color: var(--accent, #2563eb);
+  background: rgba(37, 99, 235, .07);
+  transform: scale(1.1);
 }
 
 /* ── Side editor panel (preserved) ── */

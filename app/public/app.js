@@ -8132,13 +8132,15 @@ function collectStepConfig(sid) {
     });
   }
 
-  // branch step v2 — multi-regla AND/OR + sub-flujo completo por rama
+  // branch step v2 — recolectar solo condiciones; sub-steps se gestionan desde el flujo visual
   const branchCasesV2 = body.querySelectorAll('.sb-branch-case-v2[data-case-id]');
   if (branchCasesV2.length || body.querySelector('.sb-branch-add-case-v2')) {
+    // Preservar steps existentes del modelo (no se gestionan en el popup)
+    const existingStep = (typeof sbSteps !== 'undefined' ? sbSteps : []).find(s => s._id === sid);
+    const existingCases = existingStep?.config?.cases || [];
     cfg.cases = [];
     branchCasesV2.forEach(caseEl => {
       const caseId = caseEl.dataset.caseId;
-      // Recolectar reglas
       const ruleEls = caseEl.querySelectorAll('.sb-branch-rule[data-rule-idx]');
       const rules = [];
       ruleEls.forEach(ruleEl => {
@@ -8149,22 +8151,13 @@ function collectStepConfig(sid) {
       });
       const rulesOpEl = caseEl.querySelector('.sb-branch-rules-op');
       const rules_op  = rulesOpEl?.value || 'and';
-      // Recolectar sub-steps de esta rama
-      const steps = [];
-      caseEl.querySelectorAll('[data-substep-id]').forEach(ssEl => {
-        steps.push({ _id: ssEl.dataset.substepId, type: ssEl.dataset.substepType || 'message', config: collectStepConfig(ssEl.dataset.substepId) });
-      });
+      // Preservar sub-steps existentes de esta rama
+      const existingCase = existingCases.find(c => c.id === caseId);
+      const steps = existingCase?.steps || [];
       cfg.cases.push({ id: caseId, rules_op, rules, steps });
     });
-    // Default branch
-    const defSection = body.querySelector('.sb-branch-default-section');
-    const defSteps = [];
-    if (defSection) {
-      defSection.querySelectorAll('[data-substep-id]').forEach(ssEl => {
-        defSteps.push({ _id: ssEl.dataset.substepId, type: ssEl.dataset.substepType || 'message', config: collectStepConfig(ssEl.dataset.substepId) });
-      });
-    }
-    cfg.default = defSteps;
+    // Preservar default steps existentes
+    cfg.default = existingStep?.config?.default || [];
   }
 
   // reminder_timer — recolectar reminders[]
@@ -19059,22 +19052,18 @@ function _renderBranchEditor(sid, c) {
   });
 
   const casesHtml = cases.map((cs, i) => {
-    const rulesHtml = cs.rules.length
-      ? cs.rules.map((rule, ri) => {
-          const row = _renderBranchRuleRow(sid, cs.id, ri, rule);
-          const isLast = ri === cs.rules.length - 1;
-          const connector = !isLast ? `
-            <div class="sb-branch-rule-connector">
-              <select class="sb-branch-rules-op" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">
-                <option value="and" ${(cs.rules_op || 'and') === 'and' ? 'selected' : ''}>Y — todas se cumplen</option>
-                <option value="or"  ${cs.rules_op === 'or' ? 'selected' : ''}>O — basta una</option>
-              </select>
-            </div>` : '';
-          return row + connector;
-        }).join('')
-      : '<p class="sb-hint" style="margin:4px 0 8px">Sin condiciones — esta rama siempre ejecuta.</p>';
-
-    const subStepsHtml = cs.steps.map(ss => _renderBranchSubStepCard(sid, cs.id, ss)).join('');
+    const rulesHtml = cs.rules.map((rule, ri) => {
+      const row = _renderBranchRuleRow(sid, cs.id, ri, rule);
+      const isLast = ri === cs.rules.length - 1;
+      const connector = !isLast ? `
+        <div class="sb-branch-rule-connector">
+          <select class="sb-branch-rules-op" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">
+            <option value="and" ${(cs.rules_op || 'and') === 'and' ? 'selected' : ''}>Y — todas se cumplen</option>
+            <option value="or"  ${cs.rules_op === 'or' ? 'selected' : ''}>O — basta una</option>
+          </select>
+        </div>` : '';
+      return row + connector;
+    }).join('');
 
     return `
       <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}">
@@ -19083,36 +19072,16 @@ function _renderBranchEditor(sid, c) {
           <button type="button" class="sb-branch-case-del-v2" data-del-case-id="${escHtml(cs.id)}" data-sid="${sid}" title="Eliminar rama">×</button>
         </div>
         <div class="sb-branch-rules" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">
-          ${rulesHtml}
+          ${rulesHtml || '<p class="sb-hint" style="margin:4px 0 8px">Sin condiciones — esta rama siempre ejecuta.</p>'}
         </div>
         <button type="button" class="sb-branch-add-rule" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">+ Agregar condición</button>
-        <div class="sb-branch-case-steps" data-case-id="${escHtml(cs.id)}">
-          <div class="sb-branch-case-steps-label">Pasos si esta rama matchea</div>
-          ${subStepsHtml}
-          <button type="button" class="sb-branch-case-add-step-btn" data-case-id="${escHtml(cs.id)}" data-parent-sid="${sid}">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
-            Agregar paso
-          </button>
-        </div>
       </div>`;
   }).join('');
 
-  const defaultSteps  = Array.isArray(c.default) ? c.default : [];
-  const defStepsHtml  = defaultSteps.map(ss => _renderBranchSubStepCard(sid, '__default__', ss)).join('');
-
   return `
-    ${!cases.length ? '<p class="sb-hint" style="margin-bottom:10px">Sin ramas. Agrega una para definir condiciones y pasos.</p>' : casesHtml}
-    <button type="button" class="sb-branch-add-case-v2" data-sid="${sid}">+ Agregar rama</button>
-    <div class="sb-branch-default-section">
-      <div class="sb-branch-default-header">Default — si ninguna rama matcheó</div>
-      <div class="sb-branch-default-steps">
-        ${defStepsHtml}
-        <button type="button" class="sb-branch-case-add-step-btn" data-case-id="__default__" data-parent-sid="${sid}">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
-          Agregar paso
-        </button>
-      </div>
-    </div>`;
+    ${casesHtml}
+    <button type="button" class="sb-branch-add-case-v2" data-sid="${sid}" style="margin-top:8px">+ Agregar rama</button>
+    <p class="sb-hint" style="margin-top:10px">Los pasos de cada rama se agregan en el flujo visual.</p>`;
 }
 
 // BUILDER reminder_timer UI

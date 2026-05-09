@@ -9392,14 +9392,44 @@ function setupBot() {
     return null;
   }
 
-  // Construye el HTML del nodo según el tipo del step
-  function _bbDFNodeHTML(label, summary, isTrigger = false) {
-    const cls = isTrigger ? 'df-node-trigger' : '';
+  // Construye el HTML del nodo según el tipo del step. Diseño rico:
+  // - Trigger: play icon + label + summary, border dashed azul
+  // - Step: número + ícono del registry + label + summary, border-left por grupo
+  function _bbDFNodeHTML(opts) {
+    if (opts.isTrigger) {
+      return `
+        <div class="df-node-content df-node-trigger">
+          <div class="df-node-head">
+            <span class="df-node-icon df-trigger-play">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><polygon points="4 3 17 10 4 17 4 3"/></svg>
+            </span>
+            <span class="df-node-title">Disparador</span>
+          </div>
+          <div class="df-node-summary"><strong>${escHtml(opts.label)}</strong>${opts.summary ? '<br>' + escHtml(opts.summary) : ''}</div>
+        </div>`;
+    }
+    const stepNum = opts.num != null ? `<span class="df-node-num">${opts.num}</span>` : '';
+    const iconHtml = (typeof stepIcon === 'function') ? stepIcon(opts.type, 16) : '';
     return `
-      <div class="df-node-content ${cls}">
-        <div class="df-node-title">${escHtml(label)}</div>
-        ${summary ? `<div class="df-node-summary">${escHtml(summary)}</div>` : ''}
+      <div class="df-node-content">
+        <div class="df-node-head">
+          ${stepNum}
+          <span class="df-node-icon">${iconHtml}</span>
+          <span class="df-node-title">${escHtml(opts.label)}</span>
+        </div>
+        ${opts.summary ? `<div class="df-node-summary">${escHtml(opts.summary)}</div>` : ''}
       </div>`;
+  }
+
+  // Mapea un step type a su grupo (Comunicación / Flujo / Lead / Citas / Integraciones)
+  // para colorear el border-left del nodo.
+  function _bbDFGroupClass(stepType) {
+    const def = BOT_STEP_REGISTRY[stepType];
+    if (!def?.group) return '';
+    const slug = def.group.toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-');
+    return `df-grp-${slug}`;
   }
 
   // Calcula qué outputs/inputs tiene un node según el type del step
@@ -9442,7 +9472,7 @@ function setupBot() {
     const trigNodeId = editor.addNode(
       'trigger', 0, 1, 50, 50, 'df-trigger',
       { type: 'trigger' },
-      _bbDFNodeHTML(`▶ ${triggerLabel}`, triggerSummary, true)
+      _bbDFNodeHTML({ isTrigger: true, label: triggerLabel, summary: triggerSummary })
     );
 
     // Top-level steps en línea recta vertical
@@ -9465,9 +9495,9 @@ function setupBot() {
         ports.outputs,
         pos.x,
         pos.y,
-        `df-step df-step-${step.type}`,
+        `df-step df-step-${step.type} ${_bbDFGroupClass(step.type)}`,
         { type: step.type, refPath: ['top', idx], stepId: step._id },
-        _bbDFNodeHTML(label, summary)
+        _bbDFNodeHTML({ type: step.type, label, summary, num: idx + 1 })
       );
       // Conectar previous → este
       if (prevId !== null && ports.inputs > 0) {

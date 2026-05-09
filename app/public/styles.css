@@ -102,7 +102,10 @@ svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; 
   transition: background 0.15s, color 0.15s;
   position: relative; /* anchor del badge */
 }
-.nav-item span { display: none; }
+/* :not(.nav-badge) excluye el badge — sin esto el selector tan amplio
+   pisaba al badge y lo forzaba a mostrarse como circulo rojo vacio cuando
+   el body tenia .nav-expanded (ver regla con !important mas abajo). */
+.nav-item span:not(.nav-badge) { display: none; }
 .nav-item:hover { background: rgba(255,255,255,0.04); color: #fff; }
 .nav-item.is-active { background: var(--bg-sidebar-active); color: #fff; }
 
@@ -269,7 +272,7 @@ body.nav-expanded .nav-cache-btn:not([hidden]) { display: flex; align-items: cen
 @media (min-width: 1100px) {
   body:not(.nav-collapsed) .app { grid-template-columns: 240px 1fr; }
   body:not(.nav-collapsed) .sidebar { padding: 20px 16px; }
-  body:not(.nav-collapsed) .nav-item span { display: inline; }
+  body:not(.nav-collapsed) .nav-item span:not(.nav-badge) { display: inline; }
   body:not(.nav-collapsed) .user-meta { display: block; }
   body:not(.nav-collapsed) .user-card-chevron { display: block; }
   body:not(.nav-collapsed) .brand { justify-content: flex-start; padding-left: 8px; }
@@ -277,7 +280,7 @@ body.nav-expanded .nav-cache-btn:not([hidden]) { display: flex; align-items: cen
 /* Forced-expanded via class (any screen size) */
 body.nav-expanded .app { grid-template-columns: 240px 1fr; }
 body.nav-expanded .sidebar { padding: 20px 16px; }
-body.nav-expanded .nav-item span { display: inline !important; }
+body.nav-expanded .nav-item span:not(.nav-badge) { display: inline !important; }
 body.nav-expanded .user-meta { display: block !important; }
 body.nav-expanded .user-card-chevron { display: block !important; }
 body.nav-expanded .brand { justify-content: flex-start; padding-left: 8px; }

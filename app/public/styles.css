@@ -5343,15 +5343,15 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 
 /* Conexiones (líneas curvas entre nodos) */
 .bb-visual-stage.df-host .connection .main-path {
-  stroke: #111;
-  stroke-width: 2;
+  stroke: #94a3b8;
+  stroke-width: 2.5px;
   fill: none;
   transition: stroke .15s ease, stroke-width .15s ease;
 }
 .bb-visual-stage.df-host .connection:hover .main-path,
 .bb-visual-stage.df-host .connection.selected .main-path {
-  stroke: #000;
-  stroke-width: 3;
+  stroke: var(--accent, #2563eb);
+  stroke-width: 3.5px;
 }
 /* Puntos de conexión — invisibles, líneas llegan pegadas al nodo */
 .bb-visual-stage.df-host .drawflow-node .input,

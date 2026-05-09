@@ -1316,9 +1316,14 @@ async function loadConversations() {
     const totalUnread = CONVERSATIONS.filter(c => (c.unreadCount || 0) > 0).length;
     const elAll    = document.getElementById('pillCountAll');
     const elUnread = document.getElementById('pillCountUnread');
-    if (elAll)    elAll.textContent    = CONVERSATIONS.length || '';
-    if (elUnread) elUnread.textContent = totalUnread || '';
-    if (elUnread) elUnread.style.display = totalUnread ? '' : 'none';
+    if (elAll) {
+      elAll.textContent = CONVERSATIONS.length || '';
+      elAll.style.display = CONVERSATIONS.length ? '' : 'none';
+    }
+    if (elUnread) {
+      elUnread.textContent = totalUnread || '';
+      elUnread.style.display = totalUnread ? '' : 'none';
+    }
     // Badge en la nav lateral — suma de las convos cargadas (lo que el usuario realmente ve)
     updateChatsNavBadge(CONVERSATIONS.reduce((s, c) => s + (c.unreadCount || 0), 0));
   } catch (err) {
@@ -15232,8 +15237,14 @@ function renderTemplates() {
   const freeCount = _tplItems.filter(t => t.type === 'free_form').length;
   const badgeWa   = document.getElementById('tplBadgeWa');
   const badgeFree = document.getElementById('tplBadgeFree');
-  if (badgeWa)   badgeWa.textContent   = waCount;
-  if (badgeFree) badgeFree.textContent = freeCount;
+  if (badgeWa) {
+    badgeWa.textContent = waCount || '';
+    badgeWa.style.display = waCount ? '' : 'none';
+  }
+  if (badgeFree) {
+    badgeFree.textContent = freeCount || '';
+    badgeFree.style.display = freeCount ? '' : 'none';
+  }
 
   // Remove old cards y headers
   list.querySelectorAll('.tpl-card, .tpl-group-header').forEach(c => c.remove());
@@ -17123,7 +17134,12 @@ async function refreshTaskCounts() {
       api('GET', '/api/tasks?filter=today&limit=500'),
       api('GET', '/api/tasks?filter=upcoming&limit=500'),
     ]);
-    const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+    const set = (id, n) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = n || '';
+      el.style.display = n ? '' : 'none';
+    };
     set('ttCountOverdue', overdue.items?.length || 0);
     set('ttCountToday',   today.items?.length || 0);
     set('ttCountUpcoming', upcoming.items?.length || 0);

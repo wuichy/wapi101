@@ -9453,20 +9453,20 @@ function setupBot() {
     stage.style.transform = '';
     stage.style.width = '';
     stage.style.height = '';
-    const editor = new Drawflow(stage);
-    editor.reroute = false;
-    editor.curvature = 0;
-    editor.editor_mode = 'edit';
-    editor.start();
-
-    // Codos de 90°: salida horizontal → vertical → entrada horizontal
-    editor.createCurvature = function(start_x, start_y, end_x, end_y) {
+    // Codos de 90° — pisar prototype ANTES de instanciar para que l=this.createCurvature capture la versión correcta
+    Drawflow.prototype.createCurvature = function(start_x, start_y, end_x, end_y) {
       if (Math.abs(end_x - start_x) < 4) {
         return `M ${start_x} ${start_y} L ${end_x} ${end_y}`;
       }
       const midX = start_x + (end_x - start_x) / 2;
       return `M ${start_x} ${start_y} L ${midX} ${start_y} L ${midX} ${end_y} L ${end_x} ${end_y}`;
     };
+
+    const editor = new Drawflow(stage);
+    editor.reroute = false;
+    editor.curvature = 0;
+    editor.editor_mode = 'edit';
+    editor.start();
 
     // Click en un nodo → abrir editor lateral
     editor.on('click', (e) => {

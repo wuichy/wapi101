@@ -16844,25 +16844,22 @@ function closeInAppPanel() {
 }
 
 function setupInAppNotifications() {
-  const btns = document.querySelectorAll('.nav-notif-btn');
-  if (!btns.length) return;
+  const btn = document.querySelector('.nav-notif-btn');
+  if (!btn) return;
 
-  // Toggle panel — cualquiera de los dos botones
-  btns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const panel = document.getElementById('navNotifPanel');
-      if (!panel) return;
-      if (panel.hidden) { openInAppPanel(); } else { closeInAppPanel(); }
-    });
+  // Toggle panel
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const panel = document.getElementById('navNotifPanel');
+    if (!panel) return;
+    if (panel.hidden) { openInAppPanel(); } else { closeInAppPanel(); }
   });
 
   // Cerrar al click fuera
   document.addEventListener('click', (e) => {
     const panel = document.getElementById('navNotifPanel');
     if (!panel || panel.hidden) return;
-    const clickedBtn = [...btns].some(b => b === e.target || b.contains(e.target));
-    if (!panel.contains(e.target) && !clickedBtn) closeInAppPanel();
+    if (!panel.contains(e.target) && !btn.contains(e.target)) closeInAppPanel();
   });
 
   // Marcar todo leído

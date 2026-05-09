@@ -326,10 +326,11 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
   padding: 0 4px;
 }
 
-/* Cuál se muestra según estado del sidebar */
-.nav-notif-bottom { display: none; }
-body.nav-collapsed .nav-notif-top    { display: none; }
-body.nav-collapsed .nav-notif-bottom { display: flex; }
+/* Colapsado: sidebar-top se apila en columna → campana queda debajo de la W */
+body.nav-collapsed .sidebar-top {
+  flex-direction: column;
+  gap: 6px;
+}
 
 /* Panel de notificaciones */
 .nav-notif-panel {
@@ -348,10 +349,9 @@ body.nav-collapsed .nav-notif-bottom { display: flex; }
   z-index: 999;
 }
 .nav-notif-panel[hidden] { display: none; }
-/* Colapsado: panel abre desde abajo */
+/* Colapsado: panel abre desde debajo de la campana */
 body.nav-collapsed .nav-notif-panel {
-  top: auto;
-  bottom: 72px;
+  top: 110px;
   left: 12px;
 }
 

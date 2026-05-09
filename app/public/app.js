@@ -9219,11 +9219,12 @@ function setupBot() {
   // ─── Visual node graph (rewrite 2026-05-09) ───
   // Top→bottom auto-layout. Branches spread horizontally below parent.
   // Read-only canvas — click a node to open the side editor.
-  const _BB_NODE_W = 240;
-  const _BB_NODE_H = 88;
-  const _BB_GAP_X  = 36;
-  const _BB_GAP_Y  = 60;
-  const _BB_PAD    = 32;
+  const _BB_NODE_W  = 220;
+  const _BB_NODE_H  = 80;
+  const _BB_EMPTY_H = 52;
+  const _BB_GAP_X   = 28;
+  const _BB_GAP_Y   = 52;
+  const _BB_PAD     = 40;
 
   // State
   let _bbTriggerCardOrigParent = null;
@@ -9379,10 +9380,10 @@ function setupBot() {
               x: dzX,
               y: branchY,
               w: _BB_NODE_W,
-              h: _BB_NODE_H,
+              h: _BB_EMPTY_H,
             });
             edges.push({ from: nodeId, to: dzId, label: child.label });
-            maxBranchBottom = Math.max(maxBranchBottom, branchY + _BB_NODE_H);
+            maxBranchBottom = Math.max(maxBranchBottom, branchY + _BB_EMPTY_H);
           }
           bx += child._width + _BB_GAP_X;
         });
@@ -9425,12 +9426,12 @@ function setupBot() {
       </div>`;
     }
     if (item.kind === 'empty') {
+      const shortLabel = item.label && item.label.length > 20 ? item.label.slice(0, 19) + '…' : (item.label || '');
       return `<div class="bb-node bb-node--empty" style="left:${item.x}px;top:${item.y}px;width:${item.w}px;height:${item.h}px">
         <div class="bb-node__head">
-          <span class="bb-node__icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="10" cy="10" r="6"/></svg></span>
-          <span class="bb-node__title">${escHtml(item.label)}</span>
+          <span class="bb-node__icon" style="width:16px;height:16px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px"><circle cx="8" cy="8" r="5"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/></svg></span>
+          <span class="bb-node__title" style="font-size:11.5px">${escHtml(shortLabel)}</span>
         </div>
-        <div class="bb-node__summary">Sin pasos configurados</div>
       </div>`;
     }
     const step = item.step;
@@ -9552,40 +9553,7 @@ function setupBot() {
       path.setAttribute('d', _bbEdgePath(x1, y1, x2, y2));
       svg.appendChild(path);
 
-      if (edge.label) {
-        const lx = (x1 + x2) / 2;
-        const ly = y1 + (y2 - y1) / 2;
-        const text = String(edge.label);
-        const display = text.length > 22 ? text.slice(0, 21) + '…' : text;
-        const labelW = Math.min(180, Math.max(60, display.length * 7 + 18));
-
-        const g = document.createElementNS(SVG_NS, 'g');
-        g.setAttribute('class', 'bb-edge-label');
-        g.setAttribute('transform', `translate(${lx} ${ly})`);
-
-        const rect = document.createElementNS(SVG_NS, 'rect');
-        rect.setAttribute('x', -labelW / 2);
-        rect.setAttribute('y', -11);
-        rect.setAttribute('width', labelW);
-        rect.setAttribute('height', 22);
-        rect.setAttribute('rx', 11);
-        rect.setAttribute('fill', '#fff');
-        rect.setAttribute('stroke', '#cbd5e1');
-        rect.setAttribute('stroke-width', '1');
-        g.appendChild(rect);
-
-        const txt = document.createElementNS(SVG_NS, 'text');
-        txt.setAttribute('x', 0);
-        txt.setAttribute('y', 4);
-        txt.setAttribute('text-anchor', 'middle');
-        txt.setAttribute('font-size', '11');
-        txt.setAttribute('font-weight', '600');
-        txt.setAttribute('fill', '#1e293b');
-        txt.textContent = display;
-        g.appendChild(txt);
-
-        svg.appendChild(g);
-      }
+      // Labels de rama van en el nodo vacío (no en la línea)
     });
 
     // Nodos como divs (innerHTML SÍ funciona para HTML normal)

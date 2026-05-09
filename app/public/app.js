@@ -16540,7 +16540,10 @@ function urlBase64ToUint8(base64) {
 }
 
 function pushSupported() {
-  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  // Push deshabilitado — el SW se eliminó para evitar cache hell.
+  // Cuando volvamos a meter push, registrar un SW nuevo con SOLO el handler
+  // 'push' (sin caching de assets) y restaurar el check original.
+  return false;
 }
 
 // Detección de plataforma para guiar al usuario sobre cómo activar push.
@@ -16556,17 +16559,27 @@ function _detectPushPlatform() {
 }
 
 async function registerServiceWorker() {
+  // PWA deshabilitada — el SW solo causaba problemas de cache stale.
+  // En su lugar, desregistramos cualquier SW existente y borramos sus caches.
+  // Cuando agreguemos push notifications en el futuro, registramos un SW nuevo
+  // con SOLO el handler 'push' (sin caching de assets).
   if (!('serviceWorker' in navigator)) return;
   try {
-    _swReg = await navigator.serviceWorker.register('/sw.js');
-    // Forzar check de actualización del SW al boot. Sin esto, el browser solo
-    // checaría /sw.js cada 24h, dejando a clientes con SW viejo cacheando shell
-    // viejo. Con .update() forzamos a comparar bytes y si el SW cambió, el
-    // nuevo entra en estado "waiting" → activa al cerrar/abrir tab (o por
-    // skipWaiting() del propio SW).
-    try { await _swReg.update(); } catch (_) {}
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (regs.length === 0) return;
+    // Forzar fetch del nuevo /sw.js (que se autodesinstala) — esto activa el
+    // unregister + cache cleanup. Si el SW viejo todavia controla la pagina,
+    // el browser detecta el cambio y dispara install/activate del nuevo.
+    for (const r of regs) {
+      try { await r.update(); } catch (_) {}
+      try { await r.unregister(); } catch (_) {}
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k).catch(() => {})));
+    }
   } catch (err) {
-    console.warn('[sw] register failed:', err.message);
+    console.warn('[sw] cleanup failed:', err.message);
   }
 }
 

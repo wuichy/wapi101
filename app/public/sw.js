@@ -1,110 +1,47 @@
-// Service Worker para Wapi101 CRM
-// Versionar el cache nombre fuerza re-install al cambiar (bump cuando se
-// modifique el SW para nuevos features).
-const CACHE_NAME = 'wapi101-crm-v5';
-
-// App shell mínima para que la PWA funcione offline (al menos cargue el chrome).
-// Las API calls y assets dinámicos NO se cachean — siguen network-first.
-const SHELL_FILES = [
-  '/app',
-  '/login',
-  '/styles.css',
-  '/manifest.json',
-  '/icons/favicon.svg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-];
+// Self-unregistering Service Worker.
+//
+// El SW anterior cacheaba app shell (styles.css, /app, etc) network-first y
+// causaba problemas de cache stale dificiles de debuggear. Como push web
+// todavia no esta en uso, eliminamos PWA completamente.
+//
+// Este SW se reemplaza encima del v4/v5 viejo. En install + activate hace:
+// 1) skipWaiting + claim para tomar control inmediato
+// 2) borra TODOS los caches del origen
+// 3) se desregistra a si mismo
+// 4) recarga las pestañas abiertas para que ya no tengan SW
+//
+// Una vez que todos los clientes pasaron por aqui una vez, sw.js se vuelve
+// inerte. Si en el futuro queremos push, agregamos un sw.js NUEVO con otra
+// logica (solo handler 'push', sin caching).
 
 self.addEventListener('install', (event) => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    // No fallar si alguno no está disponible
-    await Promise.all(SHELL_FILES.map(url => cache.add(url).catch(() => {})));
-    self.skipWaiting();
-  })());
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    await self.clients.claim();
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
-  })());
-});
-
-// Fetch handler: network-first para todo. Si la red falla y es navegación
-// (page request), intentamos servir /app desde cache para que la PWA al
-// menos abra. Para API calls y otros recursos, dejamos pasar el error de red.
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  // Solo manejamos GETs same-origin. POST/PATCH/DELETE pasan directo.
-  if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;
-
-  // No cachear API ni webhooks ni stripe ni admin (dinámicos)
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/webhooks/') ||
-      url.pathname.startsWith('/auth/') || url.pathname.startsWith('/super')) {
-    return; // pasa al network normal
-  }
-
-  event.respondWith((async () => {
     try {
-      const fresh = await fetch(req);
-      // Si es app shell file, actualizar cache en background
-      if (SHELL_FILES.includes(url.pathname) || url.pathname === '/app/' || url.pathname === '/login/') {
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(req, fresh.clone()).catch(() => {});
+      // Borrar todos los caches
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch (_) {}
+
+    // Tomar control de las pestañas abiertas
+    try { await self.clients.claim(); } catch (_) {}
+
+    // Desregistrar este SW
+    try { await self.registration.unregister(); } catch (_) {}
+
+    // Forzar reload de las pestañas para que ya no tengan SW activo
+    try {
+      const clients = await self.clients.matchAll({ type: 'window' });
+      for (const client of clients) {
+        try { client.navigate(client.url); } catch (_) {}
       }
-      return fresh;
-    } catch (_) {
-      // Network falló — buscar en cache
-      const cached = await caches.match(req);
-      if (cached) return cached;
-      // Si es navegación (HTML), fallback a /app del cache
-      if (req.mode === 'navigate') {
-        const fallback = await caches.match('/app');
-        if (fallback) return fallback;
-      }
-      throw _;
-    }
+    } catch (_) {}
   })());
 });
 
-self.addEventListener('push', (event) => {
-  let payload = {};
-  try {
-    payload = event.data ? event.data.json() : {};
-  } catch (_) {
-    payload = { title: 'Wapi101 CRM', body: event.data ? event.data.text() : 'Notificación' };
-  }
-  const title = payload.title || 'Wapi101 CRM';
-  const options = {
-    body: payload.body || '',
-    icon: payload.icon || '/icons/icon-192.png',
-    badge: payload.badge || '/icons/icon-192.png',
-    tag: payload.tag || 'wapi101-crm',
-    renotify: true,
-    data: { url: payload.url || '/', chatId: payload.chatId || null },
-  };
-  event.waitUntil(self.registration.showNotification(title, options));
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/app';
-  event.waitUntil((async () => {
-    const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const client of allClients) {
-      const url = new URL(client.url);
-      if (url.origin === self.location.origin) {
-        client.focus();
-        if ('navigate' in client) client.navigate(targetUrl).catch(() => {});
-        return;
-      }
-    }
-    if (self.clients.openWindow) {
-      await self.clients.openWindow(targetUrl);
-    }
-  })());
-});
+// Fetch handler vacio — pasa todo al network normal.
+// (No definir 'fetch' es equivalente, pero lo dejamos explicito)
+self.addEventListener('fetch', () => { /* passthrough */ });

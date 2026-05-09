@@ -1,7 +1,7 @@
 // Service Worker para Wapi101 CRM
 // Versionar el cache nombre fuerza re-install al cambiar (bump cuando se
 // modifique el SW para nuevos features).
-const CACHE_NAME = 'wapi101-crm-v4';
+const CACHE_NAME = 'wapi101-crm-v5';
 
 // App shell mínima para que la PWA funcione offline (al menos cargue el chrome).
 // Las API calls y assets dinámicos NO se cachean — siguen network-first.

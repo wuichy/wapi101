@@ -573,9 +573,20 @@ if (config.env !== 'production') {
 }
 // Ruta /chat — sirve la SPA con marker para que el frontend active "modo personal"
 // (chat-only, vista personal por asesor con hides + tags propios).
+//
+// Importante: inyectamos manifest-chat.json + apple-mobile-web-app-title="Chat"
+// para que iOS guarde el shortcut como app SEPARADA del CRM completo. Sin esto
+// el "Add to Home Screen" desde /chat redirigia a /app porque ambos compartian
+// el manifest principal con start_url:"/app".
 app.get('/chat', (_req, res) => {
-  res.set('Cache-Control', 'no-cache, must-revalidate');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
+  const fs = require('fs');
+  let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  html = html
+    .replace('href="/manifest.json"', 'href="/manifest-chat.json"')
+    .replace('content="Wapi101"', 'content="Wapi101 Chat"');
+  res.type('html').send(html);
 });
 
 

@@ -1,0 +1,26 @@
+{
+  "name": "Wapi101 Chat",
+  "short_name": "Wapi101 Chat",
+  "description": "Chat personal Wapi101 — solo tus conversaciones",
+  "start_url": "/chat?source=pwa",
+  "scope": "/chat",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f2f7",
+  "theme_color": "#2563eb",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

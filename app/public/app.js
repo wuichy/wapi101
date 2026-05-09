@@ -9459,8 +9459,8 @@ function setupBot() {
     editor.editor_mode = 'edit';
     editor.start();
 
-    // Codos de 90°: salida vertical → horizontal → entrada vertical
-    editor.create_curvature = function(start_x, start_y, end_x, end_y) {
+    // Codos de 90°: salida horizontal → vertical → entrada horizontal
+    editor.createCurvature = function(start_x, start_y, end_x, end_y) {
       if (Math.abs(end_x - start_x) < 4) {
         return `M ${start_x} ${start_y} L ${end_x} ${end_y}`;
       }

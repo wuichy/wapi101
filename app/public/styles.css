@@ -5279,23 +5279,34 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   transform: scale(1.1);
 }
 
-/* ── Side editor panel (preserved) ── */
+/* ── Editor modal centrado ── */
 .bb-visual-editor {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 380px;
-  height: 100%;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 480px;
+  max-width: 92vw;
+  max-height: 85vh;
   background: var(--surface, #fff);
-  border-left: 1px solid var(--border);
-  box-shadow: -4px 0 12px rgba(15, 23, 42, .06);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, .25);
   display: flex;
   flex-direction: column;
-  z-index: 10;
+  z-index: 9998;
+  overflow: hidden;
 }
 .bb-visual-editor[hidden] { display: none; }
+.bb-visual-editor::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .35);
+  z-index: -1;
+}
 
-.bb-visual-trigger-editor { width: 380px; }
+.bb-visual-trigger-editor { width: 480px; }
 
 .bb-visual-editor-head {
   padding: 12px 14px;

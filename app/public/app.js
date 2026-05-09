@@ -8704,10 +8704,16 @@ function setupBot() {
     }
 
     renderStepsFlow();
-    // Scroll al nuevo paso
-    const flow = document.getElementById('sbStepsFlow');
-    const newCard = flow?.querySelector(`[data-sid="${newStep._id}"]`);
-    newCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Si la vista visual está activa, re-renderizarla también
+    const activeView = document.querySelector('#botBuilderViewTabs .bb-view-tab.is-active')?.dataset.view;
+    if (activeView === 'visual') {
+      try { bbRenderVisualView(); } catch (_) {}
+    } else {
+      // Scroll al nuevo paso (solo en lista)
+      const flow = document.getElementById('sbStepsFlow');
+      const newCard = flow?.querySelector(`[data-sid="${newStep._id}"]`);
+      newCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   });
 
   // Close picker on outside click. Acepta clicks dentro del picker (cuando
@@ -8720,9 +8726,12 @@ function setupBot() {
     if (e.target.closest('.sb-add-step-wrap')) return;
     if (e.target.closest('.sb-insert-between')) return;
     if (e.target.closest('.sb-rem-add-step-btn')) return;
+    if (e.target.closest('.bb-add-btn')) return;
+    if (e.target.closest('.bb-node--empty')) return;
     _restoreSbStepPicker();
     _sbInsertAfter = null;
     _reminderStepCtx = null;
+    _visualBranchCtx = null;
   });
 
   // Toggle step body open/close
@@ -9584,18 +9593,29 @@ function setupBot() {
     tmpWrap.innerHTML = nodesHtml;
     while (tmpWrap.firstChild) canvas.appendChild(tmpWrap.firstChild);
 
-    // Helper: abrir picker de paso con insert-after dado
+    // Helper: abrir picker como overlay flotante centrado (sin cambiar de vista)
     function _bbOpenPicker(insertAfterVal) {
       _sbInsertAfter = insertAfterVal || null;
-      bbSwitchView('list');
+      _bbShowPickerFloating();
+    }
+    function _bbShowPickerFloating() {
       const picker = document.getElementById('sbStepPicker');
       if (!picker) return;
-      if (picker.dataset.originalParent) {
-        const wrap = document.querySelector('.sb-add-step-wrap');
-        if (wrap && picker.parentElement !== wrap) { wrap.appendChild(picker); delete picker.dataset.originalParent; picker.style.cssText = ''; }
+      if (picker.parentElement !== document.body) {
+        picker.dataset.originalParent = '1';
+        document.body.appendChild(picker);
       }
+      picker.style.position = 'fixed';
+      picker.style.top = '50%';
+      picker.style.left = '50%';
+      picker.style.right = 'auto';
+      picker.style.bottom = 'auto';
+      picker.style.transform = 'translate(-50%, -50%)';
+      picker.style.zIndex = '9999';
+      picker.style.maxHeight = '80vh';
+      picker.style.overflow = 'auto';
+      picker.style.boxShadow = '0 20px 60px rgba(15,23,42,.25)';
       picker.hidden = false;
-      picker.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
     }
 
     function _bbAddBtn(cx, cy, insertAfterVal) {
@@ -9608,6 +9628,23 @@ function setupBot() {
       btn.style.top  = (cy - 12) + 'px';
       canvas.appendChild(btn);
       btn.addEventListener('click', (e) => { e.stopPropagation(); _bbOpenPicker(insertAfterVal); });
+      return btn;
+    }
+    function _bbBranchAddBtn(cx, cy, targetArr) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bb-add-btn';
+      btn.title = 'Agregar paso a esta rama';
+      btn.textContent = '+';
+      btn.style.left = (cx - 12) + 'px';
+      btn.style.top  = (cy - 12) + 'px';
+      canvas.appendChild(btn);
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _visualBranchCtx = { targetArr, parentSid: null };
+        _sbInsertAfter = null;
+        _bbShowPickerFloating();
+      });
       return btn;
     }
 
@@ -9640,6 +9677,18 @@ function setupBot() {
       const tr = itemMap['trigger'];
       _bbAddBtn(tr.x + tr.w / 2, tr.y + tr.h + _BB_GAP_Y / 2, '__top__');
     }
+
+    // Botón "+" al final de cada rama con pasos (último item de cada parentArr no-mainFlow)
+    items.forEach(item => {
+      if (item.kind !== 'step') return;
+      if (item.mainFlow) return;
+      if (item.hasChildren) return;
+      if (!Array.isArray(item.parentArr)) return;
+      if (item.idx !== item.parentArr.length - 1) return;
+      const cx = item.x + item.w / 2;
+      const cy = item.y + item.h + _BB_GAP_Y / 2;
+      _bbBranchAddBtn(cx, cy, item.parentArr);
+    });
 
     canvas.querySelectorAll('[data-action="edit-trigger"]').forEach(el => {
       el.addEventListener('click', (e) => { e.preventDefault(); bbOpenTriggerEditorInline(); });

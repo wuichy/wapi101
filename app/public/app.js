@@ -9519,6 +9519,15 @@ function setupBot() {
         }
       }
     }
+    // reminder_timer sub-steps: ['reminder', stepId, remIdx, subIdx]
+    if (path[0] === 'reminder') {
+      const [, stepId, remIdx, subIdx] = path;
+      const parent = sbSteps.find(s => s._id === stepId);
+      if (!parent?.config) return null;
+      const rem = parent.config.reminders?.[remIdx];
+      if (!rem || !Array.isArray(rem.steps)) return null;
+      return { parentArr: rem.steps, idx: subIdx };
+    }
     return null;
   }
 
@@ -9572,6 +9581,11 @@ function setupBot() {
       const cases = Array.isArray(step.config?.cases) ? step.config.cases : [];
       const hasDefault = Array.isArray(step.config?.default);
       return { inputs: 1, outputs: Math.max(1, cases.length + (hasDefault ? 1 : 0)) };
+    }
+    if (step.type === 'reminder_timer') {
+      const n = Array.isArray(step.config?.reminders) ? step.config.reminders.length : 0;
+      // output_1 = flujo principal, output_2..N+1 = una por recordatorio
+      return { inputs: 1, outputs: 1 + n };
     }
     if (step.type === 'stop_bot') return { inputs: 1, outputs: 0 };
     return { inputs: 1, outputs: 1 };
@@ -9629,17 +9643,126 @@ function setupBot() {
         { type: step.type, refPath: ['top', idx], stepId: step._id },
         _bbDFNodeHTML({ type: step.type, label, summary, num: idx + 1 })
       );
-      // Conectar previous → este
+      // Conectar previous → este (siempre por output_1 = flujo principal)
       if (prevId !== null && ports.inputs > 0) {
         try { editor.addConnection(prevId, nodeId, 'output_1', 'input_1'); } catch (e) { console.warn('connect fail:', e); }
       }
       prevId = (ports.outputs > 0) ? nodeId : null;
       if (!step._pos) y += 130;
+
+      // ── reminder_timer: renderizar cadenas de sub-steps por rama ──
+      if (step.type === 'reminder_timer') {
+        const reminders = Array.isArray(step.config?.reminders) ? step.config.reminders : [];
+        const COL_W = 230; // ancho de columna por rama
+        const START_X = pos.x + 270; // a la derecha del nodo principal
+        reminders.forEach((rem, remIdx) => {
+          const colX = START_X + remIdx * COL_W;
+          let subY = pos.y;
+          let prevSubId   = nodeId;
+          let prevSubPort = `output_${remIdx + 2}`; // output_2 para primer reminder
+
+          // Etiqueta de tiempo para la rama
+          const timingLabel = rem.mode === 'day_before_at'
+            ? `${rem.value || 1}d antes ${rem.time || '20:00'}`
+            : `${rem.value || 30} ${rem.unit === 'hour' ? 'h' : rem.unit === 'day' ? 'd' : 'min'} antes`;
+
+          // Nodo "ancla" de la rama (sin steps muestra solo la etiqueta)
+          const subSteps = Array.isArray(rem.steps) ? rem.steps : [];
+          if (!subSteps.length) {
+            // Nodo vacío de recordatorio
+            const emptyId = editor.addNode(
+              `rem_${idx}_${remIdx}_empty`, 1, 0,
+              colX, subY + 130,
+              'df-step df-rem-empty',
+              { type: '_rem_empty', refPath: null },
+              `<div class="df-node-content df-rem-empty-content">
+                 <div class="df-node-head"><span class="df-rem-timing-badge">${escHtml(timingLabel)}</span></div>
+                 <div class="df-node-summary" style="color:var(--text-muted);font-size:11px">Sin pasos configurados</div>
+               </div>`
+            );
+            try { editor.addConnection(nodeId, emptyId, prevSubPort, 'input_1'); } catch(e) {}
+            return;
+          }
+
+          subSteps.forEach((subStep, subIdx) => {
+            const subDef = (typeof BOT_STEP_REGISTRY !== 'undefined') ? BOT_STEP_REGISTRY[subStep.type] : null;
+            const subLabel   = subDef ? (subDef.label?.[_botRegistryLang()] || subDef.label?.es || subStep.type) : subStep.type;
+            const subSummary = subDef?.summary ? (subDef.summary(subStep) || '') : '';
+            // En la cabeza del primero, mostrar badge de timing
+            const extraClass = subIdx === 0 ? 'df-rem-first-sub' : '';
+            const timingBadgeHtml = subIdx === 0
+              ? `<div class="df-rem-timing-badge">${escHtml(timingLabel)}</div>`
+              : '';
+            const subNodeHTML = `
+              <div class="df-node-content">
+                ${timingBadgeHtml}
+                <div class="df-node-head">
+                  <span class="df-node-icon">${typeof stepIcon === 'function' ? stepIcon(subStep.type, 16) : ''}</span>
+                  <span class="df-node-title">${escHtml(subLabel)}</span>
+                </div>
+                ${subSummary ? `<div class="df-node-summary">${escHtml(subSummary)}</div>` : ''}
+              </div>`;
+            const subNodeId = editor.addNode(
+              `rem_${idx}_${remIdx}_${subIdx}`, 1, 1,
+              colX, subY + 130 + subIdx * 120,
+              `df-step df-step-${subStep.type} ${_bbDFGroupClass(subStep.type)} df-rem-sub ${extraClass}`,
+              { type: subStep.type, refPath: ['reminder', step._id, remIdx, subIdx] },
+              subNodeHTML
+            );
+            try { editor.addConnection(prevSubId, subNodeId, prevSubPort, 'input_1'); } catch(e) {}
+            prevSubId   = subNodeId;
+            prevSubPort = 'output_1';
+          });
+        });
+      }
     });
+
+    // Post-proceso: añadir labels a los puertos de reminder_timer
+    _bbLabelReminderPorts(editor, data.steps || []);
 
     _bbDFSyncing = false;
 
     // El zoom y pan los maneja Drawflow internamente con scroll/pinch
+  }
+
+  // Añade texto a los puertos output de nodos reminder_timer para mostrar el timing
+  function _bbLabelReminderPorts(editor, steps) {
+    steps.forEach((step, idx) => {
+      if (step.type !== 'reminder_timer') return;
+      const reminders = Array.isArray(step.config?.reminders) ? step.config.reminders : [];
+      if (!reminders.length) return;
+      // Encontrar el nodo Drawflow por nombre
+      const nodeId = Object.keys(editor.drawflow.drawflow.Home.data || {}).find(id => {
+        return editor.drawflow.drawflow.Home.data[id]?.name === `step_${idx}`;
+      });
+      if (!nodeId) return;
+      const nodeEl = document.getElementById(`node-${nodeId}`);
+      if (!nodeEl) return;
+      // output_1 = "Continúa", output_2..N+1 = recordatorios
+      const outputEls = nodeEl.querySelectorAll('.output');
+      outputEls.forEach((portEl, portIdx) => {
+        let lbl = '';
+        if (portIdx === 0) {
+          lbl = 'Continúa';
+        } else {
+          const rem = reminders[portIdx - 1];
+          if (rem) {
+            lbl = rem.mode === 'day_before_at'
+              ? `${rem.value || 1}d antes ${rem.time || ''}`
+              : `${rem.value || 30}${rem.unit === 'hour' ? 'h' : rem.unit === 'day' ? 'd' : 'min'} antes`;
+          }
+        }
+        if (lbl) {
+          let labelEl = portEl.querySelector('.df-port-label');
+          if (!labelEl) {
+            labelEl = document.createElement('span');
+            labelEl.className = 'df-port-label';
+            portEl.appendChild(labelEl);
+          }
+          labelEl.textContent = lbl;
+        }
+      });
+    });
   }
 
   // Función legacy — la dejo aquí como _LEGACY por si necesito rollback rápido.

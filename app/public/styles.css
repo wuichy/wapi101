@@ -5833,6 +5833,33 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 #sbStepsFlow { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 560px; }
 
 .sb-step-wrap { display: flex; flex-direction: column; align-items: center; width: 100%; }
+/* Pills para el campo Mensaje en condición/branch (estilo chip clickable) */
+.sb-branch-rule-value[data-pills="1"] {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 6px 8px; background: #fff; border: 1px solid var(--border);
+  border-radius: 8px; min-height: 38px; cursor: text;
+  transition: border-color 0.15s;
+}
+.sb-branch-rule-value[data-pills="1"]:focus-within {
+  border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+}
+.sb-branch-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 6px 3px 10px; background: #eef2ff; color: #1e3a8a;
+  border-radius: 999px; font-size: 13px; line-height: 1; font-weight: 500;
+}
+.sb-branch-pill-del {
+  width: 18px; height: 18px; border-radius: 50%; border: 0;
+  background: transparent; color: #1e3a8a; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.sb-branch-pill-del:hover { background: rgba(30,58,138,0.15); }
+.sb-branch-pill-input {
+  flex: 1; min-width: 100px; border: 0; outline: 0;
+  font-size: 13px; padding: 2px 4px; background: transparent;
+}
+
 .sb-fallback-note {
   margin: 8px 0 -4px;
   padding: 6px 12px;

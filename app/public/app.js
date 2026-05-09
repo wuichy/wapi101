@@ -8169,7 +8169,17 @@ function collectStepConfig(sid) {
       ruleEls.forEach(ruleEl => {
         const field = ruleEl.querySelector('.sb-branch-rule-field')?.value || 'message';
         const op    = ruleEl.querySelector('.sb-branch-rule-op')?.value    || 'contains';
-        const value = ruleEl.querySelector('.sb-branch-rule-value')?.value?.trim() || '';
+        const valEl = ruleEl.querySelector('.sb-branch-rule-value');
+        let value = '';
+        if (valEl?.dataset?.pills === '1') {
+          // Pills: extraer cada pill + texto pendiente del input final
+          const pills = [...valEl.querySelectorAll('.sb-branch-pill')].map(p => p.dataset.pill || '').filter(Boolean);
+          const pending = valEl.querySelector('.sb-branch-pill-input')?.value?.trim();
+          if (pending) pills.push(pending);
+          value = pills.join(',');
+        } else {
+          value = valEl?.value?.trim() || '';
+        }
         rules.push({ field, op, value });
       });
       const rulesOpEl = caseEl.querySelector('.sb-branch-rules-op');
@@ -8839,7 +8849,7 @@ function setupBot() {
       step.config.cases.push({
         id: `bc_${Date.now()}`,
         rules_op: 'and',
-        rules: [{ field: 'message', op: 'contains', value: '' }],
+        rules: [{ field: 'message', op: 'matches_any', value: '' }],
         steps: [],
       });
       _refreshBranchStepBody(sid);
@@ -8875,7 +8885,7 @@ function setupBot() {
       const cs = (step.config.cases || []).find(c => c.id === caseId);
       if (cs) {
         if (!Array.isArray(cs.rules)) cs.rules = [];
-        cs.rules.push({ field: 'message', op: 'contains', value: '' });
+        cs.rules.push({ field: 'message', op: 'matches_any', value: '' });
       }
       _refreshBranchStepBody(sid);
       document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
@@ -9030,6 +9040,54 @@ function setupBot() {
       document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
       return;
     }
+  });
+
+  // ── branch v2: pills del campo Mensaje (DOM-only, sin re-render para no perder foco) ──
+  function _branchPillCreateNode(text) {
+    const span = document.createElement('span');
+    span.className = 'sb-branch-pill';
+    span.dataset.pill = text;
+    span.innerHTML = `${escHtml(text)}<button type="button" class="sb-branch-pill-del" tabindex="-1" aria-label="Eliminar">×</button>`;
+    return span;
+  }
+  function _branchPillCommit(input) {
+    const container = input.closest('.sb-branch-rule-value[data-pills="1"]');
+    if (!container) return;
+    const raw = (input.value || '').trim();
+    if (!raw) return;
+    // Permitir múltiples palabras pegadas con coma de un solo paste
+    raw.split(',').map(s => s.trim()).filter(Boolean).forEach(part => {
+      // Evitar duplicados
+      const exists = [...container.querySelectorAll('.sb-branch-pill')].some(p => p.dataset.pill === part);
+      if (!exists) container.insertBefore(_branchPillCreateNode(part), input);
+    });
+    input.value = '';
+  }
+  document.body.addEventListener('keydown', (e) => {
+    const input = e.target.closest('.sb-branch-pill-input');
+    if (!input) return;
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      _branchPillCommit(input);
+    } else if (e.key === 'Backspace' && !input.value) {
+      const container = input.closest('.sb-branch-rule-value[data-pills="1"]');
+      const pills = container?.querySelectorAll('.sb-branch-pill');
+      if (pills && pills.length) {
+        e.preventDefault();
+        pills[pills.length - 1].remove();
+      }
+    }
+  });
+  document.body.addEventListener('blur', (e) => {
+    const input = e.target.closest?.('.sb-branch-pill-input');
+    if (input && input.value.trim()) _branchPillCommit(input);
+  }, true); // capture: blur no burbuja
+  document.body.addEventListener('click', (e) => {
+    const del = e.target.closest('.sb-branch-pill-del');
+    if (!del) return;
+    e.preventDefault();
+    e.stopPropagation();
+    del.closest('.sb-branch-pill')?.remove();
   });
 
   // ── branch v2: al cambiar el campo, re-renderizar la fila para actualizar ops/value ──
@@ -18993,6 +19051,19 @@ function _branchFieldOps(field) {
       ['not_equals', 'no tiene / no es'],
     ];
   }
+  if (field === 'message') {
+    // Para mensaje el default es matches_any porque el UI usa pills (cada
+    // pill es una palabra independiente). "contiene la frase" para buscar
+    // una cadena literal con espacios (1 sola pill).
+    return [
+      ['matches_any',  'contiene alguna palabra'],
+      ['contains',     'contiene la frase exacta'],
+      ['not_contains', 'no contiene'],
+      ['equals',       'es exactamente'],
+      ['starts_with',  'empieza con'],
+      ['ends_with',    'termina con'],
+    ];
+  }
   return [
     ['contains',     'contiene'],
     ['not_contains', 'no contiene'],
@@ -19018,6 +19089,18 @@ function _branchRuleValueHtml(sid, caseId, ruleIdx, field, value) {
       .flatMap(p => (p.stages || []).map(s => ({ id: s.id, label: `${p.name} › ${s.name}` })));
     const opts = allStages.map(s => `<option value="${s.id}" ${String(value) == String(s.id) ? 'selected' : ''}>${escHtml(s.label)}</option>`).join('');
     return `<select ${attrs}><option value="">— Etapa —</option>${opts}</select>`;
+  }
+  if (field === 'message') {
+    // Pills: cada palabra/frase es una "píldora" independiente. El value
+    // se sigue persistiendo como CSV ("quiero,descuento,madre") para
+    // compat con el engine que ya maneja matches_any splitteando por coma.
+    const pills = String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+    const pillsHtml = pills.map(p => `
+      <span class="sb-branch-pill" data-pill="${escHtml(p)}">${escHtml(p)}<button type="button" class="sb-branch-pill-del" tabindex="-1" aria-label="Eliminar">×</button></span>`).join('');
+    return `<div ${attrs} data-pills="1">
+      ${pillsHtml}
+      <input type="text" class="sb-branch-pill-input" placeholder="palabra + Enter…" />
+    </div>`;
   }
   const placeholder = field === 'tag' ? 'nombre de la etiqueta'
     : field === 'phone'        ? 'número o parte del teléfono'
@@ -19079,7 +19162,7 @@ function _renderBranchEditor(sid, c) {
   }
   // Si sigue vacío (step nuevo), arrancar con una rama+condición lista
   if (!rawCases.length) {
-    rawCases = [{ id: `bc_${Date.now()}_0`, rules_op: 'and', rules: [{ field: 'message', op: 'contains', value: '' }], steps: [] }];
+    rawCases = [{ id: `bc_${Date.now()}_0`, rules_op: 'and', rules: [{ field: 'message', op: 'matches_any', value: '' }], steps: [] }];
   }
   const cases = rawCases.map((cs, i) => {
     if (!cs.id) cs.id = `bc_${Date.now()}_${i}`;

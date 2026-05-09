@@ -209,6 +209,17 @@ function findOrCreate(db, tenantId, { provider, externalId, integrationId, conta
       ).run(t, firstName, lastName, normPhone);
       contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(result.lastInsertRowid);
     }
+  } else {
+    // Sin teléfono ni contactId (p. ej. comentarios de FB/IG o Messenger sin datos de contacto).
+    // Crear contacto básico con nombre o placeholder para no violar NOT NULL en conversations.
+    const name  = (contactName || '').trim();
+    const parts = name.split(/\s+/).filter(Boolean);
+    const first = parts[0] || `Usuario ${String(externalId || '').slice(0, 8)}`;
+    const last  = parts.slice(1).join(' ') || null;
+    const result = db.prepare(
+      'INSERT INTO contacts (tenant_id, first_name, last_name) VALUES (?, ?, ?)'
+    ).run(t, first, last);
+    contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(result.lastInsertRowid);
   }
 
   const result = db.prepare(`

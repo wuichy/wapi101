@@ -524,7 +524,8 @@ module.exports = function createWebhooksRouter(db) {
       const fromId          = String(provider === 'instagram' ? (value.from?.id || '')  : (value.sender_id || value.from?.id || '')).trim() || null;
       const fromName        = (provider === 'instagram' ? value.from?.username : (value.sender_name || value.from?.name)) || null;
       const body            = (provider === 'instagram' ? value.text : value.message) || '';
-      const permalinkUrl    = value.permalink_url || null; // FB lo manda; IG no
+      // FB feed: el permalink puede venir directo en value o en value.post.permalink_url
+      const permalinkUrl    = value.permalink_url || value.post?.permalink_url || null;
 
       // Linkear con contacto existente o crearlo. Misma estrategia que conversations:
       // (provider, external_id) → contact via conversations table. Si no existe,

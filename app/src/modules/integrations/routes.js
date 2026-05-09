@@ -63,9 +63,10 @@ module.exports = function createIntegrationsRouter(db) {
 
       // FB Page comment reply: POST /{comment-id}/comments
       // IG comment reply:      POST /{comment-id}/replies
+      const META_VER = process.env.META_GRAPH_VERSION || 'v22.0';
       const endpoint = comment.provider === 'instagram'
-        ? `https://graph.facebook.com/v18.0/${comment.comment_id}/replies`
-        : `https://graph.facebook.com/v18.0/${comment.comment_id}/comments`;
+        ? `https://graph.facebook.com/${META_VER}/${comment.comment_id}/replies`
+        : `https://graph.facebook.com/${META_VER}/${comment.comment_id}/comments`;
 
       const r = await fetch(endpoint, {
         method:  'POST',

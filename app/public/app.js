@@ -8096,8 +8096,21 @@ function _removeLastStepTag(sid) {
   _setStepTagsArray(sid, tags.slice(0, -1));
 }
 
+// Resolver el body element del step. Cuando el editor visual está abierto
+// y editando este step, su body tiene prioridad sobre el del linear builder
+// (porque ambos comparten data-body-sid y querySelector devolvería el linear
+// que no es el que el usuario está viendo).
+function _resolveStepBody(sid) {
+  const bbEditor = document.getElementById('bbVisualEditor');
+  if (bbEditor && !bbEditor.hidden) {
+    const bbBody = document.getElementById('bbVisualEditorBody');
+    if (bbBody && bbBody.dataset.bodySid === sid) return bbBody;
+  }
+  return document.querySelector(`[data-body-sid="${sid}"]`);
+}
+
 function collectStepConfig(sid) {
-  const body = document.querySelector(`[data-body-sid="${sid}"]`);
+  const body = _resolveStepBody(sid);
   if (!body) return {};
   const cfg = {};
   body.querySelectorAll('[data-field]').forEach(el => {
@@ -8776,11 +8789,22 @@ function setupBot() {
 
   // Pipeline / Stage picker buttons (replace native select dropdowns)
   // ─── Handlers de step `branch` (multi-case) ───
+  // Buscar step en sbSteps O en _bbEditingTarget (para steps anidados)
+  function _findBranchStep(sid) {
+    const top = sbSteps.find(s => s._id === sid);
+    if (top) return top;
+    const editing = _bbEditingTarget?.parentArr?.[_bbEditingTarget?.idx];
+    if (editing?._id === sid) return editing;
+    return null;
+  }
+
   function _refreshBranchStepBody(sid) {
-    const step = sbSteps.find(s => s._id === sid);
+    const step = _findBranchStep(sid);
     if (!step) return;
-    // Re-renderizar solo el body de ese step
-    const body = document.querySelector(`[data-body-sid="${sid}"]`);
+    // Re-renderizar solo el body de ese step (priorizando el editor visual si está abierto)
+    const body = (typeof _resolveStepBody === 'function')
+      ? _resolveStepBody(sid)
+      : document.querySelector(`[data-body-sid="${sid}"]`);
     if (body && typeof buildStepBody === 'function') {
       body.innerHTML = buildStepBody(step);
     }
@@ -8798,7 +8822,7 @@ function setupBot() {
     if (addCaseBtn) {
       e.preventDefault();
       const sid = addCaseBtn.dataset.sid;
-      const step = sbSteps.find(s => s._id === sid);
+      const step = _findBranchStep(sid);
       if (!step) return;
       step.config = collectStepConfig(sid);
       if (!Array.isArray(step.config.cases)) step.config.cases = [];
@@ -8820,7 +8844,7 @@ function setupBot() {
       e.stopPropagation();
       const sid    = delCaseBtn.dataset.sid;
       const caseId = delCaseBtn.dataset.delCaseId;
-      const step   = sbSteps.find(s => s._id === sid);
+      const step   = _findBranchStep(sid);
       if (!step) return;
       step.config = collectStepConfig(sid);
       step.config.cases = (step.config.cases || []).filter(cs => cs.id !== caseId);
@@ -8835,7 +8859,7 @@ function setupBot() {
       e.preventDefault();
       const sid    = addRuleBtn.dataset.sid;
       const caseId = addRuleBtn.dataset.caseId;
-      const step   = sbSteps.find(s => s._id === sid);
+      const step   = _findBranchStep(sid);
       if (!step) return;
       step.config = collectStepConfig(sid);
       const cs = (step.config.cases || []).find(c => c.id === caseId);
@@ -8968,7 +8992,7 @@ function setupBot() {
     if (addRemBtn) {
       e.preventDefault();
       const sid = addRemBtn.dataset.sid;
-      const step = sbSteps.find(s => s._id === sid);
+      const step = _findBranchStep(sid);
       if (!step) return;
       step.config = collectStepConfig(sid);
       if (!Array.isArray(step.config.reminders)) step.config.reminders = [];
@@ -8988,7 +9012,7 @@ function setupBot() {
       const body = delRemBtn.closest('[data-body-sid]');
       if (!body) return;
       const sid = body.dataset.bodySid;
-      const step = sbSteps.find(s => s._id === sid);
+      const step = _findBranchStep(sid);
       if (!step) return;
       step.config = collectStepConfig(sid);
       step.config.reminders = (step.config.reminders || []).filter(r => r.id !== rid);
@@ -9005,7 +9029,7 @@ function setupBot() {
     const sid      = fieldSel.dataset.sid;
     const caseId   = fieldSel.dataset.caseId;
     const ruleIdx  = Number(fieldSel.dataset.ruleIdx);
-    const step     = sbSteps.find(s => s._id === sid);
+    const step     = _findBranchStep(sid);
     if (!step) return;
     step.config = collectStepConfig(sid);
     const cs = (step.config.cases || []).find(c => c.id === caseId);
@@ -9391,12 +9415,15 @@ function setupBot() {
             parentStep: step,
           });
         });
-        tNode.children.push({
-          label: 'Default',
-          subtree: _bbBuildBotTree(step.config.default, step.config.default),
-          targetArr: step.config.default,
-          parentStep: step,
-        });
+        // Solo mostrar Default si tiene pasos (el editor ya no lo expone para nuevos bots)
+        if (Array.isArray(step.config.default) && step.config.default.length > 0) {
+          tNode.children.push({
+            label: 'Default',
+            subtree: _bbBuildBotTree(step.config.default, step.config.default),
+            targetArr: step.config.default,
+            parentStep: step,
+          });
+        }
       } else if (step.type === 'wait_response' && step.config) {
         if (!step.config.branches || typeof step.config.branches !== 'object') step.config.branches = {};
         const branches = step.config.branches;

@@ -9545,6 +9545,12 @@ function setupBot() {
 
       const path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('class', 'bb-edge');
+      // Atributos inline como fallback (por si el CSS está cacheado o no carga)
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#94a3b8');
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('stroke-linejoin', 'round');
+      path.setAttribute('stroke-linecap', 'round');
       path.setAttribute('d', _bbEdgePath(x1, y1, x2, y2));
       svg.appendChild(path);
 
@@ -9565,12 +9571,18 @@ function setupBot() {
         rect.setAttribute('width', labelW);
         rect.setAttribute('height', 22);
         rect.setAttribute('rx', 11);
+        rect.setAttribute('fill', '#fff');
+        rect.setAttribute('stroke', '#cbd5e1');
+        rect.setAttribute('stroke-width', '1');
         g.appendChild(rect);
 
         const txt = document.createElementNS(SVG_NS, 'text');
         txt.setAttribute('x', 0);
         txt.setAttribute('y', 4);
         txt.setAttribute('text-anchor', 'middle');
+        txt.setAttribute('font-size', '11');
+        txt.setAttribute('font-weight', '600');
+        txt.setAttribute('fill', '#1e293b');
         txt.textContent = display;
         g.appendChild(txt);
 

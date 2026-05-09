@@ -19064,7 +19064,7 @@ function _renderCommentCard(c) {
   const isReplied = c.status === 'replied';
   const repliedTag = isReplied ? `<span class="comment-card-status-replied">✓ Respondido</span>` : '';
   return `
-    <div class="comment-card" data-comment-id="${c.id}">
+    <div class="comment-card" data-comment-id="${c.id}" data-permalink="${escHtml(c.permalink_url || '')}">
       <div class="comment-card-head">
         <div class="comment-card-avatar">${avatar}</div>
         <div class="comment-card-meta">
@@ -19110,16 +19110,18 @@ async function updateCommentStatus(id, status) {
 
 function openCommentReply(id) {
   _commentsActiveId = id;
-  // Buscar el comentario en el DOM para poblar el modal
   const card = document.querySelector(`.comment-card[data-comment-id="${id}"]`);
   if (!card) return;
   const fromName  = card.querySelector('.comment-card-from')?.textContent || '?';
   const body      = card.querySelector('.comment-card-body')?.textContent || '';
   const provLabel = card.querySelector('.comment-card-provider-pill')?.textContent || '';
+  const permalink = card.dataset.permalink || '';
   document.getElementById('commentReplyTitle').textContent  = `Responder a ${fromName}`;
   document.getElementById('commentReplyProvider').textContent = provLabel;
   document.getElementById('commentReplyOriginal').innerHTML = `<strong>${escHtml(fromName)}:</strong> ${escHtml(body)}`;
   document.getElementById('commentReplyText').value = '';
+  const fbLink = document.getElementById('commentReplyOpenFb');
+  if (fbLink) { fbLink.href = permalink || '#'; fbLink.style.display = permalink ? '' : 'none'; }
   document.getElementById('commentReplyOverlay').hidden = false;
   setTimeout(() => document.getElementById('commentReplyText')?.focus(), 50);
 }

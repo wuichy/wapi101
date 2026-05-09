@@ -567,6 +567,18 @@ module.exports = function createWebhooksRouter(db) {
       );
       console.log(`[webhook ${provider} comment] guardado: id=${commentId} from="${fromName || fromId || '?'}" contact=${contactId || '?'} body="${body.slice(0,50)}"`);
 
+      // Push notification para comentario nuevo
+      try {
+        const providerLabel = provider === 'instagram' ? 'Instagram' : 'Facebook';
+        const preview = (body || '💬 Nuevo comentario').slice(0, 140);
+        pushSvc.sendToAll(db, tenantId, {
+          title: `${fromName || 'Alguien'} comentó en ${providerLabel}`,
+          body:  preview,
+          tag:   `comment-${commentId}`,
+          url:   '/?view=comments',
+        }, { kind: 'comment' }).catch(err => console.warn('[push] comment:', err.message));
+      } catch (_) {}
+
       // Sync avatar (fire-and-forget) si tenemos contacto y la foto está vieja
       if (contactId && fromId) {
         avatarsSvc.syncAvatarAsync(db, tenantId, contactId, provider, fromId, integration);

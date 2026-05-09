@@ -9454,9 +9454,8 @@ function setupBot() {
     stage.style.width = '';
     stage.style.height = '';
     const editor = new Drawflow(stage);
-    editor.reroute = true;             // permite curvas en líneas
-    editor.reroute_fix_curvature = true;
-    editor.curvature = 0.5;            // suavidad de las curvas
+    editor.reroute = false;
+    editor.curvature = 0;              // líneas rectas (sin curvas bezier)
     editor.editor_mode = 'edit';
     editor.start();
 

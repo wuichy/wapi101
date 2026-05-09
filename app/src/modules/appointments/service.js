@@ -142,4 +142,89 @@ function update(db, tenantId, id, { status, notes, advisorId }) {
   return db.prepare('SELECT * FROM appointments WHERE id = ? AND tenant_id = ?').get(id, tenantId);
 }
 
-module.exports = { book, scheduleReminder, cancelLatest, reschedule, list, update, _fmtDate, _fmtTime };
+// Slots disponibles para una fecha y asesor dados.
+// Devuelve array de { time: 'HH:MM', available: bool, conflictWith: id|null }
+function getAvailableSlots(db, tenantId, dateStr, advisorId, durationMin = 30) {
+  const bizSvc = require('../business/service');
+  const dur = Number(durationMin) || 30;
+
+  // Parsear fecha en TZ local
+  const [yr, mo, dy] = dateStr.split('-').map(Number);
+  const dayStart = new Date(yr, mo - 1, dy, 0, 0, 0);
+  const dow = dayStart.getDay(); // 0=dom, 1=lun...
+
+  // Horario del asesor (o maestro)
+  const hours = advisorId
+    ? bizSvc.getAdvisorHours(db, tenantId, Number(advisorId))
+    : bizSvc.getMasterHours(db, tenantId);
+
+  const dayHours = hours.find(h => h.dayOfWeek === dow);
+  if (!dayHours || dayHours.isClosed) return [];
+
+  // Generar slots desde open a close en intervalos de durationMin
+  const [openH, openM]   = dayHours.openTime.split(':').map(Number);
+  const [closeH, closeM] = dayHours.closeTime.split(':').map(Number);
+  const openMin  = openH  * 60 + openM;
+  const closeMin = closeH * 60 + closeM;
+
+  // Citas existentes ese día para ese asesor
+  const dayStartTs = Math.floor(dayStart.getTime() / 1000);
+  const dayEndTs   = dayStartTs + 86400;
+  const existing = db.prepare(`
+    SELECT id, starts_at, ends_at FROM appointments
+     WHERE tenant_id = ?
+       AND status IN ('scheduled','confirmed')
+       AND starts_at >= ? AND starts_at < ?
+       ${advisorId ? 'AND advisor_id = ?' : ''}
+  `).all(...[tenantId, dayStartTs, dayEndTs, ...(advisorId ? [Number(advisorId)] : [])]);
+
+  const slots = [];
+  for (let m = openMin; m + dur <= closeMin; m += dur) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    const timeStr = `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+
+    // Calcular timestamp de este slot
+    const slotTs = dayStartTs + m * 60;
+    const slotEndTs = slotTs + dur * 60;
+
+    // Verificar conflicto
+    const conflict = existing.find(a =>
+      (slotTs < a.ends_at && slotEndTs > a.starts_at)
+    );
+
+    slots.push({
+      time:         timeStr,
+      available:    !conflict,
+      conflictWith: conflict?.id || null,
+    });
+  }
+  return slots;
+}
+
+// Crear cita manualmente (desde modal receptionist)
+function bookManual(db, tenantId, { contactId, expedientId, convoId, advisorId, date, time, durationMin, notes }) {
+  const dur = Number(durationMin) || 30;
+  const [yr, mo, dy] = date.split('-').map(Number);
+  const [h, m] = time.split(':').map(Number);
+  const startsAt = Math.floor(new Date(yr, mo - 1, dy, h, m, 0).getTime() / 1000);
+  const endsAt   = startsAt + dur * 60;
+
+  const res = db.prepare(`
+    INSERT INTO appointments
+      (tenant_id, contact_id, expedient_id, conversation_id, advisor_id,
+       starts_at, ends_at, duration_min, status, notes, created_via)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, 'manual')
+  `).run(tenantId, contactId || null, expedientId || null, convoId || null,
+         advisorId || null, startsAt, endsAt, dur, notes || null);
+
+  return {
+    id:       res.lastInsertRowid,
+    startsAt,
+    endsAt,
+    fecha:    _fmtDate(startsAt),
+    hora:     _fmtTime(startsAt),
+  };
+}
+
+module.exports = { book, bookManual, scheduleReminder, cancelLatest, reschedule, list, update, getAvailableSlots, _fmtDate, _fmtTime };

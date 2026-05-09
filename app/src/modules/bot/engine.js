@@ -1146,45 +1146,48 @@ async function executeStep(db, step, ctx) {
     }
 
     case 'book_appointment': {
-      if (!ctx.contactId) return false;
+      // El bot ya no agenda automáticamente. Su función es:
+      // 1) Enviar notificación in-app al asesor para que abra el modal
+      // 2) Continuar al siguiente step inmediatamente
+      // El modal en el frontend (pipeline drop) es quien crea la cita.
       try {
-        const appt = apptSvc.book(db, ctx.tenantId, {
-          contactId:   ctx.contactId,
-          expedientId: ctx.expedientId || null,
-          convoId:     ctx.convoId     || null,
-          advisorId:   c.advisorId     || null,
-          offsetDays:  c.offsetDays,
-          time:        c.time,
-          durationMin: c.durationMin,
-          notes:       replaceVars(c.notes || '', ctx),
-          createdVia:  'bot',
-        });
+        const notifSvc = require('../notifications/service');
+        // Obtener asesor destino: el asignado al lead, o el que configuró el step
+        let targetAdvisorId = c.advisorId || null;
+        if (!targetAdvisorId && ctx.expedientId) {
+          const exp = db.prepare('SELECT assigned_advisor_id FROM expedients WHERE id = ? AND tenant_id = ?')
+            .get(ctx.expedientId, ctx.tenantId);
+          targetAdvisorId = exp?.assigned_advisor_id || null;
+        }
+        // Si no hay asesor específico, notificar a todos los admins
+        const targets = targetAdvisorId
+          ? [targetAdvisorId]
+          : db.prepare("SELECT id FROM advisors WHERE tenant_id = ? AND role = 'admin' AND active = 1")
+              .all(ctx.tenantId).map(a => a.id);
 
-        // Agendar recordatorio si está configurado
-        if (c.reminderMinutes && Number(c.reminderMinutes) > 0) {
-          apptSvc.scheduleReminder(db, ctx.tenantId, appt.id, {
-            minutesBefore:   Number(c.reminderMinutes),
-            recipient:       'client',
-            messageTemplate: c.reminderMessage || null,
+        const contactRow = ctx.contactId
+          ? db.prepare('SELECT first_name, last_name FROM contacts WHERE id = ? AND tenant_id = ?')
+              .get(ctx.contactId, ctx.tenantId)
+          : null;
+        const contactName = contactRow
+          ? `${contactRow.first_name || ''} ${contactRow.last_name || ''}`.trim() || 'un lead'
+          : 'un lead';
+
+        for (const advisorId of targets) {
+          notifSvc.createNotification(db, {
+            tenantId:  ctx.tenantId,
+            advisorId,
+            type:      'appointment',
+            title:     '📅 Cita pendiente por agendar',
+            body:      `${contactName} necesita agendar una cita`,
+            link:      'pipelines',
           });
         }
-
-        // Enviar confirmación
-        const rawMsg = c.confirmMessage || 'Tu cita ha sido agendada para el {fecha_cita} a las {hora_cita}.';
-        const msg = replaceVars(rawMsg, ctx)
-          .replace(/\{fecha_cita\}/g, appt.fecha)
-          .replace(/\{hora_cita\}/g,  appt.hora);
-
-        if (msg && ctx.convoId) {
-          const convo = db.prepare('SELECT * FROM conversations WHERE id = ? AND tenant_id = ?').get(ctx.convoId, ctx.tenantId);
-          if (convo) await sendMessage(db, convo, msg);
-        }
-        _log('info', `book_appointment: cita ${appt.id} agendada para ${appt.fecha} ${appt.hora}`);
+        _log('info', `book_appointment: notificación enviada a ${targets.length} asesor(es)`);
       } catch (err) {
-        _log('error', `book_appointment error: ${err.message}`);
-        throw new Error(`Agendar cita falló: ${err.message}`);
+        _log('error', `book_appointment notif error: ${err.message}`);
       }
-      return false;
+      return false; // continúa al siguiente step
     }
 
     case 'cancel_appointment': {
@@ -1239,6 +1242,81 @@ async function executeStep(db, step, ctx) {
       } catch (err) {
         _log('error', `reschedule_appointment error: ${err.message}`);
         throw new Error(`Reagendar cita falló: ${err.message}`);
+      }
+      return false;
+    }
+
+    case 'reminder_timer': {
+      // Programa jobs que se ejecutan X tiempo antes de la cita del contacto.
+      // Cada rama en c.reminders[] genera un job independiente.
+      // El bot continúa inmediatamente; los sub-steps corren cuando llega el momento.
+      if (!ctx.contactId) return false;
+      try {
+        // Obtener la cita activa más reciente del contacto
+        const appt = db.prepare(`
+          SELECT id, starts_at FROM appointments
+           WHERE contact_id = ? AND tenant_id = ? AND status IN ('scheduled','confirmed')
+           ORDER BY starts_at DESC LIMIT 1
+        `).get(ctx.contactId, ctx.tenantId);
+
+        if (!appt) {
+          _log('info', 'reminder_timer: no hay cita activa — skipping');
+          return false;
+        }
+
+        const now = Math.floor(Date.now() / 1000);
+        const reminders = Array.isArray(c.reminders) ? c.reminders : [];
+        let scheduled = 0, skipped = 0;
+
+        for (const rem of reminders) {
+          if (!rem.steps?.length) continue;
+          let fireAt;
+
+          if (rem.mode === 'before') {
+            // X minutos/horas/días antes de la cita
+            const units = { min: 60, hour: 3600, day: 86400 };
+            const secs  = Number(rem.value || 0) * (units[rem.unit] || 60);
+            fireAt = appt.starts_at - secs;
+          } else if (rem.mode === 'day_before_at') {
+            // Día anterior a una hora fija (ej. 1 día antes a las 20:00)
+            const days = Number(rem.value || 1);
+            const [hh, mm] = (rem.time || '20:00').split(':').map(Number);
+            const apptDate = new Date(appt.starts_at * 1000);
+            const fireDate = new Date(apptDate);
+            fireDate.setDate(fireDate.getDate() - days);
+            fireDate.setHours(hh, mm, 0, 0);
+            fireAt = Math.floor(fireDate.getTime() / 1000);
+          } else {
+            continue;
+          }
+
+          if (fireAt <= now) {
+            // Ya pasó — registrar como skipped y continuar
+            db.prepare(`
+              INSERT INTO appointment_reminder_jobs
+                (tenant_id, bot_id, run_id, contact_id, expedient_id, convo_id,
+                 reminder_id, steps_json, ctx_json, fire_at, skipped, skip_reason)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'fire_time_already_passed')
+            `).run(ctx.tenantId, ctx.botId, ctx.runId, ctx.contactId, ctx.expedientId || null,
+                   ctx.convoId || null, rem.id || String(scheduled),
+                   JSON.stringify(rem.steps), JSON.stringify(ctx), fireAt);
+            skipped++;
+            _log('info', `reminder_timer: rama "${rem.id}" skipped — fire_at ya pasó`);
+          } else {
+            db.prepare(`
+              INSERT INTO appointment_reminder_jobs
+                (tenant_id, bot_id, run_id, contact_id, expedient_id, convo_id,
+                 reminder_id, steps_json, ctx_json, fire_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(ctx.tenantId, ctx.botId, ctx.runId, ctx.contactId, ctx.expedientId || null,
+                   ctx.convoId || null, rem.id || String(scheduled),
+                   JSON.stringify(rem.steps), JSON.stringify(ctx), fireAt);
+            scheduled++;
+          }
+        }
+        _log('info', `reminder_timer: ${scheduled} jobs programados, ${skipped} skipped`);
+      } catch (err) {
+        _log('error', `reminder_timer error: ${err.message}`);
       }
       return false;
     }
@@ -1608,6 +1686,48 @@ function startWaitTimeoutPoller(db) {
   console.log('[bot] startWaitTimeoutPoller iniciado (cada 60s)');
 }
 
+// Poller para appointment_reminder_jobs — ejecuta sub-steps cuando llega fire_at
+let _reminderJobTimer = null;
+function startReminderJobPoller(db) {
+  if (_reminderJobTimer) return;
+  const tick = async () => {
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const jobs = db.prepare(`
+        SELECT * FROM appointment_reminder_jobs
+         WHERE fired = 0 AND skipped = 0 AND fire_at <= ?
+         ORDER BY fire_at ASC LIMIT 50
+      `).all(now);
+
+      for (const job of jobs) {
+        // Marcar como fired antes de ejecutar (evita doble disparo)
+        db.prepare('UPDATE appointment_reminder_jobs SET fired = 1, fired_at = unixepoch() WHERE id = ?')
+          .run(job.id);
+        try {
+          const steps = JSON.parse(job.steps_json || '[]');
+          const ctx   = JSON.parse(job.ctx_json   || '{}');
+          if (!steps.length) continue;
+          // Ejecutar sub-steps en secuencia
+          for (let i = 0; i < steps.length; i++) {
+            const stop = await _runStep(db, steps[i], i, steps, ctx);
+            if (stop) break;
+          }
+          _log('info', `reminderJobPoller: job ${job.id} ejecutado (${steps.length} steps)`);
+        } catch (err) {
+          _log('error', `reminderJobPoller: error en job ${job.id}: ${err.message}`);
+          db.prepare('UPDATE appointment_reminder_jobs SET skip_reason = ? WHERE id = ?')
+            .run(`exec_error: ${err.message}`, job.id);
+        }
+      }
+    } catch (err) {
+      console.error('[bot] reminderJobPoller error:', err.message);
+    }
+  };
+  _reminderJobTimer = setInterval(tick, 60_000);
+  _reminderJobTimer.unref?.();
+  console.log('[bot] startReminderJobPoller iniciado (cada 60s)');
+}
+
 function evaluateCondition(db, c, ctx) {
   try {
     if (c.field === 'message') {
@@ -1684,4 +1804,6 @@ module.exports = {
   getLogs, clearLogs, killRun, pauseRun, resumeRun,
   // Sistema de wait_response (Opción A — branching):
   resumeWait, resumeWaitsForContact, startWaitTimeoutPoller,
+  // Recordatorios de citas:
+  startReminderJobPoller,
 };

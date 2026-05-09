@@ -17,14 +17,28 @@ module.exports = function createAppointmentsRouter(db) {
     }
   });
 
-  // POST /api/appointments — creación manual (desde CRM)
+  // GET /api/appointments/slots?date=YYYY-MM-DD&advisorId=X&duration=30
+  router.get('/slots', (req, res) => {
+    try {
+      const { date, advisorId, duration } = req.query;
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+        return res.status(400).json({ error: 'date requerido (YYYY-MM-DD)' });
+      const slots = svc.getAvailableSlots(db, req.tenantId, date, advisorId || null, duration || 30);
+      res.json({ slots });
+    } catch (err) {
+      console.error('[appointments] slots error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/appointments — creación manual (desde modal CRM)
   router.post('/', (req, res) => {
     try {
-      const { contactId, expedientId, convoId, advisorId, offsetDays, time, durationMin, notes } = req.body;
+      const { contactId, expedientId, convoId, advisorId, date, time, durationMin, notes } = req.body;
       if (!contactId) return res.status(400).json({ error: 'contactId requerido' });
-      const appt = svc.book(db, req.tenantId, {
-        contactId, expedientId, convoId, advisorId, offsetDays, time, durationMin, notes,
-        createdVia: 'manual',
+      if (!date || !time)  return res.status(400).json({ error: 'date y time requeridos' });
+      const appt = svc.bookManual(db, req.tenantId, {
+        contactId, expedientId, convoId, advisorId, date, time, durationMin, notes,
       });
       res.status(201).json({ item: appt });
     } catch (err) {

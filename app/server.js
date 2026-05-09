@@ -773,6 +773,10 @@ app.listen(config.port, config.host, () => {
   try { require('./src/modules/bot/reminders').startAppointmentReminderPoller(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar appointment reminder poller:', err.message);
   }
+  // Iniciar poller de reminder_timer jobs (step nuevo)
+  try { require('./src/modules/bot/engine').startReminderJobPoller(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar reminder job poller:', err.message);
+  }
 });
 
 module.exports = { app, config, db };

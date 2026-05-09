@@ -6364,6 +6364,48 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .sb-timer-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .sb-appt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .sb-hint { font-size: 11px; color: var(--text-muted); margin: 4px 0 0; line-height: 1.4; }
+
+/* ═══ Modal Agendar Cita ═══ */
+.appt-label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 5px; }
+.appt-input {
+  width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px;
+  font-size: 13px; background: #fff; box-sizing: border-box;
+}
+.appt-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.appt-slots-grid { display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; }
+.appt-slot {
+  padding: 6px 12px; border: 1px solid #e2e8f0; border-radius: 6px;
+  font-size: 13px; cursor: pointer; background: #f8fafc; transition: all 120ms;
+  user-select: none;
+}
+.appt-slot:hover:not(.unavailable) { border-color: var(--accent); background: #eff6ff; color: var(--accent); }
+.appt-slot.selected { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.appt-slot.unavailable { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
+.appt-slot-loading { color: #94a3b8; font-size: 13px; padding: 8px 0; }
+
+/* reminder_timer builder */
+.sb-reminder-branch {
+  border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;
+  margin-bottom: 8px; background: #f8fafc; position: relative;
+}
+.sb-reminder-branch-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.sb-reminder-branch-header select,
+.sb-reminder-branch-header input[type="number"],
+.sb-reminder-branch-header input[type="time"] {
+  padding: 4px 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;
+}
+.sb-reminder-del-btn {
+  position: absolute; top: 8px; right: 8px;
+  background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 16px; line-height: 1;
+}
+.sb-reminder-del-btn:hover { color: #ef4444; }
+.sb-reminder-add-btn {
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+  background: #eff6ff; border: 1px dashed #93c5fd; border-radius: 8px;
+  color: #2563eb; font-size: 12px; cursor: pointer; width: 100%;
+  justify-content: center; margin-top: 4px;
+}
+.sb-reminder-add-btn:hover { background: #dbeafe; }
 .sb-timer-unit { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .sb-timer-unit input { width: 100%; text-align: center; }
 .sb-timer-unit span { font-size: 11px; color: var(--text-muted); }

@@ -3119,6 +3119,70 @@ Ana, , ana@hotmail.com, 5551112222</pre>
     </main>
   </div>
 
+  <!-- ═══ MODAL AGENDAR CITA ═══ -->
+  <div class="modal" id="apptBookModal" hidden>
+    <div class="modal-backdrop" id="apptBookBackdrop"></div>
+    <div class="modal-box" style="max-width:480px;width:100%">
+      <div class="modal-header">
+        <h3>📅 Agendar Cita</h3>
+        <button class="modal-close-btn" id="apptBookCloseBtn">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+        <!-- Lead info -->
+        <div id="apptBookLeadInfo" style="background:#f8fafc;border-radius:8px;padding:10px 14px;font-size:13px;color:#475569"></div>
+
+        <!-- Asesor -->
+        <div>
+          <label class="appt-label">Asesor</label>
+          <select id="apptBookAdvisor" class="appt-input">
+            <option value="">Cargando...</option>
+          </select>
+        </div>
+
+        <!-- Duración -->
+        <div>
+          <label class="appt-label">Duración</label>
+          <select id="apptBookDuration" class="appt-input">
+            <option value="15">15 minutos</option>
+            <option value="30" selected>30 minutos</option>
+            <option value="45">45 minutos</option>
+            <option value="60">1 hora</option>
+            <option value="90">1.5 horas</option>
+            <option value="120">2 horas</option>
+          </select>
+        </div>
+
+        <!-- Fecha -->
+        <div>
+          <label class="appt-label">Fecha</label>
+          <input type="date" id="apptBookDate" class="appt-input" />
+        </div>
+
+        <!-- Slots de hora -->
+        <div>
+          <label class="appt-label">Hora disponible</label>
+          <div id="apptBookSlots" class="appt-slots-grid">
+            <p style="color:#94a3b8;font-size:13px">Selecciona una fecha para ver los horarios</p>
+          </div>
+        </div>
+
+        <!-- Notas -->
+        <div>
+          <label class="appt-label">Notas (opcional)</label>
+          <textarea id="apptBookNotes" class="appt-input" rows="2" placeholder="Notas internas sobre la cita..."></textarea>
+        </div>
+
+        <!-- Warning recordatorios -->
+        <div id="apptBookWarnings" style="display:none;background:#fef3c7;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e"></div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+          <button class="btn-secondary" id="apptBookCancelBtn">Cancelar</button>
+          <button class="btn-primary" id="apptBookSaveBtn" disabled>Agendar cita</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/vendor/drawflow/drawflow.min.js"></script>
   <script src="/app.js?v=20260508c"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->

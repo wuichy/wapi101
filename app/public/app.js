@@ -6748,14 +6748,7 @@ const BOT_STEP_REGISTRY = {
     feature: 'appointments',
     label:   { es: 'Agendar Cita', en: 'Book appointment' },
     icon:    '<rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M6 12h4m-2-2v4"/>',
-    summary: (step) => {
-      const c = step.config || {};
-      const days = Number(c.offsetDays ?? 1);
-      const time = c.time || '10:00';
-      const dur  = Number(c.durationMin || 30);
-      const label = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`;
-      return `${label} a las ${time} · ${dur} min`;
-    },
+    summary: () => 'Notifica al asesor · abre modal de cita',
   },
   cancel_appointment: {
     group: 'Citas',
@@ -6768,16 +6761,21 @@ const BOT_STEP_REGISTRY = {
     },
   },
   reschedule_appointment: {
-    group: 'Citas',
+    group:   'Citas',
     feature: 'appointments',
-    label:   { es: 'Reagendar Cita', en: 'Reschedule appointment' },
+    label:   { es: 'Reagendar Cita 🚧', en: 'Reschedule appointment 🚧' },
     icon:    '<rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/><path d="M7 14a3 3 0 0 1 3-3m0 0l-1.5-1.5M10 11l1.5-1.5"/>',
+    summary: () => '🚧 En construcción',
+  },
+  reminder_timer: {
+    group:   'Citas',
+    feature: 'appointments',
+    label:   { es: 'Temporizador de Recordatorio', en: 'Reminder Timer' },
+    icon:    '<circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2.5"/><path d="M3.5 3.5l13 13" opacity=".3"/>',
     summary: (step) => {
-      const c = step.config || {};
-      const days = Number(c.offsetDays ?? 1);
-      const time = c.time || '10:00';
-      const label = days === 0 ? 'hoy' : days === 1 ? 'mañana' : `en ${days} días`;
-      return `Reagenda a ${label} a las ${time}`;
+      const rems = step.config?.reminders || [];
+      if (!rems.length) return 'Sin recordatorios';
+      return `${rems.length} recordatorio${rems.length > 1 ? 's' : ''}`;
     },
   },
 };
@@ -11431,6 +11429,8 @@ function setupKanbanDragDrop() {
           const stage = pl?.stages?.find(s => s.id === stageId);
           toast(`Movido a ${pl?.name} → ${stage?.name || ''}`, 'success');
         }
+        // Si el stage destino tiene un bot con book_appointment → abrir modal
+        _checkAndOpenApptModal(expId, stageId);
       } catch (err) {
         toast('Error al mover: ' + err.message, 'error');
       }
@@ -14652,6 +14652,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAdvisors();
   setupMachineTokens();
   setupNotifications();
+  setupApptBookModal();
   _setupSplitListeners();
   registerServiceWorker();
   const _savedView   = localStorage.getItem('lastView') || 'chats';
@@ -18913,3 +18914,267 @@ function startCommentsBadgePolling() {
   refreshCommentsBadge();
   _commentsCountTimer = setInterval(refreshCommentsBadge, 60 * 1000);
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// MODAL AGENDAR CITA (book_appointment)
+// ═══════════════════════════════════════════════════════════════════
+
+let _apptBookContext = null; // { expId, contactId, convoId, botSteps }
+
+function _todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+async function openApptBookModal(context) {
+  _apptBookContext = context;
+  const modal = document.getElementById('apptBookModal');
+  if (!modal) return;
+
+  // Info del lead
+  const infoEl = document.getElementById('apptBookLeadInfo');
+  if (infoEl) infoEl.textContent = context.leadName ? `Lead: ${context.leadName}` : 'Agendando cita para el lead';
+
+  // Cargar asesores
+  const advisorSel = document.getElementById('apptBookAdvisor');
+  if (advisorSel) {
+    try {
+      const { advisors } = await api('GET', '/api/advisors/list-min');
+      advisorSel.innerHTML = advisors.map(a =>
+        `<option value="${a.id}" ${a.id === context.currentAdvisorId ? 'selected' : ''}>${escHtml(a.name)}</option>`
+      ).join('');
+    } catch (_) {
+      advisorSel.innerHTML = '<option value="">Sin asesores</option>';
+    }
+  }
+
+  // Fecha mínima = hoy
+  const dateInput = document.getElementById('apptBookDate');
+  if (dateInput) {
+    dateInput.min = _todayStr();
+    dateInput.value = _todayStr();
+  }
+
+  // Resetear slot seleccionado y save btn
+  _apptBookSelectedSlot = null;
+  const saveBtn = document.getElementById('apptBookSaveBtn');
+  if (saveBtn) saveBtn.disabled = true;
+
+  modal.hidden = false;
+
+  // Cargar slots para hoy
+  await _loadApptSlots();
+}
+
+function closeApptBookModal() {
+  const modal = document.getElementById('apptBookModal');
+  if (modal) modal.hidden = true;
+  _apptBookContext = null;
+  _apptBookSelectedSlot = null;
+}
+
+let _apptBookSelectedSlot = null;
+
+async function _loadApptSlots() {
+  const date     = document.getElementById('apptBookDate')?.value;
+  const advisorId= document.getElementById('apptBookAdvisor')?.value;
+  const duration = document.getElementById('apptBookDuration')?.value || 30;
+  const slotsEl  = document.getElementById('apptBookSlots');
+  if (!date || !slotsEl) return;
+
+  slotsEl.innerHTML = '<span class="appt-slot-loading">Cargando horarios…</span>';
+  _apptBookSelectedSlot = null;
+  const saveBtn = document.getElementById('apptBookSaveBtn');
+  if (saveBtn) saveBtn.disabled = true;
+
+  try {
+    const params = new URLSearchParams({ date, duration });
+    if (advisorId) params.set('advisorId', advisorId);
+    const { slots } = await api('GET', `/api/appointments/slots?${params}`);
+
+    if (!slots.length) {
+      slotsEl.innerHTML = '<span style="color:#94a3b8;font-size:13px">Sin horario disponible este día</span>';
+      _checkReminderWarnings(date);
+      return;
+    }
+
+    slotsEl.innerHTML = slots.map(s => `
+      <button type="button"
+        class="appt-slot ${s.available ? '' : 'unavailable'}"
+        data-time="${s.time}"
+        ${!s.available ? 'disabled' : ''}>
+        ${s.time}
+      </button>
+    `).join('');
+
+    slotsEl.querySelectorAll('.appt-slot:not(.unavailable)').forEach(btn => {
+      btn.addEventListener('click', () => {
+        slotsEl.querySelectorAll('.appt-slot').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        _apptBookSelectedSlot = btn.dataset.time;
+        if (saveBtn) saveBtn.disabled = false;
+      });
+    });
+  } catch (err) {
+    slotsEl.innerHTML = `<span style="color:#ef4444;font-size:13px">Error: ${escHtml(err.message)}</span>`;
+  }
+
+  _checkReminderWarnings(date);
+}
+
+function _checkReminderWarnings(dateStr) {
+  // Verificar si el bot tiene reminder_timer steps y si alguno ya pasó
+  const warnEl = document.getElementById('apptBookWarnings');
+  if (!warnEl || !_apptBookContext?.botSteps) return;
+
+  const reminderSteps = (_apptBookContext.botSteps || []).filter(s => s.type === 'reminder_timer');
+  if (!reminderSteps.length) { warnEl.style.display = 'none'; return; }
+
+  const warnings = [];
+  const apptDate = new Date(dateStr + 'T12:00:00');
+
+  for (const step of reminderSteps) {
+    for (const rem of (step.config?.reminders || [])) {
+      let fireDate;
+      if (rem.mode === 'before') {
+        const units = { min: 60_000, hour: 3_600_000, day: 86_400_000 };
+        fireDate = new Date(apptDate.getTime() - Number(rem.value || 0) * (units[rem.unit] || 60_000));
+      } else if (rem.mode === 'day_before_at') {
+        fireDate = new Date(apptDate);
+        fireDate.setDate(fireDate.getDate() - Number(rem.value || 1));
+        const [hh, mm] = (rem.time || '20:00').split(':').map(Number);
+        fireDate.setHours(hh, mm, 0, 0);
+      }
+      if (fireDate && fireDate <= new Date()) {
+        const label = rem.mode === 'before'
+          ? `${rem.value} ${rem.unit} antes`
+          : `${rem.value} día(s) antes a las ${rem.time}`;
+        warnings.push(`⚠️ El recordatorio "${label}" no se enviará — la cita es muy pronto para ese aviso.`);
+      }
+    }
+  }
+
+  if (warnings.length) {
+    warnEl.innerHTML = warnings.join('<br>');
+    warnEl.style.display = 'block';
+  } else {
+    warnEl.style.display = 'none';
+  }
+}
+
+async function _saveApptBook() {
+  if (!_apptBookSelectedSlot || !_apptBookContext) return;
+  const saveBtn = document.getElementById('apptBookSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Agendando…'; }
+
+  try {
+    const date      = document.getElementById('apptBookDate')?.value;
+    const advisorId = document.getElementById('apptBookAdvisor')?.value || null;
+    const duration  = document.getElementById('apptBookDuration')?.value || 30;
+    const notes     = document.getElementById('apptBookNotes')?.value || null;
+
+    await api('POST', '/api/appointments', {
+      contactId:   _apptBookContext.contactId,
+      expedientId: _apptBookContext.expId || null,
+      convoId:     _apptBookContext.convoId || null,
+      advisorId:   advisorId ? Number(advisorId) : null,
+      date,
+      time:        _apptBookSelectedSlot,
+      durationMin: Number(duration),
+      notes,
+    });
+
+    toast('✅ Cita agendada correctamente', 'success');
+    closeApptBookModal();
+  } catch (err) {
+    toast('Error al agendar: ' + err.message, 'error');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Agendar cita'; }
+  }
+}
+
+function setupApptBookModal() {
+  document.getElementById('apptBookCloseBtn')?.addEventListener('click', closeApptBookModal);
+  document.getElementById('apptBookBackdrop')?.addEventListener('click', closeApptBookModal);
+  document.getElementById('apptBookCancelBtn')?.addEventListener('click', closeApptBookModal);
+  document.getElementById('apptBookSaveBtn')?.addEventListener('click', _saveApptBook);
+
+  // Recargar slots al cambiar fecha, asesor o duración
+  ['apptBookDate','apptBookAdvisor','apptBookDuration'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', _loadApptSlots);
+  });
+}
+
+// Hook en pipeline drop: si el stage destino tiene un bot con book_appointment → abrir modal
+function _checkAndOpenApptModal(expId, stageId) {
+  const pipeline = (PIPELINES || []).find(p => p.stages?.some(s => s.id === stageId));
+  if (!pipeline) return;
+  const stage = pipeline.stages.find(s => s.id === stageId);
+  if (!stage?.bot_id) return;
+
+  // Buscar el bot en sbBots (ya cargado en el builder)
+  const bot = (sbBots || []).find(b => b.id === stage.bot_id);
+  if (!bot) return;
+
+  const steps = Array.isArray(bot.steps) ? bot.steps : (JSON.parse(bot.steps || '[]'));
+  const hasBookAppt = steps.some(s => s.type === 'book_appointment');
+  if (!hasBookAppt) return;
+
+  // Obtener info del lead
+  const exp = PL_EXP_CACHE?.find(x => x.id === expId);
+  const contact = exp ? { name: exp.name } : null;
+
+  openApptBookModal({
+    expId,
+    contactId: exp?.contactId || null,
+    convoId:   null,
+    leadName:  exp?.name || null,
+    currentAdvisorId: window._SESSION?.advisor?.id || null,
+    botSteps: steps,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BUILDER reminder_timer UI
+// ═══════════════════════════════════════════════════════════════════
+
+function _renderReminderTimerEditor(sid, c) {
+  const reminders = Array.isArray(c.reminders) ? c.reminders : [];
+  const branches  = reminders.map((rem, i) => {
+    const rid = rem.id || `r${i}`;
+    return `
+      <div class="sb-reminder-branch" data-rid="${escHtml(rid)}">
+        <button type="button" class="sb-reminder-del-btn" data-del-rid="${escHtml(rid)}">×</button>
+        <div class="sb-reminder-branch-header">
+          <select data-field="rem_mode" data-sid="${sid}" data-rid="${escHtml(rid)}">
+            <option value="before"       ${rem.mode==='before'?'selected':''}>Antes de la cita</option>
+            <option value="day_before_at" ${rem.mode==='day_before_at'?'selected':''}>Día anterior a hora fija</option>
+          </select>
+          ${rem.mode === 'day_before_at' ? `
+            <input type="number" value="${rem.value||1}" min="1" max="30"
+              data-field="rem_value" data-sid="${sid}" data-rid="${escHtml(rid)}" style="width:52px" />
+            <span style="font-size:12px">día(s) antes a las</span>
+            <input type="time" value="${rem.time||'20:00'}"
+              data-field="rem_time" data-sid="${sid}" data-rid="${escHtml(rid)}" />
+          ` : `
+            <input type="number" value="${rem.value||30}" min="1"
+              data-field="rem_value" data-sid="${sid}" data-rid="${escHtml(rid)}" style="width:60px" />
+            <select data-field="rem_unit" data-sid="${sid}" data-rid="${escHtml(rid)}">
+              <option value="min"  ${rem.unit==='min'?'selected':''}>minutos antes</option>
+              <option value="hour" ${rem.unit==='hour'?'selected':''}>horas antes</option>
+              <option value="day"  ${rem.unit==='day'?'selected':''}>días antes</option>
+            </select>
+          `}
+        </div>
+        <p class="sb-hint">Los pasos debajo de este recordatorio se ejecutarán en el tiempo indicado.</p>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    ${branches}
+    <button type="button" class="sb-reminder-add-btn" data-sid="${sid}" data-add-reminder>
+      + Agregar recordatorio
+    </button>
+  `;
+}
+

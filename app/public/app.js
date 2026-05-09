@@ -8728,6 +8728,7 @@ function setupBot() {
     if (e.target.closest('.sb-rem-add-step-btn')) return;
     if (e.target.closest('.bb-add-btn')) return;
     if (e.target.closest('.bb-node--empty')) return;
+    if (e.target.closest('.bb-empty-branch')) return;
     _restoreSbStepPicker();
     _sbInsertAfter = null;
     _reminderStepCtx = null;
@@ -9455,12 +9456,10 @@ function setupBot() {
       </div>`;
     }
     if (item.kind === 'empty') {
-      const shortLabel = item.label && item.label.length > 20 ? item.label.slice(0, 19) + '…' : (item.label || '');
-      return `<div class="bb-node bb-node--empty" data-action="add-to-branch" data-node-id="${item.id}" title="Agregar paso a esta rama" style="left:${item.x}px;top:${item.y}px;width:${item.w}px;height:${item.h}px">
-        <div class="bb-node__head">
-          <span class="bb-node__icon" style="width:16px;height:16px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:12px;height:12px"><circle cx="8" cy="8" r="5"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/></svg></span>
-          <span class="bb-node__title" style="font-size:11.5px">${escHtml(shortLabel)}</span>
-        </div>
+      const shortLabel = item.label && item.label.length > 22 ? item.label.slice(0, 21) + '…' : (item.label || '');
+      return `<div class="bb-empty-branch" data-action="add-to-branch" data-node-id="${item.id}" title="Agregar paso a esta rama" style="left:${item.x}px;top:${item.y}px;width:${item.w}px;height:${item.h}px">
+        <div class="bb-empty-branch-btn">+</div>
+        <div class="bb-empty-branch-label">${escHtml(shortLabel)}</div>
       </div>`;
     }
     const step = item.step;

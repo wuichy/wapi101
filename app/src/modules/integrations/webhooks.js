@@ -173,6 +173,10 @@ module.exports = function createWebhooksRouter(db) {
       const eventId = _change?.value?.messages?.[0]?.id
                    || (_statusEvt ? `status-${_statusEvt.id}-${_statusEvt.status}` : null)
                    || payload?.entry?.[0]?.messaging?.[0]?.message?.mid
+                   // feed events (page comments): usar comment_id o post_id como eventId
+                   || (_change?.field === 'feed' && _change?.value?.comment_id
+                       ? `feed-${_change.value.comment_id}`
+                       : null)
                    || `${provider}-${payload?.entry?.[0]?.id}-${payload?.entry?.[0]?.time}`;
 
       res.sendStatus(200);

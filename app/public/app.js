@@ -14746,6 +14746,7 @@ function _updateCalendarBadge(count) {
     badge.hidden = false;
   } else {
     badge.hidden = true;
+    badge.textContent = '';
   }
 }
 
@@ -18775,7 +18776,7 @@ async function refreshCommentsBadge() {
     if (badge) {
       const n = Number(counts?.unread || 0);
       if (n > 0) { badge.textContent = n > 99 ? '99+' : String(n); badge.hidden = false; }
-      else       { badge.hidden = true; }
+      else       { badge.textContent = ''; badge.hidden = true; }
     }
   } catch {}
 }

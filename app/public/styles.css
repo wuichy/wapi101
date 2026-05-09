@@ -129,6 +129,7 @@ svg { width: 20px; height: 20px; stroke-linecap: round; stroke-linejoin: round; 
   box-sizing: border-box;
 }
 .nav-badge[hidden] { display: none !important; }
+.nav-badge:empty   { display: none !important; }
 /* Cuando la nav está colapsada (modo icono), el badge se posiciona absoluto en
    la esquina superior-derecha del icono — clásico estilo iOS notificación */
 body.nav-collapsed .nav-badge {

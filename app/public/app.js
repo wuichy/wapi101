@@ -7977,6 +7977,66 @@ let _reminderStepCtx  = null; // { parentSid, rid } cuando se añade un step a u
 let _visualBranchCtx  = null; // { targetArr, parentSid } para añadir step a rama desde visual
 let _branchCaseStepCtx = null; // { parentSid, caseId } para añadir step a una rama branch
 
+// Busca el step con _id=sid en cualquier nivel del árbol (sbSteps, branch.cases.steps,
+// branch.default, reminder_timer.reminders.steps, wait_response.branches[k]).
+// Devuelve { parentArr, idx, depthInfo: [...] } o null. depthInfo describe
+// la cadena de padres (para mostrar badges tipo "Rama 1").
+function _findStepLocation(steps, sid, depthInfo = []) {
+  if (!Array.isArray(steps)) return null;
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    if (s._id === sid) return { parentArr: steps, idx: i, depthInfo };
+    if (s.type === 'branch' || s.type === 'condition') {
+      const cases = Array.isArray(s.config?.cases) ? s.config.cases : [];
+      for (let ci = 0; ci < cases.length; ci++) {
+        const r = _findStepLocation(cases[ci].steps, sid, [...depthInfo, { parentStep: s, label: `Rama ${ci + 1}` }]);
+        if (r) return r;
+      }
+      const defR = _findStepLocation(s.config?.default, sid, [...depthInfo, { parentStep: s, label: 'Default' }]);
+      if (defR) return defR;
+    }
+    if (s.type === 'reminder_timer') {
+      const rems = Array.isArray(s.config?.reminders) ? s.config.reminders : [];
+      for (const rem of rems) {
+        const r = _findStepLocation(rem.steps, sid, [...depthInfo, { parentStep: s, label: `Recordatorio` }]);
+        if (r) return r;
+      }
+    }
+    if (s.type === 'wait_response') {
+      const branches = s.config?.branches || {};
+      for (const [bk, arr] of Object.entries(branches)) {
+        const r = _findStepLocation(arr, sid, [...depthInfo, { parentStep: s, label: bk }]);
+        if (r) return r;
+      }
+    }
+  }
+  return null;
+}
+
+// Aplana sbSteps en orden de renderizado para el list view, incluyendo
+// sub-pasos de cada rama de un branch (con depth y label de "Rama X").
+// Returns array of { step, depth, branchLabel, parentArr, idx }.
+function _flattenStepsForList(steps, depth = 0, branchLabel = null) {
+  const out = [];
+  if (!Array.isArray(steps)) return out;
+  steps.forEach((step, idx) => {
+    out.push({ step, depth, branchLabel, parentArr: steps, idx });
+    if (step.type === 'branch' || step.type === 'condition') {
+      const cases = Array.isArray(step.config?.cases) ? step.config.cases : [];
+      cases.forEach((cs, ci) => {
+        if (Array.isArray(cs.steps) && cs.steps.length) {
+          out.push(..._flattenStepsForList(cs.steps, depth + 1, `Rama ${ci + 1}`));
+        }
+      });
+      const defSteps = Array.isArray(step.config?.default) ? step.config.default : [];
+      if (defSteps.length) {
+        out.push(..._flattenStepsForList(defSteps, depth + 1, 'Default'));
+      }
+    }
+  });
+  return out;
+}
+
 function renderStepsFlow() {
   const flow = document.getElementById('sbStepsFlow');
   if (!flow) return;
@@ -7999,18 +8059,27 @@ function renderStepsFlow() {
       </div>`
     : '';
 
-  flow.innerHTML = triggerBanner + sbSteps.map((step, i) => {
-    const prevIsStop = i > 0 && (sbSteps[i - 1].type === 'stop_bot' || sbSteps[i - 1].type === 'stop_and_start');
-    const prevIsBranch = i > 0 && (sbSteps[i - 1].type === 'branch' || sbSteps[i - 1].type === 'condition');
-    const insertAfterTarget = i === 0 ? '__top__' : sbSteps[i - 1]._id;
-    const showInsert = i === 0 || !prevIsStop;
-    // Nota explicativa cuando el step viene justo después de un Condición/Branch:
-    // los pasos top-level que siguen a una rama solo corren cuando ninguna rama
-    // matcheó (fallback). Sin esta nota, el list view es engañoso.
-    const fallbackNote = prevIsBranch
+  // Aplanar árbol completo: incluye top-level + sub-pasos de cada rama de cada
+  // Condición. Cada entry tiene { step, depth, branchLabel, parentArr, idx }.
+  const flatList = _flattenStepsForList(sbSteps);
+
+  flow.innerHTML = triggerBanner + flatList.map((entry, listIdx) => {
+    const { step, depth, branchLabel } = entry;
+    const prev = listIdx > 0 ? flatList[listIdx - 1] : null;
+    const prevIsStop = prev && (prev.step.type === 'stop_bot' || prev.step.type === 'stop_and_start');
+    const prevIsBranchTop = prev && depth === 0 && prev.depth === 0 && (prev.step.type === 'branch' || prev.step.type === 'condition');
+    const insertAfterTarget = !prev ? '__top__' : prev.step._id;
+    const showInsert = !prev || !prevIsStop;
+    const isNested = depth > 0;
+    // Solo top-level pueden mostrar el fallback (el aviso aplica al "después" del branch top-level)
+    const fallbackNote = prevIsBranchTop && depth === 0
       ? `<div class="sb-fallback-note" title="Estos pasos solo se ejecutan si ninguna rama del paso anterior matcheó. Para que un paso se ejecute cuando matchea una rama, agrégalo dentro de la rama desde el flujo visual.">
           <span class="sb-fallback-arrow">↳</span> Si ninguna rama matcheó, continúa aquí
         </div>`
+      : '';
+    // Badge "↳ Rama X" cuando el step es nested (dentro de una rama)
+    const branchBadge = (isNested && branchLabel)
+      ? `<span class="sb-step-branch-badge">↳ ${escHtml(branchLabel)}</span>`
       : '';
     // Issues específicas de este step (matchean por stepId === step._id)
     const stepIssues = sbCurrentIssues.filter(it => it.stepId === step._id);
@@ -8029,8 +8098,9 @@ function renderStepsFlow() {
             </div>`).join('')}
         </div>`
       : '';
+    const wrapClass = isNested ? `sb-step-wrap sb-step-wrap--nested sb-step-wrap--depth-${Math.min(depth, 4)}` : 'sb-step-wrap';
     return `
-    <div class="sb-step-wrap">
+    <div class="${wrapClass}">
       ${fallbackNote}
       <div class="sb-step-connector">
         ${showInsert ? `<button class="sb-insert-between" data-insert-after="${insertAfterTarget}" title="Insertar módulo aquí">
@@ -8041,7 +8111,7 @@ function renderStepsFlow() {
         <div class="sb-step-header" data-toggle-sid="${step._id}">
           <div class="sb-step-icon type-${step.type}">${stepIconSvg(step.type)}</div>
           <div class="sb-step-info">
-            <div class="sb-step-title">${SB_STEP_LABELS[step.type] || step.type}${errors.length ? ' <span class="sb-step-error-pill">⚠ Error</span>' : (warns.length ? ' <span class="sb-step-warn-pill">⚡ Aviso</span>' : '')}</div>
+            <div class="sb-step-title">${branchBadge}${SB_STEP_LABELS[step.type] || step.type}${errors.length ? ' <span class="sb-step-error-pill">⚠ Error</span>' : (warns.length ? ' <span class="sb-step-warn-pill">⚡ Aviso</span>' : '')}</div>
             <div class="sb-step-summary">${stepSummary(step)}</div>
           </div>
           <button class="sb-step-del" data-del-sid="${step._id}" aria-label="Eliminar paso">
@@ -8710,9 +8780,10 @@ function setupBot() {
       sbSteps.unshift(newStep);
       _sbInsertAfter = null;
     } else if (_sbInsertAfter) {
-      const idx = sbSteps.findIndex(s => s._id === _sbInsertAfter);
-      if (idx !== -1 && sbSteps[idx].type !== 'stop_bot') {
-        sbSteps.splice(idx + 1, 0, newStep);
+      // Buscar en todo el árbol (top-level + nested branch.cases.steps)
+      const loc = _findStepLocation(sbSteps, _sbInsertAfter);
+      if (loc && loc.parentArr[loc.idx].type !== 'stop_bot') {
+        loc.parentArr.splice(loc.idx + 1, 0, newStep);
       } else {
         sbSteps.push(newStep);
       }
@@ -8761,7 +8832,12 @@ function setupBot() {
     const delBtn = e.target.closest('[data-del-sid]');
     if (delBtn) {
       const sid = delBtn.dataset.delSid;
-      sbSteps = sbSteps.filter(s => s._id !== sid);
+      const loc = _findStepLocation(sbSteps, sid);
+      if (loc) {
+        loc.parentArr.splice(loc.idx, 1);
+      } else {
+        sbSteps = sbSteps.filter(s => s._id !== sid);
+      }
       renderStepsFlow();
       return;
     }

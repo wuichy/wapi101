@@ -5833,6 +5833,21 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 #sbStepsFlow { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 560px; }
 
 .sb-step-wrap { display: flex; flex-direction: column; align-items: center; width: 100%; }
+/* Indentación de cards nested (pasos dentro de una rama de Condición) */
+.sb-step-wrap--nested { width: calc(100% - 32px); margin-left: 32px; position: relative; }
+.sb-step-wrap--nested.sb-step-wrap--depth-2 { margin-left: 64px; width: calc(100% - 64px); }
+.sb-step-wrap--nested.sb-step-wrap--depth-3 { margin-left: 96px; width: calc(100% - 96px); }
+.sb-step-wrap--nested.sb-step-wrap--depth-4 { margin-left: 128px; width: calc(100% - 128px); }
+.sb-step-wrap--nested::before {
+  content: ''; position: absolute; left: -16px; top: 0; bottom: 0;
+  width: 2px; background: #c7d2fe; border-radius: 2px;
+}
+.sb-step-branch-badge {
+  display: inline-block; padding: 2px 8px; margin-right: 6px;
+  background: #eef2ff; color: #1e3a8a; border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+}
+
 /* Pills para el campo Mensaje en condición/branch (estilo chip clickable) */
 .sb-branch-rule-value[data-pills="1"] {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;

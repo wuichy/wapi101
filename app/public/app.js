@@ -9873,6 +9873,7 @@ function setupBot() {
     document.getElementById('bbVisualEditorLabel').textContent = label;
     const body = document.getElementById('bbVisualEditorBody');
     if (body && typeof buildStepBody === 'function') {
+      body.dataset.bodySid = step._id; // permite que _refreshBranchStepBody encuentre el body
       try { body.innerHTML = buildStepBody(step); }
       catch (e) { body.innerHTML = `<p style="color:#dc2626">Error: ${escHtml(e.message)}</p>`; }
     }

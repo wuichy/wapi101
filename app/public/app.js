@@ -6599,14 +6599,14 @@ const BOT_STEP_REGISTRY = {
   },
   branch: {
     group: 'Flujo',
-    label:   { es: 'Ramificar (multi-caso)', en: 'Branch (multi-case)' },
+    label:   { es: 'Condición / Ramificar', en: 'Condition / Branch' },
     icon:    '<path d="M5 3v6"/><path d="M5 9c0 5 5 5 5 8"/><path d="M15 3v6"/><path d="M15 9c0 5-5 5-5 8"/><circle cx="5" cy="3" r="1.5"/><circle cx="15" cy="3" r="1.5"/><circle cx="10" cy="17" r="1.5"/>',
     summary: (step) => {
       const c = step.config || {};
       const n = Array.isArray(c.cases) ? c.cases.length : 0;
       const hasDefault = Array.isArray(c.default) && c.default.length > 0;
-      if (!n && !hasDefault) return 'Sin casos configurados';
-      return `${n} caso${n !== 1 ? 's' : ''}${hasDefault ? ' + default' : ''}`;
+      if (!n && !hasDefault) return 'Sin ramas configuradas';
+      return `${n} rama${n !== 1 ? 's' : ''}${hasDefault ? ' + default' : ''}`;
     },
   },
   wait_response: {
@@ -7862,58 +7862,8 @@ function buildStepBody(step) {
           Este bot terminará y se ejecutará el bot seleccionado para el mismo contacto, en su mismo lead.
         </p>`;
     }
-    case 'branch': {
-      // MVP: cada caso tiene 1 mensaje. Ampliable a multi-step después.
-      const cases = Array.isArray(c.cases) ? c.cases : [];
-      const defaultBranch = Array.isArray(c.default) ? c.default : [];
-      const defaultMsg = defaultBranch[0]?.config?.text || '';
-
-      const caseHtml = cases.map((cs, ci) => {
-        const text = cs.branch?.[0]?.config?.text || '';
-        const op = cs.op || 'contains';
-        return `
-          <details class="sb-branch-case" data-branch-case="${ci}" data-parent-sid="${sid}">
-            <summary>
-              <span class="sb-branch-case-num">${ci + 1}</span>
-              <span class="sb-branch-case-label">${escHtml(cs.field === 'tag' ? `Tag = "${cs.value || '?'}"` : `Mensaje ${op} "${cs.value || '?'}"`)}</span>
-              <span class="sb-branch-case-state ${text.trim() ? 'is-set' : ''}">${text.trim() ? '✓' : 'Vacía'}</span>
-              <button type="button" class="sb-branch-case-del" data-del-case="${ci}" data-sid="${sid}" title="Eliminar caso">×</button>
-            </summary>
-            <div class="sb-branch-case-body">
-              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-                <select class="sb-branch-case-field" data-case="${ci}" data-sid="${sid}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
-                  <option value="message"${cs.field === 'message' || !cs.field ? ' selected' : ''}>Mensaje</option>
-                  <option value="tag"${cs.field === 'tag' ? ' selected' : ''}>Etiqueta</option>
-                </select>
-                <select class="sb-branch-case-op" data-case="${ci}" data-sid="${sid}" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px">
-                  <option value="contains"${op === 'contains' ? ' selected' : ''}>contiene</option>
-                  <option value="equals"${op === 'equals' ? ' selected' : ''}>es exactamente</option>
-                  <option value="starts_with"${op === 'starts_with' ? ' selected' : ''}>empieza con</option>
-                  <option value="matches_any"${op === 'matches_any' ? ' selected' : ''}>coincide con (lista)</option>
-                </select>
-                <input type="text" class="sb-branch-case-value" data-case="${ci}" data-sid="${sid}" value="${escHtml(cs.value || '')}" placeholder="valor o lista,sep,coma" style="flex:1;min-width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px" />
-              </div>
-              <label style="font-size:12px;font-weight:600;display:block;margin:4px 0 4px">Mensaje cuando matchea este caso</label>
-              <textarea class="sb-branch-case-text" data-case="${ci}" data-sid="${sid}" rows="2" placeholder="Texto a enviar...">${escHtml(text)}</textarea>
-            </div>
-          </details>`;
-      }).join('');
-
-      return `
-        <p style="font-size:12px;color:var(--text-muted);margin:6px 0 8px;line-height:1.5">
-          Evalúa los casos en orden y ejecuta el primero que matchea. Si nada matchea, usa <strong>default</strong>. Útil para rutear según contenido del mensaje (ej: cupones distintos por keyword).
-        </p>
-        <div class="sb-branch-cases" data-sid="${sid}">
-          ${caseHtml || '<p style="font-size:12px;color:var(--text-muted);margin:0">Sin casos. Agrega uno abajo.</p>'}
-        </div>
-        <button type="button" class="btn btn--ghost btn--sm sb-branch-add-case" data-sid="${sid}" style="margin:8px 0">
-          + Agregar caso
-        </button>
-        <details class="sb-branch-default">
-          <summary style="font-size:12px;font-weight:600;color:var(--text-muted)">Default (si nada matchea)</summary>
-          <textarea class="sb-branch-default-text" data-sid="${sid}" rows="2" placeholder="Mensaje por defecto. Vacío = no responde nada.">${escHtml(defaultMsg)}</textarea>
-        </details>`;
-    }
+    case 'branch':
+      return _renderBranchEditor(sid, c);
     case 'wait_response': {
       // MVP: cada rama tiene 1 paso de tipo "message". Las ramas se guardan en
       // c.branches[branchKey] = [{ type:'message', config:{ text } }]. La UI
@@ -8025,6 +7975,7 @@ function buildStageOptionsWithColor(pipelineId, selectedStageId) {
 let _sbInsertAfter     = null; // sid tras el cual insertar, null = al final
 let _reminderStepCtx  = null; // { parentSid, rid } cuando se añade un step a una rama reminder
 let _visualBranchCtx  = null; // { targetArr, parentSid } para añadir step a rama desde visual
+let _branchCaseStepCtx = null; // { parentSid, caseId } para añadir step a una rama branch
 
 function renderStepsFlow() {
   const flow = document.getElementById('sbStepsFlow');
@@ -8181,23 +8132,39 @@ function collectStepConfig(sid) {
     });
   }
 
-  // branch step — recolectar cases[] + default
-  const branchCases = body.querySelectorAll('.sb-branch-case[data-branch-case]');
-  if (branchCases.length || body.querySelector('.sb-branch-default-text')) {
+  // branch step v2 — multi-regla AND/OR + sub-flujo completo por rama
+  const branchCasesV2 = body.querySelectorAll('.sb-branch-case-v2[data-case-id]');
+  if (branchCasesV2.length || body.querySelector('.sb-branch-add-case-v2')) {
     cfg.cases = [];
-    branchCases.forEach((caseEl) => {
-      const ci    = caseEl.dataset.branchCase;
-      const field = caseEl.querySelector('.sb-branch-case-field')?.value || 'message';
-      const op    = caseEl.querySelector('.sb-branch-case-op')?.value    || 'contains';
-      const value = caseEl.querySelector('.sb-branch-case-value')?.value?.trim() || '';
-      const text  = caseEl.querySelector('.sb-branch-case-text')?.value?.trim()  || '';
-      cfg.cases.push({
-        field, op, value,
-        branch: text ? [{ type: 'message', config: { text, channelId: 'auto' } }] : [],
+    branchCasesV2.forEach(caseEl => {
+      const caseId = caseEl.dataset.caseId;
+      // Recolectar reglas
+      const ruleEls = caseEl.querySelectorAll('.sb-branch-rule[data-rule-idx]');
+      const rules = [];
+      ruleEls.forEach(ruleEl => {
+        const field = ruleEl.querySelector('.sb-branch-rule-field')?.value || 'message';
+        const op    = ruleEl.querySelector('.sb-branch-rule-op')?.value    || 'contains';
+        const value = ruleEl.querySelector('.sb-branch-rule-value')?.value?.trim() || '';
+        rules.push({ field, op, value });
       });
+      const rulesOpEl = caseEl.querySelector('.sb-branch-rules-op');
+      const rules_op  = rulesOpEl?.value || 'and';
+      // Recolectar sub-steps de esta rama
+      const steps = [];
+      caseEl.querySelectorAll('[data-substep-id]').forEach(ssEl => {
+        steps.push({ _id: ssEl.dataset.substepId, type: ssEl.dataset.substepType || 'message', config: collectStepConfig(ssEl.dataset.substepId) });
+      });
+      cfg.cases.push({ id: caseId, rules_op, rules, steps });
     });
-    const defaultText = body.querySelector('.sb-branch-default-text')?.value?.trim() || '';
-    cfg.default = defaultText ? [{ type: 'message', config: { text: defaultText, channelId: 'auto' } }] : [];
+    // Default branch
+    const defSection = body.querySelector('.sb-branch-default-section');
+    const defSteps = [];
+    if (defSection) {
+      defSection.querySelectorAll('[data-substep-id]').forEach(ssEl => {
+        defSteps.push({ _id: ssEl.dataset.substepId, type: ssEl.dataset.substepType || 'message', config: collectStepConfig(ssEl.dataset.substepId) });
+      });
+    }
+    cfg.default = defSteps;
   }
 
   // reminder_timer — recolectar reminders[]
@@ -8660,6 +8627,29 @@ function setupBot() {
     sbStepCounter++;
     const newStep = { _id: `s${sbStepCounter}`, type, config: {} };
 
+    // ── Si estamos añadiendo a una rama branch (step) ──
+    if (_branchCaseStepCtx) {
+      const { parentSid, caseId } = _branchCaseStepCtx;
+      _branchCaseStepCtx = null;
+      const parentStep = sbSteps.find(s => s._id === parentSid);
+      if (parentStep) {
+        parentStep.config = collectStepConfig(parentSid);
+        if (caseId === '__default__') {
+          if (!Array.isArray(parentStep.config.default)) parentStep.config.default = [];
+          parentStep.config.default.push(newStep);
+        } else {
+          const cs = (parentStep.config.cases || []).find(c => c.id === caseId);
+          if (cs) {
+            if (!Array.isArray(cs.steps)) cs.steps = [];
+            cs.steps.push(newStep);
+          }
+        }
+        _refreshBranchStepBody(parentSid);
+        document.querySelector(`[data-body-sid="${parentSid}"]`)?.classList.add('is-open');
+      }
+      return;
+    }
+
     // ── Si estamos añadiendo a una rama desde la vista visual ──
     if (_visualBranchCtx) {
       const { targetArr } = _visualBranchCtx;
@@ -8726,6 +8716,7 @@ function setupBot() {
     if (e.target.closest('.sb-add-step-wrap')) return;
     if (e.target.closest('.sb-insert-between')) return;
     if (e.target.closest('.sb-rem-add-step-btn')) return;
+    if (e.target.closest('.sb-branch-case-add-step-btn')) return;
     if (e.target.closest('.bb-add-btn')) return;
     if (e.target.closest('.bb-node--empty')) return;
     if (e.target.closest('.bb-empty-branch')) return;
@@ -8733,6 +8724,7 @@ function setupBot() {
     _sbInsertAfter = null;
     _reminderStepCtx = null;
     _visualBranchCtx = null;
+    _branchCaseStepCtx = null;
   });
 
   // Toggle step body open/close
@@ -8804,52 +8796,141 @@ function setupBot() {
     }
   }
 
-  // Click en + Agregar caso o eliminar caso
+  // ── branch v2: agregar rama, eliminar rama, agregar/eliminar regla, agregar step ──
   document.body.addEventListener('click', (e) => {
-    const addBtn = e.target.closest('.sb-branch-add-case');
-    if (addBtn) {
+    // Agregar rama
+    const addCaseBtn = e.target.closest('.sb-branch-add-case-v2');
+    if (addCaseBtn) {
       e.preventDefault();
-      const sid = addBtn.dataset.sid;
-      const step = sbSteps.find(s => s._id === sid);
-      if (!step) return;
-      // Antes de modificar, guardar el config actual desde el DOM (hay textos del usuario)
-      step.config = collectStepConfig(sid);
-      step.config.cases = step.config.cases || [];
-      step.config.cases.push({ field: 'message', op: 'contains', value: '', branch: [] });
-      _refreshBranchStepBody(sid);
-      return;
-    }
-    const delBtn = e.target.closest('.sb-branch-case-del');
-    if (delBtn) {
-      e.preventDefault();
-      e.stopPropagation();
-      const sid = delBtn.dataset.sid;
-      const ci  = Number(delBtn.dataset.delCase);
+      const sid = addCaseBtn.dataset.sid;
       const step = sbSteps.find(s => s._id === sid);
       if (!step) return;
       step.config = collectStepConfig(sid);
-      if (Array.isArray(step.config.cases)) {
-        step.config.cases.splice(ci, 1);
-      }
+      if (!Array.isArray(step.config.cases)) step.config.cases = [];
+      step.config.cases.push({
+        id: `bc_${Date.now()}`,
+        rules_op: 'and',
+        rules: [{ field: 'message', op: 'contains', value: '' }],
+        steps: [],
+      });
       _refreshBranchStepBody(sid);
+      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
       return;
     }
 
-    // ── reminder_timer: eliminar sub-step de una rama ──
+    // Eliminar rama
+    const delCaseBtn = e.target.closest('.sb-branch-case-del-v2');
+    if (delCaseBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const sid    = delCaseBtn.dataset.sid;
+      const caseId = delCaseBtn.dataset.delCaseId;
+      const step   = sbSteps.find(s => s._id === sid);
+      if (!step) return;
+      step.config = collectStepConfig(sid);
+      step.config.cases = (step.config.cases || []).filter(cs => cs.id !== caseId);
+      _refreshBranchStepBody(sid);
+      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      return;
+    }
+
+    // Agregar regla a una rama
+    const addRuleBtn = e.target.closest('.sb-branch-add-rule');
+    if (addRuleBtn) {
+      e.preventDefault();
+      const sid    = addRuleBtn.dataset.sid;
+      const caseId = addRuleBtn.dataset.caseId;
+      const step   = sbSteps.find(s => s._id === sid);
+      if (!step) return;
+      step.config = collectStepConfig(sid);
+      const cs = (step.config.cases || []).find(c => c.id === caseId);
+      if (cs) {
+        if (!Array.isArray(cs.rules)) cs.rules = [];
+        cs.rules.push({ field: 'message', op: 'contains', value: '' });
+      }
+      _refreshBranchStepBody(sid);
+      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      return;
+    }
+
+    // Eliminar regla de una rama
+    const delRuleBtn = e.target.closest('.sb-branch-rule-del');
+    if (delRuleBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const sid      = delRuleBtn.dataset.sid;
+      const caseId   = delRuleBtn.dataset.caseId;
+      const ruleIdx  = Number(delRuleBtn.dataset.ruleIdx);
+      const step     = sbSteps.find(s => s._id === sid);
+      if (!step) return;
+      step.config = collectStepConfig(sid);
+      const cs = (step.config.cases || []).find(c => c.id === caseId);
+      if (cs && Array.isArray(cs.rules)) {
+        cs.rules.splice(ruleIdx, 1);
+      }
+      _refreshBranchStepBody(sid);
+      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      return;
+    }
+
+    // Abrir picker para agregar step a rama branch (o default)
+    const addStepBtn = e.target.closest('.sb-branch-case-add-step-btn');
+    if (addStepBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const parentSid = addStepBtn.dataset.parentSid;
+      const caseId    = addStepBtn.dataset.caseId;
+      _branchCaseStepCtx = { parentSid, caseId };
+      const picker = document.getElementById('sbStepPicker');
+      if (!picker) return;
+      if (picker.parentElement !== document.body) {
+        picker.dataset.originalParent = '1';
+        document.body.appendChild(picker);
+      }
+      picker.style.position  = 'fixed';
+      picker.style.transform = 'none';
+      picker.style.zIndex    = '9999';
+      picker.hidden = false;
+      const btnRect = addStepBtn.getBoundingClientRect();
+      const pickerW = picker.offsetWidth || 320;
+      const pickerH = picker.offsetHeight || 200;
+      const margin  = 8;
+      let left = btnRect.left + btnRect.width / 2 - pickerW / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - pickerW - margin));
+      let top = btnRect.bottom + 6;
+      if (top + pickerH > window.innerHeight - margin) top = Math.max(margin, btnRect.top - pickerH - 6);
+      picker.style.left = `${left}px`;
+      picker.style.top  = `${top}px`;
+      return;
+    }
+
+    // ── eliminar sub-step de una rama (reminder_timer o branch v2) ──
     const delSubBtn = e.target.closest('.sb-rem-substep-del');
     if (delSubBtn) {
       e.preventDefault();
       e.stopPropagation();
-      const parentSid = delSubBtn.dataset.parentSid;
-      const rid       = delSubBtn.dataset.parentRid;
-      const subSid    = delSubBtn.dataset.delSubstep;
+      const parentSid  = delSubBtn.dataset.parentSid;
+      const rid        = delSubBtn.dataset.parentRid;
+      const caseId     = delSubBtn.dataset.parentCaseId;
+      const subSid     = delSubBtn.dataset.delSubstep;
       const parentStep = sbSteps.find(s => s._id === parentSid);
       if (!parentStep) return;
       parentStep.config = collectStepConfig(parentSid);
-      const rem = (parentStep.config.reminders || []).find(r => r.id === rid);
-      if (rem && Array.isArray(rem.steps)) {
-        rem.steps = rem.steps.filter(ss => ss._id !== subSid);
+
+      if (caseId !== undefined) {
+        // branch v2
+        if (caseId === '__default__') {
+          parentStep.config.default = (parentStep.config.default || []).filter(ss => ss._id !== subSid);
+        } else {
+          const cs = (parentStep.config.cases || []).find(c => c.id === caseId);
+          if (cs && Array.isArray(cs.steps)) cs.steps = cs.steps.filter(ss => ss._id !== subSid);
+        }
+      } else {
+        // reminder_timer
+        const rem = (parentStep.config.reminders || []).find(r => r.id === rid);
+        if (rem && Array.isArray(rem.steps)) rem.steps = rem.steps.filter(ss => ss._id !== subSid);
       }
+
       _refreshBranchStepBody(parentSid);
       document.querySelector(`[data-body-sid="${parentSid}"]`)?.classList.add('is-open');
       return;
@@ -9270,13 +9351,28 @@ function setupBot() {
       if (step.type === 'branch' && step.config) {
         if (!Array.isArray(step.config.cases))   step.config.cases = [];
         if (!Array.isArray(step.config.default)) step.config.default = [];
-        step.config.cases.forEach((cs) => {
-          if (!Array.isArray(cs.branch)) cs.branch = [];
-          const labelText = `${cs.field === 'tag' ? '🏷' : '💬'} ${cs.value || '?'}`;
+        step.config.cases.forEach((cs, i) => {
+          // Normalizar: asegurar que cs.steps exista (compat con formato viejo branch[])
+          if (!Array.isArray(cs.steps)) cs.steps = Array.isArray(cs.branch) ? cs.branch : [];
+          // Construir etiqueta desde rules[]
+          const rules = Array.isArray(cs.rules) && cs.rules.length
+            ? cs.rules
+            : (cs.field ? [{ field: cs.field, value: cs.value }] : []);
+          const rulesOp = cs.rules_op || 'and';
+          let labelText;
+          if (!rules.length) {
+            labelText = `Rama ${i + 1}`;
+          } else if (rules.length === 1) {
+            const r = rules[0];
+            labelText = `${r.field === 'tag' ? '🏷' : '💬'} "${r.value || '?'}"`;
+          } else {
+            const sep = rulesOp === 'or' ? ' O ' : ' Y ';
+            labelText = rules.map(r => `"${r.value || '?'}"`).join(sep);
+          }
           tNode.children.push({
             label: labelText,
-            subtree: _bbBuildBotTree(cs.branch, cs.branch),
-            targetArr: cs.branch,
+            subtree: _bbBuildBotTree(cs.steps, cs.steps),
+            targetArr: cs.steps,
             parentStep: step,
           });
         });
@@ -18830,6 +18926,124 @@ function _checkAndOpenApptModal(expId, stageId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// BUILDER branch v2 UI — multi-regla AND/OR + sub-flujo por rama
+// ═══════════════════════════════════════════════════════════════════
+
+function _renderBranchRuleRow(sid, caseId, ruleIdx, rule) {
+  const field = rule.field || 'message';
+  const op    = rule.op    || 'contains';
+  return `
+    <div class="sb-branch-rule" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}">
+      <select class="sb-branch-rule-field" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}">
+        <option value="message"  ${field === 'message'  ? 'selected' : ''}>Mensaje</option>
+        <option value="tag"      ${field === 'tag'      ? 'selected' : ''}>Etiqueta</option>
+        <option value="pipeline" ${field === 'pipeline' ? 'selected' : ''}>En pipeline</option>
+      </select>
+      <select class="sb-branch-rule-op" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}">
+        <option value="contains"     ${op === 'contains'     ? 'selected' : ''}>contiene</option>
+        <option value="not_contains" ${op === 'not_contains' ? 'selected' : ''}>no contiene</option>
+        <option value="equals"       ${op === 'equals'       ? 'selected' : ''}>es exactamente</option>
+        <option value="starts_with"  ${op === 'starts_with'  ? 'selected' : ''}>empieza con</option>
+        <option value="matches_any"  ${op === 'matches_any'  ? 'selected' : ''}>es cualquiera de</option>
+      </select>
+      <input type="text" class="sb-branch-rule-value" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}"
+        value="${escHtml(rule.value || '')}" placeholder='valor (o lista separada por coma)' />
+      <button type="button" class="sb-branch-rule-del" data-rule-idx="${ruleIdx}" data-case-id="${escHtml(caseId)}" data-sid="${sid}" title="Eliminar condición">×</button>
+    </div>`;
+}
+
+function _renderBranchSubStepCard(parentSid, caseId, subStep) {
+  const label    = (typeof SB_STEP_LABELS !== 'undefined' && SB_STEP_LABELS[subStep.type]) || subStep.type;
+  const iconHtml = typeof stepIconSvg === 'function' ? stepIconSvg(subStep.type) : '';
+  const bodyHtml = typeof buildStepBody === 'function' ? buildStepBody(subStep) : '';
+  return `
+    <div class="sb-rem-substep" data-substep-id="${escHtml(subStep._id)}" data-substep-type="${escHtml(subStep.type)}">
+      <div class="sb-rem-substep-header" data-toggle-sub="${escHtml(subStep._id)}">
+        <div class="sb-step-icon type-${subStep.type}" style="width:24px;height:24px;min-width:24px">${iconHtml}</div>
+        <span class="sb-rem-substep-label">${escHtml(label)}</span>
+        <button type="button" class="sb-rem-substep-del"
+          data-del-substep="${escHtml(subStep._id)}"
+          data-parent-sid="${escHtml(parentSid)}"
+          data-parent-case-id="${escHtml(caseId)}"
+          title="Eliminar paso">×</button>
+      </div>
+      <div class="sb-step-body is-open" data-body-sid="${escHtml(subStep._id)}">
+        ${bodyHtml}
+      </div>
+    </div>`;
+}
+
+function _renderBranchEditor(sid, c) {
+  // Normalizar casos (compat con formato viejo field/op/value/branch)
+  const rawCases = Array.isArray(c.cases) ? c.cases : [];
+  const cases = rawCases.map((cs, i) => {
+    if (!cs.id) cs.id = `bc_${Date.now()}_${i}`;
+    if (!Array.isArray(cs.rules)) {
+      cs.rules = cs.field ? [{ field: cs.field, op: cs.op || 'contains', value: cs.value || '' }] : [];
+    }
+    if (!cs.rules_op) cs.rules_op = 'and';
+    if (!Array.isArray(cs.steps)) cs.steps = Array.isArray(cs.branch) ? cs.branch : [];
+    return cs;
+  });
+
+  const casesHtml = cases.map((cs, i) => {
+    const rulesHtml = cs.rules.length
+      ? cs.rules.map((rule, ri) => {
+          const row = _renderBranchRuleRow(sid, cs.id, ri, rule);
+          const isLast = ri === cs.rules.length - 1;
+          const connector = !isLast ? `
+            <div class="sb-branch-rule-connector">
+              <select class="sb-branch-rules-op" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">
+                <option value="and" ${(cs.rules_op || 'and') === 'and' ? 'selected' : ''}>Y — todas se cumplen</option>
+                <option value="or"  ${cs.rules_op === 'or' ? 'selected' : ''}>O — basta una</option>
+              </select>
+            </div>` : '';
+          return row + connector;
+        }).join('')
+      : '<p class="sb-hint" style="margin:4px 0 8px">Sin condiciones — esta rama siempre ejecuta.</p>';
+
+    const subStepsHtml = cs.steps.map(ss => _renderBranchSubStepCard(sid, cs.id, ss)).join('');
+
+    return `
+      <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}">
+        <div class="sb-branch-case-v2-header">
+          <span class="sb-branch-case-v2-num">Rama ${i + 1}</span>
+          <button type="button" class="sb-branch-case-del-v2" data-del-case-id="${escHtml(cs.id)}" data-sid="${sid}" title="Eliminar rama">×</button>
+        </div>
+        <div class="sb-branch-rules" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">
+          ${rulesHtml}
+        </div>
+        <button type="button" class="sb-branch-add-rule" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">+ Agregar condición</button>
+        <div class="sb-branch-case-steps" data-case-id="${escHtml(cs.id)}">
+          <div class="sb-branch-case-steps-label">Pasos si esta rama matchea</div>
+          ${subStepsHtml}
+          <button type="button" class="sb-branch-case-add-step-btn" data-case-id="${escHtml(cs.id)}" data-parent-sid="${sid}">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+            Agregar paso
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const defaultSteps  = Array.isArray(c.default) ? c.default : [];
+  const defStepsHtml  = defaultSteps.map(ss => _renderBranchSubStepCard(sid, '__default__', ss)).join('');
+
+  return `
+    ${!cases.length ? '<p class="sb-hint" style="margin-bottom:10px">Sin ramas. Agrega una para definir condiciones y pasos.</p>' : casesHtml}
+    <button type="button" class="sb-branch-add-case-v2" data-sid="${sid}">+ Agregar rama</button>
+    <div class="sb-branch-default-section">
+      <div class="sb-branch-default-header">Default — si ninguna rama matcheó</div>
+      <div class="sb-branch-default-steps">
+        ${defStepsHtml}
+        <button type="button" class="sb-branch-case-add-step-btn" data-case-id="__default__" data-parent-sid="${sid}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+          Agregar paso
+        </button>
+      </div>
+    </div>`;
+}
+
 // BUILDER reminder_timer UI
 // ═══════════════════════════════════════════════════════════════════
 

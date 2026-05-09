@@ -6159,6 +6159,110 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .appt-slot.unavailable { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
 .appt-slot-loading { color: #94a3b8; font-size: 13px; padding: 8px 0; }
 
+/* branch v2 builder — multi-regla AND/OR + sub-flujo por rama */
+.sb-branch-case-v2 {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.sb-branch-case-v2-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.sb-branch-case-v2-num {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
+}
+.sb-branch-case-del-v2 {
+  background: none; border: none; cursor: pointer;
+  color: #94a3b8; font-size: 16px; line-height: 1; padding: 0 2px;
+}
+.sb-branch-case-del-v2:hover { color: #ef4444; }
+.sb-branch-rules { padding: 8px 12px 4px; }
+.sb-branch-rule {
+  display: flex; align-items: center; gap: 5px; margin-bottom: 5px; flex-wrap: wrap;
+}
+.sb-branch-rule-field,
+.sb-branch-rule-op {
+  padding: 5px 8px; border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px; font-size: 12px; background: #fff; flex-shrink: 0;
+}
+.sb-branch-rule-value {
+  flex: 1; min-width: 90px;
+  padding: 5px 8px; border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px; font-size: 12px;
+}
+.sb-branch-rule-del {
+  background: none; border: none; cursor: pointer;
+  color: #94a3b8; font-size: 14px; padding: 2px 4px; flex-shrink: 0;
+}
+.sb-branch-rule-del:hover { color: #ef4444; }
+.sb-branch-rule-connector {
+  padding: 0 12px 6px;
+}
+.sb-branch-rules-op {
+  font-size: 11px; padding: 3px 8px;
+  border: 1px solid var(--accent, #2563eb);
+  border-radius: 4px;
+  background: rgba(37,99,235,.07);
+  color: var(--accent, #2563eb);
+  font-weight: 600;
+  cursor: pointer;
+}
+.sb-branch-add-rule {
+  display: block; font-size: 11px; color: var(--accent, #2563eb);
+  background: none; border: none; cursor: pointer;
+  padding: 2px 12px 8px; text-align: left;
+}
+.sb-branch-add-rule:hover { text-decoration: underline; }
+.sb-branch-case-steps {
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+.sb-branch-case-steps-label {
+  font-size: 10px; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px;
+}
+.sb-branch-case-add-step-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--accent, #2563eb);
+  background: none;
+  border: 1px dashed var(--accent, #2563eb);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; margin-top: 6px;
+}
+.sb-branch-case-add-step-btn:hover { background: rgba(37,99,235,.06); }
+.sb-branch-add-case-v2 {
+  display: block; width: 100%; padding: 8px;
+  border: 1.5px dashed var(--border, #e2e8f0);
+  border-radius: 8px; background: none;
+  color: var(--text-secondary, #475569);
+  font-size: 13px; cursor: pointer; margin-bottom: 10px; text-align: center;
+}
+.sb-branch-add-case-v2:hover {
+  border-color: var(--accent, #2563eb);
+  color: var(--accent, #2563eb);
+}
+.sb-branch-default-section {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px; overflow: hidden;
+}
+.sb-branch-default-header {
+  padding: 7px 12px; background: #f8fafc;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  font-size: 12px; font-weight: 600; color: #94a3b8;
+}
+.sb-branch-default-steps {
+  padding: 8px 12px; background: #f1f5f9;
+}
+
 /* reminder_timer builder */
 .sb-reminder-branch {
   border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;

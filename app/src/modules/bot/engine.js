@@ -1037,59 +1037,47 @@ async function executeStep(db, step, ctx) {
     }
 
     case 'branch': {
-      // Multi-case routing. Evalúa cases[] en orden, ejecuta el branch del
-      // primer match. Si nada matchea, ejecuta default. La rama es self-contained
-      // — al terminar, halta el flujo (return true) igual que wait_response.
+      // Multi-case routing con soporte de AND/OR multi-regla por caso.
+      // Formato nuevo: cases[i].rules[] + rules_op ('and'|'or') + steps[].
+      // Formato viejo: cases[i].field/op/value + branch[] — compat total.
       const cases = Array.isArray(c.cases) ? c.cases : [];
-      let matchedBranch = null;
+      let matchedSteps = null;
       let matchedLabel = null;
+
       for (const cs of cases) {
         try {
-          const op    = cs.op || 'contains';
-          const value = String(cs.value || '').toLowerCase();
-          const field = cs.field || 'message';
-          let actualValue = '';
-          if (field === 'message') {
-            actualValue = String(ctx.messageBody || '').toLowerCase();
-          } else if (field === 'tag') {
-            const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
-            const tags = (() => { try { return JSON.parse(row?.tags || '[]'); } catch { return []; } })();
-            // Para tag, "contains" significa "tiene el tag"
-            if (op === 'contains' || op === 'equals') {
-              if (tags.map(t => String(t).toLowerCase()).includes(value)) {
-                matchedBranch = cs.branch || []; matchedLabel = cs.value;
-                break;
-              }
-              continue;
-            }
-          }
-          // operadores sobre string
-          let isMatch = false;
-          if      (op === 'equals')      isMatch = actualValue === value;
-          else if (op === 'starts_with') isMatch = actualValue.startsWith(value);
-          else if (op === 'matches_any') {
-            const list = value.split(',').map(s => s.trim()).filter(Boolean);
-            isMatch = list.some(v => actualValue.includes(v));
-          }
-          else /* contains (default) */  isMatch = actualValue.includes(value);
+          // Normalizar: formato viejo → formato nuevo
+          const rules = Array.isArray(cs.rules) && cs.rules.length
+            ? cs.rules
+            : (cs.field ? [{ field: cs.field, op: cs.op, value: cs.value }] : []);
+          if (!rules.length) continue;
+
+          const rulesOp = cs.rules_op || 'and';
+          const results = rules.map(rule => evaluateRule(db, rule, ctx));
+          const isMatch = rulesOp === 'or' ? results.some(Boolean) : results.every(Boolean);
+
           if (isMatch) {
-            matchedBranch = cs.branch || []; matchedLabel = cs.value;
+            // Soporte formato nuevo (steps) y viejo (branch)
+            matchedSteps = Array.isArray(cs.steps) ? cs.steps
+              : (Array.isArray(cs.branch) ? cs.branch : []);
+            matchedLabel = rules.map(r => `${r.field}:${r.value}`).join(rulesOp === 'or' ? '|' : '&');
             break;
           }
         } catch (err) {
           _log('error', `branch case error: ${err.message}`);
         }
       }
-      if (matchedBranch === null && Array.isArray(c.default)) {
-        matchedBranch = c.default; matchedLabel = '(default)';
+
+      if (matchedSteps === null && Array.isArray(c.default)) {
+        matchedSteps = c.default;
+        matchedLabel = '(default)';
       }
-      if (!matchedBranch) {
-        _log('info', `branch: ningún case matcheó y no hay default — saltando`);
+      if (!matchedSteps) {
+        _log('info', 'branch: ningún case matcheó y no hay default — saltando');
         return false;
       }
-      _log('info', `branch matched "${matchedLabel}" — ejecutando ${matchedBranch.length} pasos`);
-      // Ejecutar los pasos de la rama secuencialmente
-      for (const subStep of matchedBranch) {
+      _log('info', `branch matched "${matchedLabel}" — ejecutando ${matchedSteps.length} pasos`);
+      for (const subStep of matchedSteps) {
         try {
           const result = await executeStep(db, subStep, ctx);
           if (result === true || result === 'stop') return true;
@@ -1099,8 +1087,6 @@ async function executeStep(db, step, ctx) {
           break;
         }
       }
-      // La rama IS el flujo principal a partir de aquí — no continuamos con
-      // los steps hermanos del branch (igual que wait_response)
       return true;
     }
 
@@ -1748,6 +1734,48 @@ function evaluateCondition(db, c, ctx) {
     console.error('[bot engine] evaluateCondition error:', err.message);
   }
   return true;
+}
+
+// Evalúa una regla individual — usada por el step `branch` con AND/OR multi-regla.
+function evaluateRule(db, rule, ctx) {
+  try {
+    const op    = rule.op || 'contains';
+    const value = String(rule.value || '').toLowerCase().trim();
+    const field = rule.field || 'message';
+
+    if (field === 'message') {
+      const actual = String(ctx.messageBody || '').toLowerCase();
+      if (op === 'equals')       return actual === value;
+      if (op === 'not_equals')   return actual !== value;
+      if (op === 'starts_with')  return actual.startsWith(value);
+      if (op === 'ends_with')    return actual.endsWith(value);
+      if (op === 'not_contains') return !actual.includes(value);
+      if (op === 'matches_any') {
+        const list = value.split(',').map(s => s.trim()).filter(Boolean);
+        return list.some(v => actual.includes(v));
+      }
+      return actual.includes(value); // contains (default)
+    }
+
+    if (field === 'tag') {
+      const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
+      const tags = (() => { try { return JSON.parse(row?.tags || '[]'); } catch { return []; } })();
+      const lowerTags = tags.map(t => String(t).toLowerCase());
+      if (op === 'not_contains' || op === 'not_equals') return !lowerTags.includes(value);
+      return lowerTags.includes(value);
+    }
+
+    if (field === 'pipeline') {
+      const exp = db.prepare(
+        'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
+      ).get(ctx.contactId, Number(rule.value), ctx.tenantId);
+      const has = !!exp;
+      return (op === 'not_contains' || op === 'not_equals') ? !has : has;
+    }
+  } catch (err) {
+    _log('error', `evaluateRule (${rule.field} ${rule.op} "${rule.value}"): ${err.message}`);
+  }
+  return false;
 }
 
 // Sustituye variables del contacto en un texto libre. Soporta tanto la sintaxis

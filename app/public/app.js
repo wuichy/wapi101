@@ -6594,25 +6594,25 @@ const BOT_STEP_REGISTRY = {
     },
   },
   condition: {
-    hidden: true, // obsoleto — redirige a branch v2 en buildStepBody y collectAllSteps
-    label:   { es: 'Condición / Ramas', en: 'Condition / Branch' },
-    icon:    '<path d="M5 3v6"/><path d="M5 9c0 5 5 5 5 8"/><path d="M15 3v6"/><path d="M15 9c0 5-5 5-5 8"/><circle cx="5" cy="3" r="1.5"/><circle cx="15" cy="3" r="1.5"/><circle cx="10" cy="17" r="1.5"/>',
+    hidden: true, // obsoleto — redirige a branch v2
+    label:   { es: 'Condición', en: 'Condition' },
+    icon:    '<path d="M10 3v14M3 10h14"/><circle cx="10" cy="10" r="3"/>',
     summary: (step) => {
       const c = step.config || {};
       const n = Array.isArray(c.cases) ? c.cases.length : 0;
-      if (!n) return c.field ? `Si ${c.field} = "${c.value || ''}"` : 'Sin ramas';
+      if (!n) return c.field ? `Si ${c.field} = "${c.value || ''}"` : 'Sin condiciones';
       return `${n} rama${n !== 1 ? 's' : ''}${Array.isArray(c.default) && c.default.length ? ' + default' : ''}`;
     },
   },
   branch: {
     group: 'Flujo',
-    label:   { es: 'Condición / Ramas', en: 'Condition / Branch' },
-    icon:    '<path d="M5 3v6"/><path d="M5 9c0 5 5 5 5 8"/><path d="M15 3v6"/><path d="M15 9c0 5-5 5-5 8"/><circle cx="5" cy="3" r="1.5"/><circle cx="15" cy="3" r="1.5"/><circle cx="10" cy="17" r="1.5"/>',
+    label:   { es: 'Condición', en: 'Condition' },
+    icon:    '<path d="M10 3v14M3 10h14"/><circle cx="10" cy="10" r="3"/>',
     summary: (step) => {
       const c = step.config || {};
       const n = Array.isArray(c.cases) ? c.cases.length : 0;
       const hasDefault = Array.isArray(c.default) && c.default.length > 0;
-      if (!n && !hasDefault) return 'Sin ramas configuradas';
+      if (!n && !hasDefault) return 'Sin condiciones';
       return `${n} rama${n !== 1 ? 's' : ''}${hasDefault ? ' + default' : ''}`;
     },
   },
@@ -19043,6 +19043,10 @@ function _renderBranchEditor(sid, c) {
   let rawCases = Array.isArray(c.cases) ? c.cases : [];
   if (!rawCases.length && c.field) {
     rawCases = [{ rules: [{ field: c.field, op: c.op || 'contains', value: c.value || '' }], steps: [] }];
+  }
+  // Si sigue vacío (step nuevo), arrancar con una rama+condición lista
+  if (!rawCases.length) {
+    rawCases = [{ id: `bc_${Date.now()}_0`, rules_op: 'and', rules: [{ field: 'message', op: 'contains', value: '' }], steps: [] }];
   }
   const cases = rawCases.map((cs, i) => {
     if (!cs.id) cs.id = `bc_${Date.now()}_${i}`;

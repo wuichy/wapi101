@@ -9283,12 +9283,19 @@ function setupBot() {
       } else if (step.type === 'reminder_timer' && step.config) {
         if (!Array.isArray(step.config.reminders)) step.config.reminders = [];
         step.config.reminders.forEach((rem) => {
-          if (!Array.isArray(rem.sub_steps)) rem.sub_steps = [];
-          const m = Number(rem.minutes_before) || 0;
+          if (!Array.isArray(rem.steps)) rem.steps = [];
+          let label;
+          if (rem.mode === 'day_before_at') {
+            label = `${rem.value || 1}d antes · ${rem.time || '20:00'}`;
+          } else {
+            const v = rem.value != null ? rem.value : 30;
+            const u = rem.unit || 'min';
+            label = `${v} ${u} antes`;
+          }
           tNode.children.push({
-            label: `${m} min antes`,
-            subtree: _bbBuildBotTree(rem.sub_steps, rem.sub_steps),
-            targetArr: rem.sub_steps,
+            label,
+            subtree: _bbBuildBotTree(rem.steps, rem.steps),
+            targetArr: rem.steps,
           });
         });
         tNode.mainContinues = true;
@@ -9324,13 +9331,16 @@ function setupBot() {
 
   // ── Position tree nodes recursively → push to items[] / edges[] ──
   function _bbPosition(treeNodes, originX, originY, items, edges, prevId, prevEdgeLabel) {
+    // Todos los hermanos comparten el MISMO centro horizontal (alineación vertical del flujo)
+    const flowMaxWidth = Math.max.apply(null, treeNodes.map(n => n._width || _BB_NODE_W).concat([_BB_NODE_W]));
+    const flowCenterX = originX + flowMaxWidth / 2;
+
     let y = originY;
     let curPrev = prevId;
     let curLabel = prevEdgeLabel;
 
     treeNodes.forEach((node) => {
-      const myWidth = node._width;
-      const nodeX = originX + (myWidth - _BB_NODE_W) / 2;
+      const nodeX = flowCenterX - _BB_NODE_W / 2;
       const nodeId = `n${items.length}`;
 
       items.push({
@@ -9351,7 +9361,9 @@ function setupBot() {
 
       if (node.children.length > 0) {
         const branchY = y + _BB_NODE_H + _BB_GAP_Y;
-        let bx = originX;
+        // Centrar las branches debajo del nodo padre
+        const totalBranchWidth = node._width;
+        let bx = flowCenterX - totalBranchWidth / 2;
         let maxBranchBottom = branchY;
 
         node.children.forEach((child) => {
@@ -9473,10 +9485,11 @@ function setupBot() {
     if (tree.length > 0) _bbMeasure(tree);
 
     const totalContentW = tree.length > 0
-      ? tree.reduce((acc, n) => Math.max(acc, n._width), _BB_NODE_W)
+      ? Math.max.apply(null, tree.map(n => n._width || _BB_NODE_W).concat([_BB_NODE_W]))
       : _BB_NODE_W;
 
-    const triggerX = _BB_PAD + (totalContentW - _BB_NODE_W) / 2;
+    const flowCenterX = _BB_PAD + totalContentW / 2;
+    const triggerX = flowCenterX - _BB_NODE_W / 2;
     const triggerY = _BB_PAD;
     items.push({
       id: 'trigger',
@@ -9501,13 +9514,26 @@ function setupBot() {
     const stageW = maxX + _BB_PAD;
     const stageH = maxY + _BB_PAD;
 
-    let html = `<div class="bb-canvas" style="width:${stageW}px;height:${stageH}px">`;
-    html += `<svg class="bb-edges" width="${stageW}" height="${stageH}" viewBox="0 0 ${stageW} ${stageH}" xmlns="http://www.w3.org/2000/svg">`;
-
-    const edgePaths = [];
-    const labelEls = [];
     const itemMap = {};
     items.forEach(it => { itemMap[it.id] = it; });
+
+    // Limpiar stage y crear canvas
+    stage.innerHTML = '';
+    const canvas = document.createElement('div');
+    canvas.className = 'bb-canvas';
+    canvas.style.width  = stageW + 'px';
+    canvas.style.height = stageH + 'px';
+    stage.appendChild(canvas);
+
+    // SVG con createElementNS (innerHTML no parsea bien SVG nested)
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'bb-edges');
+    svg.setAttribute('width', stageW);
+    svg.setAttribute('height', stageH);
+    svg.setAttribute('viewBox', `0 0 ${stageW} ${stageH}`);
+    canvas.appendChild(svg);
+
     edges.forEach((edge) => {
       const from = itemMap[edge.from];
       const to   = itemMap[edge.to];
@@ -9516,34 +9542,52 @@ function setupBot() {
       const y1 = from.y + from.h;
       const x2 = to.x + to.w / 2;
       const y2 = to.y;
-      edgePaths.push(`<path class="bb-edge" d="${_bbEdgePath(x1, y1, x2, y2)}" />`);
+
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('class', 'bb-edge');
+      path.setAttribute('d', _bbEdgePath(x1, y1, x2, y2));
+      svg.appendChild(path);
+
       if (edge.label) {
         const lx = (x1 + x2) / 2;
         const ly = y1 + (y2 - y1) / 2;
         const text = String(edge.label);
         const display = text.length > 22 ? text.slice(0, 21) + '…' : text;
         const labelW = Math.min(180, Math.max(60, display.length * 7 + 18));
-        labelEls.push(
-          `<g class="bb-edge-label" transform="translate(${lx} ${ly})">` +
-            `<rect x="${-labelW/2}" y="-11" width="${labelW}" height="22" rx="11" />` +
-            `<text x="0" y="4" text-anchor="middle">${escHtml(display)}</text>` +
-          `</g>`
-        );
+
+        const g = document.createElementNS(SVG_NS, 'g');
+        g.setAttribute('class', 'bb-edge-label');
+        g.setAttribute('transform', `translate(${lx} ${ly})`);
+
+        const rect = document.createElementNS(SVG_NS, 'rect');
+        rect.setAttribute('x', -labelW / 2);
+        rect.setAttribute('y', -11);
+        rect.setAttribute('width', labelW);
+        rect.setAttribute('height', 22);
+        rect.setAttribute('rx', 11);
+        g.appendChild(rect);
+
+        const txt = document.createElementNS(SVG_NS, 'text');
+        txt.setAttribute('x', 0);
+        txt.setAttribute('y', 4);
+        txt.setAttribute('text-anchor', 'middle');
+        txt.textContent = display;
+        g.appendChild(txt);
+
+        svg.appendChild(g);
       }
     });
-    html += edgePaths.join('');
-    html += labelEls.join('');
-    html += `</svg>`;
 
-    items.forEach(item => { html += _bbRenderNodeHtml(item); });
-    html += `</div>`;
+    // Nodos como divs (innerHTML SÍ funciona para HTML normal)
+    const nodesHtml = items.map(item => _bbRenderNodeHtml(item)).join('');
+    const tmpWrap = document.createElement('div');
+    tmpWrap.innerHTML = nodesHtml;
+    while (tmpWrap.firstChild) canvas.appendChild(tmpWrap.firstChild);
 
-    stage.innerHTML = html;
-
-    stage.querySelectorAll('[data-action="edit-trigger"]').forEach(el => {
+    canvas.querySelectorAll('[data-action="edit-trigger"]').forEach(el => {
       el.addEventListener('click', (e) => { e.preventDefault(); bbOpenTriggerEditorInline(); });
     });
-    stage.querySelectorAll('[data-action="edit-step"]').forEach(el => {
+    canvas.querySelectorAll('[data-action="edit-step"]').forEach(el => {
       el.addEventListener('click', (e) => {
         e.preventDefault();
         const id = el.getAttribute('data-node-id');

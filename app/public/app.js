@@ -16776,18 +16776,19 @@ function _notifTypeIcon(type) {
 }
 
 function renderInAppNotifications(items, unread) {
-  const badge = document.getElementById('navNotifBadge');
-  const list  = document.getElementById('navNotifList');
-  if (!badge || !list) return;
+  const list = document.getElementById('navNotifList');
+  if (!list) return;
 
-  // Badge
-  if (unread > 0) {
-    badge.textContent = unread > 99 ? '99+' : String(unread);
-    badge.style.display = '';
-  } else {
-    badge.textContent = '';
-    badge.style.display = 'none';
-  }
+  // Actualizar TODOS los badges (top + bottom)
+  document.querySelectorAll('.nav-notif-badge').forEach(badge => {
+    if (unread > 0) {
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+      badge.style.display = '';
+    } else {
+      badge.textContent = '';
+      badge.style.display = 'none';
+    }
+  });
 
   // Lista
   if (!items.length) {
@@ -16843,24 +16844,25 @@ function closeInAppPanel() {
 }
 
 function setupInAppNotifications() {
-  const btn = document.getElementById('navNotifBtn');
-  if (!btn) return;
+  const btns = document.querySelectorAll('.nav-notif-btn');
+  if (!btns.length) return;
 
-  // Toggle panel
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const panel = document.getElementById('navNotifPanel');
-    if (!panel) return;
-    if (panel.hidden) { openInAppPanel(); } else { closeInAppPanel(); }
+  // Toggle panel — cualquiera de los dos botones
+  btns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const panel = document.getElementById('navNotifPanel');
+      if (!panel) return;
+      if (panel.hidden) { openInAppPanel(); } else { closeInAppPanel(); }
+    });
   });
 
   // Cerrar al click fuera
   document.addEventListener('click', (e) => {
     const panel = document.getElementById('navNotifPanel');
     if (!panel || panel.hidden) return;
-    if (!panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
-      closeInAppPanel();
-    }
+    const clickedBtn = [...btns].some(b => b === e.target || b.contains(e.target));
+    if (!panel.contains(e.target) && !clickedBtn) closeInAppPanel();
   });
 
   // Marcar todo leído

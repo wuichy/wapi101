@@ -326,7 +326,12 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
   padding: 0 4px;
 }
 
-/* Panel de notificaciones — se abre debajo del botón */
+/* Cuál se muestra según estado del sidebar */
+.nav-notif-bottom { display: none; }
+body.nav-collapsed .nav-notif-top    { display: none; }
+body.nav-collapsed .nav-notif-bottom { display: flex; }
+
+/* Panel de notificaciones */
 .nav-notif-panel {
   position: fixed;
   top: 68px;
@@ -343,6 +348,12 @@ body.nav-collapsed .nav-collapse-btn svg { transform: rotate(180deg); }
   z-index: 999;
 }
 .nav-notif-panel[hidden] { display: none; }
+/* Colapsado: panel abre desde abajo */
+body.nav-collapsed .nav-notif-panel {
+  top: auto;
+  bottom: 72px;
+  left: 12px;
+}
 
 .nav-notif-header {
   display: flex;

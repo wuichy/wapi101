@@ -5225,14 +5225,17 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .bb-visual-stage.df-host .drawflow-node {
   background: var(--surface, #fff);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
   padding: 0;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
   min-width: 220px;
   font-size: 13px;
   color: var(--text);
   cursor: grab;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
   transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
 }
 .bb-visual-stage.df-host .drawflow-node:hover {
@@ -5325,6 +5328,14 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   overflow: hidden;
 }
 
+/* SVG de conexiones detrás de los nodos */
+.bb-visual-stage.df-host svg {
+  z-index: 0 !important;
+}
+.bb-visual-stage.df-host .connection {
+  z-index: 0;
+}
+
 /* Conexiones (líneas curvas entre nodos) */
 .bb-visual-stage.df-host .connection .main-path {
   stroke: #111;
@@ -5337,15 +5348,26 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   stroke: #000;
   stroke-width: 3;
 }
-/* Puntos de conexión — invisibles, líneas llegan pegadas al nodo */
+/* Puntos de conexión — círculos visibles pegados al borde del nodo */
 .bb-visual-stage.df-host .input,
 .bb-visual-stage.df-host .output {
-  width: 10px;
-  height: 10px;
-  background: transparent;
-  border: none;
-  opacity: 0;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: 2px solid #94a3b8;
+  border-radius: 50%;
+  opacity: 1;
+  transition: border-color .15s, background .15s;
+  z-index: 3;
 }
+.bb-visual-stage.df-host .input:hover,
+.bb-visual-stage.df-host .output:hover {
+  background: #e0e7ff;
+  border-color: #6366f1;
+}
+/* Fix posición: input en borde izquierdo, output en borde derecho */
+.bb-visual-stage.df-host .input  { left: -6px !important; }
+.bb-visual-stage.df-host .output { right: -6px !important; }
 
 /* reminder_timer: label en cada puerto output */
 .bb-visual-stage.df-host .output { position: relative; }

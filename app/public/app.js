@@ -9327,7 +9327,8 @@ function setupBot() {
   }
 
   // ── Position tree nodes recursively → push to items[] / edges[] ──
-  function _bbPosition(treeNodes, originX, originY, items, edges, prevId, prevEdgeLabel) {
+  function _bbPosition(treeNodes, originX, originY, items, edges, prevId, prevEdgeLabel, depth) {
+    if (depth === undefined) depth = 0;
     // Todos los hermanos comparten el MISMO centro horizontal (alineación vertical del flujo)
     const flowMaxWidth = Math.max.apply(null, treeNodes.map(n => n._width || _BB_NODE_W).concat([_BB_NODE_W]));
     const flowCenterX = originX + flowMaxWidth / 2;
@@ -9346,6 +9347,7 @@ function setupBot() {
         step: node.step,
         parentArr: node.parentArr,
         idx: node.idx,
+        mainFlow: depth === 0,
         x: nodeX,
         y,
         w: _BB_NODE_W,
@@ -9366,7 +9368,7 @@ function setupBot() {
         node.children.forEach((child) => {
           if (child.subtree.length > 0) {
             const subFirstId = `n${items.length}`;
-            _bbPosition(child.subtree, bx, branchY, items, edges, null, undefined);
+            _bbPosition(child.subtree, bx, branchY, items, edges, null, undefined, depth + 1);
             edges.push({ from: nodeId, to: subFirstId, label: child.label });
             const lastItem = items[items.length - 1];
             maxBranchBottom = Math.max(maxBranchBottom, lastItem.y + lastItem.h);
@@ -9564,45 +9566,62 @@ function setupBot() {
     tmpWrap.innerHTML = nodesHtml;
     while (tmpWrap.firstChild) canvas.appendChild(tmpWrap.firstChild);
 
-    // Botones "+" en el punto medio de cada arista
-    edges.forEach((edge) => {
-      const from = itemMap[edge.from];
-      const to   = itemMap[edge.to];
-      if (!from || !to || to.kind === 'empty') return;
+    // Helper: abrir picker de paso con insert-after dado
+    function _bbOpenPicker(insertAfterVal) {
+      _sbInsertAfter = insertAfterVal || null;
+      bbSwitchView('list');
+      const picker = document.getElementById('sbStepPicker');
+      if (!picker) return;
+      if (picker.dataset.originalParent) {
+        const wrap = document.querySelector('.sb-add-step-wrap');
+        if (wrap && picker.parentElement !== wrap) { wrap.appendChild(picker); delete picker.dataset.originalParent; picker.style.cssText = ''; }
+      }
+      picker.hidden = false;
+      picker.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    }
 
-      const x1 = from.x + from.w / 2;
-      const y1 = from.y + from.h;
-      const x2 = to.x + to.w / 2;
-      const y2 = to.y;
-      const mx = (x1 + x2) / 2;
-      const my = (y1 + y2) / 2;
-
-      const insertAfter = edge.from === 'trigger' ? '__top__' : (from.step?._id || null);
-      if (!insertAfter) return;
-
+    function _bbAddBtn(cx, cy, insertAfterVal) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'bb-add-btn';
       btn.title = 'Insertar paso aquí';
       btn.textContent = '+';
-      btn.style.left = (mx - 12) + 'px';
-      btn.style.top  = (my - 12) + 'px';
-      btn.dataset.insertAfter = insertAfter;
+      btn.style.left = (cx - 12) + 'px';
+      btn.style.top  = (cy - 12) + 'px';
       canvas.appendChild(btn);
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        _sbInsertAfter = btn.dataset.insertAfter;
-        bbSwitchView('list');
-        const picker = document.getElementById('sbStepPicker');
-        if (!picker) return;
-        if (picker.dataset.originalParent) {
-          const wrap = document.querySelector('.sb-add-step-wrap');
-          if (wrap && picker.parentElement !== wrap) { wrap.appendChild(picker); delete picker.dataset.originalParent; picker.style.cssText = ''; }
-        }
-        picker.hidden = false;
-        picker.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
-      });
+      btn.addEventListener('click', (e) => { e.stopPropagation(); _bbOpenPicker(insertAfterVal); });
+      return btn;
+    }
+
+    // Botones "+" solo en aristas del flujo principal (no en ramas)
+    edges.forEach((edge) => {
+      const from = itemMap[edge.from];
+      const to   = itemMap[edge.to];
+      // Solo flujo principal: trigger→n o mainFlow→mainFlow
+      const fromMain = edge.from === 'trigger' || from?.mainFlow;
+      const toMain   = to?.mainFlow;
+      if (!fromMain || !toMain) return;
+
+      const x1 = from ? from.x + from.w / 2 : itemMap['trigger'].x + itemMap['trigger'].w / 2;
+      const y1 = from ? from.y + from.h      : itemMap['trigger'].y + itemMap['trigger'].h;
+      const x2 = to.x + to.w / 2;
+      const y2 = to.y;
+      const insertAfter = edge.from === 'trigger' ? '__top__' : (from.step?._id || null);
+      if (!insertAfter) return;
+      _bbAddBtn((x1 + x2) / 2, (y1 + y2) / 2, insertAfter);
     });
+
+    // Botón "+" al final del último nodo del flujo principal
+    const lastMain = items.filter(it => it.mainFlow).sort((a, b) => (b.y + b.h) - (a.y + a.h))[0];
+    if (lastMain) {
+      const endX = lastMain.x + lastMain.w / 2;
+      const endY = lastMain.y + lastMain.h + _BB_GAP_Y / 2;
+      _bbAddBtn(endX, endY, lastMain.step?._id || null);
+    } else if (items.length === 1) {
+      // Solo trigger, sin pasos: botón justo debajo
+      const tr = itemMap['trigger'];
+      _bbAddBtn(tr.x + tr.w / 2, tr.y + tr.h + _BB_GAP_Y / 2, '__top__');
+    }
 
     canvas.querySelectorAll('[data-action="edit-trigger"]').forEach(el => {
       el.addEventListener('click', (e) => { e.preventDefault(); bbOpenTriggerEditorInline(); });

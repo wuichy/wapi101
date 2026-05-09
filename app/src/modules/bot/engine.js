@@ -963,6 +963,30 @@ async function executeStep(db, step, ctx) {
         }
       }
 
+      // 5) Notificación in-app al asesor que recibe el lead
+      const notifAdvisorId = targetAdvisorId || null;
+      if (notifAdvisorId) {
+        try {
+          const notifSvc = require('../notifications/service');
+          // Obtener nombre del contacto para el mensaje
+          const contactRow = ctx.contactId
+            ? db.prepare('SELECT name FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId)
+            : null;
+          const contactName = contactRow?.name || 'un lead';
+          notifSvc.createNotification(db, {
+            tenantId:  ctx.tenantId,
+            advisorId: notifAdvisorId,
+            type:      'handover',
+            title:     `Nueva conversación asignada`,
+            body:      `El bot te asignó la conversación con ${contactName}`,
+            link:      'chats',
+          });
+          _log('info', `handover: notificación in-app enviada al asesor ${notifAdvisorId}`);
+        } catch (e) {
+          _log('error', `handover: error creando notificación in-app: ${e.message}`);
+        }
+      }
+
       return true; // detener cadena
     }
 

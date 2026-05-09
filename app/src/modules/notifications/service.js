@@ -127,6 +127,49 @@ async function sendToAll(db, tenantId, payload, { kind = 'manual', cooldownKey =
   return { sent, failed, removed: dead.length };
 }
 
+// ─── In-app notifications ─────────────────────────────────────────────────────
+
+function createNotification(db, { tenantId, advisorId, type = 'general', title, body = null, link = null }) {
+  if (!advisorId || !title) return null;
+  const r = db.prepare(`
+    INSERT INTO in_app_notifications (tenant_id, advisor_id, type, title, body, link)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(tenantId, advisorId, type, title, body, link);
+  return r.lastInsertRowid;
+}
+
+function getNotifications(db, advisorId, tenantId, { limit = 50 } = {}) {
+  return db.prepare(`
+    SELECT id, type, title, body, link, read, created_at
+    FROM in_app_notifications
+    WHERE advisor_id = ? AND tenant_id = ?
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(advisorId, tenantId, limit);
+}
+
+function countUnread(db, advisorId, tenantId) {
+  const r = db.prepare(`
+    SELECT COUNT(*) AS n FROM in_app_notifications
+    WHERE advisor_id = ? AND tenant_id = ? AND read = 0
+  `).get(advisorId, tenantId);
+  return r ? r.n : 0;
+}
+
+function markRead(db, id, advisorId) {
+  return db.prepare(`
+    UPDATE in_app_notifications SET read = 1
+    WHERE id = ? AND advisor_id = ?
+  `).run(id, advisorId).changes;
+}
+
+function markAllRead(db, advisorId, tenantId) {
+  return db.prepare(`
+    UPDATE in_app_notifications SET read = 1
+    WHERE advisor_id = ? AND tenant_id = ? AND read = 0
+  `).run(advisorId, tenantId).changes;
+}
+
 module.exports = {
   getPublicKey,
   ensureConfigured,
@@ -134,4 +177,10 @@ module.exports = {
   removeSubscription,
   listSubscriptions,
   sendToAll,
+  // in-app
+  createNotification,
+  getNotifications,
+  countUnread,
+  markRead,
+  markAllRead,
 };

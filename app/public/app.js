@@ -16748,6 +16748,132 @@ function setupNotifications() {
       el.addEventListener('click', () => { refreshNotifPaneState(); loadNotifLog(); });
     }
   });
+
+  // ─── Campana in-app ───────────────────────────────────────────────────────
+  setupInAppNotifications();
+}
+
+// ─── In-app notifications (campana sidebar) ──────────────────────────────────
+let _inAppPollTimer = null;
+
+function _fmtNotifTime(ts) {
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 60)   return 'ahora';
+  if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} h`;
+  return `${Math.floor(diff / 86400)} d`;
+}
+
+function _notifTypeIcon(type) {
+  const icons = {
+    handover:     `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><path d="M13 6l4 4-4 4"/><path d="M17 10H7"/><path d="M7 3H4a1 1 0 00-1 1v12a1 1 0 001 1h3"/></svg>`,
+    lead_assigned:`<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><circle cx="9" cy="7" r="3"/><path d="M3 17a6 6 0 0112 0"/><path d="M14 9l2 2 3-3"/></svg>`,
+    appointment:  `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><rect x="2" y="3" width="16" height="15" rx="2"/><path d="M2 8h16"/><path d="M6 1v4M14 1v4"/></svg>`,
+    task_due:     `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><circle cx="10" cy="10" r="7"/><polyline points="10 6 10 10 13 12"/></svg>`,
+    general:      `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><path d="M10 2a6 6 0 00-6 6c0 5-2 6-2 6h16s-2-1-2-6a6 6 0 00-6-6z"/><path d="M11.73 17a2 2 0 01-3.46 0"/></svg>`,
+  };
+  return icons[type] || icons.general;
+}
+
+function renderInAppNotifications(items, unread) {
+  const badge = document.getElementById('navNotifBadge');
+  const list  = document.getElementById('navNotifList');
+  if (!badge || !list) return;
+
+  // Badge
+  if (unread > 0) {
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.style.display = '';
+  } else {
+    badge.textContent = '';
+    badge.style.display = 'none';
+  }
+
+  // Lista
+  if (!items.length) {
+    list.innerHTML = '<p class="nav-notif-empty">Sin notificaciones</p>';
+    return;
+  }
+  list.innerHTML = items.map(n => `
+    <div class="nav-notif-item ${n.read ? '' : 'unread'}" data-notif-id="${n.id}" data-notif-link="${escHtml(n.link || '')}">
+      <div class="nav-notif-dot"></div>
+      <div style="display:flex;align-items:flex-start;gap:8px;flex:1;min-width:0">
+        <div style="flex-shrink:0;color:#64748b;margin-top:1px">${_notifTypeIcon(n.type)}</div>
+        <div class="nav-notif-content">
+          <p class="nav-notif-title">${escHtml(n.title)}</p>
+          ${n.body ? `<p class="nav-notif-body">${escHtml(n.body)}</p>` : ''}
+          <span class="nav-notif-time">${_fmtNotifTime(n.created_at)}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Click en item → marcar leído + navegar
+  list.querySelectorAll('.nav-notif-item').forEach(el => {
+    el.addEventListener('click', async () => {
+      const id   = Number(el.dataset.notifId);
+      const link = el.dataset.notifLink;
+      el.classList.remove('unread');
+      try { await api('PATCH', `/api/notifications/in-app/${id}/read`); } catch (_) {}
+      await loadInAppNotifications();
+      if (link) {
+        closeInAppPanel();
+        // link es un nombre de vista ('chats', 'pipelines', etc.)
+        if (typeof showView === 'function') showView(link);
+      }
+    });
+  });
+}
+
+async function loadInAppNotifications() {
+  try {
+    const { items, unread } = await api('GET', '/api/notifications/in-app');
+    renderInAppNotifications(items || [], unread || 0);
+  } catch (_) {}
+}
+
+function openInAppPanel() {
+  const panel = document.getElementById('navNotifPanel');
+  if (panel) { panel.hidden = false; loadInAppNotifications(); }
+}
+
+function closeInAppPanel() {
+  const panel = document.getElementById('navNotifPanel');
+  if (panel) panel.hidden = true;
+}
+
+function setupInAppNotifications() {
+  const btn = document.getElementById('navNotifBtn');
+  if (!btn) return;
+
+  // Toggle panel
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const panel = document.getElementById('navNotifPanel');
+    if (!panel) return;
+    if (panel.hidden) { openInAppPanel(); } else { closeInAppPanel(); }
+  });
+
+  // Cerrar al click fuera
+  document.addEventListener('click', (e) => {
+    const panel = document.getElementById('navNotifPanel');
+    if (!panel || panel.hidden) return;
+    if (!panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+      closeInAppPanel();
+    }
+  });
+
+  // Marcar todo leído
+  document.getElementById('navNotifReadAll')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try { await api('POST', '/api/notifications/in-app/read-all'); } catch (_) {}
+    await loadInAppNotifications();
+  });
+
+  // Carga inicial + polling cada 30s
+  loadInAppNotifications();
+  if (_inAppPollTimer) clearInterval(_inAppPollTimer);
+  _inAppPollTimer = setInterval(loadInAppNotifications, 30_000);
 }
 
 // ═══════ BILLING (Suscripción) ═══════

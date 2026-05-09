@@ -42,6 +42,39 @@ module.exports = function createNotificationsRouter(db) {
     } catch (err) { next(err); }
   });
 
+  // ─── In-app notifications ───────────────────────────────────────────────────
+
+  // GET /api/notifications/in-app — lista + conteo sin leer
+  router.get('/in-app', (req, res, next) => {
+    try {
+      const advisorId = req.advisor?.id;
+      if (!advisorId) return res.status(401).json({ error: 'Sin sesión' });
+      const items = service.getNotifications(db, advisorId, req.tenantId);
+      const unread = service.countUnread(db, advisorId, req.tenantId);
+      res.json({ items, unread });
+    } catch (err) { next(err); }
+  });
+
+  // PATCH /api/notifications/in-app/:id/read — marcar una como leída
+  router.patch('/in-app/:id/read', (req, res, next) => {
+    try {
+      const advisorId = req.advisor?.id;
+      if (!advisorId) return res.status(401).json({ error: 'Sin sesión' });
+      service.markRead(db, Number(req.params.id), advisorId);
+      res.json({ ok: true });
+    } catch (err) { next(err); }
+  });
+
+  // POST /api/notifications/in-app/read-all — marcar todas como leídas
+  router.post('/in-app/read-all', (req, res, next) => {
+    try {
+      const advisorId = req.advisor?.id;
+      if (!advisorId) return res.status(401).json({ error: 'Sin sesión' });
+      const changed = service.markAllRead(db, advisorId, req.tenantId);
+      res.json({ ok: true, changed });
+    } catch (err) { next(err); }
+  });
+
   router.get('/log', (req, res, next) => {
     try {
       const items = db.prepare(

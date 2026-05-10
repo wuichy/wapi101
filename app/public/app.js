@@ -9643,8 +9643,8 @@ function setupBot() {
             parentStep: step,
           });
         });
-        // Mostrar Default si tiene pasos
-        if (Array.isArray(step.config.default) && step.config.default.length > 0) {
+        // Siempre mostrar De lo contrario (placeholder vacío si no tiene pasos)
+        if (Array.isArray(step.config.default)) {
           tNode.children.push({
             label: 'De lo contrario',
             subtree: _bbBuildBotTree(step.config.default, step.config.default),
@@ -9961,7 +9961,7 @@ function setupBot() {
     // Helper: abrir picker como overlay flotante centrado (sin cambiar de vista)
     function _bbOpenPicker(insertAfterVal) {
       _sbInsertAfter = insertAfterVal || null;
-      _visualBranchCtx = null;
+      if (insertAfterVal) _visualBranchCtx = null;
       _bbShowPickerFloating();
     }
     function _bbShowPickerFloating() {
@@ -10018,6 +10018,7 @@ function setupBot() {
     edges.forEach((edge) => {
       const from = itemMap[edge.from];
       const to   = itemMap[edge.to];
+      if (!to) return;
 
       const x1 = from ? from.x + from.w / 2 : itemMap['trigger'].x + itemMap['trigger'].w / 2;
       const y1 = from ? from.y + from.h      : itemMap['trigger'].y + itemMap['trigger'].h;
@@ -19338,11 +19339,18 @@ function _renderBranchRuleRow(sid, caseId, ruleIdx, rule) {
     </div>`;
 }
 
-function _renderBranchSubStepCard(parentSid, caseId, subStep) {
+function _renderBranchSubStepCard(parentSid, caseId, subStep, prevStepId = null) {
   const label    = (typeof SB_STEP_LABELS !== 'undefined' && SB_STEP_LABELS[subStep.type]) || subStep.type;
   const iconHtml = typeof stepIconSvg === 'function' ? stepIconSvg(subStep.type) : '';
   const bodyHtml = typeof buildStepBody === 'function' ? buildStepBody(subStep) : '';
-  return `
+  const connectorHtml = prevStepId
+    ? `<div class="sb-step-connector">
+        <button class="sb-insert-between" data-insert-after="${escHtml(prevStepId)}" title="Insertar paso aquí">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+        </button>
+      </div>`
+    : '';
+  return connectorHtml + `
     <div class="sb-rem-substep" data-substep-id="${escHtml(subStep._id)}" data-substep-type="${escHtml(subStep.type)}">
       <div class="sb-rem-substep-header" data-toggle-sub="${escHtml(subStep._id)}">
         <div class="sb-step-icon type-${subStep.type}" style="width:24px;height:24px;min-width:24px">${iconHtml}</div>
@@ -19393,7 +19401,9 @@ function _renderBranchEditor(sid, c) {
       return row + connector;
     }).join('');
 
-    const subStepsHtml = (cs.steps || []).map(ss => _renderBranchSubStepCard(sid, cs.id, ss)).join('');
+    const subStepsHtml = (cs.steps || []).map((ss, si) =>
+      _renderBranchSubStepCard(sid, cs.id, ss, si > 0 ? cs.steps[si - 1]._id : null)
+    ).join('');
 
     return `
       <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}">
@@ -19417,7 +19427,9 @@ function _renderBranchEditor(sid, c) {
   }).join('');
 
   const defaultSteps    = Array.isArray(c.default) ? c.default : [];
-  const defaultSubHtml  = defaultSteps.map(ss => _renderBranchSubStepCard(sid, '__default__', ss)).join('');
+  const defaultSubHtml  = defaultSteps.map((ss, si) =>
+    _renderBranchSubStepCard(sid, '__default__', ss, si > 0 ? defaultSteps[si - 1]._id : null)
+  ).join('');
 
   return `
     ${casesHtml}

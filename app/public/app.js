@@ -11416,6 +11416,10 @@ function setupKanbanDragDrop() {
       try {
         await api('PATCH', `/api/expedients/${expId}`, patch);
         exp.stageId = stageId;
+        // Backend setea stage_entered_at = unixepoch() al cambiar stage_id —
+        // hay que reflejarlo en local para que las alarmas no disparen
+        // inmediatamente con el timestamp viejo.
+        exp.stageEnteredAt = Math.floor(Date.now() / 1000);
         if (patch.pipelineId) exp.pipelineId = newPipelineId;
         renderPipelineTabs();
         renderPipelinesBoard();

@@ -15288,6 +15288,7 @@ function renderTemplates() {
         ${isWa && (t.waStatus === 'draft' || t.waStatus === 'rejected') ? `<button class="btn btn--sm btn--primary tpl-submit-btn" data-id="${t.id}">${t.waStatus === 'rejected' ? 'Reenviar' : 'Enviar a Meta'}</button>` : ''}
         ${isWa && t.waStatus === 'pending' ? `<button class="btn btn--sm btn--secondary tpl-sync-btn" data-id="${t.id}">↺ Sync</button>` : ''}
         <button class="btn btn--sm btn--secondary tpl-edit-btn" data-id="${t.id}">Editar</button>
+        <button class="btn btn--sm btn--secondary tpl-clone-btn" data-id="${t.id}" title="Clonar como nueva plantilla">⧉ Clonar</button>
         <button class="btn btn--sm btn--danger tpl-del-btn" data-id="${t.id}">✕</button>
       </div>`;
     list.appendChild(card);
@@ -16532,6 +16533,9 @@ function setupTemplates() {
     if (e.target.classList.contains('tpl-edit-btn')) {
       const tmpl = _tplItems.find(t => t.id === id);
       if (tmpl) openTplModal(tmpl);
+    } else if (e.target.classList.contains('tpl-clone-btn')) {
+      const tmpl = _tplItems.find(t => t.id === id);
+      if (tmpl) duplicateCurrentTemplate(tmpl);
     } else if (e.target.classList.contains('tpl-del-btn')) {
       if (!confirm('¿Eliminar esta plantilla?')) return;
       try {

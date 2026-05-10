@@ -8759,11 +8759,11 @@ function setupBot() {
 
     // ── Si estamos añadiendo a una rama branch (step) ──
     if (_branchCaseStepCtx) {
-      const { parentSid, caseId } = _branchCaseStepCtx;
+      const { parentSid, caseId, ownBody } = _branchCaseStepCtx;
       _branchCaseStepCtx = null;
       const parentStep = _findBranchStep(parentSid);
       if (parentStep) {
-        parentStep.config = collectStepConfig(parentSid);
+        parentStep.config = collectStepConfig(parentSid, ownBody);
         if (caseId === '__default__') {
           if (!Array.isArray(parentStep.config.default)) parentStep.config.default = [];
           parentStep.config.default.push(newStep);
@@ -8774,8 +8774,8 @@ function setupBot() {
             cs.steps.push(newStep);
           }
         }
-        _refreshBranchStepBody(parentSid);
-        document.querySelector(`[data-body-sid="${parentSid}"]`)?.classList.add('is-open');
+        _rerenderBranchBody(ownBody, parentStep);
+        if (ownBody) ownBody.classList.add('is-open');
       }
       return;
     }
@@ -8792,17 +8792,17 @@ function setupBot() {
 
     // ── Si estamos añadiendo a una rama reminder, insertar ahí ──
     if (_reminderStepCtx) {
-      const { parentSid, rid } = _reminderStepCtx;
+      const { parentSid, rid, ownBody } = _reminderStepCtx;
       _reminderStepCtx = null;
       const parentStep = _findBranchStep(parentSid);
       if (parentStep) {
-        parentStep.config = collectStepConfig(parentSid);
+        parentStep.config = collectStepConfig(parentSid, ownBody);
         const rem = (parentStep.config.reminders || []).find(r => r.id === rid);
         if (rem) {
           if (!Array.isArray(rem.steps)) rem.steps = [];
           rem.steps.push(newStep);
-          _refreshBranchStepBody(parentSid);
-          document.querySelector(`[data-body-sid="${parentSid}"]`)?.classList.add('is-open');
+          _rerenderBranchBody(ownBody, parentStep);
+          if (ownBody) ownBody.classList.add('is-open');
         }
       }
       return;
@@ -8944,27 +8944,36 @@ function setupBot() {
   }
 
   // ── branch v2: agregar rama, eliminar rama, agregar/eliminar regla, agregar step ──
+  // Helper: re-renderiza el body exacto del step usando el elemento que contiene
+  // el botón clickeado — evita ambigüedad cuando hay múltiples [data-body-sid="X"]
+  // en el DOM (ej. visual editor stale + list view).
+  function _rerenderBranchBody(ownBody, step) {
+    if (!ownBody || typeof buildStepBody !== 'function') {
+      _refreshBranchStepBody(step._id);
+      return;
+    }
+    ownBody.innerHTML = buildStepBody(step);
+    ownBody.classList.add('is-open');
+  }
+
   document.body.addEventListener('click', (e) => {
     // Agregar rama
     const addCaseBtn = e.target.closest('.sb-branch-add-case-v2');
     if (addCaseBtn) {
       e.preventDefault();
-      const sid = addCaseBtn.dataset.sid;
-      const step = _findBranchStep(sid);
-      if (!step) { toast(`[dbg] NOT FOUND sid="${sid}"`, 'error'); return; }
-      step.config = collectStepConfig(sid);
+      const sid     = addCaseBtn.dataset.sid;
+      const ownBody = addCaseBtn.closest('[data-body-sid]');
+      const step    = _findBranchStep(sid);
+      if (!step) return;
+      step.config = collectStepConfig(sid, ownBody);
       if (!Array.isArray(step.config.cases)) step.config.cases = [];
-      const casesBefore = step.config.cases.length;
       step.config.cases.push({
         id: `bc_${Date.now()}`,
         rules_op: 'and',
         rules: [{ field: 'message', op: 'matches_any', value: '' }],
         steps: [],
       });
-      const bodyEl = document.querySelector(`[data-body-sid="${sid}"]`);
-      toast(`[dbg] sid="${sid}" casos:${casesBefore}→${step.config.cases.length} body:${bodyEl ? 'OK' : 'NULL'}`, bodyEl ? 'success' : 'error');
-      _refreshBranchStepBody(sid);
-      bodyEl?.classList.add('is-open');
+      _rerenderBranchBody(ownBody, step);
       return;
     }
 
@@ -8973,14 +8982,14 @@ function setupBot() {
     if (delCaseBtn) {
       e.preventDefault();
       e.stopPropagation();
-      const sid    = delCaseBtn.dataset.sid;
-      const caseId = delCaseBtn.dataset.delCaseId;
-      const step   = _findBranchStep(sid);
+      const sid     = delCaseBtn.dataset.sid;
+      const caseId  = delCaseBtn.dataset.delCaseId;
+      const ownBody = delCaseBtn.closest('[data-body-sid]');
+      const step    = _findBranchStep(sid);
       if (!step) return;
-      step.config = collectStepConfig(sid);
+      step.config = collectStepConfig(sid, ownBody);
       step.config.cases = (step.config.cases || []).filter(cs => cs.id !== caseId);
-      _refreshBranchStepBody(sid);
-      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      _rerenderBranchBody(ownBody, step);
       return;
     }
 
@@ -8988,20 +8997,18 @@ function setupBot() {
     const addRuleBtn = e.target.closest('.sb-branch-add-rule');
     if (addRuleBtn) {
       e.preventDefault();
-      const sid    = addRuleBtn.dataset.sid;
-      const caseId = addRuleBtn.dataset.caseId;
-      toast(`[dbg] agregar-cond sid="${sid}" caseId="${caseId}"`, 'success');
-      const step   = _findBranchStep(sid);
-      if (!step) { toast(`[dbg] step NOT FOUND sid="${sid}"`, 'error'); }
+      const sid     = addRuleBtn.dataset.sid;
+      const caseId  = addRuleBtn.dataset.caseId;
+      const ownBody = addRuleBtn.closest('[data-body-sid]');
+      const step    = _findBranchStep(sid);
       if (!step) return;
-      step.config = collectStepConfig(sid);
+      step.config = collectStepConfig(sid, ownBody);
       const cs = (step.config.cases || []).find(c => c.id === caseId);
       if (cs) {
         if (!Array.isArray(cs.rules)) cs.rules = [];
         cs.rules.push({ field: 'message', op: 'matches_any', value: '' });
       }
-      _refreshBranchStepBody(sid);
-      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      _rerenderBranchBody(ownBody, step);
       return;
     }
 
@@ -9013,15 +9020,15 @@ function setupBot() {
       const sid      = delRuleBtn.dataset.sid;
       const caseId   = delRuleBtn.dataset.caseId;
       const ruleIdx  = Number(delRuleBtn.dataset.ruleIdx);
+      const ownBody  = delRuleBtn.closest('[data-body-sid]');
       const step     = _findBranchStep(sid);
       if (!step) return;
-      step.config = collectStepConfig(sid);
+      step.config = collectStepConfig(sid, ownBody);
       const cs = (step.config.cases || []).find(c => c.id === caseId);
       if (cs && Array.isArray(cs.rules)) {
         cs.rules.splice(ruleIdx, 1);
       }
-      _refreshBranchStepBody(sid);
-      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      _rerenderBranchBody(ownBody, step);
       return;
     }
 
@@ -9032,7 +9039,8 @@ function setupBot() {
       e.stopPropagation();
       const parentSid = addStepBtn.dataset.parentSid;
       const caseId    = addStepBtn.dataset.caseId;
-      _branchCaseStepCtx = { parentSid, caseId };
+      const ownBody   = addStepBtn.closest('[data-body-sid]');
+      _branchCaseStepCtx = { parentSid, caseId, ownBody };
       const picker = document.getElementById('sbStepPicker');
       if (!picker) return;
       if (picker.parentElement !== document.body) {
@@ -9065,9 +9073,10 @@ function setupBot() {
       const rid        = delSubBtn.dataset.parentRid;
       const caseId     = delSubBtn.dataset.parentCaseId;
       const subSid     = delSubBtn.dataset.delSubstep;
+      const ownBody    = delSubBtn.closest('[data-body-sid]');
       const parentStep = _findBranchStep(parentSid);
       if (!parentStep) return;
-      parentStep.config = collectStepConfig(parentSid);
+      parentStep.config = collectStepConfig(parentSid, ownBody);
 
       if (caseId !== undefined) {
         // branch v2
@@ -9083,8 +9092,7 @@ function setupBot() {
         if (rem && Array.isArray(rem.steps)) rem.steps = rem.steps.filter(ss => ss._id !== subSid);
       }
 
-      _refreshBranchStepBody(parentSid);
-      document.querySelector(`[data-body-sid="${parentSid}"]`)?.classList.add('is-open');
+      _rerenderBranchBody(ownBody, parentStep);
       return;
     }
 
@@ -9095,7 +9103,8 @@ function setupBot() {
       e.stopPropagation();
       const parentSid = addSubBtn.dataset.parentSid;
       const rid       = addSubBtn.dataset.parentRid;
-      _reminderStepCtx = { parentSid, rid };
+      const ownBody   = addSubBtn.closest('[data-body-sid]');
+      _reminderStepCtx = { parentSid, rid, ownBody };
       const picker = document.getElementById('sbStepPicker');
       if (!picker) return;
       // Mover picker al body para evitar clipping
@@ -9124,15 +9133,14 @@ function setupBot() {
     const addRemBtn = e.target.closest('.sb-reminder-add-btn');
     if (addRemBtn) {
       e.preventDefault();
-      const sid = addRemBtn.dataset.sid;
-      const step = _findBranchStep(sid);
+      const sid     = addRemBtn.dataset.sid;
+      const ownBody = addRemBtn.closest('[data-body-sid]');
+      const step    = _findBranchStep(sid);
       if (!step) return;
-      step.config = collectStepConfig(sid);
+      step.config = collectStepConfig(sid, ownBody);
       if (!Array.isArray(step.config.reminders)) step.config.reminders = [];
       step.config.reminders.push({ id: `r${Date.now()}`, mode: 'before', value: 30, unit: 'min' });
-      _refreshBranchStepBody(sid);
-      // re-open the body
-      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      _rerenderBranchBody(ownBody, step);
       return;
     }
 
@@ -9147,10 +9155,9 @@ function setupBot() {
       const sid = body.dataset.bodySid;
       const step = _findBranchStep(sid);
       if (!step) return;
-      step.config = collectStepConfig(sid);
+      step.config = collectStepConfig(sid, body);
       step.config.reminders = (step.config.reminders || []).filter(r => r.id !== rid);
-      _refreshBranchStepBody(sid);
-      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      _rerenderBranchBody(body, step);
       return;
     }
   });
@@ -9210,29 +9217,29 @@ function setupBot() {
     const sid      = fieldSel.dataset.sid;
     const caseId   = fieldSel.dataset.caseId;
     const ruleIdx  = Number(fieldSel.dataset.ruleIdx);
+    const ownBody  = fieldSel.closest('[data-body-sid]');
     const step     = _findBranchStep(sid);
     if (!step) return;
-    step.config = collectStepConfig(sid);
+    step.config = collectStepConfig(sid, ownBody);
     const cs = (step.config.cases || []).find(c => c.id === caseId);
     if (cs && cs.rules[ruleIdx]) {
       cs.rules[ruleIdx].field = fieldSel.value;
       cs.rules[ruleIdx].op    = _branchFieldOps(fieldSel.value)[0]?.[0] || 'contains';
       cs.rules[ruleIdx].value = '';
     }
-    _refreshBranchStepBody(sid);
-    document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+    _rerenderBranchBody(ownBody, step);
   });
 
   // ── reminder_timer: cambio de modo (before ↔ day_before_at) ──
   document.getElementById('sbStepsFlow')?.addEventListener('change', (e) => {
     const modeSel = e.target.closest('select[data-field="rem_mode"]');
     if (!modeSel) return;
-    const sid = modeSel.dataset.sid;
-    const step = _findBranchStep(sid);
+    const sid     = modeSel.dataset.sid;
+    const ownBody = modeSel.closest('[data-body-sid]');
+    const step    = _findBranchStep(sid);
     if (!step) return;
-    step.config = collectStepConfig(sid);
-    _refreshBranchStepBody(sid);
-    document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+    step.config = collectStepConfig(sid, ownBody);
+    _rerenderBranchBody(ownBody, step);
   });
 
   document.getElementById('sbStepsFlow')?.addEventListener('click', (e) => {

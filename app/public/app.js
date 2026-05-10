@@ -8950,7 +8950,9 @@ function setupBot() {
     if (addCaseBtn) {
       e.preventDefault();
       const sid = addCaseBtn.dataset.sid;
+      console.log('[branch] agregar-rama click, sid=', sid, 'sbSteps count=', sbSteps.length);
       const step = _findBranchStep(sid);
+      console.log('[branch] _findBranchStep result=', step ? `found (type=${step.type})` : 'NOT FOUND');
       if (!step) return;
       step.config = collectStepConfig(sid);
       if (!Array.isArray(step.config.cases)) step.config.cases = [];
@@ -8987,7 +8989,9 @@ function setupBot() {
       e.preventDefault();
       const sid    = addRuleBtn.dataset.sid;
       const caseId = addRuleBtn.dataset.caseId;
+      console.log('[branch] agregar-condicion click, sid=', sid, 'caseId=', caseId);
       const step   = _findBranchStep(sid);
+      console.log('[branch] _findBranchStep result=', step ? `found (type=${step.type})` : 'NOT FOUND');
       if (!step) return;
       step.config = collectStepConfig(sid);
       const cs = (step.config.cases || []).find(c => c.id === caseId);

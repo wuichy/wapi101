@@ -19129,15 +19129,17 @@ function _branchFieldOps(field) {
   }
   if (field === 'message') {
     // Para mensaje el default es matches_any porque el UI usa pills (cada
-    // pill es una palabra independiente). "contiene la frase" para buscar
-    // una cadena literal con espacios (1 sola pill).
+    // pill es una palabra independiente). matches_any = OR, contains_all = AND.
     return [
-      ['matches_any',  'contiene alguna palabra'],
-      ['contains',     'contiene la frase exacta'],
-      ['not_contains', 'no contiene'],
-      ['equals',       'es exactamente'],
-      ['starts_with',  'empieza con'],
-      ['ends_with',    'termina con'],
+      ['matches_any',      'contiene alguna de estas palabras'],
+      ['contains_all',     'contiene todas estas palabras'],
+      ['matches_none',     'no contiene ninguna de estas palabras'],
+      ['not_contains_all', 'no contiene todas estas palabras'],
+      ['contains',         'contiene la frase exacta'],
+      ['not_contains',     'no contiene la frase exacta'],
+      ['equals',           'es exactamente'],
+      ['starts_with',      'empieza con'],
+      ['ends_with',        'termina con'],
     ];
   }
   return [

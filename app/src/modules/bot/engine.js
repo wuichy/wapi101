@@ -1749,16 +1749,17 @@ function evaluateRule(db, rule, ctx) {
 
     if (field === 'message') {
       const actual = String(ctx.messageBody || '').toLowerCase();
+      const list = () => value.split(',').map(s => s.trim()).filter(Boolean);
       if (op === 'equals')       return actual === value;
       if (op === 'not_equals')   return actual !== value;
       if (op === 'starts_with')  return actual.startsWith(value);
       if (op === 'ends_with')    return actual.endsWith(value);
-      if (op === 'not_contains') return !actual.includes(value);
-      if (op === 'matches_any') {
-        const list = value.split(',').map(s => s.trim()).filter(Boolean);
-        return list.some(v => actual.includes(v));
-      }
-      return actual.includes(value); // contains (default)
+      if (op === 'matches_any')      return list().some(v => actual.includes(v));
+      if (op === 'matches_none')     return list().every(v => !actual.includes(v));
+      if (op === 'contains_all')     return list().every(v => actual.includes(v));
+      if (op === 'not_contains_all') return !list().every(v => actual.includes(v));
+      if (op === 'not_contains')     return !actual.includes(value);
+      return actual.includes(value); // contains (default — frase exacta)
     }
 
     if (field === 'tag') {

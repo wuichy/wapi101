@@ -5068,6 +5068,9 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   flex: 1;
   display: flex;
   overflow: hidden;
+  width: 100%;       /* sin esto el canvas toma el ancho de su contenido (2780px+ con muchas ramas) */
+  min-width: 0;
+  min-height: 0;
 }
 
 .bb-visual-stage {

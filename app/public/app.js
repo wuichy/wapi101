@@ -8242,14 +8242,21 @@ function collectStepConfig(sid) {
       });
       const rulesOpEl = caseEl.querySelector('.sb-branch-rules-op');
       const rules_op  = rulesOpEl?.value || 'and';
-      // Sub-steps: si su body está en el DOM (list view los renderiza),
-      // releer su config para capturar edits del usuario. Si no está en
-      // DOM (visual editor), preservar el config del modelo.
+      // Sub-steps: leer config directo desde el caseEl para evitar leer un
+      // body duplicado en otra parte del DOM (ej. visual editor en paralelo).
       const existingCase = existingCases.find(c => c.id === caseId);
       const steps = (existingCase?.steps || []).map(subStep => {
-        const subBody = document.querySelector(`[data-body-sid="${subStep._id}"]`);
-        const newConfig = subBody ? collectStepConfig(subStep._id) : subStep.config;
-        return { ...subStep, config: newConfig };
+        const subBody = caseEl.querySelector(`[data-body-sid="${subStep._id}"]`);
+        if (!subBody) return { ...subStep };
+        // Leer fields del sub-step directamente desde su body
+        const subCfg = {};
+        subBody.querySelectorAll('[data-field]').forEach(el => { subCfg[el.dataset.field] = el.value; });
+        const mvInputs = subBody.querySelectorAll('.sb-tpl-manual');
+        if (mvInputs.length) {
+          subCfg.manualValues = [];
+          mvInputs.forEach(inp => { subCfg.manualValues[Number(inp.dataset.i)] = inp.value; });
+        }
+        return { ...subStep, config: subCfg };
       });
       cfg.cases.push({ id: caseId, rules_op, rules, steps });
     });

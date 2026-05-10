@@ -8214,8 +8214,10 @@ function collectStepConfig(sid) {
   }
 
   // branch step v2 — recolectar solo condiciones; sub-steps se gestionan desde el flujo visual
-  const branchCasesV2 = body.querySelectorAll('.sb-branch-case-v2[data-case-id]');
-  if (branchCasesV2.length || body.querySelector('.sb-branch-add-case-v2')) {
+  // Solo los casos que pertenecen a ESTE body, no a branches anidados
+  const branchCasesV2 = [...body.querySelectorAll('.sb-branch-case-v2[data-case-id]')]
+    .filter(el => el.closest('[data-body-sid]') === body);
+  if (branchCasesV2.length || body.querySelector(':scope > .sb-branch-add-case-v2, .sb-branch-add-case-v2')) {
     // Preservar steps existentes del modelo (no se gestionan en el popup)
     const existingStep = (typeof sbSteps !== 'undefined' ? sbSteps : []).find(s => s._id === sid);
     const existingCases = existingStep?.config?.cases || [];

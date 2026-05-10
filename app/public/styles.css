@@ -5072,6 +5072,8 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 
 .bb-visual-stage {
   flex: 1;
+  min-width: 0;     /* permite encoger debajo del tamaño del contenido para que overflow:auto active scroll */
+  min-height: 0;
   position: relative;
   overflow: auto;
   background:

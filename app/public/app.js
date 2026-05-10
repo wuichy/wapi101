@@ -8177,8 +8177,8 @@ function _resolveStepBody(sid) {
   return document.querySelector(`[data-body-sid="${sid}"]`);
 }
 
-function collectStepConfig(sid) {
-  const body = _resolveStepBody(sid);
+function collectStepConfig(sid, bodyEl) {
+  const body = bodyEl || _resolveStepBody(sid);
   if (!body) return {};
   const cfg = {};
   body.querySelectorAll('[data-field]').forEach(el => {
@@ -8244,21 +8244,14 @@ function collectStepConfig(sid) {
       });
       const rulesOpEl = caseEl.querySelector('.sb-branch-rules-op');
       const rules_op  = rulesOpEl?.value || 'and';
-      // Sub-steps: leer config directo desde el caseEl para evitar leer un
-      // body duplicado en otra parte del DOM (ej. visual editor en paralelo).
+      // Sub-steps: buscar el body dentro del caseEl (evita encontrar un cuerpo
+      // duplicado stale en el editor visual) y pasar ese body a collectStepConfig
+      // para que use la lógica completa (incluyendo cases de branches anidados).
       const existingCase = existingCases.find(c => c.id === caseId);
       const steps = (existingCase?.steps || []).map(subStep => {
         const subBody = caseEl.querySelector(`[data-body-sid="${subStep._id}"]`);
-        if (!subBody) return { ...subStep };
-        // Leer fields del sub-step directamente desde su body
-        const subCfg = {};
-        subBody.querySelectorAll('[data-field]').forEach(el => { subCfg[el.dataset.field] = el.value; });
-        const mvInputs = subBody.querySelectorAll('.sb-tpl-manual');
-        if (mvInputs.length) {
-          subCfg.manualValues = [];
-          mvInputs.forEach(inp => { subCfg.manualValues[Number(inp.dataset.i)] = inp.value; });
-        }
-        return { ...subStep, config: subCfg };
+        const newConfig = subBody ? collectStepConfig(subStep._id, subBody) : subStep.config;
+        return { ...subStep, config: newConfig };
       });
       cfg.cases.push({ id: caseId, rules_op, rules, steps });
     });

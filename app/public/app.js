@@ -8950,10 +8950,9 @@ function setupBot() {
     if (addCaseBtn) {
       e.preventDefault();
       const sid = addCaseBtn.dataset.sid;
-      console.log('[branch] agregar-rama click, sid=', sid, 'sbSteps count=', sbSteps.length);
+      toast(`[dbg] agregar-rama sid="${sid}"`, 'success');
       const step = _findBranchStep(sid);
-      console.log('[branch] _findBranchStep result=', step ? `found (type=${step.type})` : 'NOT FOUND');
-      if (!step) return;
+      if (!step) { toast(`[dbg] step NOT FOUND para sid="${sid}"`, 'error'); return; }
       step.config = collectStepConfig(sid);
       if (!Array.isArray(step.config.cases)) step.config.cases = [];
       step.config.cases.push({
@@ -8989,9 +8988,9 @@ function setupBot() {
       e.preventDefault();
       const sid    = addRuleBtn.dataset.sid;
       const caseId = addRuleBtn.dataset.caseId;
-      console.log('[branch] agregar-condicion click, sid=', sid, 'caseId=', caseId);
+      toast(`[dbg] agregar-cond sid="${sid}" caseId="${caseId}"`, 'success');
       const step   = _findBranchStep(sid);
-      console.log('[branch] _findBranchStep result=', step ? `found (type=${step.type})` : 'NOT FOUND');
+      if (!step) { toast(`[dbg] step NOT FOUND sid="${sid}"`, 'error'); }
       if (!step) return;
       step.config = collectStepConfig(sid);
       const cs = (step.config.cases || []).find(c => c.id === caseId);

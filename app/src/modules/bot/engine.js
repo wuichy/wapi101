@@ -700,18 +700,14 @@ async function executeStep(db, step, ctx) {
         : String(raw || '').split(',').map(t => t.trim()).filter(Boolean);
       if (!incoming.length || !ctx.contactId) return false;
       try {
-        const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
-        if (row) {
-          const tags = (() => { try { return JSON.parse(row.tags || '[]'); } catch { return []; } })();
-          const added = [];
-          for (const t of incoming) {
-            if (!tags.includes(t)) { tags.push(t); added.push(t); }
-          }
-          if (added.length) {
-            db.prepare('UPDATE contacts SET tags = ? WHERE id = ? AND tenant_id = ?').run(JSON.stringify(tags), ctx.contactId, ctx.tenantId);
-          }
-          _log('info', `etiquetas ${JSON.stringify(incoming)} en contacto ${ctx.contactId} (añadidas=${JSON.stringify(added)})`);
+        // Tags viven en contact_tags(contact_id, tag, tenant_id) — UNIQUE(contact_id, tag)
+        const ins = db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag, tenant_id) VALUES (?, ?, ?)');
+        const added = [];
+        for (const t of incoming) {
+          const r = ins.run(ctx.contactId, t, ctx.tenantId);
+          if (r.changes > 0) added.push(t);
         }
+        _log('info', `etiquetas ${JSON.stringify(incoming)} en contacto ${ctx.contactId} (añadidas=${JSON.stringify(added)})`);
       } catch (err) {
         _log('error', `error en step tag: ${err.message}`);
         throw new Error(`Asignar etiqueta falló: ${err.message}`);
@@ -932,18 +928,12 @@ async function executeStep(db, step, ctx) {
         }
       }
 
-      // 3) Agregar etiqueta de seguimiento al contacto
+      // 3) Agregar etiqueta de seguimiento al contacto (tabla contact_tags)
       if (tagToAdd && ctx.contactId) {
         try {
-          const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
-          if (row) {
-            const tags = (() => { try { return JSON.parse(row.tags || '[]'); } catch { return []; } })();
-            if (!tags.includes(tagToAdd)) {
-              tags.push(tagToAdd);
-              db.prepare('UPDATE contacts SET tags = ? WHERE id = ? AND tenant_id = ?').run(JSON.stringify(tags), ctx.contactId, ctx.tenantId);
-              _log('info', `handover: etiqueta "${tagToAdd}" agregada al contacto ${ctx.contactId}`);
-            }
-          }
+          const r = db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag, tenant_id) VALUES (?, ?, ?)')
+            .run(ctx.contactId, tagToAdd, ctx.tenantId);
+          if (r.changes > 0) _log('info', `handover: etiqueta "${tagToAdd}" agregada al contacto ${ctx.contactId}`);
         } catch (e) {
           _log('error', `handover: error agregando etiqueta: ${e.message}`);
         }
@@ -1724,8 +1714,8 @@ function evaluateCondition(db, c, ctx) {
       return (ctx.messageBody || '').toLowerCase().includes((c.value || '').toLowerCase());
     }
     if (c.field === 'tag') {
-      const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
-      const tags = (() => { try { return JSON.parse(row?.tags || '[]'); } catch { return []; } })();
+      const rows = db.prepare('SELECT tag FROM contact_tags WHERE contact_id = ? AND tenant_id = ?').all(ctx.contactId, ctx.tenantId);
+      const tags = rows.map(r => r.tag);
       return tags.includes(c.value || '');
     }
     if (c.field === 'pipeline') {
@@ -1763,9 +1753,9 @@ function evaluateRule(db, rule, ctx) {
     }
 
     if (field === 'tag') {
-      const row = db.prepare('SELECT tags FROM contacts WHERE id = ? AND tenant_id = ?').get(ctx.contactId, ctx.tenantId);
-      const tags = (() => { try { return JSON.parse(row?.tags || '[]'); } catch { return []; } })();
-      const lowerTags = tags.map(t => String(t).toLowerCase());
+      // Tags viven en contact_tags(contact_id, tag) — no en columna en contacts
+      const rows = db.prepare('SELECT tag FROM contact_tags WHERE contact_id = ? AND tenant_id = ?').all(ctx.contactId, ctx.tenantId);
+      const lowerTags = rows.map(r => String(r.tag || '').toLowerCase());
       if (op === 'not_contains' || op === 'not_equals') return !lowerTags.includes(value);
       return lowerTags.includes(value);
     }

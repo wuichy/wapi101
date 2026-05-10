@@ -7360,6 +7360,22 @@ function openBotBuilder(bot, returnTo = null) {
         return { ...s, _id: s._id || `s${i}` };
       })
     : [];
+  // Ajustar sbStepCounter al máximo ID encontrado en TODO el árbol (top-level + sub-steps
+  // anidados en cases/default/reminders). Sin esto, al recargar la página sbStepCounter
+  // se basaba solo en el conteo de top-level steps y el siguiente ID podía colisionar
+  // con un sub-step guardado, causando data-body-sid duplicados en el DOM.
+  const _maxNestedStepNum = (steps) => {
+    let m = 0;
+    for (const s of (steps || [])) {
+      const n = parseInt(String(s._id || '').replace(/^s/, ''), 10);
+      if (n > 0 && n > m) m = n;
+      for (const cs of (s.config?.cases || [])) m = Math.max(m, _maxNestedStepNum(cs.steps));
+      m = Math.max(m, _maxNestedStepNum(s.config?.default));
+      for (const rem of (s.config?.reminders || [])) m = Math.max(m, _maxNestedStepNum(rem.steps));
+    }
+    return m;
+  };
+  sbStepCounter = Math.max(sbStepCounter, _maxNestedStepNum(sbSteps));
   sbTagIds = bot && Array.isArray(bot.tags) ? bot.tags.map(t => t.id) : [];
 
   document.getElementById('botListView').hidden = true;

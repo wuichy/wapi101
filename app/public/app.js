@@ -7376,6 +7376,20 @@ function openBotBuilder(bot, returnTo = null) {
     return m;
   };
   sbStepCounter = Math.max(sbStepCounter, _maxNestedStepNum(sbSteps));
+  // Garantizar _id en sub-steps anidados (bots guardados antes de este feature)
+  const _ensureSubStepIds = (steps) => {
+    for (const s of (steps || [])) {
+      if (!s._id) { sbStepCounter++; s._id = `s${sbStepCounter}`; }
+      for (const cs of (s.config?.cases || [])) {
+        if (!Array.isArray(cs.steps)) cs.steps = Array.isArray(cs.branch) ? cs.branch : [];
+        _ensureSubStepIds(cs.steps);
+      }
+      _ensureSubStepIds(s.config?.default);
+      for (const rem of (s.config?.reminders || [])) _ensureSubStepIds(rem.steps);
+      for (const arr of Object.values(s.config?.branches || {})) _ensureSubStepIds(arr);
+    }
+  };
+  _ensureSubStepIds(sbSteps);
   sbTagIds = bot && Array.isArray(bot.tags) ? bot.tags.map(t => t.id) : [];
 
   document.getElementById('botListView').hidden = true;
@@ -8002,10 +8016,12 @@ function buildStageOptionsWithColor(pipelineId, selectedStageId) {
   ).join('');
 }
 
-let _sbInsertAfter     = null; // sid tras el cual insertar, null = al final
+let _sbInsertAfter     = null; // sid tras el cual insertar en flujo principal, null = al final
 let _reminderStepCtx  = null; // { parentSid, rid } cuando se añade un step a una rama reminder
 let _visualBranchCtx  = null; // { targetArr, parentSid } para añadir step a rama desde visual
 let _branchCaseStepCtx = null; // { parentSid, caseId } para añadir step a una rama branch
+let _bbSubInsertCtx   = null; // { targetArr, afterIdx } insertar entre sub-steps desde visual
+let _branchSubInsertCtx = null; // { parentSid, caseId, afterStepId } insertar entre sub-steps en lista
 
 // Busca el step con _id=sid en cualquier nivel del árbol (sbSteps, branch.cases.steps,
 // branch.default, reminder_timer.reminders.steps, wait_response.branches[k]).
@@ -8720,7 +8736,17 @@ function setupBot() {
     const insertBtn = e.target.closest('.sb-insert-between');
     if (!insertBtn) return;
     e.stopPropagation();
-    _sbInsertAfter = insertBtn.dataset.insertAfter;
+    // Detectar si es un insert dentro de una rama branch (tiene data-branch-parent-sid)
+    const bParentSid = insertBtn.dataset.branchParentSid;
+    const bCaseId    = insertBtn.dataset.branchCaseId;
+    const bAfterId   = insertBtn.dataset.insertAfter;
+    if (bParentSid && bCaseId && bAfterId) {
+      _branchSubInsertCtx = { parentSid: bParentSid, caseId: bCaseId, afterStepId: bAfterId };
+      _sbInsertAfter = null;
+    } else {
+      _branchSubInsertCtx = null;
+      _sbInsertAfter = insertBtn.dataset.insertAfter;
+    }
     const picker = document.getElementById('sbStepPicker');
     if (!picker) return;
 
@@ -8838,6 +8864,42 @@ function setupBot() {
       return;
     }
 
+    // ── Insertar entre sub-steps desde la vista visual (referencia directa) ──
+    if (_bbSubInsertCtx) {
+      const { targetArr, afterIdx } = _bbSubInsertCtx;
+      _bbSubInsertCtx = null;
+      if (Array.isArray(targetArr)) targetArr.splice(afterIdx + 1, 0, newStep);
+      if (typeof renderStepsFlow === 'function') renderStepsFlow();
+      try { bbRenderVisualView(); } catch (_) {}
+      return;
+    }
+
+    // ── Insertar entre sub-steps desde la vista lista (lookup directo) ──
+    if (_branchSubInsertCtx) {
+      const { parentSid, caseId, afterStepId } = _branchSubInsertCtx;
+      _branchSubInsertCtx = null;
+      const parentStep = _findBranchStep(parentSid);
+      if (parentStep) {
+        if (caseId === '__default__') {
+          if (!Array.isArray(parentStep.config.default)) parentStep.config.default = [];
+          const idx = parentStep.config.default.findIndex(s => s._id === afterStepId);
+          parentStep.config.default.splice(idx + 1, 0, newStep);
+        } else {
+          const cs = (parentStep.config.cases || []).find(c => c.id === caseId);
+          if (cs) {
+            if (!Array.isArray(cs.steps)) cs.steps = [];
+            const idx = cs.steps.findIndex(s => s._id === afterStepId);
+            cs.steps.splice(idx + 1, 0, newStep);
+          }
+        }
+        // Re-render lista y visual
+        if (typeof renderStepsFlow === 'function') renderStepsFlow();
+        const _av = document.querySelector('#botBuilderViewTabs .bb-view-tab.is-active')?.dataset.view;
+        if (_av === 'visual') try { bbRenderVisualView(); } catch (_) {}
+      }
+      return;
+    }
+
     if (_sbInsertAfter === '__top__') {
       sbSteps.unshift(newStep);
       _sbInsertAfter = null;
@@ -8886,6 +8948,8 @@ function setupBot() {
     _reminderStepCtx = null;
     _visualBranchCtx = null;
     _branchCaseStepCtx = null;
+    _bbSubInsertCtx = null;
+    _branchSubInsertCtx = null;
   });
 
   // Toggle step body open/close
@@ -9984,7 +10048,7 @@ function setupBot() {
       picker.hidden = false;
     }
 
-    function _bbAddBtn(cx, cy, insertAfterVal) {
+    function _bbAddBtn(cx, cy, insertAfterVal, subCtx) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'bb-add-btn';
@@ -9993,7 +10057,17 @@ function setupBot() {
       btn.style.left = (cx - 12) + 'px';
       btn.style.top  = (cy - 12) + 'px';
       canvas.appendChild(btn);
-      btn.addEventListener('click', (e) => { e.stopPropagation(); _bbOpenPicker(insertAfterVal); });
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (subCtx) {
+          _bbSubInsertCtx = subCtx;
+          _sbInsertAfter = null;
+          _visualBranchCtx = null;
+          _bbShowPickerFloating();
+        } else {
+          _bbOpenPicker(insertAfterVal);
+        }
+      });
       return btn;
     }
     function _bbBranchAddBtn(cx, cy, targetArr) {
@@ -10037,10 +10111,10 @@ function setupBot() {
         return;
       }
 
-      // Sub-steps de rama: hermanos en el mismo parentArr
+      // Sub-steps de rama: hermanos en el mismo parentArr — usar referencia directa
       if (from?.step && to?.step && from.parentArr && from.parentArr === to.parentArr) {
-        const insertAfter = from.step._id;
-        if (insertAfter) _bbAddBtn(midX, midY, insertAfter);
+        const subCtx = { targetArr: from.parentArr, afterIdx: from.idx };
+        _bbAddBtn(midX, midY, null, subCtx);
       }
     });
 
@@ -19345,7 +19419,11 @@ function _renderBranchSubStepCard(parentSid, caseId, subStep, prevStepId = null)
   const bodyHtml = typeof buildStepBody === 'function' ? buildStepBody(subStep) : '';
   const connectorHtml = prevStepId
     ? `<div class="sb-step-connector">
-        <button class="sb-insert-between" data-insert-after="${escHtml(prevStepId)}" title="Insertar paso aquí">
+        <button class="sb-insert-between"
+          data-insert-after="${escHtml(prevStepId)}"
+          data-branch-parent-sid="${escHtml(parentSid)}"
+          data-branch-case-id="${escHtml(caseId)}"
+          title="Insertar paso aquí">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
         </button>
       </div>`

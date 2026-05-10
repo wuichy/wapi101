@@ -9619,10 +9619,10 @@ function setupBot() {
             parentStep: step,
           });
         });
-        // Solo mostrar Default si tiene pasos (el editor ya no lo expone para nuevos bots)
+        // Mostrar Default si tiene pasos
         if (Array.isArray(step.config.default) && step.config.default.length > 0) {
           tNode.children.push({
-            label: 'Default',
+            label: 'De lo contrario',
             subtree: _bbBuildBotTree(step.config.default, step.config.default),
             targetArr: step.config.default,
             parentStep: step,

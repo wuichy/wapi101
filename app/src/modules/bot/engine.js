@@ -720,7 +720,7 @@ async function executeStep(db, step, ctx) {
         convoSvc.setBotPaused(db, null, ctx.convoId, true);
         _log('info', `bot pausado para conversación ${ctx.convoId}`);
       }
-      return true;
+      return 'stop';
     }
 
     case 'create_task': {
@@ -1074,7 +1074,8 @@ async function executeStep(db, step, ctx) {
       for (const subStep of matchedSteps) {
         try {
           const result = await executeStep(db, subStep, ctx);
-          if (result === true || result === 'stop') return true;
+          if (result === 'stop') return 'stop';
+          if (result === true) return true;
           if (result === 'suspend') return 'suspend';
         } catch (subErr) {
           _log('error', `branch sub-step error: ${subErr.message}`);
@@ -1435,12 +1436,28 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
       try {
         const result = await executeStep(db, step, ctx);
         if (result === 'suspend') { suspended = true; break; }
-        if (result === true || result === 'stop') break;
+        if (result === 'stop') { stopped = true; break; }
+        if (result === true) break; // branch terminó normalmente, seguir al re-wait
       } catch (err) {
         _log('error', `resumeRun: continuation paso ${i + 1} ("${step.type}") error: ${err.message}`);
         errored = true;
         break;
       }
+    }
+  }
+
+  // Si el flujo continúa (nadie lo paró ni suspendió), re-registrar el wait_response
+  // para que el bot siga escuchando la próxima respuesta del contacto.
+  if (!suspended && !errored && !stopped) {
+    ctx._stepIndex = wait.wait_step_index;
+    ctx._runId = wait.run_id;
+    _log('info', `resumeRun: re-registrando wait_response para continuar escuchando (run ${wait.run_id})`);
+    try {
+      const result = await executeStep(db, waitStep, ctx);
+      if (result === 'suspend') suspended = true;
+    } catch (err) {
+      _log('error', `resumeRun: error re-suspendiendo wait_response: ${err.message}`);
+      errored = true;
     }
   }
 

@@ -1407,6 +1407,7 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
   // Ejecutar los pasos de la rama. Si hay otro wait_response dentro, vuelve a suspender.
   let suspended = false;
   let errored = false;
+  let stopped = false;
   for (let i = 0; i < branchStepsHydrated.length; i++) {
     const step = branchStepsHydrated[i];
     ctx._stepIndex = wait.wait_step_index; // mantenemos el índice del wait original
@@ -1414,7 +1415,7 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     try {
       const result = await executeStep(db, step, ctx);
       if (result === 'suspend') { suspended = true; break; }
-      if (result === true || result === 'stop') break;
+      if (result === true || result === 'stop') { stopped = true; break; }
     } catch (err) {
       _log('error', `resumeRun: paso ${i + 1} ("${step.type}") error: ${err.message}`);
       errored = true;
@@ -1422,7 +1423,28 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     }
   }
 
-  // Finalizar el run (las ramas siempre terminan el bot, salvo que tengan otro wait_response)
+  // Si la rama no terminó el flujo, continuar con los pasos del flujo principal
+  // que siguen al wait_response (ctx.messageBody ya tiene la respuesta del contacto).
+  if (!suspended && !errored && !stopped) {
+    const continuationSteps = allSteps.slice(wait.wait_step_index + 1);
+    _log('info', `resumeRun: continuando con ${continuationSteps.length} pasos del flujo principal tras rama "${branch}"`);
+    for (let i = 0; i < continuationSteps.length; i++) {
+      const step = continuationSteps[i];
+      ctx._stepIndex = wait.wait_step_index + 1 + i;
+      ctx._runId = wait.run_id;
+      try {
+        const result = await executeStep(db, step, ctx);
+        if (result === 'suspend') { suspended = true; break; }
+        if (result === true || result === 'stop') break;
+      } catch (err) {
+        _log('error', `resumeRun: continuation paso ${i + 1} ("${step.type}") error: ${err.message}`);
+        errored = true;
+        break;
+      }
+    }
+  }
+
+  // Finalizar el run
   if (!suspended && wait.run_id) {
     const status = errored ? 'error' : 'done';
     try {

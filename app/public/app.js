@@ -8305,8 +8305,8 @@ function collectStepConfig(sid, bodyEl) {
     });
     // Default steps: misma lógica que cs.steps — releer del DOM si está visible
     cfg.default = (existingStep?.config?.default || []).map(subStep => {
-      const subBody = document.querySelector(`[data-body-sid="${subStep._id}"]`);
-      const newConfig = subBody ? collectStepConfig(subStep._id) : subStep.config;
+      const subBody = body.querySelector(`[data-body-sid="${subStep._id}"]`);
+      const newConfig = subBody ? collectStepConfig(subStep._id, subBody) : subStep.config;
       return { ...subStep, config: newConfig };
     });
   }
@@ -19380,9 +19380,26 @@ function _renderBranchEditor(sid, c) {
       </div>`;
   }).join('');
 
+  const defaultSteps    = Array.isArray(c.default) ? c.default : [];
+  const defaultSubHtml  = defaultSteps.map(ss => _renderBranchSubStepCard(sid, '__default__', ss)).join('');
+
   return `
     ${casesHtml}
-    <button type="button" class="sb-branch-add-case-v2" data-sid="${sid}" style="margin-top:8px">+ Agregar rama</button>`;
+    <button type="button" class="sb-branch-add-case-v2" data-sid="${sid}" style="margin-top:8px">+ Agregar rama</button>
+    <div class="sb-branch-default-section" style="margin-top:10px">
+      <div class="sb-branch-default-header">↳ De lo contrario <span style="font-weight:400;font-size:11px;opacity:.7">(si ninguna rama coincide)</span></div>
+      <div class="sb-branch-default-steps">
+        <div class="sb-rem-substeps" data-case-substeps="__default__">
+          ${defaultSubHtml}
+        </div>
+        <button type="button" class="sb-branch-case-add-step-btn sb-rem-add-step-btn"
+          data-parent-sid="${escHtml(sid)}" data-case-id="__default__"
+          style="width:100%;padding:6px;border:1px dashed #cbd5e1;border-radius:6px;background:none;color:#64748b;font-size:12px;cursor:pointer;margin-top:4px">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+          Agregar paso
+        </button>
+      </div>
+    </div>`;
 }
 
 // BUILDER reminder_timer UI

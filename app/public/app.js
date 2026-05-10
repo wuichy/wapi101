@@ -8892,8 +8892,33 @@ function setupBot() {
   // ─── Handlers de step `branch` (multi-case) ───
   // Buscar step en sbSteps O en _bbEditingTarget (para steps anidados)
   function _findBranchStep(sid) {
-    const top = sbSteps.find(s => s._id === sid);
-    if (top) return top;
+    // Búsqueda recursiva en cualquier nivel de anidamiento
+    function searchIn(steps) {
+      for (const s of steps) {
+        if (s._id === sid) return s;
+        // Bajar por casos de branch
+        if (s.config?.cases) {
+          for (const cs of s.config.cases) {
+            const found = searchIn(cs.steps || []);
+            if (found) return found;
+          }
+        }
+        if (s.config?.default) {
+          const found = searchIn(s.config.default);
+          if (found) return found;
+        }
+        // Bajar por reminders de reminder_timer
+        if (s.config?.reminders) {
+          for (const rem of s.config.reminders) {
+            const found = searchIn(rem.steps || []);
+            if (found) return found;
+          }
+        }
+      }
+      return null;
+    }
+    const found = searchIn(sbSteps);
+    if (found) return found;
     const editing = _bbEditingTarget?.parentArr?.[_bbEditingTarget?.idx];
     if (editing?._id === sid) return editing;
     return null;

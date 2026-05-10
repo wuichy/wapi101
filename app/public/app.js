@@ -15728,6 +15728,19 @@ function _collectTplButtons() {
 function updateTplModalType(card) {
   const isWa = document.getElementById('tplTypeWaApi')?.checked;
   if (card) card.classList.toggle('is-free', !isWa);
+  // Free templates no soportan header tipo TEXT (no se manda) — si está
+  // seleccionado al cambiar a free, switch a IMAGE para que el form no quede
+  // en estado vacío (la opción TEXT está oculta por CSS para free).
+  if (!isWa) {
+    const textRadio = document.querySelector('input[name="tplHeaderType"][value="TEXT"]');
+    if (textRadio?.checked) {
+      const imgRadio = document.querySelector('input[name="tplHeaderType"][value="IMAGE"]');
+      if (imgRadio) {
+        imgRadio.checked = true;
+        if (typeof setHeaderTypeUI === 'function') setHeaderTypeUI('IMAGE', _tplDraftExistingMedia);
+      }
+    }
+  }
 }
 
 function closeTplModal() {

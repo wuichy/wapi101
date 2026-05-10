@@ -18,7 +18,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260509u" />
+  <link rel="stylesheet" href="/styles.css?v=20260509v" />
 </head>
 <body>
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
@@ -1320,13 +1320,13 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <div class="int-field">
               <label>Encabezado <span class="tpl-hint-inline">(opcional)</span></label>
               <div class="tpl-header-type-row">
-                <label class="tpl-header-type-opt"><input type="radio" name="tplHeaderType" value="TEXT" checked> Texto</label>
+                <label class="tpl-header-type-opt tpl-wa-only"><input type="radio" name="tplHeaderType" value="TEXT" checked> Texto</label>
                 <label class="tpl-header-type-opt"><input type="radio" name="tplHeaderType" value="IMAGE"> Imagen</label>
                 <label class="tpl-header-type-opt"><input type="radio" name="tplHeaderType" value="VIDEO"> Video</label>
                 <label class="tpl-header-type-opt"><input type="radio" name="tplHeaderType" value="DOCUMENT"> Documento</label>
               </div>
-              <!-- Sub-campo: Texto -->
-              <input type="text" class="int-input tpl-header-text" id="tplHeader" placeholder="Texto del encabezado (máx 60 chars)" maxlength="60" />
+              <!-- Sub-campo: Texto (solo wa_api — free no manda header texto) -->
+              <input type="text" class="int-input tpl-header-text tpl-wa-only" id="tplHeader" placeholder="Texto del encabezado (máx 60 chars)" maxlength="60" />
               <!-- Sub-campo: Media (oculto por default) -->
               <div class="tpl-header-media" id="tplHeaderMediaBox" hidden>
                 <!-- Preview del archivo ya subido (al editar) -->
@@ -1373,13 +1373,13 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </div>
               <div class="tpl-placeholders-list" id="tplPlaceholdersList"><!-- JS render --></div>
             </div>
-            <!-- Footer -->
-            <div class="int-field">
+            <!-- Footer (solo wa_api — free no lo manda) -->
+            <div class="int-field tpl-wa-only">
               <label for="tplFooter"><span data-i18n="tpl.field.footer">Pie de página</span> <span class="tpl-hint-inline" data-i18n="tpl.hint.footer_optional">(opcional, máx 60 chars)</span></label>
               <input type="text" class="int-input" id="tplFooter" placeholder="Texto del pie" maxlength="60" />
             </div>
-            <!-- Botones (solo wa_api) -->
-            <div class="int-field" id="tplButtonsField">
+            <!-- Botones (solo wa_api — free no los manda) -->
+            <div class="int-field tpl-wa-only" id="tplButtonsField">
               <label><span data-i18n="tpl.field.buttons">Botones</span> <span class="tpl-hint-inline" data-i18n="tpl.hint.buttons_optional">(opcional, máx 3 — todos QUICK_REPLY o hasta 2 CTA)</span></label>
               <div class="tpl-buttons-list" id="tplButtonsList"><!-- JS render --></div>
               <button type="button" class="btn btn--ghost btn--sm" id="tplAddButtonBtn" data-i18n="tpl.add_button">+ Agregar botón</button>
@@ -3173,7 +3173,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=20260509u"></script>
+  <script src="/app.js?v=20260509v"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

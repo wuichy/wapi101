@@ -9961,6 +9961,7 @@ function setupBot() {
     // Helper: abrir picker como overlay flotante centrado (sin cambiar de vista)
     function _bbOpenPicker(insertAfterVal) {
       _sbInsertAfter = insertAfterVal || null;
+      _visualBranchCtx = null;
       _bbShowPickerFloating();
     }
     function _bbShowPickerFloating() {
@@ -10013,22 +10014,33 @@ function setupBot() {
       return btn;
     }
 
-    // Botones "+" solo en aristas del flujo principal (no en ramas)
+    // Botones "+" en aristas del flujo principal Y entre sub-steps de ramas
     edges.forEach((edge) => {
       const from = itemMap[edge.from];
       const to   = itemMap[edge.to];
-      // Solo flujo principal: trigger→n o mainFlow→mainFlow
-      const fromMain = edge.from === 'trigger' || from?.mainFlow;
-      const toMain   = to?.mainFlow;
-      if (!fromMain || !toMain) return;
 
       const x1 = from ? from.x + from.w / 2 : itemMap['trigger'].x + itemMap['trigger'].w / 2;
       const y1 = from ? from.y + from.h      : itemMap['trigger'].y + itemMap['trigger'].h;
       const x2 = to.x + to.w / 2;
       const y2 = to.y;
-      const insertAfter = edge.from === 'trigger' ? '__top__' : (from.step?._id || null);
-      if (!insertAfter) return;
-      _bbAddBtn((x1 + x2) / 2, (y1 + y2) / 2, insertAfter);
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+
+      const fromMain = edge.from === 'trigger' || from?.mainFlow;
+      const toMain   = to?.mainFlow;
+
+      if (fromMain && toMain) {
+        // Flujo principal: trigger→n o mainFlow→mainFlow
+        const insertAfter = edge.from === 'trigger' ? '__top__' : (from.step?._id || null);
+        if (insertAfter) _bbAddBtn(midX, midY, insertAfter);
+        return;
+      }
+
+      // Sub-steps de rama: hermanos en el mismo parentArr
+      if (from?.step && to?.step && from.parentArr && from.parentArr === to.parentArr) {
+        const insertAfter = from.step._id;
+        if (insertAfter) _bbAddBtn(midX, midY, insertAfter);
+      }
     });
 
     // Botón "+" al final del último nodo del flujo principal — solo si NO ramifica
@@ -10043,7 +10055,7 @@ function setupBot() {
       _bbAddBtn(tr.x + tr.w / 2, tr.y + tr.h + _BB_GAP_Y / 2, '__top__');
     }
 
-    // Botón "+" al final de cada rama con pasos (último item de cada parentArr no-mainFlow)
+    // Botón "+" al final de cada rama (último sub-step de cada parentArr no-mainFlow)
     items.forEach(item => {
       if (item.kind !== 'step') return;
       if (item.mainFlow) return;

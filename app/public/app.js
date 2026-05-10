@@ -8177,6 +8177,32 @@ function _resolveStepBody(sid) {
   return document.querySelector(`[data-body-sid="${sid}"]`);
 }
 
+// Búsqueda recursiva de un step por _id en cualquier nivel de anidamiento
+// (top-level, dentro de cases.steps, default, o reminders.steps).
+function _findStepDeep(steps, sid) {
+  if (!Array.isArray(steps)) return null;
+  for (const s of steps) {
+    if (s._id === sid) return s;
+    if (s.config?.cases) {
+      for (const cs of s.config.cases) {
+        const f = _findStepDeep(cs.steps || [], sid);
+        if (f) return f;
+      }
+    }
+    if (s.config?.default) {
+      const f = _findStepDeep(s.config.default, sid);
+      if (f) return f;
+    }
+    if (s.config?.reminders) {
+      for (const rem of s.config.reminders) {
+        const f = _findStepDeep(rem.steps || [], sid);
+        if (f) return f;
+      }
+    }
+  }
+  return null;
+}
+
 function collectStepConfig(sid, bodyEl) {
   const body = bodyEl || _resolveStepBody(sid);
   if (!body) return {};
@@ -8217,14 +8243,19 @@ function collectStepConfig(sid, bodyEl) {
   // Solo los casos que pertenecen a ESTE body, no a branches anidados
   const branchCasesV2 = [...body.querySelectorAll('.sb-branch-case-v2[data-case-id]')]
     .filter(el => el.closest('[data-body-sid]') === body);
-  if (branchCasesV2.length || body.querySelector(':scope > .sb-branch-add-case-v2, .sb-branch-add-case-v2')) {
-    // Preservar steps existentes del modelo (no se gestionan en el popup)
-    const existingStep = (typeof sbSteps !== 'undefined' ? sbSteps : []).find(s => s._id === sid);
+  // Detectar si este body pertenece a un step branch (filtra add-buttons que pertenezcan a este body)
+  const hasOwnAddCaseBtn = [...body.querySelectorAll('.sb-branch-add-case-v2')]
+    .some(el => el.closest('[data-body-sid]') === body);
+  if (branchCasesV2.length || hasOwnAddCaseBtn) {
+    // Buscar el step en cualquier nivel (top-level o anidado) para preservar su estado
+    const existingStep = (typeof sbSteps !== 'undefined' ? _findStepDeep(sbSteps, sid) : null);
     const existingCases = existingStep?.config?.cases || [];
     cfg.cases = [];
     branchCasesV2.forEach(caseEl => {
       const caseId = caseEl.dataset.caseId;
-      const ruleEls = caseEl.querySelectorAll('.sb-branch-rule[data-rule-idx]');
+      // Solo rules de ESTE caso, no de branches anidados dentro de sus sub-steps
+      const ruleEls = [...caseEl.querySelectorAll('.sb-branch-rule[data-rule-idx]')]
+        .filter(el => el.closest('[data-body-sid]') === body);
       const rules = [];
       ruleEls.forEach(ruleEl => {
         const field = ruleEl.querySelector('.sb-branch-rule-field')?.value || 'message';
@@ -8242,7 +8273,8 @@ function collectStepConfig(sid, bodyEl) {
         }
         rules.push({ field, op, value });
       });
-      const rulesOpEl = caseEl.querySelector('.sb-branch-rules-op');
+      const rulesOpEl = [...caseEl.querySelectorAll('.sb-branch-rules-op')]
+        .find(el => el.closest('[data-body-sid]') === body);
       const rules_op  = rulesOpEl?.value || 'and';
       // Sub-steps: buscar el body dentro del caseEl (evita encontrar un cuerpo
       // duplicado stale en el editor visual) y pasar ese body a collectStepConfig
@@ -8729,7 +8761,7 @@ function setupBot() {
     if (_branchCaseStepCtx) {
       const { parentSid, caseId } = _branchCaseStepCtx;
       _branchCaseStepCtx = null;
-      const parentStep = sbSteps.find(s => s._id === parentSid);
+      const parentStep = _findBranchStep(parentSid);
       if (parentStep) {
         parentStep.config = collectStepConfig(parentSid);
         if (caseId === '__default__') {
@@ -8762,7 +8794,7 @@ function setupBot() {
     if (_reminderStepCtx) {
       const { parentSid, rid } = _reminderStepCtx;
       _reminderStepCtx = null;
-      const parentStep = sbSteps.find(s => s._id === parentSid);
+      const parentStep = _findBranchStep(parentSid);
       if (parentStep) {
         parentStep.config = collectStepConfig(parentSid);
         const rem = (parentStep.config.reminders || []).find(r => r.id === rid);
@@ -8887,32 +8919,7 @@ function setupBot() {
   // ─── Handlers de step `branch` (multi-case) ───
   // Buscar step en sbSteps O en _bbEditingTarget (para steps anidados)
   function _findBranchStep(sid) {
-    // Búsqueda recursiva en cualquier nivel de anidamiento
-    function searchIn(steps) {
-      for (const s of steps) {
-        if (s._id === sid) return s;
-        // Bajar por casos de branch
-        if (s.config?.cases) {
-          for (const cs of s.config.cases) {
-            const found = searchIn(cs.steps || []);
-            if (found) return found;
-          }
-        }
-        if (s.config?.default) {
-          const found = searchIn(s.config.default);
-          if (found) return found;
-        }
-        // Bajar por reminders de reminder_timer
-        if (s.config?.reminders) {
-          for (const rem of s.config.reminders) {
-            const found = searchIn(rem.steps || []);
-            if (found) return found;
-          }
-        }
-      }
-      return null;
-    }
-    const found = searchIn(sbSteps);
+    const found = _findStepDeep(sbSteps, sid);
     if (found) return found;
     const editing = _bbEditingTarget?.parentArr?.[_bbEditingTarget?.idx];
     if (editing?._id === sid) return editing;
@@ -9001,7 +9008,7 @@ function setupBot() {
       const sid      = delRuleBtn.dataset.sid;
       const caseId   = delRuleBtn.dataset.caseId;
       const ruleIdx  = Number(delRuleBtn.dataset.ruleIdx);
-      const step     = sbSteps.find(s => s._id === sid);
+      const step     = _findBranchStep(sid);
       if (!step) return;
       step.config = collectStepConfig(sid);
       const cs = (step.config.cases || []).find(c => c.id === caseId);
@@ -9053,7 +9060,7 @@ function setupBot() {
       const rid        = delSubBtn.dataset.parentRid;
       const caseId     = delSubBtn.dataset.parentCaseId;
       const subSid     = delSubBtn.dataset.delSubstep;
-      const parentStep = sbSteps.find(s => s._id === parentSid);
+      const parentStep = _findBranchStep(parentSid);
       if (!parentStep) return;
       parentStep.config = collectStepConfig(parentSid);
 
@@ -9216,7 +9223,7 @@ function setupBot() {
     const modeSel = e.target.closest('select[data-field="rem_mode"]');
     if (!modeSel) return;
     const sid = modeSel.dataset.sid;
-    const step = sbSteps.find(s => s._id === sid);
+    const step = _findBranchStep(sid);
     if (!step) return;
     step.config = collectStepConfig(sid);
     _refreshBranchStepBody(sid);
@@ -9283,7 +9290,7 @@ function setupBot() {
     const el = e.target.closest('[data-sid]');
     if (!el) return;
     const sid = el.dataset.sid;
-    const step = sbSteps.find(s => s._id === sid);
+    const step = _findBranchStep(sid);
     if (!step) return;
     step.config = collectStepConfig(sid);
     const card = document.querySelector(`.sb-step-card[data-sid="${sid}"]`);

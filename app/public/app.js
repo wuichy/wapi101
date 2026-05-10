@@ -8950,19 +8950,21 @@ function setupBot() {
     if (addCaseBtn) {
       e.preventDefault();
       const sid = addCaseBtn.dataset.sid;
-      toast(`[dbg] agregar-rama sid="${sid}"`, 'success');
       const step = _findBranchStep(sid);
-      if (!step) { toast(`[dbg] step NOT FOUND para sid="${sid}"`, 'error'); return; }
+      if (!step) { toast(`[dbg] NOT FOUND sid="${sid}"`, 'error'); return; }
       step.config = collectStepConfig(sid);
       if (!Array.isArray(step.config.cases)) step.config.cases = [];
+      const casesBefore = step.config.cases.length;
       step.config.cases.push({
         id: `bc_${Date.now()}`,
         rules_op: 'and',
         rules: [{ field: 'message', op: 'matches_any', value: '' }],
         steps: [],
       });
+      const bodyEl = document.querySelector(`[data-body-sid="${sid}"]`);
+      toast(`[dbg] sid="${sid}" casos:${casesBefore}→${step.config.cases.length} body:${bodyEl ? 'OK' : 'NULL'}`, bodyEl ? 'success' : 'error');
       _refreshBranchStepBody(sid);
-      document.querySelector(`[data-body-sid="${sid}"]`)?.classList.add('is-open');
+      bodyEl?.classList.add('is-open');
       return;
     }
 

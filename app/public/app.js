@@ -6618,6 +6618,7 @@ const BOT_STEP_REGISTRY = {
   },
   wait_response: {
     group: 'Flujo',
+    hidden: true,
     label:   { es: 'Esperar respuesta del lead', en: 'Wait for lead reply' },
     icon:    '<circle cx="10" cy="10" r="7"/><polyline points="10 5 10 10 13 12"/><path d="M3 10a7 7 0 0 1 1-3.5"/>',
     summary: (step) => {

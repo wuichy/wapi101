@@ -19368,6 +19368,20 @@ function _renderBranchSubStepCard(parentSid, caseId, subStep, prevStepId = null)
 }
 
 function _renderBranchEditor(sid, c) {
+  // Prefijo jerárquico: si este step está dentro de "Rama 11" del padre → prefijo "11."
+  let casePrefix = '';
+  if (typeof sbSteps !== 'undefined' && typeof _findStepLocation === 'function') {
+    try {
+      const loc = _findStepLocation(sbSteps, sid);
+      if (loc?.depthInfo?.length) {
+        const parts = loc.depthInfo
+          .map(d => { const m = String(d.label || '').match(/\d+$/); return m ? m[0] : null; })
+          .filter(Boolean);
+        if (parts.length) casePrefix = parts.join('.') + '.';
+      }
+    } catch (_) {}
+  }
+
   // Normalizar casos (compat con formato viejo field/op/value/branch Y condition antiguo)
   let rawCases = Array.isArray(c.cases) ? c.cases : [];
   if (!rawCases.length && c.field) {
@@ -19408,7 +19422,7 @@ function _renderBranchEditor(sid, c) {
     return `
       <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}">
         <div class="sb-branch-case-v2-header">
-          <span class="sb-branch-case-v2-num">Rama ${i + 1}</span>
+          <span class="sb-branch-case-v2-num">Rama ${casePrefix}${i + 1}</span>
           <button type="button" class="sb-branch-case-del-v2" data-del-case-id="${escHtml(cs.id)}" data-sid="${sid}" title="Eliminar rama">×</button>
         </div>
         <div class="sb-branch-rules" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">

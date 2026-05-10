@@ -19307,6 +19307,8 @@ function _renderBranchEditor(sid, c) {
       return row + connector;
     }).join('');
 
+    const subStepsHtml = (cs.steps || []).map(ss => _renderBranchSubStepCard(sid, cs.id, ss)).join('');
+
     return `
       <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}">
         <div class="sb-branch-case-v2-header">
@@ -19317,13 +19319,20 @@ function _renderBranchEditor(sid, c) {
           ${rulesHtml || '<p class="sb-hint" style="margin:4px 0 8px">Sin condiciones — esta rama siempre ejecuta.</p>'}
         </div>
         <button type="button" class="sb-branch-add-rule" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">+ Agregar condición</button>
+        <div class="sb-rem-substeps" data-case-substeps="${escHtml(cs.id)}">
+          ${subStepsHtml}
+        </div>
+        <button type="button" class="sb-branch-case-add-step-btn sb-rem-add-step-btn"
+          data-parent-sid="${escHtml(sid)}" data-case-id="${escHtml(cs.id)}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+          Agregar paso
+        </button>
       </div>`;
   }).join('');
 
   return `
     ${casesHtml}
-    <button type="button" class="sb-branch-add-case-v2" data-sid="${sid}" style="margin-top:8px">+ Agregar rama</button>
-    <p class="sb-hint" style="margin-top:10px">Los pasos de cada rama se agregan en el flujo visual.</p>`;
+    <button type="button" class="sb-branch-add-case-v2" data-sid="${sid}" style="margin-top:8px">+ Agregar rama</button>`;
 }
 
 // BUILDER reminder_timer UI

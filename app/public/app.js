@@ -15779,6 +15779,16 @@ async function saveTpl() {
   const footer = document.getElementById('tplFooter')?.value.trim() || '';
   const buttons = _collectTplButtons();
 
+  // Plantilla libre: el "Nombre interno" no se muestra en el form. Si está
+  // vacío, lo derivamos del displayName (slugified). El displayName pasa a
+  // ser el campo principal y obligatorio.
+  if (type === 'free_form' && !name) {
+    if (!displayName) {
+      if (errEl) { errEl.textContent = 'El nombre de la plantilla es obligatorio.'; errEl.hidden = false; }
+      return;
+    }
+    name = sanitizeTplName(displayName) || `tpl_${Date.now()}`;
+  }
   if (!name) {
     if (errEl) { errEl.textContent = 'El nombre interno es obligatorio.'; errEl.hidden = false; }
     return;

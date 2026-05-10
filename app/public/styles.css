@@ -8117,7 +8117,9 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 
 /* WA-only fields block */
 .tpl-wa-fields { display: flex; flex-direction: column; gap: 14px; transition: opacity .15s; }
-.tpl-modal-card.is-free .tpl-wa-fields { opacity: 0.4; pointer-events: none; }
+/* Plantillas libres: ocultar todo lo que es exclusivo de Meta/wa_api */
+.tpl-modal-card.is-free .tpl-wa-fields,
+.tpl-modal-card.is-free .tpl-wa-only { display: none; }
 
 /* Two-column row */
 .tpl-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

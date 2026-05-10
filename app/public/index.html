@@ -18,7 +18,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260509t" />
+  <link rel="stylesheet" href="/styles.css?v=20260509u" />
 </head>
 <body>
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
@@ -1287,8 +1287,8 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <label for="tplDisplayName" data-i18n="tpl.field.display_name">Nombre para mostrar</label>
               <input type="text" class="int-input" id="tplDisplayName" placeholder="Ej: Bienvenida al cliente" />
             </div>
-            <!-- Nombre interno -->
-            <div class="int-field">
+            <!-- Nombre interno (solo wa_api — Meta exige formato estricto) -->
+            <div class="int-field tpl-wa-only">
               <label for="tplName">Nombre interno <span class="tpl-hint-inline">(minúsculas, números y guiones bajos — Meta lo requiere así)</span></label>
               <input type="text" class="int-input" id="tplName" placeholder="ej. bienvenida_cliente" />
               <p class="tpl-name-hint" id="tplNameHint" hidden>⚠️ <span></span></p>
@@ -3173,7 +3173,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=20260509t"></script>
+  <script src="/app.js?v=20260509u"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

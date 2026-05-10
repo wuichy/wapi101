@@ -8254,13 +8254,23 @@ function collectStepConfig(sid) {
       });
       const rulesOpEl = caseEl.querySelector('.sb-branch-rules-op');
       const rules_op  = rulesOpEl?.value || 'and';
-      // Preservar sub-steps existentes de esta rama
+      // Sub-steps: si su body está en el DOM (list view los renderiza),
+      // releer su config para capturar edits del usuario. Si no está en
+      // DOM (visual editor), preservar el config del modelo.
       const existingCase = existingCases.find(c => c.id === caseId);
-      const steps = existingCase?.steps || [];
+      const steps = (existingCase?.steps || []).map(subStep => {
+        const subBody = document.querySelector(`[data-body-sid="${subStep._id}"]`);
+        const newConfig = subBody ? collectStepConfig(subStep._id) : subStep.config;
+        return { ...subStep, config: newConfig };
+      });
       cfg.cases.push({ id: caseId, rules_op, rules, steps });
     });
-    // Preservar default steps existentes
-    cfg.default = existingStep?.config?.default || [];
+    // Default steps: misma lógica que cs.steps — releer del DOM si está visible
+    cfg.default = (existingStep?.config?.default || []).map(subStep => {
+      const subBody = document.querySelector(`[data-body-sid="${subStep._id}"]`);
+      const newConfig = subBody ? collectStepConfig(subStep._id) : subStep.config;
+      return { ...subStep, config: newConfig };
+    });
   }
 
   // reminder_timer — recolectar reminders[]

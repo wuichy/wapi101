@@ -7538,6 +7538,14 @@ function connectedIntegrationOptions(selectedId) {
   ).join('');
 }
 
+const _EMAIL_PROVIDERS_SET = new Set(['email', 'gmail', 'outlook', 'icloud_mail', 'yahoo_mail']);
+function _isEmailIntegration(channelId) {
+  if (!channelId || channelId === 'auto') return false;
+  const inst = INTEGRATIONS.flatMap(p => (p.integrations || []).map(i => ({ id: i.id, providerKey: p.key })))
+    .find(i => i.id == channelId);
+  return inst ? _EMAIL_PROVIDERS_SET.has(inst.providerKey) : false;
+}
+
 // ── Step rendering ──
 // Resumen del step — delega a la función summary() declarada en BOT_STEP_REGISTRY.
 function stepSummary(step) {
@@ -7556,7 +7564,8 @@ function buildStepBody(step) {
   const c = step.config || {};
   const sid = step._id;
   switch (step.type) {
-    case 'message':
+    case 'message': {
+      const _isEmailCh = _isEmailIntegration(c.channelId);
       return `
         <label>Canal de envío</label>
         <select data-field="channelId" data-sid="${sid}" class="sb-channel-sel">
@@ -7566,6 +7575,10 @@ function buildStepBody(step) {
         <p class="sb-channel-hint" style="font-size:11px;color:var(--text-muted);margin-top:3px;margin-bottom:0">
           "Automático" responde por el canal donde llegó el mensaje.
         </p>
+        <div class="sb-msg-subject-row" style="margin-top:8px;display:${_isEmailCh ? 'block' : 'none'}">
+          <label>Asunto del correo</label>
+          <input type="text" data-field="subject" data-sid="${sid}" value="${escHtml(c.subject || '')}" placeholder="Asunto del correo…" style="width:100%;box-sizing:border-box" />
+        </div>
         <div class="sb-msg-label-row">
           <label>Mensaje</label>
           <button type="button" class="sb-tpl-insert-btn" data-sid="${sid}" title="Inserta el cuerpo de una plantilla básica">📋 Usar plantilla básica</button>
@@ -7586,6 +7599,7 @@ function buildStepBody(step) {
         })()}
         <input type="hidden" data-field="fromTemplateId" data-sid="${sid}" value="${escHtml(c.fromTemplateId || '')}" />
         <p style="font-size:11px;color:var(--text-muted);margin-top:4px">Variables: {nombre} {apellido} {telefono} {email} · Para plantillas WhatsApp API aprobadas usa el step "Enviar plantilla".</p>`;
+    }
     case 'template': {
       // Solo plantillas wa_api APROBADAS por Meta — las demás no se pueden enviar.
       const waApproved = (_tplItems || []).filter(t => t.type === 'wa_api' && t.waStatus === 'approved');
@@ -9244,6 +9258,16 @@ function setupBot() {
       cs.rules[ruleIdx].value = '';
     }
     _rerenderBranchBody(ownBody, step);
+  });
+
+  // ── message: mostrar/ocultar campo subject según canal de correo ──
+  document.getElementById('sbStepsFlow')?.addEventListener('change', (e) => {
+    const chanSel = e.target.closest('.sb-channel-sel');
+    if (!chanSel) return;
+    const body = chanSel.closest('[data-body-sid]');
+    if (!body) return;
+    const subjectRow = body.querySelector('.sb-msg-subject-row');
+    if (subjectRow) subjectRow.style.display = _isEmailIntegration(chanSel.value) ? 'block' : 'none';
   });
 
   // ── reminder_timer: cambio de modo (before ↔ day_before_at) ──

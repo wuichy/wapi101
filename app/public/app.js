@@ -8021,18 +8021,6 @@ function _flattenStepsForList(steps, depth = 0, branchLabel = null) {
   if (!Array.isArray(steps)) return out;
   steps.forEach((step, idx) => {
     out.push({ step, depth, branchLabel, parentArr: steps, idx });
-    if (step.type === 'branch' || step.type === 'condition') {
-      const cases = Array.isArray(step.config?.cases) ? step.config.cases : [];
-      cases.forEach((cs, ci) => {
-        if (Array.isArray(cs.steps) && cs.steps.length) {
-          out.push(..._flattenStepsForList(cs.steps, depth + 1, `Rama ${ci + 1}`));
-        }
-      });
-      const defSteps = Array.isArray(step.config?.default) ? step.config.default : [];
-      if (defSteps.length) {
-        out.push(..._flattenStepsForList(defSteps, depth + 1, 'Default'));
-      }
-    }
   });
   return out;
 }

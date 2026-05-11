@@ -31,9 +31,10 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createSession(db, advisorId) {
+function createSession(db, advisorId, remember = false) {
   const token = generateToken();
-  const expiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 3600; // 30 días
+  const days = remember ? 90 : 30; // "recuerda mi sesión" = 90 días; normal = 30
+  const expiresAt = Math.floor(Date.now() / 1000) + days * 24 * 3600;
   db.prepare('INSERT INTO advisor_sessions (token, advisor_id, expires_at) VALUES (?, ?, ?)').run(token, advisorId, expiresAt);
   return token;
 }
@@ -162,4 +163,83 @@ function ensureFirstAdmin(db, { name, username, password }) {
   }
 }
 
-module.exports = { login, createSession, getSession, deleteSession, list, create, update, remove, ensureFirstAdmin };
+// ─── Password Reset ────────────────────────────────────────────
+// Flow: usuario pide reset → generamos token plano (devuelto) + guardamos hash.
+// El token expira en 1 hora. Único uso (se marca used_at al consumirse).
+
+const RESET_TOKEN_TTL_SECS = 60 * 60; // 1 hora
+
+function _hashToken(plain) {
+  return crypto.createHash('sha256').update(plain).digest('hex');
+}
+
+// Busca advisor por email (case-insensitive vía COLLATE NOCASE) y crea token.
+// Devuelve { plainToken, advisor } o null si no existe el email (no leakeamos).
+function requestPasswordReset(db, email, ipAddress = null, userAgent = null) {
+  if (!email || typeof email !== 'string') return null;
+  const advisor = db.prepare(
+    'SELECT id, name, email, tenant_id, active FROM advisors WHERE email = ? AND active = 1 LIMIT 1'
+  ).get(email.trim());
+  if (!advisor) return null;
+
+  // Invalidar tokens previos no usados de este advisor (anti reset-spam)
+  db.prepare(
+    "UPDATE password_reset_tokens SET used_at = unixepoch() WHERE advisor_id = ? AND used_at IS NULL"
+  ).run(advisor.id);
+
+  const plainToken = generateToken(); // 64 hex chars
+  const tokenHash = _hashToken(plainToken);
+  const expiresAt = Math.floor(Date.now() / 1000) + RESET_TOKEN_TTL_SECS;
+
+  db.prepare(`
+    INSERT INTO password_reset_tokens (advisor_id, tenant_id, token_hash, expires_at, ip_address, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(advisor.id, advisor.tenant_id, tokenHash, expiresAt, ipAddress, userAgent);
+
+  return { plainToken, advisor };
+}
+
+// Verifica si un token plano sigue siendo válido. Devuelve { advisor, tokenRow } o null.
+function verifyResetToken(db, plainToken) {
+  if (!plainToken || typeof plainToken !== 'string') return null;
+  const tokenHash = _hashToken(plainToken);
+  const row = db.prepare(`
+    SELECT t.id, t.advisor_id, t.tenant_id, t.expires_at, t.used_at,
+           a.id AS aid, a.name, a.email, a.username, a.active
+    FROM password_reset_tokens t
+    JOIN advisors a ON a.id = t.advisor_id
+    WHERE t.token_hash = ?
+  `).get(tokenHash);
+  if (!row) return null;
+  if (row.used_at) return null;
+  if (row.expires_at < Math.floor(Date.now() / 1000)) return null;
+  if (!row.active) return null;
+  return {
+    tokenId:  row.id,
+    advisor:  { id: row.aid, name: row.name, email: row.email, username: row.username, tenantId: row.tenant_id },
+  };
+}
+
+// Aplica el cambio de password y marca token como usado.
+// Invalida todas las sesiones existentes del advisor (por si alguien las robó).
+function applyPasswordReset(db, plainToken, newPassword) {
+  const verified = verifyResetToken(db, plainToken);
+  if (!verified) return { error: 'INVALID_TOKEN' };
+  if (!newPassword || newPassword.length < 8) return { error: 'WEAK_PASSWORD' };
+
+  const newHash = hashPassword(newPassword);
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE advisors SET password_hash = ? WHERE id = ?').run(newHash, verified.advisor.id);
+    db.prepare('UPDATE password_reset_tokens SET used_at = unixepoch() WHERE id = ?').run(verified.tokenId);
+    // Cerrar sesiones existentes para forzar re-login
+    db.prepare('DELETE FROM advisor_sessions WHERE advisor_id = ?').run(verified.advisor.id);
+  });
+  tx();
+  return { advisor: verified.advisor };
+}
+
+module.exports = {
+  login, createSession, getSession, deleteSession,
+  list, create, update, remove, ensureFirstAdmin,
+  requestPasswordReset, verifyResetToken, applyPasswordReset,
+};

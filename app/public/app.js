@@ -1106,15 +1106,25 @@ function applyTranslationsToDOM() {
 }
 
 // ─── Auth helpers ───
-function getToken() { return localStorage.getItem('rh_token') || ''; }
+// El token puede estar en localStorage (si "Recuerda mi sesión" estaba activo)
+// o en sessionStorage (sesión de una sola pestaña). Revisamos ambos.
+function getToken() {
+  return localStorage.getItem('rh_token') || sessionStorage.getItem('rh_token') || '';
+}
 function getAdvisor() {
-  try { return JSON.parse(localStorage.getItem('rh_advisor') || 'null'); } catch { return null; }
+  try {
+    return JSON.parse(
+      localStorage.getItem('rh_advisor') || sessionStorage.getItem('rh_advisor') || 'null'
+    );
+  } catch { return null; }
 }
 function logout() {
   const token = getToken();
   if (token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
   localStorage.removeItem('rh_token');
   localStorage.removeItem('rh_advisor');
+  sessionStorage.removeItem('rh_token');
+  sessionStorage.removeItem('rh_advisor');
   window.location.href = '/login';
 }
 

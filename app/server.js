@@ -147,7 +147,7 @@ app.get('/api/push/vapid-public-key', (_req, res) => {
 const { authMiddleware, loadTenant } = require('./src/middleware/auth');
 
 app.post('/api/auth/login', (req, res) => {
-  const { username, password, tenantSlug } = req.body || {};
+  const { username, password, tenantSlug, remember } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
   const result = advisorSvc.login(db, username.trim(), password, tenantSlug ? String(tenantSlug).trim() : null);
   if (result.error === 'SLUG_REQUIRED') {
@@ -165,7 +165,7 @@ app.post('/api/auth/login', (req, res) => {
   if (!tenant)                          return res.status(403).json({ error: 'Tenant inexistente', code: 'TENANT_NOT_FOUND' });
   if (tenant.status === 'suspended')    return res.status(403).json({ error: 'Cuenta suspendida — contacta soporte', code: 'TENANT_SUSPENDED' });
   if (tenant.status === 'cancelled')    return res.status(403).json({ error: 'Cuenta cancelada', code: 'TENANT_CANCELLED' });
-  const token = advisorSvc.createSession(db, advisor.id);
+  const token = advisorSvc.createSession(db, advisor.id, remember === true);
   res.json({
     token,
     advisor: { id: advisor.id, name: advisor.name, username: advisor.username, role: advisor.role,

@@ -107,8 +107,12 @@
       <label for="password">Contraseña</label>
       <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required />
 
-      <div style="text-align:right;margin:-8px 0 16px;font-size:12px">
-        <a href="/forgot-password" id="forgotLink" style="color:#2563eb;text-decoration:none;font-weight:500">¿Olvidaste tu contraseña?</a>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:-4px 0 20px;">
+        <label for="rememberMe" id="rememberLabel" style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:#374151;margin:0;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="rememberMe" name="rememberMe" style="width:15px;height:15px;margin:0;accent-color:#2563eb;cursor:pointer;" checked />
+          <span id="rememberText">Recuerda mi sesión</span>
+        </label>
+        <a href="/forgot-password" id="forgotLink" style="color:#2563eb;text-decoration:none;font-weight:500;font-size:12px;">¿Olvidaste tu contraseña?</a>
       </div>
 
       <button class="btn" type="submit" id="loginBtn">Iniciar sesión</button>
@@ -134,6 +138,7 @@
         lblUser:     'Usuario o email',
         phUser:      'usuario o correo',
         lblPass:     'Contraseña',
+        rememberMe:  'Recuerda mi sesión',
         forgot:      '¿Olvidaste tu contraseña?',
         btnLogin:    'Iniciar sesión',
         btnLoading:  'Verificando...',
@@ -148,6 +153,7 @@
         lblUser:     'Username or email',
         phUser:      'username or email',
         lblPass:     'Password',
+        rememberMe:  'Remember me',
         forgot:      'Forgot your password?',
         btnLogin:    'Sign in',
         btnLoading:  'Verifying...',
@@ -165,6 +171,7 @@
     document.querySelector('label[for="username"]').textContent = s.lblUser;
     document.getElementById('username').placeholder  = s.phUser;
     document.querySelector('label[for="password"]').textContent = s.lblPass;
+    document.getElementById('rememberText').textContent = s.rememberMe;
     document.getElementById('forgotLink').textContent = s.forgot;
     document.getElementById('loginBtn').textContent  = s.btnLogin;
     const links = document.querySelectorAll('p a');
@@ -181,18 +188,26 @@
       btn.textContent = s.btnLoading;
 
       try {
+        const _remember = document.getElementById('rememberMe').checked;
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             username: document.getElementById('username').value.trim(),
             password: document.getElementById('password').value,
+            remember: _remember,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || s.errGeneric);
-        localStorage.setItem('rh_token', data.token);
-        localStorage.setItem('rh_advisor', JSON.stringify(data.advisor));
+        // "Recuerda mi sesión" → localStorage (persiste entre sesiones de navegador)
+        // Sin recordar         → sessionStorage (se borra al cerrar la pestaña/app)
+        const _store = _remember ? localStorage : sessionStorage;
+        // Limpiar el otro para evitar conflictos
+        try { (_remember ? sessionStorage : localStorage).removeItem('rh_token'); } catch {}
+        try { (_remember ? sessionStorage : localStorage).removeItem('rh_advisor'); } catch {}
+        _store.setItem('rh_token', data.token);
+        _store.setItem('rh_advisor', JSON.stringify(data.advisor));
         // Respetar ?redirect= si viene (caso /chat PWA: login → /chat, no /app)
         const _params = new URLSearchParams(location.search);
         const _redirect = _params.get('redirect');

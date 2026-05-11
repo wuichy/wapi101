@@ -91,13 +91,17 @@ async function _sendViaGmailOAuth({ from, to, subject, html, text, replyTo }, cf
   const senderEmail = creds.email || row.external_id;
 
   // Construir email RFC 2822
+  // Los headers con caracteres no-ASCII (emojis, acentos) deben ir como
+  // encoded-word RFC 2047: =?UTF-8?B?<base64>?=
+  const _encodeHeader = (str) => `=?UTF-8?B?${Buffer.from(str).toString('base64')}?=`;
+
   const boundary = `__wapi101_${Date.now()}`;
   const recipients = Array.isArray(to) ? to.join(', ') : to;
 
   let rawParts = [
-    `From: ${from}`,
+    `From: ${_encodeHeader(from)}`,
     `To: ${recipients}`,
-    `Subject: ${subject}`,
+    `Subject: ${_encodeHeader(subject)}`,
     `MIME-Version: 1.0`,
   ];
   if (replyTo) rawParts.push(`Reply-To: ${replyTo}`);

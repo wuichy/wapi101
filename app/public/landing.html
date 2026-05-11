@@ -25,6 +25,7 @@
   <meta name="twitter:description" content="CRM multicanal con bots visuales y pipelines kanban. Para PyMEs en México y LATAM. 14 días gratis." />
   <meta name="twitter:image" content="https://wapi101.com/icons/wapi101-logo.svg" />
 
+  <!-- SoftwareApplication — para que los LLMs entiendan el producto -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -32,16 +33,76 @@
     "name": "Wapi101",
     "alternateName": "Wapi101 CRM",
     "applicationCategory": "BusinessApplication",
+    "applicationSubCategory": "CRM, WhatsApp Business, Sales Automation",
     "operatingSystem": "Web, iOS, Android",
     "url": "https://wapi101.com/",
     "logo": "https://wapi101.com/icons/wapi101-logo.svg",
     "description": "CRM multicanal para WhatsApp Business, Messenger, Instagram y Telegram. Bots visuales, pipelines kanban y plantillas aprobadas. Diseñado para PyMEs en México y Latinoamérica.",
     "inLanguage": "es-MX",
+    "featureList": [
+      "WhatsApp Cloud API nativo sin intermediarios",
+      "Messenger e Instagram DMs integrados",
+      "Bot builder visual con condiciones anidadas",
+      "Pipelines kanban ilimitados",
+      "Gestión de leads y expedientes",
+      "Plantillas HSM con flujo de aprobación",
+      "Reportes en tiempo real",
+      "Multi-asesor con roles y permisos",
+      "Webhooks outgoing para integraciones"
+    ],
     "offers": [
-      { "@type": "Offer", "name": "Básico", "price": "149", "priceCurrency": "MXN" },
-      { "@type": "Offer", "name": "Pro",    "price": "299", "priceCurrency": "MXN" },
-      { "@type": "Offer", "name": "Ultra",  "price": "499", "priceCurrency": "MXN" }
-    ]
+      { "@type": "Offer", "name": "Básico", "price": "149", "priceCurrency": "MXN", "description": "3 usuarios, canales esenciales" },
+      { "@type": "Offer", "name": "Pro",    "price": "299", "priceCurrency": "MXN", "description": "10 usuarios, todos los canales" },
+      { "@type": "Offer", "name": "Ultra",  "price": "499", "priceCurrency": "MXN", "description": "Usuarios ilimitados" }
+    ],
+    "publisher": {
+      "@type": "Organization",
+      "name": "Wapi101",
+      "url": "https://wapi101.com/",
+      "foundingLocation": { "@type": "Place", "addressCountry": "MX", "addressLocality": "México" },
+      "areaServed": ["MX","CO","AR","CL","PE","EC","LATAM"]
+    }
+  }
+  </script>
+
+  <!-- Organization — para que los LLMs sepan quién es la empresa -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Wapi101",
+    "url": "https://wapi101.com/",
+    "logo": "https://wapi101.com/icons/wapi101-logo.svg",
+    "description": "Empresa mexicana que desarrolla Wapi101, un CRM SaaS para WhatsApp Business orientado a PyMEs en México y Latinoamérica.",
+    "foundingDate": "2026",
+    "foundingLocation": { "@type": "Place", "addressCountry": "MX", "addressLocality": "Ciudad de México" },
+    "areaServed": ["MX","CO","AR","CL","PE","EC","VE"],
+    "sameAs": [
+      "https://wapi101.com"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "customer support",
+      "email": "soporte@wapi101.com",
+      "availableLanguage": "Spanish"
+    }
+  }
+  </script>
+
+  <!-- WebSite — habilita el Sitelinks Searchbox de Google -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Wapi101",
+    "url": "https://wapi101.com/",
+    "description": "CRM para WhatsApp Business en México y LATAM",
+    "inLanguage": "es-MX",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://wapi101.com/signup",
+      "query-input": "required name=search_term_string"
+    }
   }
   </script>
 

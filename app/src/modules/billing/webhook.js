@@ -17,6 +17,15 @@
 const express = require('express');
 const billingSvc = require('./service');
 
+// Obtener tenant + admin para poder enviarle emails desde webhooks Stripe.
+function _getTenantInfo(db, stripeCustomerId) {
+  if (!stripeCustomerId) return null;
+  const tenant = db.prepare('SELECT id, display_name, plan FROM tenants WHERE stripe_customer_id = ?').get(stripeCustomerId);
+  if (!tenant) return null;
+  const admin = db.prepare("SELECT name, email FROM advisors WHERE tenant_id = ? AND role = 'admin' AND active = 1 ORDER BY id LIMIT 1").get(tenant.id);
+  return { tenant, admin };
+}
+
 module.exports = function createStripeWebhookRouter(db) {
   const router = express.Router();
 
@@ -54,14 +63,64 @@ module.exports = function createStripeWebhookRouter(db) {
           case 'customer.subscription.updated':
           case 'customer.subscription.deleted': {
             const sub = event.data.object;
+            // Capturar plan actual ANTES de sincronizar para detectar cambio
+            const tenantBefore = db.prepare('SELECT plan FROM tenants WHERE id = ?').get(
+              Number(sub?.metadata?.tenant_id || 0)
+            );
             const tenantId = billingSvc.syncSubscriptionToTenant(db, sub);
             console.log(`[stripe] ${event.type} sub=${sub.id} status=${sub.status} → tenant=${tenantId ?? '?'}`);
+
+            if (tenantId) {
+              const info = _getTenantInfo(db, sub.customer);
+              if (info?.admin?.email) {
+                const mailer = require('../mailer/transactional');
+                const tenantAfter = db.prepare('SELECT plan FROM tenants WHERE id = ?').get(tenantId);
+
+                if (event.type === 'customer.subscription.deleted' && sub.status === 'canceled') {
+                  mailer.sendSubscriptionCancelled({
+                    to:          info.admin.email,
+                    name:        info.admin.name,
+                    companyName: info.tenant.display_name,
+                    plan:        info.tenant.plan,
+                    periodEnd:   sub.current_period_end,
+                  }).catch(e => console.error('[mailer] sendSubscriptionCancelled:', e.message));
+
+                } else if (event.type === 'customer.subscription.updated'
+                  && tenantBefore && tenantAfter
+                  && tenantBefore.plan !== tenantAfter.plan) {
+                  mailer.sendPlanChanged({
+                    to:          info.admin.email,
+                    name:        info.admin.name,
+                    companyName: info.tenant.display_name,
+                    oldPlan:     tenantBefore.plan,
+                    newPlan:     tenantAfter.plan,
+                  }).catch(e => console.error('[mailer] sendPlanChanged:', e.message));
+                }
+              }
+            }
             break;
           }
 
           case 'invoice.payment_succeeded': {
             const inv = event.data.object;
             console.log(`[stripe] invoice.payment_succeeded: ${inv.id} amount=${inv.amount_paid / 100} ${inv.currency} customer=${inv.customer}`);
+            // No enviar recibo en cobros de $0 (e.g. trial setup)
+            if ((inv.amount_paid || 0) > 0) {
+              const info = _getTenantInfo(db, inv.customer);
+              if (info?.admin?.email) {
+                const mailer = require('../mailer/transactional');
+                mailer.sendPaymentReceipt({
+                  to:          info.admin.email,
+                  name:        info.admin.name,
+                  companyName: info.tenant.display_name,
+                  amount:      inv.amount_paid / 100,
+                  currency:    inv.currency,
+                  plan:        info.tenant.plan,
+                  invoiceUrl:  inv.hosted_invoice_url || inv.invoice_pdf || null,
+                  periodEnd:   inv.lines?.data?.[0]?.period?.end || null,
+                }).catch(e => console.error('[mailer] sendPaymentReceipt:', e.message));
+              }
+            }
             break;
           }
 
@@ -70,6 +129,18 @@ module.exports = function createStripeWebhookRouter(db) {
             console.warn(`[stripe] invoice.payment_failed: ${inv.id} customer=${inv.customer} attempt=${inv.attempt_count}`);
             // Si Stripe agota reintentos y la sub queda past_due / unpaid,
             // ese estado llega vía customer.subscription.updated y se persiste.
+            const info = _getTenantInfo(db, inv.customer);
+            if (info?.admin?.email) {
+              const mailer = require('../mailer/transactional');
+              mailer.sendPaymentFailed({
+                to:           info.admin.email,
+                name:         info.admin.name,
+                companyName:  info.tenant.display_name,
+                attempt:      inv.attempt_count || 1,
+                nextAttempt:  inv.next_payment_attempt || null,
+                billingUrl:   'https://wapi101.com/app',
+              }).catch(e => console.error('[mailer] sendPaymentFailed:', e.message));
+            }
             break;
           }
 

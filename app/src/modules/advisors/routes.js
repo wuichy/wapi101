@@ -34,6 +34,22 @@ module.exports = function createAdvisorsRouter(db) {
       if (limitErr) return res.status(402).json({ error: limitErr, limitExceeded: 'users' });
       const created = svc.create(db, req.tenantId, { name: name.trim(), username: username.trim(), email, password, role, permissions });
       res.status(201).json(created);
+      // Email de bienvenida al asesor recién creado (si tiene email)
+      if (email) {
+        try {
+          const mailer = require('../mailer/transactional');
+          const tenantRow = db.prepare('SELECT display_name FROM tenants WHERE id = ?').get(req.tenantId);
+          const baseUrl   = (process.env.APP_BASE_URL || 'https://wapi101.com').replace(/\/$/, '');
+          mailer.sendAdvisorInvited({
+            to:          email,
+            name:        name.trim(),
+            inviterName: req.advisor?.name || null,
+            companyName: tenantRow?.display_name || '',
+            loginUrl:    `${baseUrl}/login`,
+            password,          // enviamos la contraseña temporal en claro (van a cambiarla)
+          }).catch(err => console.error('[advisors] error invite email:', err.message));
+        } catch (e) { /* mailer opcional — no bloquear */ }
+      }
     } catch (err) {
       if (err.message.includes('UNIQUE')) return res.status(409).json({ error: 'El usuario o email ya existe' });
       res.status(500).json({ error: err.message });

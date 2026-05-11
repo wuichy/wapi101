@@ -322,14 +322,253 @@ async function sendTestEmail({ to }, overrideCfg) {
   }, overrideCfg);
 }
 
+// ─── Bienvenida al nuevo tenant ──────────────────────────────────────────────
+async function sendWelcome({ to, name, companyName, plan, appUrl }, overrideCfg) {
+  const planLabel = { free: 'Free', basico: 'Básico', pro: 'Pro', ultra: 'Ultra' }[plan] || plan;
+  const isPaid = ['basico', 'pro', 'ultra'].includes(plan);
+  const url = appUrl || 'https://wapi101.com/app';
+  const html = _layout({
+    title: `¡Bienvenido a Wapi101, ${name ? name.split(' ')[0] : ''}! 🎉`,
+    preheader: `Tu CRM para WhatsApp ya está listo. Empieza en minutos.`,
+    body: `
+      <p>Hola ${name ? name.split(' ')[0] : ''},</p>
+      <p>Tu workspace <strong>${companyName}</strong> ya está activo en Wapi101. Estas son las primeras cosas que te recomendamos hacer:</p>
+      <ol style="padding-left:20px;color:#334155;font-size:15px;line-height:2">
+        <li>Conecta tu número de WhatsApp Business</li>
+        <li>Importa o crea tus primeros contactos</li>
+        <li>Crea un pipeline de ventas para tus leads</li>
+        <li>Configura tu primer bot de respuestas automáticas</li>
+      </ol>
+      ${isPaid ? `<p style="margin-top:18px;padding:14px 16px;background:#eff6ff;border-radius:8px;font-size:14px;color:#1e40af">
+        🎁 Tu plan <strong>${planLabel}</strong> incluye 14 días de prueba sin cargo. Cancela en cualquier momento.
+      </p>` : ''}
+    `,
+    ctaText: 'Abrir mi CRM',
+    ctaUrl: url,
+    footer: `¿Tienes dudas? Escríbenos a <a href="mailto:soporte@wapi101.com" style="color:#2563eb">soporte@wapi101.com</a> — respondemos en menos de 24h.`,
+  });
+
+  return sendTransactional({
+    to,
+    from: `Wapi101 <${_resolveCfg(overrideCfg).fromEmail}>`,
+    subject: `¡Bienvenido a Wapi101, ${companyName}! Tu CRM ya está listo 🚀`,
+    html,
+    text: `Hola ${name || ''}, tu workspace ${companyName} está listo en Wapi101. Entra aquí: ${url}`,
+    replyTo: 'soporte@wapi101.com',
+  }, overrideCfg);
+}
+
+// ─── Recibo de pago exitoso ───────────────────────────────────────────────────
+async function sendPaymentReceipt({ to, name, companyName, amount, currency, plan, invoiceUrl, periodEnd }, overrideCfg) {
+  const planLabel = { free: 'Free', basico: 'Básico', pro: 'Pro', ultra: 'Ultra' }[plan] || plan || '';
+  const amountFmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: (currency || 'usd').toUpperCase() }).format(amount || 0);
+  const periodFmt = periodEnd ? new Date(periodEnd * 1000).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+
+  const html = _layout({
+    title: '✅ Pago recibido',
+    preheader: `Tu pago de ${amountFmt} fue procesado exitosamente.`,
+    body: `
+      <p>Hola ${name ? name.split(' ')[0] : ''},</p>
+      <p>Tu pago fue procesado exitosamente. Aquí está el resumen:</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+        <tr><td style="padding:8px 0;color:#64748b;width:140px">Empresa</td><td style="padding:8px 0;font-weight:600">${companyName || ''}</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b">Plan</td><td style="padding:8px 0">${planLabel}</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b">Monto</td><td style="padding:8px 0;font-weight:700;color:#10b981">${amountFmt}</td></tr>
+        ${periodFmt ? `<tr><td style="padding:8px 0;color:#64748b">Próximo cobro</td><td style="padding:8px 0">${periodFmt}</td></tr>` : ''}
+      </table>
+    `,
+    ctaText: invoiceUrl ? 'Ver factura' : 'Ver mi cuenta',
+    ctaUrl: invoiceUrl || 'https://wapi101.com/app',
+    footer: `Wapi101 · Tu CRM para WhatsApp · <a href="mailto:soporte@wapi101.com" style="color:#64748b">soporte@wapi101.com</a>`,
+  });
+
+  return sendTransactional({
+    to,
+    from: `Wapi101 Billing <${_resolveCfg(overrideCfg).fromEmail}>`,
+    subject: `✅ Pago recibido — ${amountFmt} · Wapi101`,
+    html,
+    text: `Hola ${name || ''}, tu pago de ${amountFmt} fue procesado. Plan: ${planLabel}. ${invoiceUrl ? 'Factura: ' + invoiceUrl : ''}`,
+  }, overrideCfg);
+}
+
+// ─── Pago fallido ─────────────────────────────────────────────────────────────
+async function sendPaymentFailed({ to, name, companyName, attempt, nextAttempt, billingUrl }, overrideCfg) {
+  const nextFmt = nextAttempt ? new Date(nextAttempt * 1000).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+  const url = billingUrl || 'https://wapi101.com/app';
+
+  const html = _layout({
+    title: '⚠️ No pudimos procesar tu pago',
+    preheader: 'Actualiza tu método de pago para mantener tu cuenta activa.',
+    body: `
+      <p>Hola ${name ? name.split(' ')[0] : ''},</p>
+      <p>Intentamos cobrar tu suscripción de <strong>${companyName || 'Wapi101'}</strong> pero el pago no fue procesado${attempt > 1 ? ` (intento ${attempt})` : ''}.</p>
+      <p>Para evitar interrupciones en tu servicio, actualiza tu método de pago lo antes posible.</p>
+      ${nextFmt ? `<p style="padding:12px 16px;background:#fef9c3;border-radius:8px;font-size:14px;color:#854d0e">
+        ⏰ Haremos un nuevo intento el <strong>${nextFmt}</strong>.
+      </p>` : ''}
+      <p style="font-size:14px;color:#64748b;margin-top:16px">Si tu cuenta no se regulariza, será suspendida automáticamente por Stripe.</p>
+    `,
+    ctaText: 'Actualizar método de pago',
+    ctaUrl: url,
+    footer: `¿Necesitas ayuda? Escríbenos a <a href="mailto:soporte@wapi101.com" style="color:#2563eb">soporte@wapi101.com</a>`,
+  });
+
+  return sendTransactional({
+    to,
+    from: `Wapi101 Billing <${_resolveCfg(overrideCfg).fromEmail}>`,
+    subject: `⚠️ Pago fallido — Actualiza tu método de pago en Wapi101`,
+    html,
+    text: `Hola ${name || ''}, no pudimos procesar tu pago de ${companyName || 'Wapi101'}. Actualiza tu tarjeta aquí: ${url}`,
+    replyTo: 'soporte@wapi101.com',
+  }, overrideCfg);
+}
+
+// ─── Trial terminando ─────────────────────────────────────────────────────────
+async function sendTrialEnding({ to, name, companyName, plan, daysLeft, upgradeUrl }, overrideCfg) {
+  const planLabel = { free: 'Free', basico: 'Básico', pro: 'Pro', ultra: 'Ultra' }[plan] || plan || '';
+  const url = upgradeUrl || 'https://wapi101.com/app';
+  const urgency = daysLeft <= 1;
+
+  const html = _layout({
+    title: urgency ? '🚨 Tu prueba termina hoy' : `⏳ Tu prueba termina en ${daysLeft} días`,
+    preheader: `Activa tu suscripción para no perder acceso a Wapi101.`,
+    body: `
+      <p>Hola ${name ? name.split(' ')[0] : ''},</p>
+      <p>Tu período de prueba de <strong>${companyName}</strong> en el plan <strong>${planLabel}</strong> ${urgency ? 'termina <strong>hoy</strong>' : `termina en <strong>${daysLeft} días</strong>`}.</p>
+      ${urgency
+        ? `<p style="padding:14px 16px;background:#fef2f2;border-radius:8px;font-size:14px;color:#991b1b">
+            ⚠️ Si no activas tu suscripción antes de que termine el día, tu cuenta pasará al plan Free y perderás acceso a funciones avanzadas.
+           </p>`
+        : `<p>Activa tu suscripción ahora para seguir disfrutando de todas las funcionalidades sin interrupciones.</p>`
+      }
+    `,
+    ctaText: 'Activar mi suscripción',
+    ctaUrl: url,
+    footer: `¿Tienes preguntas sobre los planes? Escríbenos a <a href="mailto:soporte@wapi101.com" style="color:#2563eb">soporte@wapi101.com</a>`,
+  });
+
+  return sendTransactional({
+    to,
+    from: `Wapi101 <${_resolveCfg(overrideCfg).fromEmail}>`,
+    subject: urgency
+      ? `🚨 Tu prueba de Wapi101 termina hoy — Activa tu plan`
+      : `⏳ Tu prueba de Wapi101 termina en ${daysLeft} días`,
+    html,
+    text: `Hola ${name || ''}, tu período de prueba de ${companyName} termina en ${daysLeft} día(s). Activa tu plan: ${url}`,
+    replyTo: 'soporte@wapi101.com',
+  }, overrideCfg);
+}
+
+// ─── Suscripción cancelada ────────────────────────────────────────────────────
+async function sendSubscriptionCancelled({ to, name, companyName, plan, periodEnd }, overrideCfg) {
+  const planLabel = { free: 'Free', basico: 'Básico', pro: 'Pro', ultra: 'Ultra' }[plan] || plan || '';
+  const periodFmt = periodEnd ? new Date(periodEnd * 1000).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+
+  const html = _layout({
+    title: 'Tu suscripción fue cancelada',
+    preheader: `Tu suscripción de Wapi101 ha sido cancelada.`,
+    body: `
+      <p>Hola ${name ? name.split(' ')[0] : ''},</p>
+      <p>Tu suscripción al plan <strong>${planLabel}</strong> de <strong>${companyName}</strong> en Wapi101 ha sido cancelada.</p>
+      ${periodFmt ? `<p>Mantendrás acceso a todas las funciones hasta el <strong>${periodFmt}</strong>, cuando tu cuenta cambiará al plan Free.</p>` : ''}
+      <p style="font-size:14px;color:#64748b">¿Fue un error o quieres reactivar? Escríbenos y lo resolvemos.</p>
+    `,
+    ctaText: 'Reactivar mi plan',
+    ctaUrl: 'https://wapi101.com/app',
+    footer: `¿Fue un error? Contáctanos en <a href="mailto:soporte@wapi101.com" style="color:#2563eb">soporte@wapi101.com</a>`,
+  });
+
+  return sendTransactional({
+    to,
+    from: `Wapi101 <${_resolveCfg(overrideCfg).fromEmail}>`,
+    subject: `Tu suscripción de Wapi101 fue cancelada`,
+    html,
+    text: `Hola ${name || ''}, tu suscripción al plan ${planLabel} de ${companyName} en Wapi101 fue cancelada. ${periodFmt ? 'Acceso hasta: ' + periodFmt : ''} Reactiva en https://wapi101.com/app`,
+    replyTo: 'soporte@wapi101.com',
+  }, overrideCfg);
+}
+
+// ─── Cambio de plan ───────────────────────────────────────────────────────────
+async function sendPlanChanged({ to, name, companyName, oldPlan, newPlan }, overrideCfg) {
+  const labels = { free: 'Free', basico: 'Básico', pro: 'Pro', ultra: 'Ultra' };
+  const oldLabel = labels[oldPlan] || oldPlan || '';
+  const newLabel = labels[newPlan] || newPlan || '';
+  const isUpgrade = ['free','basico','pro'].indexOf(oldPlan) < ['free','basico','pro','ultra'].indexOf(newPlan);
+
+  const html = _layout({
+    title: isUpgrade ? `🚀 Plan actualizado a ${newLabel}` : `Plan cambiado a ${newLabel}`,
+    preheader: `Tu plan de Wapi101 cambió de ${oldLabel} a ${newLabel}.`,
+    body: `
+      <p>Hola ${name ? name.split(' ')[0] : ''},</p>
+      <p>El plan de <strong>${companyName}</strong> en Wapi101 ha sido actualizado:</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+        <tr><td style="padding:8px 0;color:#64748b;width:100px">Plan anterior</td><td style="padding:8px 0">${oldLabel}</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b">Plan nuevo</td><td style="padding:8px 0;font-weight:700;color:${isUpgrade ? '#10b981' : '#ef4444'}">${newLabel}</td></tr>
+      </table>
+      ${isUpgrade ? `<p>¡Gracias por confiar en Wapi101! Ya puedes disfrutar de todas las funciones de tu nuevo plan.</p>` : ''}
+    `,
+    ctaText: 'Ver mi cuenta',
+    ctaUrl: 'https://wapi101.com/app',
+    footer: `¿Tienes preguntas? <a href="mailto:soporte@wapi101.com" style="color:#2563eb">soporte@wapi101.com</a>`,
+  });
+
+  return sendTransactional({
+    to,
+    from: `Wapi101 <${_resolveCfg(overrideCfg).fromEmail}>`,
+    subject: isUpgrade ? `🚀 Tu plan de Wapi101 es ahora ${newLabel}` : `Tu plan de Wapi101 cambió a ${newLabel}`,
+    html,
+    text: `Hola ${name || ''}, el plan de ${companyName} cambió de ${oldLabel} a ${newLabel}. Ver cuenta: https://wapi101.com/app`,
+  }, overrideCfg);
+}
+
+// ─── Nuevo asesor invitado ────────────────────────────────────────────────────
+async function sendAdvisorInvited({ to, name, inviterName, companyName, loginUrl, password }, overrideCfg) {
+  const url = loginUrl || 'https://wapi101.com/login';
+
+  const html = _layout({
+    title: `Te invitaron a ${companyName} en Wapi101`,
+    preheader: `${inviterName || 'Tu equipo'} te agregó como asesor en Wapi101.`,
+    body: `
+      <p>Hola ${name ? name.split(' ')[0] : ''},</p>
+      <p><strong>${inviterName || 'Un administrador'}</strong> te agregó como asesor en el workspace de <strong>${companyName}</strong> en Wapi101.</p>
+      ${password ? `
+      <p>Tus credenciales de acceso:</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+        <tr><td style="padding:8px 12px;background:#f8fafc;border-radius:6px;font-family:monospace;font-size:15px;letter-spacing:.5px">${password}</td></tr>
+      </table>
+      <p style="font-size:13px;color:#64748b">Te recomendamos cambiar tu contraseña al ingresar por primera vez.</p>
+      ` : ''}
+    `,
+    ctaText: 'Entrar a Wapi101',
+    ctaUrl: url,
+    footer: `¿No reconoces este mensaje? Ignóralo o escríbenos a <a href="mailto:soporte@wapi101.com" style="color:#2563eb">soporte@wapi101.com</a>`,
+  });
+
+  return sendTransactional({
+    to,
+    from: `${companyName} via Wapi101 <${_resolveCfg(overrideCfg).fromEmail}>`,
+    subject: `${inviterName || 'Tu equipo'} te invitó a ${companyName} en Wapi101`,
+    html,
+    text: `Hola ${name || ''}, ${inviterName || 'un admin'} te agregó a ${companyName} en Wapi101. Entra aquí: ${url}${password ? '\nTu contraseña temporal: ' + password : ''}`,
+    replyTo: 'soporte@wapi101.com',
+  }, overrideCfg);
+}
+
 // ─── Factory: withConfig(cfg) ─────────────────────────────────────────────────
 // Útil cuando ya tienes el config y no quieres pasarlo en cada llamada.
 function withConfig(cfg) {
   return {
-    sendTransactional: (opts)  => sendTransactional(opts, cfg),
-    sendPasswordReset: (opts)  => sendPasswordReset(opts, cfg),
-    sendSignupNotification: (opts) => sendSignupNotification(opts, cfg),
-    sendTestEmail: (opts)      => sendTestEmail(opts, cfg),
+    sendTransactional:       (opts) => sendTransactional(opts, cfg),
+    sendPasswordReset:       (opts) => sendPasswordReset(opts, cfg),
+    sendSignupNotification:  (opts) => sendSignupNotification(opts, cfg),
+    sendTestEmail:           (opts) => sendTestEmail(opts, cfg),
+    sendWelcome:             (opts) => sendWelcome(opts, cfg),
+    sendPaymentReceipt:      (opts) => sendPaymentReceipt(opts, cfg),
+    sendPaymentFailed:       (opts) => sendPaymentFailed(opts, cfg),
+    sendTrialEnding:         (opts) => sendTrialEnding(opts, cfg),
+    sendSubscriptionCancelled:(opts)=> sendSubscriptionCancelled(opts, cfg),
+    sendPlanChanged:         (opts) => sendPlanChanged(opts, cfg),
+    sendAdvisorInvited:      (opts) => sendAdvisorInvited(opts, cfg),
   };
 }
 
@@ -339,5 +578,12 @@ module.exports = {
   sendPasswordReset,
   sendSignupNotification,
   sendTestEmail,
+  sendWelcome,
+  sendPaymentReceipt,
+  sendPaymentFailed,
+  sendTrialEnding,
+  sendSubscriptionCancelled,
+  sendPlanChanged,
+  sendAdvisorInvited,
   withConfig,
 };

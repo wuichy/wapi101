@@ -58,6 +58,55 @@ superSvc.ensureFirstSuperAdmin(db);
 // ─── Mailer: conectar DB para leer mail_config en caliente ───
 require('./src/modules/mailer/transactional').setDb(db);
 
+// ─── Cron: aviso de trial por terminar (corre cada 24h) ──────────────────────
+// Revisa tenants con trial y envía aviso a 7 y 1 día(s) antes de vencer.
+// Usa un flag simple en system_settings para no mandar el mismo email dos veces.
+(function _scheduleTrialWarnings() {
+  const INTERVALS_DAYS = [7, 1];
+  async function checkTrials() {
+    try {
+      const mailer = require('./src/modules/mailer/transactional');
+      const now    = Math.floor(Date.now() / 1000);
+      const rows   = db.prepare(`
+        SELECT t.id, t.display_name, t.plan, t.subscription_period_end
+          FROM tenants t
+         WHERE t.subscription_status = 'trialing'
+           AND t.subscription_period_end IS NOT NULL
+      `).all();
+
+      for (const tenant of rows) {
+        const daysLeft = Math.ceil((tenant.subscription_period_end - now) / 86400);
+        if (!INTERVALS_DAYS.includes(daysLeft)) continue;
+
+        const flagKey = `trial_warn_${tenant.id}_${daysLeft}d`;
+        const already = db.prepare("SELECT 1 FROM system_settings WHERE key = ?").get(flagKey);
+        if (already) continue; // ya enviado
+
+        const admin = db.prepare(
+          "SELECT name, email FROM advisors WHERE tenant_id = ? AND role = 'admin' AND active = 1 ORDER BY id LIMIT 1"
+        ).get(tenant.id);
+        if (!admin?.email) continue;
+
+        await mailer.sendTrialEnding({
+          to:          admin.email,
+          name:        admin.name,
+          companyName: tenant.display_name,
+          plan:        tenant.plan,
+          daysLeft,
+          upgradeUrl:  `${(process.env.APP_BASE_URL || 'https://wapi101.com').replace(/\/$/, '')}/app`,
+        });
+        // Marcar como enviado (expira a los 8 días — no necesario pero limpio)
+        db.prepare("INSERT OR IGNORE INTO system_settings (key, value) VALUES (?, ?)").run(flagKey, String(now));
+        console.log(`[trial-warn] enviado tenant=${tenant.id} daysLeft=${daysLeft}`);
+      }
+    } catch (e) {
+      console.error('[trial-warn] error:', e.message);
+    }
+  }
+  // Primera corrida a los 5 min del arranque, luego cada 24h
+  setTimeout(() => { checkTrials(); setInterval(checkTrials, 24 * 60 * 60 * 1000); }, 5 * 60 * 1000);
+})();
+
 // ─── App ───
 const app = express();
 
@@ -335,9 +384,10 @@ app.post('/api/auth/signup', async (req, res) => {
       }
     }
 
-    // Notificar a admin (luis@wapi101.com) — fire-and-forget, no bloquea response
+    // Notificar a admin (luis@wapi101.com) + bienvenida al nuevo tenant — fire-and-forget
     try {
       const mailer = require('./src/modules/mailer/transactional');
+      const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
       mailer.sendSignupNotification({
         tenantName: result.tenant.display_name,
         adminName:  advisor.name,
@@ -345,6 +395,13 @@ app.post('/api/auth/signup', async (req, res) => {
         plan,
         slug:       result.tenant.slug,
       }).catch(err => console.error('[signup] error notif email:', err.message));
+      mailer.sendWelcome({
+        to:          advisor.email || email,
+        name:        advisor.name,
+        companyName: result.tenant.display_name,
+        plan,
+        appUrl:      `${baseUrl}/app`,
+      }).catch(err => console.error('[signup] error welcome email:', err.message));
     } catch (e) {
       console.warn('[signup] no se pudo cargar mailer:', e.message);
     }

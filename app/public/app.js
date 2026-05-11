@@ -14661,14 +14661,19 @@ function suppressAutofill(el) {
   // No tocar los password reales (login.html los necesita)
   if (el.type === 'password') return;
   el.setAttribute('autocomplete', 'off');
-  el.setAttribute('autocorrect', 'off');
-  el.setAttribute('autocapitalize', 'off');
-  el.setAttribute('spellcheck', 'false');
   el.setAttribute('data-1p-ignore', 'true');
   el.setAttribute('data-lpignore', 'true');
   el.setAttribute('data-bwignore', 'true');
   el.setAttribute('data-form-type', 'other');
   el.setAttribute('aria-autocomplete', 'none');
+  // Los textareas (cajas de mensaje) necesitan autocorrect y spellcheck activos
+  // para que iOS/Android muestren predicción de texto y corrección ortográfica.
+  // Solo los inputs de formulario (texto, email, tel) desactivan estas funciones.
+  if (el.tagName !== 'TEXTAREA') {
+    el.setAttribute('autocorrect', 'off');
+    el.setAttribute('autocapitalize', 'off');
+    el.setAttribute('spellcheck', 'false');
+  }
 }
 function applyAntiAutofill(root = document) {
   root.querySelectorAll('input, textarea').forEach(suppressAutofill);

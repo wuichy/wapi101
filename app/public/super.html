@@ -753,19 +753,37 @@
           <label class="smtp-label">Proveedor</label>
           <div class="smtp-radio-row">
             <label class="smtp-radio-opt">
+              <input type="radio" name="mailProvider" value="gmail_oauth" id="provGmail">
+              <span class="smtp-radio-box">
+                <strong>Gmail (OAuth — integración del CRM)</strong>
+                <small>Usa una cuenta Gmail ya conectada al CRM. Sin contraseñas.</small>
+              </span>
+            </label>
+            <label class="smtp-radio-opt">
               <input type="radio" name="mailProvider" value="resend" id="provResend">
               <span class="smtp-radio-box">
                 <strong>Resend</strong>
-                <small>API moderna, freemium. Recomendado para empezar.</small>
+                <small>API moderna, freemium. 3,000 emails/mes gratis.</small>
               </span>
             </label>
             <label class="smtp-radio-opt">
               <input type="radio" name="mailProvider" value="smtp" id="provSmtp">
               <span class="smtp-radio-box">
                 <strong>SMTP personalizado</strong>
-                <small>Gmail, ZeptoMail, Postmark, SendGrid, cualquier servidor.</small>
+                <small>ZeptoMail, Postmark, SendGrid, cualquier servidor SMTP.</small>
               </span>
             </label>
+          </div>
+        </div>
+
+        <!-- Campos Gmail OAuth -->
+        <div id="smtpGmailFields" hidden>
+          <div class="smtp-field-group">
+            <label class="smtp-label" for="gmailIntegrationId">Cuenta Gmail conectada</label>
+            <select class="smtp-input" id="gmailIntegrationId">
+              <option value="">Cargando…</option>
+            </select>
+            <p class="smtp-hint">Solo aparecen las cuentas Gmail ya conectadas en el CRM (Integraciones → Gmail). Si no ves ninguna, ve al CRM y conecta primero tu cuenta Gmail.</p>
           </div>
         </div>
 
@@ -1438,6 +1456,7 @@ function getSelectedProvider() {
 }
 
 function toggleProviderFields(provider) {
+  $('smtpGmailFields').hidden   = provider !== 'gmail_oauth';
   $('smtpResendFields').hidden  = provider !== 'resend';
   $('smtpCustomFields').hidden  = provider !== 'smtp';
 }
@@ -1457,24 +1476,45 @@ $('smtpPort').addEventListener('change', (e) => {
 
 async function loadEmailConfig() {
   smtpHideFeedback();
+
+  // Cargar integraciones Gmail disponibles
+  try {
+    const { items } = await api('GET', '/mail-gmail-integrations');
+    const sel = $('gmailIntegrationId');
+    if (items && items.length) {
+      sel.innerHTML = items.map(i =>
+        `<option value="${i.id}">${escapeHtml(i.display_name || i.external_id)} (tenant ${i.tenant_id})</option>`
+      ).join('');
+    } else {
+      sel.innerHTML = '<option value="">— No hay cuentas Gmail conectadas —</option>';
+    }
+  } catch (_) {}
+
   try {
     const { config } = await api('GET', '/mail-config');
-    const prov = config.provider || 'resend';
-    document.querySelector(`input[name="mailProvider"][value="${prov}"]`).checked = true;
+    const prov = config.provider || 'gmail_oauth';
+    const radioEl = document.querySelector(`input[name="mailProvider"][value="${prov}"]`);
+    if (radioEl) radioEl.checked = true;
     toggleProviderFields(prov);
+
+    // Gmail OAuth
+    if (config.gmailIntegrationId) $('gmailIntegrationId').value = config.gmailIntegrationId;
+    // Resend
     $('resendApiKey').value  = config.resendApiKey  || '';
+    // SMTP
     $('smtpHost').value      = config.smtpHost      || '';
     $('smtpPort').value      = config.smtpPort      || 587;
     $('smtpSecure').checked  = config.smtpSecure    || false;
     $('smtpUser').value      = config.smtpUser      || '';
     $('smtpPass').value      = config.smtpPass      || '';
-    $('mailFromName').value  = config.fromName       || 'Wapi101';
-    $('mailFromEmail').value = config.fromEmail      || '';
-    $('mailAdminEmail').value = config.adminEmail    || '';
+    // Comunes
+    $('mailFromName').value   = config.fromName    || 'Wapi101';
+    $('mailFromEmail').value  = config.fromEmail   || '';
+    $('mailAdminEmail').value = config.adminEmail  || '';
   } catch (err) {
-    // Sin config guardada aún — defaults
-    document.querySelector('input[name="mailProvider"][value="resend"]').checked = true;
-    toggleProviderFields('resend');
+    // Sin config — default Gmail OAuth si hay integraciones
+    document.querySelector('input[name="mailProvider"][value="gmail_oauth"]').checked = true;
+    toggleProviderFields('gmail_oauth');
     $('mailFromName').value = 'Wapi101';
   }
 }
@@ -1490,7 +1530,11 @@ $('smtpSaveBtn').addEventListener('click', async () => {
       fromName:    $('mailFromName').value.trim()  || 'Wapi101',
       fromEmail:   $('mailFromEmail').value.trim() || '',
       adminEmail:  $('mailAdminEmail').value.trim() || '',
+      // Gmail OAuth
+      gmailIntegrationId: provider === 'gmail_oauth' ? (Number($('gmailIntegrationId').value) || null) : null,
+      // Resend
       resendApiKey: $('resendApiKey').value.trim(),
+      // SMTP
       smtpHost:    $('smtpHost').value.trim(),
       smtpPort:    Number($('smtpPort').value) || 587,
       smtpSecure:  $('smtpSecure').checked,

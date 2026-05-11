@@ -59,8 +59,50 @@ async function sendTransactional({ from, to, subject, html, text, replyTo }, ove
   if (cfg.provider === 'smtp') {
     return _sendViaSMTP({ from: fromAddr, to: recipients, subject, html, text, replyTo }, cfg);
   }
+  if (cfg.provider === 'gmail_oauth') {
+    return _sendViaGmailOAuth({ from: fromAddr, to: recipients, subject, html, text, replyTo }, cfg);
+  }
   // Default: Resend
   return _sendViaResend({ from: fromAddr, to: recipients, subject, html, text, replyTo }, cfg);
+}
+
+// ─── Gmail OAuth2 vía integración del CRM ────────────────────────────────────
+async function _sendViaGmailOAuth({ from, to, subject, html, text, replyTo }, cfg) {
+  if (!_globalDb) throw new Error('DB no conectada al mailer — llamar setDb(db) al inicio');
+  const integrationId = cfg.gmailIntegrationId;
+  if (!integrationId) throw new Error('gmailIntegrationId no configurado en mail_config');
+
+  // Leer credenciales encriptadas de la integración Gmail
+  const row = _globalDb.prepare('SELECT external_id, credentials_enc FROM integrations WHERE id = ? AND provider = ?').get(integrationId, 'gmail');
+  if (!row) throw new Error(`Integración Gmail id=${integrationId} no encontrada`);
+  const { decryptJson } = require('../../security/crypto');
+  const creds = decryptJson(row.credentials_enc);
+  if (!creds?.refreshToken) throw new Error('Integración Gmail no tiene refreshToken — reconecta la cuenta');
+
+  // Renovar access token
+  const { refreshGoogleToken } = require('../integrations/providers/gmail');
+  const accessToken = await refreshGoogleToken(creds.refreshToken);
+
+  const nodemailer = require('nodemailer');
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      type:         'OAuth2',
+      user:         creds.email || row.external_id,
+      clientId:     process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      refreshToken: creds.refreshToken,
+      accessToken,
+    },
+  });
+
+  const mailOptions = { from, to, subject, html };
+  if (text)    mailOptions.text = text;
+  if (replyTo) mailOptions.replyTo = replyTo;
+
+  const info = await transporter.sendMail(mailOptions);
+  console.log(`[mailer/gmail-oauth] enviado id=${info.messageId} to=${to} subject="${subject}"`);
+  return { id: info.messageId, provider: 'gmail_oauth' };
 }
 
 // ─── Resend HTTP API ──────────────────────────────────────────────────────────

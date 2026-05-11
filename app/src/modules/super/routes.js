@@ -117,6 +117,21 @@ module.exports = function createSuperRouter(db) {
   });
 
   // ─── Mail config (SMTP / Resend) ────────────────────────────────────────
+  // Lista las integraciones Gmail conectadas (para el picker de Gmail OAuth)
+  router.get('/mail-gmail-integrations', (req, res) => {
+    try {
+      const rows = db.prepare(`
+        SELECT id, tenant_id, display_name, external_id, status
+          FROM integrations
+         WHERE provider = 'gmail' AND status = 'connected'
+         ORDER BY id ASC
+      `).all();
+      res.json({ items: rows });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   router.get('/mail-config', (req, res) => {
     const cfg = service.getMailConfig(db) || {};
     // Nunca devolver contraseñas en claro
@@ -131,10 +146,12 @@ module.exports = function createSuperRouter(db) {
     // Leer config actual para no pisar contraseñas con "••••••••"
     const current = service.getMailConfig(db) || {};
     const cfg = {
-      provider:    body.provider    || current.provider    || 'resend',
+      provider:    body.provider    || current.provider    || 'gmail_oauth',
       fromName:    body.fromName    || current.fromName    || 'Wapi101',
       fromEmail:   body.fromEmail   || current.fromEmail   || '',
       adminEmail:  body.adminEmail  || current.adminEmail  || '',
+      // Gmail OAuth
+      gmailIntegrationId: body.gmailIntegrationId ?? current.gmailIntegrationId ?? null,
       // Resend
       resendApiKey: body.resendApiKey && !body.resendApiKey.startsWith('••')
         ? body.resendApiKey

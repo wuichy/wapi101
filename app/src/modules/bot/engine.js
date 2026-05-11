@@ -416,28 +416,12 @@ function runAsync(db, bot, ctx) {
 async function execute(db, bot, ctx) {
   if (ctx.contactId) {
     const pause = db.prepare(
-      'SELECT paused, updated_at FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?'
+      'SELECT paused FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?'
     ).get(ctx.contactId, bot.id, ctx.tenantId);
     if (pause?.paused) {
-      // Bots con trigger "always" son catálogos / flujos repetibles —
-      // la pausa de stop_bot expira en 1 hora para que el mismo contacto
-      // pueda volver a activar el bot en una nueva conversación.
-      // Para otros trigger types (keyword, new_contact, pipeline_stage)
-      // la pausa es permanente (comportamiento original).
-      const isAlways = bot.trigger_type === 'always';
-      const ALWAYS_TTL_SECS = 3600; // 1 hora
-      const age = Math.floor(Date.now() / 1000) - (pause.updated_at || 0);
-      if (isAlways && age >= ALWAYS_TTL_SECS) {
-        // Pausa expirada — limpiar y continuar
-        try {
-          db.prepare('DELETE FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?')
-            .run(ctx.contactId, bot.id, ctx.tenantId);
-        } catch (_) {}
-        _log('info', `bot ${bot.id} (always): pausa expirada para contacto ${ctx.contactId}, reiniciando.`);
-      } else {
-        _log('warn', `bot ${bot.id} pausado para contacto ${ctx.contactId}, omitiendo.`);
-        return;
-      }
+      // Pausa manual vía UI (handover/asesor) — respetar siempre.
+      _log('warn', `bot ${bot.id} pausado para contacto ${ctx.contactId}, omitiendo.`);
+      return;
     }
   }
   if (ctx.convoId) {
@@ -796,21 +780,17 @@ async function executeStep(db, step, ctx) {
     }
 
     case 'stop_bot': {
-      // Pausa SOLO este bot para este contacto (no la conversación entera) para
-      // que otros bots puedan seguir respondiendo. Pausa manual de la conversación
-      // sigue siendo conversations.bot_paused vía UI.
+      // Termina el run actual y limpia cualquier pausa previa para que el bot
+      // pueda volver a dispararse en el siguiente mensaje. Los loops mid-conversación
+      // ya están protegidos por bot_run_waits (wait_response activo).
       if (ctx.contactId && ctx._botId) {
         try {
-          db.prepare(`
-            INSERT INTO contact_bot_pauses (tenant_id, contact_id, bot_id, paused, updated_at)
-            VALUES (?, ?, ?, 1, unixepoch())
-            ON CONFLICT (contact_id, bot_id) DO UPDATE SET paused = 1, updated_at = excluded.updated_at
-          `).run(ctx.tenantId, ctx.contactId, ctx._botId);
-          _log('info', `bot ${ctx._botId} pausado para contacto ${ctx.contactId}`);
-        } catch (e) {
-          _log('warn', `stop_bot: no se pudo pausar bot ${ctx._botId} para contacto ${ctx.contactId}: ${e.message}`);
-        }
+          db.prepare(
+            'DELETE FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?'
+          ).run(ctx.contactId, ctx._botId, ctx.tenantId);
+        } catch (_) {}
       }
+      _log('info', `bot ${ctx._botId} stop_bot para contacto ${ctx.contactId}`);
       return 'stop';
     }
 

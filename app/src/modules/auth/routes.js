@@ -357,6 +357,109 @@ module.exports = function createAuthRouter(db) {
     }
   });
 
+  // ─── Google (Gmail OAuth2) ───
+  // Scopes: email + profile + gmail.send + mail.google.com (IMAP para leer)
+  router.get('/google/start', (req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return oauthError(res, 'No están configuradas las credenciales de Google (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET en .env).');
+    }
+
+    let state;
+    if (req.query.state) {
+      const stateRow = db.prepare("SELECT * FROM oauth_states WHERE state = ?").get(req.query.state);
+      if (!stateRow) return oauthError(res, 'Sesión OAuth inválida o expirada. Inténtalo de nuevo desde el CRM.');
+      state = stateRow.state;
+    } else {
+      state = makeState();
+      db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
+      db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, 'gmail', 1)").run(state);
+    }
+
+    const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
+    const redirectUri = encodeURIComponent(`${baseUrl}/auth/google/callback`);
+    // Pedimos acceso a: perfil básico + envío de emails (Gmail API) + IMAP
+    const scope = encodeURIComponent([
+      'email',
+      'profile',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://mail.google.com/',
+    ].join(' '));
+
+    const url = `https://accounts.google.com/o/oauth2/v2/auth` +
+      `?client_id=${clientId}` +
+      `&redirect_uri=${redirectUri}` +
+      `&response_type=code` +
+      `&scope=${scope}` +
+      `&state=${state}` +
+      `&access_type=offline` +
+      `&prompt=consent`;   // siempre forzar consent para obtener refresh_token
+
+    res.redirect(url);
+  });
+
+  router.get('/google/callback', async (req, res) => {
+    const { code, state, error, error_description } = req.query;
+    if (error) return oauthError(res, error_description || error);
+    if (!code || !state) return oauthError(res, 'Respuesta inválida de Google.');
+
+    const stateRow = db.prepare("SELECT * FROM oauth_states WHERE state = ?").get(state);
+    if (!stateRow) return oauthError(res, 'Estado OAuth inválido o expirado. Inténtalo de nuevo.');
+    db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
+
+    const tenantId = stateRow.tenant_id || 1;
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
+    const redirectUri = `${baseUrl}/auth/google/callback`;
+
+    try {
+      // 1. Intercambiar code → tokens
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id:     clientId,
+          client_secret: clientSecret,
+          code,
+          grant_type:    'authorization_code',
+          redirect_uri:  redirectUri,
+        }),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || tokenData.error) {
+        throw new Error(tokenData.error_description || tokenData.error || 'Error obteniendo tokens de Google');
+      }
+      if (!tokenData.refresh_token) {
+        throw new Error('Google no devolvió refresh_token. Revoca el acceso en myaccount.google.com/permissions y vuelve a conectar.');
+      }
+
+      // 2. Info del usuario
+      const userRes = await fetch(`https://www.googleapis.com/oauth2/v2/userinfo`, {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      const userData = await userRes.json();
+      if (!userRes.ok || userData.error) {
+        throw new Error(userData.error?.message || 'Error obteniendo perfil de Google');
+      }
+
+      const creds = {
+        email:        userData.email,
+        name:         userData.name || userData.email,
+        refreshToken: tokenData.refresh_token,
+      };
+      const integration = await integrationService.connectRaw(db, tenantId, 'gmail', creds, {
+        displayName: userData.email,
+        externalId:  userData.email,
+      });
+      return oauthSuccess(res, integration.id, integration.displayName);
+    } catch (err) {
+      console.error('[auth google]', err.message);
+      return oauthError(res, err.message);
+    }
+  });
+
   // Listado de eventos disponibles para outgoing webhooks
   router.get('/events', (_req, res) => {
     res.json({ events: AVAILABLE_EVENTS });

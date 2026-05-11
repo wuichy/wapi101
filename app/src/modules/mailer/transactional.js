@@ -71,7 +71,9 @@ async function sendTransactional({ from, to, subject, html, text, replyTo }, ove
   return _sendViaResend({ from: fromAddr, to: recipients, subject, html, text, replyTo }, cfg);
 }
 
-// ─── Gmail OAuth2 vía integración del CRM ────────────────────────────────────
+// ─── Gmail REST API (HTTPS) vía integración del CRM ──────────────────────────
+// Usa la API de Gmail en vez de SMTP — funciona aunque el droplet tenga
+// bloqueados los puertos 465/587 (que Digital Ocean bloquea por defecto).
 async function _sendViaGmailOAuth({ from, to, subject, html, text, replyTo }, cfg) {
   if (!_globalDb) throw new Error('DB no conectada al mailer — llamar setDb(db) al inicio');
   const integrationId = cfg.gmailIntegrationId;
@@ -84,30 +86,66 @@ async function _sendViaGmailOAuth({ from, to, subject, html, text, replyTo }, cf
   const creds = decryptJson(row.credentials_enc);
   if (!creds?.refreshToken) throw new Error('Integración Gmail no tiene refreshToken — reconecta la cuenta');
 
-  // Renovar access token
   const { refreshGoogleToken } = require('../integrations/providers/gmail');
   const accessToken = await refreshGoogleToken(creds.refreshToken);
+  const senderEmail = creds.email || row.external_id;
 
-  const nodemailer = require('nodemailer');
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      type:         'OAuth2',
-      user:         creds.email || row.external_id,
-      clientId:     process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      refreshToken: creds.refreshToken,
-      accessToken,
+  // Construir email RFC 2822
+  const boundary = `__wapi101_${Date.now()}`;
+  const recipients = Array.isArray(to) ? to.join(', ') : to;
+
+  let rawParts = [
+    `From: ${from}`,
+    `To: ${recipients}`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+  ];
+  if (replyTo) rawParts.push(`Reply-To: ${replyTo}`);
+
+  if (html && text) {
+    rawParts.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    rawParts.push('');
+    rawParts.push(`--${boundary}`);
+    rawParts.push('Content-Type: text/plain; charset=UTF-8');
+    rawParts.push('');
+    rawParts.push(text);
+    rawParts.push(`--${boundary}`);
+    rawParts.push('Content-Type: text/html; charset=UTF-8');
+    rawParts.push('');
+    rawParts.push(html);
+    rawParts.push(`--${boundary}--`);
+  } else if (html) {
+    rawParts.push('Content-Type: text/html; charset=UTF-8');
+    rawParts.push('');
+    rawParts.push(html);
+  } else {
+    rawParts.push('Content-Type: text/plain; charset=UTF-8');
+    rawParts.push('');
+    rawParts.push(text || '');
+  }
+
+  const raw = rawParts.join('\r\n');
+  // Base64url encoding (Gmail API requiere base64url sin padding)
+  const encoded = Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  // Gmail REST API — usa HTTPS (port 443), no SMTP
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/${encodeURIComponent(senderEmail)}/messages/send`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ raw: encoded }),
   });
 
-  const mailOptions = { from, to, subject, html };
-  if (text)    mailOptions.text = text;
-  if (replyTo) mailOptions.replyTo = replyTo;
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`Gmail API ${res.status}: ${err.slice(0, 300)}`);
+  }
 
-  const info = await transporter.sendMail(mailOptions);
-  console.log(`[mailer/gmail-oauth] enviado id=${info.messageId} to=${to} subject="${subject}"`);
-  return { id: info.messageId, provider: 'gmail_oauth' };
+  const data = await res.json();
+  console.log(`[mailer/gmail-api] enviado id=${data.id} to=${recipients} subject="${subject}"`);
+  return { id: data.id, provider: 'gmail_oauth' };
 }
 
 // ─── Resend HTTP API ──────────────────────────────────────────────────────────

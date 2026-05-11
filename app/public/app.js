@@ -1650,26 +1650,34 @@ function renderChatList() {
       : '';
     const pinIcon = c.pinned ? `<span class="rh-chat-pin-icon" title="Fijado">📌</span>` : '';
     const mutedIcon = (c.mutedUntil && c.mutedUntil * 1000 > Date.now()) ? `<span class="rh-chat-muted-icon" title="Silenciado">🔇</span>` : '';
+    // Avatar: foto real si existe, si no iniciales
+    const _avInitials = (c.name || c.contactName || '?').split(/\s+/).slice(0,2).map(s => s[0]?.toUpperCase() || '').join('') || '?';
+    const _avContent = c.contactAvatarUrl
+      ? `<img src="${escapeHtml(c.contactAvatarUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#64748b">${escapeHtml(_avInitials)}</span>`
+      : escapeHtml(_avInitials);
     return `
     <div role="button" tabindex="0" class="rh-chat-item ${c.id === ACTIVE_CONVO_ID ? "rh-active" : ""} ${unread ? 'is-unread' : ''} ${c.pinned ? 'is-pinned' : ''}" data-id="${c.id}">
       ${personalAction}
-      <div class="rh-chat-item-top">
-        <strong class="rh-chat-name">${pinIcon}${mutedIcon}${escapeHtml(c.name || c.contactName || '—')}</strong>
-        <span class="rh-chat-meta-right">
-          <span class="rh-chat-time">${escapeHtml(c.time || '')}</span>
-          ${unreadBadge}
-        </span>
-      </div>
-      <p class="rh-chat-phone">${escapeHtml(c.phone || c.contactPhone || '')}</p>
-      <p class="rh-chat-preview">${escapeHtml(c.lastMessage || '')}</p>
-      <div class="rh-chat-badges">
-        <span class="rh-chat-origin">
-          <span class="rh-channel-badge">
-            <span class="rh-channel-dot rh-channel-${c.provider}"></span>
-            ${escapeHtml(PROVIDER_LABEL[c.provider] || c.provider)}
+      <div class="rh-chat-av">${_avContent}</div>
+      <div class="rh-chat-body">
+        <div class="rh-chat-item-top">
+          <strong class="rh-chat-name">${pinIcon}${mutedIcon}${escapeHtml(c.name || c.contactName || '—')}</strong>
+          <span class="rh-chat-meta-right">
+            <span class="rh-chat-time">${escapeHtml(c.time || '')}</span>
+            ${unreadBadge}
           </span>
-        </span>
-        ${wa24Html(c.provider, c.lastIncomingAt)}
+        </div>
+        <p class="rh-chat-phone">${escapeHtml(c.phone || c.contactPhone || '')}</p>
+        <p class="rh-chat-preview">${escapeHtml(c.lastMessage || '')}</p>
+        <div class="rh-chat-badges">
+          <span class="rh-chat-origin">
+            <span class="rh-channel-badge">
+              <span class="rh-channel-dot rh-channel-${c.provider}"></span>
+              ${escapeHtml(PROVIDER_LABEL[c.provider] || c.provider)}
+            </span>
+          </span>
+          ${wa24Html(c.provider, c.lastIncomingAt)}
+        </div>
       </div>
     </div>
   `;
@@ -1728,6 +1736,16 @@ async function openConversation(convoId) {
 
   // Actualizar header
   if (convo) {
+    // Avatar en header
+    const avWrap = document.getElementById('rhHeaderAvatar');
+    if (avWrap) {
+      const _initials = (convo.name || '?').split(/\s+/).slice(0,2).map(s => s[0]?.toUpperCase() || '').join('') || '?';
+      if (convo.contactAvatarUrl) {
+        avWrap.innerHTML = `<img src="${escapeHtml(convo.contactAvatarUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block" onerror="this.outerHTML='<span class=&quot;rh-header-av-initials&quot;>${escapeHtml(_initials)}</span>'" />`;
+      } else {
+        avWrap.innerHTML = `<span class="rh-header-av-initials">${escapeHtml(_initials)}</span>`;
+      }
+    }
     const titleEl = document.getElementById("rhChatTitle");
     if (titleEl) {
       titleEl.textContent = convo.name;

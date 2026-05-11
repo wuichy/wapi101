@@ -3388,6 +3388,7 @@ body[data-view-active="chats"] .main { background: #f2f2f7; }
   overflow-x: hidden;
   padding: 4px 0;
 }
+/* ── Avatar en lista de chats ── */
 .rh-chat-item {
   width: 100%;
   text-align: left;
@@ -3396,8 +3397,47 @@ body[data-view-active="chats"] .main { background: #f2f2f7; }
   padding: 10px 16px;
   cursor: pointer;
   transition: background 100ms;
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   font: inherit;
+}
+.rh-chat-av {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; color: #64748b;
+  position: relative;
+}
+.rh-chat-av img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.rh-chat-body { flex: 1; min-width: 0; }
+
+/* ── Avatar en header de conversación ── */
+.rh-header-av-wrap {
+  flex-shrink: 0;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.rh-header-av-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.rh-header-av-initials {
+  font-size: 13px; font-weight: 600; color: #64748b;
 }
 .rh-chat-item:hover { background: rgba(0, 0, 0, 0.04); }
 .rh-chat-item.rh-active { background: var(--rh-brand-soft); }

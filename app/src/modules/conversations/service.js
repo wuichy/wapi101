@@ -61,6 +61,7 @@ function hydrateConvo(db, tenantId, row) {
     externalId:    row.external_id,
     name,
     phone:         contact?.phone || row.external_id || '',
+    contactAvatarUrl: contact?.avatar_url || null,
     lastMessage:    row.last_message || '',
     lastMessageAt:  row.last_message_at,
     lastIncomingAt: row.last_incoming_at || null,

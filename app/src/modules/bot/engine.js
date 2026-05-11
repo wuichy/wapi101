@@ -340,10 +340,63 @@ function enabledBots(db, tenantId) {
   return rows.map(r => ({ ...r, steps: JSON.parse(r.steps || '[]') }));
 }
 
+// Walks a path array through nested step structures. Returns
+// { step, containerArr, idxInContainer, topLevelIdx } or null.
+// Path encodings:
+//   [0]                                → top-level steps[0]
+//   [0, 'cases', 4, 'steps', 1]       → branch case 4 substep 1
+//   [0, 'default', 2]                 → branch default substep 2
+//   [0, 'reminders', 1, 'steps', 0]   → reminder_timer reminder 1 substep 0
+function _walkStepPath(rootSteps, path) {
+  if (!Array.isArray(path) || path.length === 0) return null;
+  let containerArr = rootSteps;
+  let idxInContainer = path[0];
+  let step = containerArr?.[idxInContainer];
+  let i = 1;
+  while (i < path.length && step) {
+    const seg = path[i];
+    if (seg === 'cases') {
+      const caseIdx = path[i + 1];
+      const cs = step.config?.cases?.[caseIdx];
+      if (!cs) return null;
+      containerArr = cs.steps;
+      idxInContainer = path[i + 3];
+      step = containerArr?.[idxInContainer];
+      i += 4;
+    } else if (seg === 'default') {
+      const subIdx = path[i + 1];
+      containerArr = step.config?.default;
+      idxInContainer = subIdx;
+      step = containerArr?.[idxInContainer];
+      i += 2;
+    } else if (seg === 'reminders') {
+      const remIdx = path[i + 1];
+      const rem = step.config?.reminders?.[remIdx];
+      if (!rem) return null;
+      containerArr = rem.steps;
+      idxInContainer = path[i + 3];
+      step = containerArr?.[idxInContainer];
+      i += 4;
+    } else {
+      return null;
+    }
+  }
+  return { step, containerArr, idxInContainer, topLevelIdx: path[0] };
+}
+
 function runAsync(db, bot, ctx) {
-  // Kill any existing active runs for this bot+contact to avoid duplicates
   if (ctx.contactId && bot.id) {
     try {
+      // Si hay un wait_response suspendido para este bot+contacto, NO arrancar
+      // un nuevo run — el mensaje entrante lo va a reanudar vía resumeWaitsForContact.
+      const pendingWait = db.prepare(
+        "SELECT id FROM bot_run_waits WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status='waiting' LIMIT 1"
+      ).get(bot.id, ctx.contactId, ctx.tenantId);
+      if (pendingWait) {
+        _log('info', `bot ${bot.id} tiene wait suspendido para contacto ${ctx.contactId} — no se inicia nuevo run`);
+        return;
+      }
+      // Sino, matar runs activos para evitar duplicados.
       const active = db.prepare(
         "SELECT id FROM bot_runs WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status IN ('running','paused')"
       ).all(bot.id, ctx.contactId, ctx.tenantId);
@@ -363,10 +416,36 @@ function runAsync(db, bot, ctx) {
 async function execute(db, bot, ctx) {
   if (ctx.contactId) {
     const pause = db.prepare(
-      'SELECT paused FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?'
+      'SELECT paused, updated_at FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?'
     ).get(ctx.contactId, bot.id, ctx.tenantId);
     if (pause?.paused) {
-      _log('warn', `bot ${bot.id} pausado para contacto ${ctx.contactId}, omitiendo.`);
+      // Bots con trigger "always" son catálogos / flujos repetibles —
+      // la pausa de stop_bot expira en 1 hora para que el mismo contacto
+      // pueda volver a activar el bot en una nueva conversación.
+      // Para otros trigger types (keyword, new_contact, pipeline_stage)
+      // la pausa es permanente (comportamiento original).
+      const isAlways = bot.trigger_type === 'always';
+      const ALWAYS_TTL_SECS = 3600; // 1 hora
+      const age = Math.floor(Date.now() / 1000) - (pause.updated_at || 0);
+      if (isAlways && age >= ALWAYS_TTL_SECS) {
+        // Pausa expirada — limpiar y continuar
+        try {
+          db.prepare('DELETE FROM contact_bot_pauses WHERE contact_id = ? AND bot_id = ? AND tenant_id = ?')
+            .run(ctx.contactId, bot.id, ctx.tenantId);
+        } catch (_) {}
+        _log('info', `bot ${bot.id} (always): pausa expirada para contacto ${ctx.contactId}, reiniciando.`);
+      } else {
+        _log('warn', `bot ${bot.id} pausado para contacto ${ctx.contactId}, omitiendo.`);
+        return;
+      }
+    }
+  }
+  if (ctx.convoId) {
+    const convoPause = db.prepare(
+      'SELECT bot_paused FROM conversations WHERE id = ? AND tenant_id = ?'
+    ).get(ctx.convoId, ctx.tenantId);
+    if (convoPause?.bot_paused) {
+      _log('warn', `bot ${bot.id}: conversación ${ctx.convoId} tiene bot_paused=1, omitiendo.`);
       return;
     }
   }
@@ -441,6 +520,7 @@ async function execute(db, bot, ctx) {
       // persistir su posición en bot_run_waits.
       fullCtx._stepIndex = i;
       fullCtx._runId = runId;
+      fullCtx._stepPath = [i];
       const result = await executeStep(db, step, fullCtx);
       _log('info', `paso ${i + 1} completado, result=${result}`);
       if (result === 'suspend') { suspended = true; break; }
@@ -716,9 +796,20 @@ async function executeStep(db, step, ctx) {
     }
 
     case 'stop_bot': {
-      if (ctx.convoId) {
-        convoSvc.setBotPaused(db, null, ctx.convoId, true);
-        _log('info', `bot pausado para conversación ${ctx.convoId}`);
+      // Pausa SOLO este bot para este contacto (no la conversación entera) para
+      // que otros bots puedan seguir respondiendo. Pausa manual de la conversación
+      // sigue siendo conversations.bot_paused vía UI.
+      if (ctx.contactId && ctx._botId) {
+        try {
+          db.prepare(`
+            INSERT INTO contact_bot_pauses (tenant_id, contact_id, bot_id, paused, updated_at)
+            VALUES (?, ?, ?, 1, unixepoch())
+            ON CONFLICT (contact_id, bot_id) DO UPDATE SET paused = 1, updated_at = excluded.updated_at
+          `).run(ctx.tenantId, ctx.contactId, ctx._botId);
+          _log('info', `bot ${ctx._botId} pausado para contacto ${ctx.contactId}`);
+        } catch (e) {
+          _log('warn', `stop_bot: no se pudo pausar bot ${ctx._botId} para contacto ${ctx.contactId}: ${e.message}`);
+        }
       }
       return 'stop';
     }
@@ -1037,8 +1128,10 @@ async function executeStep(db, step, ctx) {
       const cases = Array.isArray(c.cases) ? c.cases : [];
       let matchedSteps = null;
       let matchedLabel = null;
+      let matchedCaseIdx = -1;
 
-      for (const cs of cases) {
+      for (let cIdx = 0; cIdx < cases.length; cIdx++) {
+        const cs = cases[cIdx];
         try {
           // Normalizar: formato viejo → formato nuevo
           const rules = Array.isArray(cs.rules) && cs.rules.length
@@ -1055,6 +1148,7 @@ async function executeStep(db, step, ctx) {
             matchedSteps = Array.isArray(cs.steps) ? cs.steps
               : (Array.isArray(cs.branch) ? cs.branch : []);
             matchedLabel = rules.map(r => `${r.field}:${r.value}`).join(rulesOp === 'or' ? '|' : '&');
+            matchedCaseIdx = cIdx;
             break;
           }
         } catch (err) {
@@ -1065,15 +1159,22 @@ async function executeStep(db, step, ctx) {
       if (matchedSteps === null && Array.isArray(c.default)) {
         matchedSteps = c.default;
         matchedLabel = '(default)';
+        matchedCaseIdx = -1;
       }
       if (!matchedSteps) {
         _log('info', 'branch: ningún case matcheó y no hay default — saltando');
         return false;
       }
       _log('info', `branch matched "${matchedLabel}" — ejecutando ${matchedSteps.length} pasos`);
-      for (const subStep of matchedSteps) {
+      const parentPath = Array.isArray(ctx._stepPath) ? ctx._stepPath : [];
+      for (let si = 0; si < matchedSteps.length; si++) {
+        const subStep = matchedSteps[si];
+        const subPath = matchedCaseIdx === -1
+          ? [...parentPath, 'default', si]
+          : [...parentPath, 'cases', matchedCaseIdx, 'steps', si];
+        const subCtx = { ...ctx, _stepPath: subPath };
         try {
-          const result = await executeStep(db, subStep, ctx);
+          const result = await executeStep(db, subStep, subCtx);
           if (result === 'stop') return 'stop';
           if (result === true) return true;
           if (result === 'suspend') return 'suspend';
@@ -1104,6 +1205,7 @@ async function executeStep(db, step, ctx) {
         pipelineId:    ctx.pipelineId || null,
         stageId:       ctx.stageId || null,
         messageBody:   ctx.messageBody || '',
+        path:          Array.isArray(ctx._stepPath) ? ctx._stepPath : [stepIndex],
       };
       db.prepare(`
         INSERT INTO bot_run_waits (
@@ -1370,9 +1472,19 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
   // Asegurar _id estable como en run normal
   allSteps = allSteps.map((s, i) => ({ ...s, _id: s._id || `s${i}` }));
 
-  const waitStep = allSteps[wait.wait_step_index];
+  // Reconstruir ctx
+  let snap = {};
+  try { snap = JSON.parse(wait.ctx_json || '{}'); } catch {}
+
+  // Localizar el wait_response via path (soporta nested dentro de ramas).
+  // Fallback al wait_step_index legacy (top-level) si no hay path.
+  const path = Array.isArray(snap.path) && snap.path.length
+    ? snap.path
+    : [wait.wait_step_index];
+  const located = _walkStepPath(allSteps, path);
+  const waitStep = located?.step;
   if (!waitStep || waitStep.type !== 'wait_response') {
-    _log('error', `resumeRun: step en índice ${wait.wait_step_index} no es wait_response`);
+    _log('error', `resumeRun: no se encontró wait_response en path ${JSON.stringify(path)}`);
     return;
   }
 
@@ -1380,10 +1492,6 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
   const branchSteps = Array.isArray(branches[branch]) ? branches[branch] : [];
   // Asegurar _ids únicos
   const branchStepsHydrated = branchSteps.map((s, i) => ({ ...s, _id: s._id || `${wait.wait_step_id}-${branch}-${i}` }));
-
-  // Reconstruir ctx
-  let snap = {};
-  try { snap = JSON.parse(wait.ctx_json || '{}'); } catch {}
   const contact = wait.contact_id
     ? db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(wait.contact_id, tenantId)
     : null;
@@ -1409,7 +1517,22 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
   let suspended = false;
   let errored = false;
   let stopped = false;
-  for (let i = 0; i < branchStepsHydrated.length; i++) {
+  // Nuevo shape simple: si rama es 'on_timeout' y onTimeout === 'stop', pausar SOLO este bot
+  // para este contacto (consistente con stop_bot).
+  if (branch === 'on_timeout' && waitStep.config?.onTimeout === 'stop') {
+    _log('info', `resumeRun: timeout con onTimeout=stop, pausando bot ${wait.bot_id} para contacto ${wait.contact_id}`);
+    if (wait.contact_id && wait.bot_id) {
+      try {
+        db.prepare(`
+          INSERT INTO contact_bot_pauses (tenant_id, contact_id, bot_id, paused, updated_at)
+          VALUES (?, ?, ?, 1, unixepoch())
+          ON CONFLICT (contact_id, bot_id) DO UPDATE SET paused = 1, updated_at = excluded.updated_at
+        `).run(tenantId, wait.contact_id, wait.bot_id);
+      } catch (e) { _log('warn', `pausa por timeout fallo: ${e.message}`); }
+    }
+    stopped = true;
+  }
+  for (let i = 0; i < branchStepsHydrated.length && !stopped; i++) {
     const step = branchStepsHydrated[i];
     ctx._stepIndex = wait.wait_step_index; // mantenemos el índice del wait original
     ctx._runId = wait.run_id;
@@ -1424,20 +1547,26 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     }
   }
 
-  // Si la rama no terminó el flujo, continuar con los pasos del flujo principal
-  // que siguen al wait_response (ctx.messageBody ya tiene la respuesta del contacto).
+  // Continuación: ejecutar los HERMANOS que vienen DESPUÉS del wait_response
+  // dentro del mismo contenedor (case.steps[], default[], reminders[].steps[] o top-level).
+  // Esto preserva el contexto cuando wait_response está anidado dentro de una rama.
+  const containerArr = located.containerArr || allSteps;
+  const idxInContainer = typeof located.idxInContainer === 'number' ? located.idxInContainer : wait.wait_step_index;
   if (!suspended && !errored && !stopped) {
-    const continuationSteps = allSteps.slice(wait.wait_step_index + 1);
-    _log('info', `resumeRun: continuando con ${continuationSteps.length} pasos del flujo principal tras rama "${branch}"`);
+    const continuationSteps = containerArr.slice(idxInContainer + 1);
+    _log('info', `resumeRun: continuando con ${continuationSteps.length} hermanos tras wait_response (path=${JSON.stringify(path)})`);
     for (let i = 0; i < continuationSteps.length; i++) {
       const step = continuationSteps[i];
-      ctx._stepIndex = wait.wait_step_index + 1 + i;
+      // Sub-path para que un wait_response anidado dentro de la continuación también funcione
+      const subPath = path.slice(0, -1).concat([idxInContainer + 1 + i]);
+      ctx._stepIndex = wait.wait_step_index;
+      ctx._stepPath = subPath;
       ctx._runId = wait.run_id;
       try {
         const result = await executeStep(db, step, ctx);
         if (result === 'suspend') { suspended = true; break; }
-        if (result === 'stop') { stopped = true; break; }
-        if (result === true) break; // branch terminó normalmente, seguir al re-wait
+        if (result === 'stop')    { stopped = true; break; }
+        if (result === true)      break;
       } catch (err) {
         _log('error', `resumeRun: continuation paso ${i + 1} ("${step.type}") error: ${err.message}`);
         errored = true;
@@ -1446,18 +1575,29 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     }
   }
 
-  // Si el flujo continúa (nadie lo paró ni suspendió), re-registrar el wait_response
-  // para que el bot siga escuchando la próxima respuesta del contacto.
-  if (!suspended && !errored && !stopped) {
-    ctx._stepIndex = wait.wait_step_index;
-    ctx._runId = wait.run_id;
-    _log('info', `resumeRun: re-registrando wait_response para continuar escuchando (run ${wait.run_id})`);
-    try {
-      const result = await executeStep(db, waitStep, ctx);
-      if (result === 'suspend') suspended = true;
-    } catch (err) {
-      _log('error', `resumeRun: error re-suspendiendo wait_response: ${err.message}`);
-      errored = true;
+  // Si el wait estaba ANIDADO (path > 1 elemento) y terminamos los hermanos sin
+  // stop/suspend, continuar con los top-level steps DESPUÉS del ancestro outer.
+  if (!suspended && !errored && !stopped && path.length > 1) {
+    const topLevelAfter = path[0] + 1;
+    const tailSteps = allSteps.slice(topLevelAfter);
+    if (tailSteps.length > 0) {
+      _log('info', `resumeRun: hermanos completados, continuando ${tailSteps.length} pasos top-level desde idx ${topLevelAfter}`);
+      for (let i = 0; i < tailSteps.length; i++) {
+        const step = tailSteps[i];
+        ctx._stepIndex = topLevelAfter + i;
+        ctx._stepPath = [topLevelAfter + i];
+        ctx._runId = wait.run_id;
+        try {
+          const result = await executeStep(db, step, ctx);
+          if (result === 'suspend') { suspended = true; break; }
+          if (result === 'stop')    { stopped = true; break; }
+          if (result === true)      break;
+        } catch (err) {
+          _log('error', `resumeRun: tail paso ${i + 1} ("${step.type}") error: ${err.message}`);
+          errored = true;
+          break;
+        }
+      }
     }
   }
 

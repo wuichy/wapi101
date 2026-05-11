@@ -252,7 +252,39 @@ function impersonate(db, tenantId, superAdminId) {
   };
 }
 
+// ─── System settings (global, no tenant) ────────────────────────────────────
+// Almacena configuración del sistema como key→JSON en la tabla system_settings.
+
+function getSystemSetting(db, key) {
+  try {
+    const row = db.prepare('SELECT value FROM system_settings WHERE key = ?').get(key);
+    return row ? row.value : null;
+  } catch { return null; }
+}
+
+function setSystemSetting(db, key, value) {
+  db.prepare(`
+    INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, unixepoch())
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = unixepoch()
+  `).run(key, typeof value === 'string' ? value : JSON.stringify(value));
+}
+
+// Devuelve el mail config parseado, o null si no está configurado.
+function getMailConfig(db) {
+  const raw = getSystemSetting(db, 'mail_config');
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+// Guarda el mail config. Nunca expone smtpPass/resendApiKey en la respuesta
+// — los callers deben mascararlos antes de responder al frontend.
+function saveMailConfig(db, cfg) {
+  if (!cfg || typeof cfg !== 'object') throw new Error('Config inválida');
+  setSystemSetting(db, 'mail_config', JSON.stringify(cfg));
+}
+
 module.exports = {
   login, createSession, getSession, deleteSession, ensureFirstSuperAdmin,
   listTenants, getTenant, createTenant, updateTenant, cancelTenant, impersonate,
+  getSystemSetting, setSystemSetting, getMailConfig, saveMailConfig,
 };

@@ -55,6 +55,9 @@ advisorSvc.ensureFirstAdmin(db, {
 const superSvc = require('./src/modules/super/service');
 superSvc.ensureFirstSuperAdmin(db);
 
+// ─── Mailer: conectar DB para leer mail_config en caliente ───
+require('./src/modules/mailer/transactional').setDb(db);
+
 // ─── App ───
 const app = express();
 

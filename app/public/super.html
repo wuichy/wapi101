@@ -539,6 +539,41 @@
       object-fit: contain;
     }
 
+    /* ───────── Email / SMTP form ───────── */
+    .smtp-label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: var(--sa-text); margin-bottom: 5px;
+      text-transform: uppercase; letter-spacing: .4px;
+    }
+    .smtp-field-group { margin-bottom: 16px; }
+    .smtp-input {
+      width: 100%; box-sizing: border-box;
+      padding: 8px 11px; border: 1px solid #d1d5db; border-radius: 6px;
+      font-size: 13px; background: #fff; color: var(--sa-text);
+      transition: border-color .15s;
+    }
+    .smtp-input:focus { outline: none; border-color: var(--sa-accent); }
+    .smtp-hint {
+      font-size: 12px; color: var(--sa-muted); margin: 5px 0 0;
+      line-height: 1.5;
+    }
+    .smtp-hint a { color: var(--sa-accent); }
+    .smtp-hint code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+    .smtp-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .smtp-radio-row { display: flex; flex-direction: column; gap: 8px; }
+    .smtp-radio-opt { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+    .smtp-radio-opt input[type=radio] { margin-top: 3px; cursor: pointer; }
+    .smtp-radio-box strong { display: block; font-size: 13px; }
+    .smtp-radio-box small { font-size: 12px; color: var(--sa-muted); }
+    .smtp-check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+    .smtp-check-row input { cursor: pointer; }
+    .smtp-feedback {
+      padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 4px;
+    }
+    .smtp-feedback.is-ok     { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; }
+    .smtp-feedback.is-error  { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; }
+    .smtp-feedback.is-info   { background: #eff6ff; color: #1d4ed8; border: 1px solid #93c5fd; }
+
     /* ───────── Notice (mensajes WP-style) ───────── */
     .sa-notice {
       background: #fff; border-left: 4px solid var(--sa-accent);
@@ -608,6 +643,10 @@
       <a class="sa-nav-item" data-section="health">
         <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         <span>Salud</span>
+      </a>
+      <a class="sa-nav-item" data-section="email">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        <span>Email / SMTP</span>
       </a>
     </nav>
     <div class="sa-sidebar-foot">v1 · Wapi101</div>
@@ -698,6 +737,108 @@
           <tbody id="srTbody"></tbody>
         </table>
         <div class="empty-state" id="srEmpty" hidden>No hay reportes que coincidan con el filtro.</div>
+      </div>
+    </section>
+
+    <!-- Section: Email / SMTP -->
+    <section data-section-pane="email" hidden>
+      <div class="sa-page-head">
+        <h1 class="sa-page-title">Email / SMTP</h1>
+      </div>
+      <p class="sa-page-sub">Configura cómo Wapi101 envía emails transaccionales (reset de contraseña, notificaciones de signup, etc.). Equivalente a <em>WP Mail SMTP</em>.</p>
+
+      <div class="sa-card" style="padding:24px 28px;max-width:640px">
+        <!-- Proveedor -->
+        <div class="smtp-field-group">
+          <label class="smtp-label">Proveedor</label>
+          <div class="smtp-radio-row">
+            <label class="smtp-radio-opt">
+              <input type="radio" name="mailProvider" value="resend" id="provResend">
+              <span class="smtp-radio-box">
+                <strong>Resend</strong>
+                <small>API moderna, freemium. Recomendado para empezar.</small>
+              </span>
+            </label>
+            <label class="smtp-radio-opt">
+              <input type="radio" name="mailProvider" value="smtp" id="provSmtp">
+              <span class="smtp-radio-box">
+                <strong>SMTP personalizado</strong>
+                <small>Gmail, ZeptoMail, Postmark, SendGrid, cualquier servidor.</small>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Campos Resend -->
+        <div id="smtpResendFields">
+          <div class="smtp-field-group">
+            <label class="smtp-label" for="resendApiKey">API Key de Resend</label>
+            <input class="smtp-input" type="password" id="resendApiKey" placeholder="re_xxxxxxxxxxxx" autocomplete="new-password">
+            <p class="smtp-hint">Obtén tu key en <a href="https://resend.com/api-keys" target="_blank" rel="noopener">resend.com/api-keys</a>. Plan gratuito: 3,000 emails/mes.</p>
+          </div>
+        </div>
+
+        <!-- Campos SMTP -->
+        <div id="smtpCustomFields" hidden>
+          <div class="smtp-row-2">
+            <div class="smtp-field-group">
+              <label class="smtp-label" for="smtpHost">Host SMTP</label>
+              <input class="smtp-input" type="text" id="smtpHost" placeholder="smtp.gmail.com">
+            </div>
+            <div class="smtp-field-group" style="max-width:110px">
+              <label class="smtp-label" for="smtpPort">Puerto</label>
+              <input class="smtp-input" type="number" id="smtpPort" placeholder="587" value="587">
+            </div>
+          </div>
+          <div class="smtp-field-group">
+            <label class="smtp-check-row">
+              <input type="checkbox" id="smtpSecure">
+              <span>Usar SSL/TLS (puerto 465). Desactivado = STARTTLS (puerto 587).</span>
+            </label>
+          </div>
+          <div class="smtp-row-2">
+            <div class="smtp-field-group">
+              <label class="smtp-label" for="smtpUser">Usuario SMTP</label>
+              <input class="smtp-input" type="text" id="smtpUser" placeholder="noreply@tudominio.com" autocomplete="username">
+            </div>
+            <div class="smtp-field-group">
+              <label class="smtp-label" for="smtpPass">Contraseña SMTP</label>
+              <input class="smtp-input" type="password" id="smtpPass" placeholder="••••••••" autocomplete="new-password">
+            </div>
+          </div>
+          <p class="smtp-hint">
+            <strong>Gmail:</strong> usa una <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">contraseña de aplicación</a> (2FA requerido).
+            <strong>ZeptoMail:</strong> host <code>smtp.zeptomail.com</code>, puerto 587.
+            <strong>Postmark:</strong> host <code>smtp.postmarkapp.com</code>, usuario = API Token.
+          </p>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
+
+        <!-- Remitente y admin -->
+        <div class="smtp-row-2">
+          <div class="smtp-field-group">
+            <label class="smtp-label" for="mailFromName">Nombre del remitente</label>
+            <input class="smtp-input" type="text" id="mailFromName" placeholder="Wapi101">
+          </div>
+          <div class="smtp-field-group">
+            <label class="smtp-label" for="mailFromEmail">Email remitente (From)</label>
+            <input class="smtp-input" type="email" id="mailFromEmail" placeholder="noreply@wapi101.com">
+          </div>
+        </div>
+        <div class="smtp-field-group">
+          <label class="smtp-label" for="mailAdminEmail">Email del admin (notificaciones internas)</label>
+          <input class="smtp-input" type="email" id="mailAdminEmail" placeholder="luis@wapi101.com">
+          <p class="smtp-hint">Aquí llegan las notificaciones de nuevos signups y alertas del sistema.</p>
+        </div>
+
+        <!-- Acciones -->
+        <div id="smtpFeedback" class="smtp-feedback" hidden></div>
+        <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+          <button class="btn-primary" id="smtpSaveBtn">Guardar configuración</button>
+          <button class="btn-ghost" id="smtpTestBtn">Enviar email de prueba</button>
+        </div>
+        <p class="smtp-hint" style="margin-top:10px">El email de prueba se enviará a la dirección del admin configurada arriba.</p>
       </div>
     </section>
 
@@ -852,7 +993,7 @@ $('logoutBtn').addEventListener('click', async () => {
 });
 
 // ── Navegación entre secciones ──
-const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', reports: 'Reportes', health: 'Salud del sistema' };
+const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', reports: 'Reportes', health: 'Salud del sistema', email: 'Email / SMTP' };
 $('saNav').addEventListener('click', (e) => {
   const item = e.target.closest('[data-section]');
   if (!item) return;
@@ -868,6 +1009,7 @@ function switchSection(name) {
   });
   $('saTopbarTitle').textContent = SECTION_TITLES[name] || name;
   if (name === 'reports') loadReports();
+  if (name === 'email')   loadEmailConfig();
 }
 
 // ──────────── Reportes (cross-tenant) ────────────
@@ -1277,6 +1419,111 @@ $('createForm').addEventListener('submit', async (e) => {
 
 $('createModal').addEventListener('click', (e) => {
   if (e.target.id === 'createModal') $('createModal').hidden = true;
+});
+
+// ── Email / SMTP ──────────────────────────────────────────────────────────────
+function smtpFeedback(msg, type = 'info') {
+  const el = $('smtpFeedback');
+  el.textContent = msg;
+  el.className = `smtp-feedback is-${type}`;
+  el.hidden = false;
+}
+
+function smtpHideFeedback() {
+  $('smtpFeedback').hidden = true;
+}
+
+function getSelectedProvider() {
+  return document.querySelector('input[name="mailProvider"]:checked')?.value || 'resend';
+}
+
+function toggleProviderFields(provider) {
+  $('smtpResendFields').hidden  = provider !== 'resend';
+  $('smtpCustomFields').hidden  = provider !== 'smtp';
+}
+
+document.querySelectorAll('input[name="mailProvider"]').forEach(radio => {
+  radio.addEventListener('change', () => toggleProviderFields(radio.value));
+});
+
+$('smtpSecure').addEventListener('change', (e) => {
+  if (e.target.checked) $('smtpPort').value = 465;
+  else $('smtpPort').value = 587;
+});
+
+$('smtpPort').addEventListener('change', (e) => {
+  $('smtpSecure').checked = Number(e.target.value) === 465;
+});
+
+async function loadEmailConfig() {
+  smtpHideFeedback();
+  try {
+    const { config } = await api('GET', '/mail-config');
+    const prov = config.provider || 'resend';
+    document.querySelector(`input[name="mailProvider"][value="${prov}"]`).checked = true;
+    toggleProviderFields(prov);
+    $('resendApiKey').value  = config.resendApiKey  || '';
+    $('smtpHost').value      = config.smtpHost      || '';
+    $('smtpPort').value      = config.smtpPort      || 587;
+    $('smtpSecure').checked  = config.smtpSecure    || false;
+    $('smtpUser').value      = config.smtpUser      || '';
+    $('smtpPass').value      = config.smtpPass      || '';
+    $('mailFromName').value  = config.fromName       || 'Wapi101';
+    $('mailFromEmail').value = config.fromEmail      || '';
+    $('mailAdminEmail').value = config.adminEmail    || '';
+  } catch (err) {
+    // Sin config guardada aún — defaults
+    document.querySelector('input[name="mailProvider"][value="resend"]').checked = true;
+    toggleProviderFields('resend');
+    $('mailFromName').value = 'Wapi101';
+  }
+}
+
+$('smtpSaveBtn').addEventListener('click', async () => {
+  const btn = $('smtpSaveBtn');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  smtpHideFeedback();
+  try {
+    const provider = getSelectedProvider();
+    const body = {
+      provider,
+      fromName:    $('mailFromName').value.trim()  || 'Wapi101',
+      fromEmail:   $('mailFromEmail').value.trim() || '',
+      adminEmail:  $('mailAdminEmail').value.trim() || '',
+      resendApiKey: $('resendApiKey').value.trim(),
+      smtpHost:    $('smtpHost').value.trim(),
+      smtpPort:    Number($('smtpPort').value) || 587,
+      smtpSecure:  $('smtpSecure').checked,
+      smtpUser:    $('smtpUser').value.trim(),
+      smtpPass:    $('smtpPass').value,
+    };
+    await api('PUT', '/mail-config', body);
+    smtpFeedback('✓ Configuración guardada correctamente.', 'ok');
+  } catch (err) {
+    smtpFeedback('Error: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar configuración';
+  }
+});
+
+$('smtpTestBtn').addEventListener('click', async () => {
+  const btn = $('smtpTestBtn');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  smtpHideFeedback();
+  const to = $('mailAdminEmail').value.trim();
+  if (!to) {
+    smtpFeedback('Primero guarda un email de admin para recibir la prueba.', 'error');
+    btn.disabled = false; btn.textContent = 'Enviar email de prueba';
+    return;
+  }
+  try {
+    const r = await api('POST', '/mail-test', { to });
+    smtpFeedback(`✓ Email de prueba enviado a ${escapeHtml(to)}. Revisa tu bandeja de entrada.`, 'ok');
+  } catch (err) {
+    smtpFeedback('Error al enviar: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enviar email de prueba';
+  }
 });
 
 init();

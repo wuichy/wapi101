@@ -116,6 +116,60 @@ module.exports = function createSuperRouter(db) {
     }
   });
 
+  // ─── Mail config (SMTP / Resend) ────────────────────────────────────────
+  router.get('/mail-config', (req, res) => {
+    const cfg = service.getMailConfig(db) || {};
+    // Nunca devolver contraseñas en claro
+    const safe = { ...cfg };
+    if (safe.smtpPass)    safe.smtpPass    = safe.smtpPass    ? '••••••••' : '';
+    if (safe.resendApiKey) safe.resendApiKey = safe.resendApiKey ? '••••••••' : '';
+    res.json({ config: safe });
+  });
+
+  router.put('/mail-config', (req, res) => {
+    const body = req.body || {};
+    // Leer config actual para no pisar contraseñas con "••••••••"
+    const current = service.getMailConfig(db) || {};
+    const cfg = {
+      provider:    body.provider    || current.provider    || 'resend',
+      fromName:    body.fromName    || current.fromName    || 'Wapi101',
+      fromEmail:   body.fromEmail   || current.fromEmail   || '',
+      adminEmail:  body.adminEmail  || current.adminEmail  || '',
+      // Resend
+      resendApiKey: body.resendApiKey && !body.resendApiKey.startsWith('••')
+        ? body.resendApiKey
+        : (current.resendApiKey || ''),
+      // SMTP
+      smtpHost:    body.smtpHost    ?? current.smtpHost    ?? '',
+      smtpPort:    Number(body.smtpPort    || current.smtpPort    || 587),
+      smtpSecure:  body.smtpSecure  ?? current.smtpSecure  ?? false,
+      smtpUser:    body.smtpUser    ?? current.smtpUser    ?? '',
+      smtpPass:    body.smtpPass && !body.smtpPass.startsWith('••')
+        ? body.smtpPass
+        : (current.smtpPass || ''),
+    };
+    try {
+      service.saveMailConfig(db, cfg);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  router.post('/mail-test', async (req, res) => {
+    const cfg = service.getMailConfig(db);
+    const to  = req.body?.to || cfg?.adminEmail || req.superAdmin?.email;
+    if (!to) return res.status(400).json({ error: 'No hay destinatario. Guarda un adminEmail primero.' });
+    try {
+      const mailer = require('../mailer/transactional');
+      const result = await mailer.sendTestEmail({ to }, cfg || undefined);
+      res.json({ ok: true, to, messageId: result?.id });
+    } catch (err) {
+      console.error('[super/mail-test]', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── Reportes (cross-tenant) ────────────────────────────────────────────
   // Lista todos los reportes que clientes han creado, con info del tenant.
   // Filtros opcionales por status, type, tenantId.

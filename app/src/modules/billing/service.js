@@ -143,21 +143,40 @@ async function createPortalSession(db, tenantId, returnUrl) {
   return { url: session.url };
 }
 
+// ─── Mapeo de price IDs → plan key ───────────────────────────────────────
+// Construye el mapa dinámicamente desde las vars de entorno para evitar
+// hardcodear price IDs que cambian entre test y producción.
+function _buildPriceToPlanMap() {
+  const map = {};
+  const PLANS     = ['basico', 'pro', 'ultra'];
+  const INTERVALS = ['MONTHLY', 'SEMESTRAL', 'YEARLY'];
+  for (const plan of PLANS) {
+    for (const interval of INTERVALS) {
+      const val = process.env[`STRIPE_PRICE_${plan.toUpperCase()}_${interval}`];
+      if (val) map[val] = plan;
+    }
+  }
+  return map;
+}
+
 // ─── Sync subscription → tenant row ──────────────────────────────────────
 // Llamado desde el webhook handler cuando llega un evento de subscription.
-// Toma el subscription object de Stripe y actualiza tenants.subscription_*.
+// Actualiza stripe_subscription_id, subscription_status, subscription_period_end
+// Y también tenants.plan según el price ID activo de la suscripción.
 function syncSubscriptionToTenant(db, subscription) {
   const tenantId = Number(subscription?.metadata?.tenant_id || 0);
   if (!tenantId) {
     console.warn('[stripe] subscription sin tenant_id en metadata:', subscription.id);
     return null;
   }
-  const status = subscription.status; // trialing | active | past_due | canceled | unpaid | incomplete | incomplete_expired | paused
+  const status    = subscription.status; // trialing | active | past_due | canceled | unpaid | incomplete | incomplete_expired | paused
   const periodEnd = subscription.current_period_end || null;
-  const subId = subscription.id;
+  const subId     = subscription.id;
+  const now       = Math.floor(Date.now() / 1000);
   // Si la suscripción fue cancelada y ya pasó el período, limpiar el id local
   // pero mantener el customer_id (futuras suscripciones lo reusan).
-  const finalSubId = (status === 'canceled' && periodEnd && periodEnd < Math.floor(Date.now()/1000)) ? null : subId;
+  const finalSubId = (status === 'canceled' && periodEnd && periodEnd < now) ? null : subId;
+
   db.prepare(`
     UPDATE tenants SET
       stripe_subscription_id = ?,
@@ -166,6 +185,32 @@ function syncSubscriptionToTenant(db, subscription) {
       updated_at = unixepoch()
     WHERE id = ?
   `).run(finalSubId, status, periodEnd, tenantId);
+
+  // ── Sincronizar tenants.plan ──────────────────────────────────────────
+  const priceMap = _buildPriceToPlanMap();
+  const items    = subscription.items?.data || [];
+  let resolvedPlan = null;
+  for (const item of items) {
+    const pid = item.price?.id;
+    if (pid && priceMap[pid]) { resolvedPlan = priceMap[pid]; break; }
+  }
+
+  if (['trialing', 'active'].includes(status) && resolvedPlan) {
+    // Activar el plan pagado. No tocar plan 'owner' ni 'ejecutivo'.
+    const updated = db.prepare(
+      "UPDATE tenants SET plan = ? WHERE id = ? AND plan NOT IN ('owner','ejecutivo')"
+    ).run(resolvedPlan, tenantId);
+    if (updated.changes) console.log(`[stripe] tenant ${tenantId} → plan ${resolvedPlan} (${status})`);
+  } else if (status === 'incomplete_expired' || (status === 'canceled' && (!periodEnd || periodEnd < now))) {
+    // Nunca completó el pago, o cancelado y ya venció → bajar a free
+    const updated = db.prepare(
+      "UPDATE tenants SET plan = 'free' WHERE id = ? AND plan NOT IN ('owner','ejecutivo')"
+    ).run(tenantId);
+    if (updated.changes) console.log(`[stripe] tenant ${tenantId} → plan free (${status})`);
+  }
+  // past_due, unpaid, paused, canceled-dentro-del-período: no tocar el plan
+  // (el usuario sigue activo hasta que Stripe resuelva o expire el período)
+
   return tenantId;
 }
 

@@ -7,7 +7,7 @@ const PLAN_LIMITS = {
   ultra:     { contacts: 100000, leads: 50000, users: 2 },
   pro:       { contacts: 30000,  leads: 15000, users: 2 },
   basico:    { contacts: 8000,   leads: 4000,  users: 2 },
-  free:      { contacts: 300,    leads: 100,   users: 1 },
+  free:      { contacts: 500,    leads: null,  users: 1 },
 };
 
 function getLimits(plan) {

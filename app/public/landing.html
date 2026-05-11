@@ -777,14 +777,15 @@ document.getElementById('langSw').addEventListener('click', (e) => {
   applyLandingLang();
 });
 
-// Apply immediately
-applyLandingLang();
-
-// ─── Pricing ──────────────────────────────────────────────────────────────────
+// ─── Pricing state (debe declararse ANTES de applyLandingLang porque ─────────
+// applyLandingLang lee _plans para decidir si re-renderizar) ─────────────────
 let _interval = 'month';
 let _plans = [];
 
 function lp() { return _isEn ? _LP.en : _LP.es; }
+
+// Apply immediately
+applyLandingLang();
 
 async function loadPlans() {
   const grid = document.getElementById('pricingGrid');

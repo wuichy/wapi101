@@ -19401,9 +19401,9 @@ function _branchFieldOps(field) {
       ['contains_all',     'contiene todas estas palabras'],
       ['matches_none',     'no contiene ninguna de estas palabras'],
       ['not_contains_all', 'no contiene todas estas palabras'],
-      ['contains',         'contiene la frase exacta'],
-      ['not_contains',     'no contiene la frase exacta'],
-      ['equals',           'es exactamente'],
+      ['contains',         'contiene la frase'],
+      ['not_contains',     'no contiene la frase'],
+      ['equals',           'es exactamente (frase exacta)'],
       ['starts_with',      'empieza con'],
       ['ends_with',        'termina con'],
     ];

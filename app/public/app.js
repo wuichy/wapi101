@@ -1106,10 +1106,21 @@ function applyTranslationsToDOM() {
 }
 
 // ─── Auth helpers ───
-// El token puede estar en localStorage (si "Recuerda mi sesión" estaba activo)
-// o en sessionStorage (sesión de una sola pestaña). Revisamos ambos.
+// El token puede estar en localStorage (si "Recuerda mi sesión" estaba activo),
+// sessionStorage (sesión de una sola pestaña), o en una cookie httpless
+// (iOS: Safari y el PWA standalone comparten cookies pero NO localStorage).
+function _getCookie(name) {
+  const m = document.cookie.match('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)');
+  return m ? decodeURIComponent(m[1]) : '';
+}
+function _setCookie(name, value, maxAgeSecs) {
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSecs}; SameSite=Lax`;
+}
+function _clearCookie(name) {
+  document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+}
 function getToken() {
-  return localStorage.getItem('rh_token') || sessionStorage.getItem('rh_token') || '';
+  return localStorage.getItem('rh_token') || sessionStorage.getItem('rh_token') || _getCookie('rh_token') || '';
 }
 function getAdvisor() {
   try {
@@ -1125,6 +1136,7 @@ function logout() {
   localStorage.removeItem('rh_advisor');
   sessionStorage.removeItem('rh_token');
   sessionStorage.removeItem('rh_advisor');
+  _clearCookie('rh_token');
   window.location.href = '/login';
 }
 

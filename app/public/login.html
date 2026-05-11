@@ -208,6 +208,9 @@
         try { (_remember ? sessionStorage : localStorage).removeItem('rh_advisor'); } catch {}
         _store.setItem('rh_token', data.token);
         _store.setItem('rh_advisor', JSON.stringify(data.advisor));
+        // Cookie compartida entre Safari y el PWA standalone en iOS
+        // (localStorage NO se comparte entre ambos contextos en iOS)
+        document.cookie = `rh_token=${encodeURIComponent(data.token)}; path=/; max-age=2592000; SameSite=Lax`;
         // Respetar ?redirect= si viene (caso /chat PWA: login → /chat, no /app)
         const _params = new URLSearchParams(location.search);
         const _redirect = _params.get('redirect');

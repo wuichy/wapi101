@@ -384,25 +384,59 @@ function _walkStepPath(rootSteps, path) {
   return { step, containerArr, idxInContainer, topLevelIdx: path[0] };
 }
 
+// Verifica si el mensaje del contexto matchea algún case del PRIMER branch
+// del bot (la "puerta de entrada" del flujo). Si es así, el mensaje es un
+// intent de re-entrada y debe cancelar el wait activo en lugar de alimentarlo.
+function _messageMatchesFirstBranch(db, bot, ctx) {
+  const firstBranch = (bot.steps || []).find(s => s.type === 'branch');
+  if (!firstBranch?.config?.cases?.length) return false;
+  for (const c of firstBranch.config.cases) {
+    if (!c.rules?.length) continue;
+    const op = c.rules_op === 'or' ? 'some' : 'every';
+    try {
+      const matched = c.rules[op](rule => evaluateRule(db, rule, ctx));
+      if (matched) return true;
+    } catch (_) {}
+  }
+  return false;
+}
+
 function runAsync(db, bot, ctx) {
   if (ctx.contactId && bot.id) {
     try {
-      // Si hay un wait_response suspendido para este bot+contacto, NO arrancar
-      // un nuevo run — el mensaje entrante lo va a reanudar vía resumeWaitsForContact.
+      // Si hay un wait_response suspendido para este bot+contacto, verificar
+      // si el mensaje es un "re-entry" (matchea el primer branch del bot).
+      // Si sí → cancelar el wait viejo y arrancar run fresco.
+      // Si no → dejar que resumeWaitsForContact lo maneje (flujo normal).
       const pendingWait = db.prepare(
         "SELECT id FROM bot_run_waits WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status='waiting' LIMIT 1"
       ).get(bot.id, ctx.contactId, ctx.tenantId);
       if (pendingWait) {
-        _log('info', `bot ${bot.id} tiene wait suspendido para contacto ${ctx.contactId} — no se inicia nuevo run`);
-        return;
-      }
-      // Sino, matar runs activos para evitar duplicados.
-      const active = db.prepare(
-        "SELECT id FROM bot_runs WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status IN ('running','paused')"
-      ).all(bot.id, ctx.contactId, ctx.tenantId);
-      for (const row of active) {
-        _log('info', `matando ejecución duplicada run=${row.id} bot=${bot.id} contacto=${ctx.contactId}`);
-        killRun(db, row.id);
+        const isReEntry = _messageMatchesFirstBranch(db, bot, ctx);
+        if (isReEntry) {
+          // Mensaje de re-entrada: cancelar wait + matar runs activos → arrancar fresco
+          db.prepare(
+            "UPDATE bot_run_waits SET status='cancelled' WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status='waiting'"
+          ).run(bot.id, ctx.contactId, ctx.tenantId);
+          const stale = db.prepare(
+            "SELECT id FROM bot_runs WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status IN ('running','paused')"
+          ).all(bot.id, ctx.contactId, ctx.tenantId);
+          for (const r of stale) killRun(db, r.id);
+          _log('info', `bot ${bot.id}: re-entrada detectada — wait cancelado, arrancando run fresco para contacto ${ctx.contactId}`);
+          // Continúa y arranca nuevo run abajo
+        } else {
+          _log('info', `bot ${bot.id} tiene wait suspendido para contacto ${ctx.contactId} — no se inicia nuevo run`);
+          return;
+        }
+      } else {
+        // Sin wait pendiente: matar runs activos para evitar duplicados.
+        const active = db.prepare(
+          "SELECT id FROM bot_runs WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status IN ('running','paused')"
+        ).all(bot.id, ctx.contactId, ctx.tenantId);
+        for (const row of active) {
+          _log('info', `matando ejecución duplicada run=${row.id} bot=${bot.id} contacto=${ctx.contactId}`);
+          killRun(db, row.id);
+        }
       }
     } catch (e) {
       _log('warn', `no se pudo limpiar runs activos: ${e.message}`);

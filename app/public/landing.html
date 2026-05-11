@@ -787,16 +787,25 @@ let _plans = [];
 function lp() { return _isEn ? _LP.en : _LP.es; }
 
 async function loadPlans() {
+  const grid = document.getElementById('pricingGrid');
   try {
-    const r = await fetch('/api/public/plans');
+    const r = await fetch('/api/public/plans', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     _plans = data.plans || [];
+    if (!_plans.length) throw new Error('Sin planes');
     renderPlans();
-  } catch {
-    document.getElementById('pricingGrid').innerHTML =
-      '<p style="grid-column:1/-1;text-align:center;color:#ef4444">Error loading plans</p>';
+  } catch (err) {
+    console.error('[landing] loadPlans error:', err);
+    if (grid) grid.innerHTML =
+      '<p style="grid-column:1/-1;text-align:center;color:#ef4444">Error cargando planes: ' + (err.message || err) + '</p>';
   }
 }
+
+// Reintentar al volver a la pestaña (caso Safari Private a veces bloquea el primer fetch)
+window.addEventListener('pageshow', () => {
+  if (!_plans.length) loadPlans();
+});
 
 function renderPlans() {
   const t = lp();

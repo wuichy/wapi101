@@ -8710,6 +8710,42 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 }
 .rh-chat-hide-btn--unhide:hover { background: rgba(34, 197, 94, 0.22); }
 
+/* ═══════ iOS / Android safe area — standalone PWA ═══════ */
+/* viewport-fit=cover + black-translucent corre el contenido bajo la barra
+   de estado (notch, Dynamic Island, home indicator).
+   env(safe-area-inset-*) empuja el layout fuera de esas zonas.
+   @supports garantiza que solo aplica donde el browser lo soporta. */
+@supports (padding-top: env(safe-area-inset-top)) {
+  /* ── Modo personal /chat ── */
+  /* Lista de chats: cabecera superior */
+  body.personal-mode .rh-brand-card {
+    padding-top: calc(20px + env(safe-area-inset-top));
+  }
+  /* Conversación abierta: header */
+  body.personal-mode .rh-conversation-header {
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
+  /* Conversación abierta: caja de reply (home indicator en iPhone) */
+  body.personal-mode .rh-reply-form {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
+  /* ── CRM PWA /app ── */
+  /* Sidebar izquierdo (nav principal) */
+  @media (display-mode: standalone) {
+    .sidebar-top {
+      padding-top: calc(4px + env(safe-area-inset-top));
+    }
+    /* Área de contenido — header de cada vista */
+    .rh-conversation-header {
+      padding-top: calc(14px + env(safe-area-inset-top));
+    }
+    .rh-reply-form {
+      padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    }
+  }
+}
+
 /* ═══════ Deploy card ═══════ */
 .deploy-card {
   display: flex;

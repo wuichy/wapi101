@@ -1,9 +1,10 @@
 {
   "name": "Wapi101 CRM",
   "short_name": "Wapi101",
+  "id": "wapi101-crm",
   "description": "CRM multicanal — WhatsApp, Messenger, Instagram, Telegram",
   "start_url": "/app?source=pwa",
-  "scope": "/",
+  "scope": "/app",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f2f2f7",

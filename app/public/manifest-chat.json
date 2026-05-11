@@ -1,6 +1,7 @@
 {
   "name": "Wapi101 Chat",
   "short_name": "Wapi101 Chat",
+  "id": "wapi101-chat",
   "description": "Chat personal Wapi101 — solo tus conversaciones",
   "start_url": "/chat?source=pwa",
   "scope": "/chat",

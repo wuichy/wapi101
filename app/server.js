@@ -182,6 +182,73 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── Forgot Password — pide reset por email ───────────────────────────
+// Siempre devuelve 200 (no revela si el email existe — evita enumeration).
+const _forgotAttempts = new Map();
+function _forgotRateLimit(ip) {
+  const now = Date.now();
+  const entry = _forgotAttempts.get(ip) || { count: 0, resetAt: now + 60*60*1000 };
+  if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + 60*60*1000; }
+  entry.count++;
+  _forgotAttempts.set(ip, entry);
+  return entry.count <= 5;
+}
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+  if (!_forgotRateLimit(ip)) {
+    return res.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
+  }
+  const { email } = req.body || {};
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Email inválido' });
+  }
+  try {
+    const userAgent = req.headers['user-agent'] || null;
+    const result = advisorSvc.requestPasswordReset(db, email, ip, userAgent);
+    // Si el email existe, mandamos correo. Si no, igual devolvemos 200.
+    if (result && result.plainToken) {
+      const baseUrl = (process.env.APP_BASE_URL || 'https://wapi101.com').replace(/\/$/, '');
+      const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(result.plainToken)}`;
+      try {
+        const mailer = require('./src/modules/mailer/transactional');
+        await mailer.sendPasswordReset({ to: result.advisor.email, name: result.advisor.name, resetUrl });
+      } catch (mailErr) {
+        console.error('[forgot-password] error enviando email:', mailErr.message);
+        // No revelar al cliente que falló — sigue 200 para no leak existencia
+      }
+    }
+  } catch (err) {
+    console.error('[forgot-password] error inesperado:', err.message);
+  }
+  res.json({ ok: true, message: 'Si el email existe en nuestro sistema, recibirás un correo con instrucciones.' });
+});
+
+// ─── Reset Password — consume token y actualiza ───────────────────────
+app.post('/api/auth/reset-password', (req, res) => {
+  const { token, password } = req.body || {};
+  if (!token) return res.status(400).json({ error: 'Token requerido' });
+  if (!password || password.length < 8) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+  }
+  const result = advisorSvc.applyPasswordReset(db, token, password);
+  if (result.error === 'INVALID_TOKEN') {
+    return res.status(400).json({ error: 'El link expiró o ya fue usado. Solicita uno nuevo.' });
+  }
+  if (result.error === 'WEAK_PASSWORD') {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+  }
+  res.json({ ok: true, message: 'Contraseña actualizada. Inicia sesión con tu nueva contraseña.' });
+});
+
+// ─── Verificar validez de token (para mostrar form o "expirado") ──────
+app.get('/api/auth/reset-password/verify', (req, res) => {
+  const token = String(req.query.token || '');
+  const verified = advisorSvc.verifyResetToken(db, token);
+  if (!verified) return res.status(400).json({ valid: false });
+  res.json({ valid: true, email: verified.advisor.email });
+});
+
 // ─── Signup público — crea tenant + admin + auto-login ─────────────────
 // Sin auth. Registra rate-limit básico por IP en memoria (5 intentos / 10 min)
 // para mitigar bots; el rate limit "real" se hace después con Redis o similar.
@@ -263,6 +330,20 @@ app.post('/api/auth/signup', async (req, res) => {
       } catch (err) {
         console.warn('[signup] no se pudo crear checkout session:', err.message);
       }
+    }
+
+    // Notificar a admin (luis@wapi101.com) — fire-and-forget, no bloquea response
+    try {
+      const mailer = require('./src/modules/mailer/transactional');
+      mailer.sendSignupNotification({
+        tenantName: result.tenant.display_name,
+        adminName:  advisor.name,
+        adminEmail: advisor.email || email,
+        plan,
+        slug:       result.tenant.slug,
+      }).catch(err => console.error('[signup] error notif email:', err.message));
+    } catch (e) {
+      console.warn('[signup] no se pudo cargar mailer:', e.message);
     }
 
     res.json({
@@ -586,6 +667,10 @@ app.get('/chat', (_req, res) => {
   html = html
     .replace('href="/manifest.json"', 'href="/manifest-chat.json"')
     .replace(
+      /<title>[^<]*<\/title>/,
+      '<title>Wapi101 Chat</title>'
+    )
+    .replace(
       /<meta name="apple-mobile-web-app-title" content="[^"]*"/,
       '<meta name="apple-mobile-web-app-title" content="Wapi101 Chat"'
     )
@@ -625,13 +710,20 @@ const _sendFile = (file) => (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', file));
 };
 
-app.get('/',         _sendFile('landing.html'));
-app.get('/login',    _sendFile('login.html'));
-app.get('/signup',   _sendFile('signup.html'));
-app.get('/app',      _sendFile('index.html'));
+app.get('/',                _sendFile('landing.html'));
+app.get('/login',           _sendFile('login.html'));
+app.get('/signup',          _sendFile('signup.html'));
+app.get('/forgot-password', _sendFile('forgot-password.html'));
+app.get('/reset-password',  _sendFile('reset-password.html'));
+app.get('/app',             _sendFile('index.html'));
 // Express 5 requiere wildcards con nombre (no '*' suelto). '*splat' captura
 // cualquier subpath bajo /app y lo manda al index.html del SPA.
 app.get('/app/*splat', _sendFile('index.html'));
+
+// Páginas de marketing/SEO: comparaciones vs competidores y páginas temáticas.
+// Sirven HTML server-side renderizado para wapi101.com/vs/* y nichos como
+// /crm-whatsapp-business, /mejor-crm-latam, etc. También expone /sitemap.xml y /robots.txt.
+mountSafe('/', require('./src/modules/marketing/routes'));
 
 // /reset — endpoint de "borra todo lo cacheado" para usuarios atrapados con
 // service workers o cache stale. Manda Clear-Site-Data header que el browser

@@ -107,6 +107,10 @@
       <label for="password">Contraseña</label>
       <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required />
 
+      <div style="text-align:right;margin:-8px 0 16px;font-size:12px">
+        <a href="/forgot-password" id="forgotLink" style="color:#2563eb;text-decoration:none;font-weight:500">¿Olvidaste tu contraseña?</a>
+      </div>
+
       <button class="btn" type="submit" id="loginBtn">Iniciar sesión</button>
     </form>
   </div>
@@ -130,6 +134,7 @@
         lblUser:     'Usuario o email',
         phUser:      'usuario o correo',
         lblPass:     'Contraseña',
+        forgot:      '¿Olvidaste tu contraseña?',
         btnLogin:    'Iniciar sesión',
         btnLoading:  'Verificando...',
         errGeneric:  'Error al iniciar sesión',
@@ -143,6 +148,7 @@
         lblUser:     'Username or email',
         phUser:      'username or email',
         lblPass:     'Password',
+        forgot:      'Forgot your password?',
         btnLogin:    'Sign in',
         btnLoading:  'Verifying...',
         errGeneric:  'Failed to sign in',
@@ -159,6 +165,7 @@
     document.querySelector('label[for="username"]').textContent = s.lblUser;
     document.getElementById('username').placeholder  = s.phUser;
     document.querySelector('label[for="password"]').textContent = s.lblPass;
+    document.getElementById('forgotLink').textContent = s.forgot;
     document.getElementById('loginBtn').textContent  = s.btnLogin;
     const links = document.querySelectorAll('p a');
     if (links[0]) links[0].textContent = s.linkPrivacy;
@@ -186,7 +193,12 @@
         if (!res.ok) throw new Error(data.error || s.errGeneric);
         localStorage.setItem('rh_token', data.token);
         localStorage.setItem('rh_advisor', JSON.stringify(data.advisor));
-        window.location.href = '/app';
+        // Respetar ?redirect= si viene (caso /chat PWA: login → /chat, no /app)
+        const _params = new URLSearchParams(location.search);
+        const _redirect = _params.get('redirect');
+        // Solo permitir paths internos (mismo dominio) por seguridad
+        const _safe = _redirect && _redirect.startsWith('/') && !_redirect.startsWith('//');
+        window.location.href = _safe ? _redirect : '/app';
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';

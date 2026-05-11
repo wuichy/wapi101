@@ -6618,21 +6618,18 @@ const BOT_STEP_REGISTRY = {
   },
   wait_response: {
     group: 'Flujo',
-    hidden: true,
     label:   { es: 'Esperar respuesta del lead', en: 'Wait for lead reply' },
     icon:    '<circle cx="10" cy="10" r="7"/><polyline points="10 5 10 10 13 12"/><path d="M3 10a7 7 0 0 1 1-3.5"/>',
     summary: (step) => {
       const c = step.config || {};
-      const t = Number(c.timeoutMinutes || 1440);
+      const t = Number(c.timeoutMinutes || 2880);
       let dur;
-      if (t >= 1440 && t % 1440 === 0)   dur = `${t / 1440}d`;
+      if (t >= 1440 && t % 1440 === 0)   dur = `${t / 1440} día${t/1440===1?'':'s'}`;
       else if (t >= 60 && t % 60 === 0)  dur = `${t / 60}h`;
-      else                                dur = `${t}min`;
-      const branches = c.branches || {};
-      const filled = Object.keys(SB_BRANCH_LABELS).filter(k =>
-        Array.isArray(branches[k]) && branches[k].some(s => (s.config?.text || '').trim() || s.config?.templateId)
-      ).length;
-      return `Espera ${dur} · ${filled}/4 ramas configuradas`;
+      else if (t >= 1)                   dur = `${t}min`;
+      else                                dur = `${Math.round(t * 60)}s`;
+      const action = c.onTimeout === 'stop' ? 'terminar bot' : 'continuar';
+      return `Espera ${dur} · al timeout: ${action}`;
     },
   },
   stop_bot: {
@@ -7910,44 +7907,39 @@ function buildStepBody(step) {
     case 'branch':
       return _renderBranchEditor(sid, c);
     case 'wait_response': {
-      // MVP: cada rama tiene 1 paso de tipo "message". Las ramas se guardan en
-      // c.branches[branchKey] = [{ type:'message', config:{ text } }]. La UI
-      // muestra 4 acordeones, uno por rama. Engine ya soporta arrays — se podrá
-      // ampliar a multi-step cuando haga falta.
-      const branches = c.branches || {};
-      const tMin = Number(c.timeoutMinutes || 1440);
-      const branchHtml = Object.entries(SB_BRANCH_LABELS).map(([key, label]) => {
-        const arr = Array.isArray(branches[key]) ? branches[key] : [];
-        const first = arr[0] || { type: 'message', config: {} };
-        const text = first.config?.text || '';
-        return `
-          <details class="sb-wait-branch" data-branch="${key}" data-parent-sid="${sid}">
-            <summary>
-              <span class="sb-wait-branch-icon"></span>
-              <span class="sb-wait-branch-label">${label}</span>
-              <span class="sb-wait-branch-state ${text.trim() ? 'is-set' : ''}">${text.trim() ? '✓ Configurada' : 'Vacía'}</span>
-            </summary>
-            <div class="sb-wait-branch-body">
-              <label>Mensaje a enviar cuando esto ocurra</label>
-              <textarea class="sb-wait-branch-text" data-branch="${key}" data-sid="${sid}" rows="3" placeholder="Escribe el mensaje que se enviará por esta rama…">${escHtml(text)}</textarea>
-              <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0">Variables: {nombre} {apellido} {telefono} {email}. Si dejas la rama vacía, el bot solo termina sin responder.</p>
-            </div>
-          </details>`;
-      }).join('');
+      const tMin = Number(c.timeoutMinutes || 2880);
+      let amount, unit;
+      if (tMin >= 1440 && tMin % 1440 === 0)      { amount = tMin / 1440; unit = 'd'; }
+      else if (tMin >= 60 && tMin % 60 === 0)     { amount = tMin / 60;   unit = 'h'; }
+      else if (tMin >= 1)                         { amount = tMin;        unit = 'min'; }
+      else                                         { amount = Math.round(tMin * 60); unit = 'sec'; }
+      const onTimeout = c.onTimeout === 'stop' ? 'stop' : 'continue';
       return `
-        <label>Tiempo de espera antes de timeout</label>
+        <label>Esperar máximo</label>
         <div class="sb-timer-grid">
           <div class="sb-timer-unit">
-            <input type="number" data-field="timeoutMinutes" data-sid="${sid}" min="1" value="${tMin}" />
-            <span>minutos</span>
+            <input type="number" data-field="waitAmount" data-sid="${sid}" min="1" value="${amount}" style="width:80px" />
+            <select data-field="waitUnit" data-sid="${sid}">
+              <option value="sec" ${unit==='sec'?'selected':''}>segundos</option>
+              <option value="min" ${unit==='min'?'selected':''}>minutos</option>
+              <option value="h"   ${unit==='h'  ?'selected':''}>horas</option>
+              <option value="d"   ${unit==='d'  ?'selected':''}>días</option>
+            </select>
           </div>
         </div>
         <p style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">
-          Si el lead no responde antes de este tiempo, se ejecuta la rama "No responde (timeout)". Default: 1440 (24h).
+          El bot pausa aquí y espera al siguiente mensaje del lead. Si no responde en este tiempo, ejecuta la acción de abajo.
         </p>
-        <label style="margin-bottom:6px">Ramas — qué hacer según la respuesta</label>
-        <div class="sb-wait-branches">
-          ${branchHtml}
+        <label style="margin-bottom:6px">Si pasa el tiempo sin respuesta:</label>
+        <div class="sb-wait-ontimeout">
+          <label class="sb-radio-row">
+            <input type="radio" name="ontimeout-${sid}" data-field="onTimeout" data-sid="${sid}" value="continue" ${onTimeout==='continue'?'checked':''} />
+            <span>Continuar al siguiente paso</span>
+          </label>
+          <label class="sb-radio-row">
+            <input type="radio" name="ontimeout-${sid}" data-field="onTimeout" data-sid="${sid}" value="stop" ${onTimeout==='stop'?'checked':''} />
+            <span>Terminar bot</span>
+          </label>
         </div>`;
     }
     case 'book_appointment':
@@ -8271,19 +8263,19 @@ function collectStepConfig(sid, bodyEl) {
       cfg.manualValues[i] = inp.value;
     });
   }
-  // wait_response — recolectar textareas de cada rama y armar el shape
-  // que el engine consume: branches[key] = [{type:'message', config:{text}}]
-  const branchTextareas = body.querySelectorAll('.sb-wait-branch-text');
-  if (branchTextareas.length) {
-    cfg.timeoutMinutes = Number(cfg.timeoutMinutes) || 1440;
-    cfg.branches = {};
-    branchTextareas.forEach(ta => {
-      const key = ta.dataset.branch;
-      const text = (ta.value || '').trim();
-      cfg.branches[key] = text
-        ? [{ type: 'message', config: { text, channelId: 'auto' } }]
-        : [];
-    });
+  // wait_response (nuevo shape simple): timeoutMinutes + onTimeout
+  const waitAmtEl  = body.querySelector('[data-field="waitAmount"]');
+  const waitUnitEl = body.querySelector('[data-field="waitUnit"]');
+  if (waitAmtEl && waitUnitEl) {
+    const amt = Math.max(1, Number(waitAmtEl.value) || 1);
+    const unit = waitUnitEl.value;
+    const factor = unit === 'd' ? 1440 : unit === 'h' ? 60 : unit === 'sec' ? (1 / 60) : 1;
+    cfg.timeoutMinutes = amt * factor;
+    const checked = body.querySelector(`input[type="radio"][data-field="onTimeout"]:checked`);
+    cfg.onTimeout = checked?.value === 'stop' ? 'stop' : 'continue';
+    // Limpiar keys auxiliares que el loop genérico de [data-field] dejó en cfg
+    delete cfg.waitAmount;
+    delete cfg.waitUnit;
   }
 
   // branch step v2 — recolectar solo condiciones; sub-steps se gestionan desde el flujo visual
@@ -9578,8 +9570,11 @@ function setupBot() {
           ${summary ? `<div class="bb-tree-step-summary">${escHtml(summary)}</div>` : ''}
         </div>
       </div>`;
-    // wait_response: render branches
-    if (type === 'wait_response' && step.config?.branches) {
+    // wait_response (compat con shape viejo): solo renderiza ramas si hay contenido real
+    const _wrBranches = step.config?.branches;
+    const _wrHasContent = _wrBranches && typeof _wrBranches === 'object'
+      && Object.values(_wrBranches).some(arr => Array.isArray(arr) && arr.length > 0);
+    if (type === 'wait_response' && _wrHasContent) {
       const branches = step.config.branches;
       const parts = ['<div class="bb-tree-branches">'];
       for (const [key, label] of Object.entries(SB_BRANCH_LABELS)) {
@@ -9718,20 +9713,25 @@ function setupBot() {
           });
         }
       } else if (step.type === 'wait_response' && step.config) {
-        if (!step.config.branches || typeof step.config.branches !== 'object') step.config.branches = {};
+        // Solo expandir ramas si el step tiene contenido real (shape viejo).
+        // Shape nuevo (timeoutMinutes + onTimeout) → step simple sin children.
         const branches = step.config.branches;
-        const keys = (typeof SB_BRANCH_LABELS === 'object' && SB_BRANCH_LABELS)
-          ? Object.keys(SB_BRANCH_LABELS)
-          : Object.keys(branches);
-        keys.forEach((bKey) => {
-          if (!Array.isArray(branches[bKey])) branches[bKey] = [];
-          tNode.children.push({
-            label: (SB_BRANCH_LABELS && SB_BRANCH_LABELS[bKey]) || bKey,
-            subtree: _bbBuildBotTree(branches[bKey], branches[bKey]),
-            targetArr: branches[bKey],
-            parentStep: step,
+        const hasContent = branches && typeof branches === 'object'
+          && Object.values(branches).some(arr => Array.isArray(arr) && arr.length > 0);
+        if (hasContent) {
+          const keys = (typeof SB_BRANCH_LABELS === 'object' && SB_BRANCH_LABELS)
+            ? Object.keys(SB_BRANCH_LABELS)
+            : Object.keys(branches);
+          keys.forEach((bKey) => {
+            if (!Array.isArray(branches[bKey])) branches[bKey] = [];
+            tNode.children.push({
+              label: (SB_BRANCH_LABELS && SB_BRANCH_LABELS[bKey]) || bKey,
+              subtree: _bbBuildBotTree(branches[bKey], branches[bKey]),
+              targetArr: branches[bKey],
+              parentStep: step,
+            });
           });
-        });
+        }
       } else if (step.type === 'reminder_timer' && step.config) {
         if (!Array.isArray(step.config.reminders)) step.config.reminders = [];
         step.config.reminders.forEach((rem) => {
@@ -10108,20 +10108,25 @@ function setupBot() {
       if (fromMain && toMain) {
         // Flujo principal: trigger→n o mainFlow→mainFlow
         const insertAfter = edge.from === 'trigger' ? '__top__' : (from.step?._id || null);
-        if (insertAfter) _bbAddBtn(midX, midY, insertAfter);
+        const fromIsStop = from?.step?.type === 'stop_bot' || from?.step?.type === 'stop_and_start';
+        if (insertAfter && !fromIsStop) _bbAddBtn(midX, midY, insertAfter);
         return;
       }
 
       // Sub-steps de rama: hermanos en el mismo parentArr — usar referencia directa
       if (from?.step && to?.step && from.parentArr && from.parentArr === to.parentArr) {
-        const subCtx = { targetArr: from.parentArr, afterIdx: from.idx };
-        _bbAddBtn(midX, midY, null, subCtx);
+        const fromIsStop = from.step.type === 'stop_bot' || from.step.type === 'stop_and_start';
+        if (!fromIsStop) {
+          const subCtx = { targetArr: from.parentArr, afterIdx: from.idx };
+          _bbAddBtn(midX, midY, null, subCtx);
+        }
       }
     });
 
     // Botón "+" al final del último nodo del flujo principal — solo si NO ramifica
     const lastMain = items.filter(it => it.mainFlow).sort((a, b) => (b.y + b.h) - (a.y + a.h))[0];
-    if (lastMain && !lastMain.hasChildren) {
+    const lastMainIsStop = lastMain?.step?.type === 'stop_bot' || lastMain?.step?.type === 'stop_and_start';
+    if (lastMain && !lastMain.hasChildren && !lastMainIsStop) {
       const endX = lastMain.x + lastMain.w / 2;
       const endY = lastMain.y + lastMain.h + _BB_GAP_Y / 2;
       _bbAddBtn(endX, endY, lastMain.step?._id || null);
@@ -10138,6 +10143,7 @@ function setupBot() {
       if (item.hasChildren) return;
       if (!Array.isArray(item.parentArr)) return;
       if (item.idx !== item.parentArr.length - 1) return;
+      if (item.step?.type === 'stop_bot' || item.step?.type === 'stop_and_start') return;
       const cx = item.x + item.w / 2;
       const cy = item.y + item.h + _BB_GAP_Y / 2;
       _bbBranchAddBtn(cx, cy, item.parentArr);
@@ -14610,6 +14616,30 @@ function _rhToast(msg, type = 'success') {
 // Detectar si estamos en /chat (vista personal del asesor)
 window.PERSONAL_MODE = (window.location.pathname === '/chat' || window.location.pathname === '/chat/');
 window.PERSONAL_SHOW_HIDDEN = false;
+
+// PWA Guard: si la app corre en modo standalone (PWA instalada) y el manifest
+// cargado es manifest-chat.json (PWA de Chat), forzar que estemos en /chat.
+// Esto cubre el caso iOS donde reabrir la PWA puede caer en /app por restoración
+// de estado del SPA. La verificación se hace antes de cualquier otra cosa.
+(function _pwaScopeGuard() {
+  try {
+    const isStandalone =
+      window.matchMedia?.('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true; // iOS Safari
+    if (!isStandalone) return;
+    const manifestHref = document.querySelector('link[rel="manifest"]')?.href || '';
+    const isChatPwa = manifestHref.includes('manifest-chat.json');
+    const isCrmPwa  = manifestHref.endsWith('/manifest.json');
+    const path = window.location.pathname;
+    if (isChatPwa && !path.startsWith('/chat')) {
+      // Estamos en la PWA de Chat pero el SPA cargó en otra ruta → forzar /chat
+      window.location.replace('/chat?source=pwa');
+    } else if (isCrmPwa && path.startsWith('/chat')) {
+      // PWA del CRM pero por algún motivo entramos en /chat → forzar /app
+      window.location.replace('/app?source=pwa');
+    }
+  } catch (_) { /* ignorar errores del guard */ }
+})();
 
 // Bloquea sugerencias de iCloud Keychain / contactos iOS / managers de password
 // en todos los inputs y textareas. Safari ignora `autocomplete="off"` para campos
@@ -19414,14 +19444,15 @@ function _renderBranchRuleRow(sid, caseId, ruleIdx, rule) {
     </div>`;
 }
 
-function _renderBranchSubStepCard(parentSid, caseId, subStep, prevStepId = null) {
+function _renderBranchSubStepCard(parentSid, caseId, subStep, prevStep = null) {
   const label    = (typeof SB_STEP_LABELS !== 'undefined' && SB_STEP_LABELS[subStep.type]) || subStep.type;
   const iconHtml = typeof stepIconSvg === 'function' ? stepIconSvg(subStep.type) : '';
   const bodyHtml = typeof buildStepBody === 'function' ? buildStepBody(subStep) : '';
-  const connectorHtml = prevStepId
+  const prevIsStop = prevStep && (prevStep.type === 'stop_bot' || prevStep.type === 'stop_and_start');
+  const connectorHtml = (prevStep && !prevIsStop)
     ? `<div class="sb-step-connector">
         <button class="sb-insert-between"
-          data-insert-after="${escHtml(prevStepId)}"
+          data-insert-after="${escHtml(prevStep._id)}"
           data-branch-parent-sid="${escHtml(parentSid)}"
           data-branch-case-id="${escHtml(caseId)}"
           title="Insertar paso aquí">
@@ -19494,8 +19525,9 @@ function _renderBranchEditor(sid, c) {
       return row + connector;
     }).join('');
 
+    const caseLastIsStop = cs.steps.length > 0 && (cs.steps[cs.steps.length - 1].type === 'stop_bot' || cs.steps[cs.steps.length - 1].type === 'stop_and_start');
     const subStepsHtml = (cs.steps || []).map((ss, si) =>
-      _renderBranchSubStepCard(sid, cs.id, ss, si > 0 ? cs.steps[si - 1]._id : null)
+      _renderBranchSubStepCard(sid, cs.id, ss, si > 0 ? cs.steps[si - 1] : null)
     ).join('');
 
     return `
@@ -19511,17 +19543,18 @@ function _renderBranchEditor(sid, c) {
         <div class="sb-rem-substeps" data-case-substeps="${escHtml(cs.id)}">
           ${subStepsHtml}
         </div>
-        <button type="button" class="sb-branch-case-add-step-btn sb-rem-add-step-btn"
+        ${!caseLastIsStop ? `<button type="button" class="sb-branch-case-add-step-btn sb-rem-add-step-btn"
           data-parent-sid="${escHtml(sid)}" data-case-id="${escHtml(cs.id)}">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
           Agregar paso
-        </button>
+        </button>` : ''}
       </div>`;
   }).join('');
 
   const defaultSteps    = Array.isArray(c.default) ? c.default : [];
+  const defaultLastIsStop = defaultSteps.length > 0 && (defaultSteps[defaultSteps.length - 1].type === 'stop_bot' || defaultSteps[defaultSteps.length - 1].type === 'stop_and_start');
   const defaultSubHtml  = defaultSteps.map((ss, si) =>
-    _renderBranchSubStepCard(sid, '__default__', ss, si > 0 ? defaultSteps[si - 1]._id : null)
+    _renderBranchSubStepCard(sid, '__default__', ss, si > 0 ? defaultSteps[si - 1] : null)
   ).join('');
 
   return `
@@ -19533,12 +19566,12 @@ function _renderBranchEditor(sid, c) {
         <div class="sb-rem-substeps" data-case-substeps="__default__">
           ${defaultSubHtml}
         </div>
-        <button type="button" class="sb-branch-case-add-step-btn sb-rem-add-step-btn"
+        ${!defaultLastIsStop ? `<button type="button" class="sb-branch-case-add-step-btn sb-rem-add-step-btn"
           data-parent-sid="${escHtml(sid)}" data-case-id="__default__"
           style="width:100%;padding:6px;border:1px dashed #cbd5e1;border-radius:6px;background:none;color:#64748b;font-size:12px;cursor:pointer;margin-top:4px">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
           Agregar paso
-        </button>
+        </button>` : ''}
       </div>
     </div>`;
 }

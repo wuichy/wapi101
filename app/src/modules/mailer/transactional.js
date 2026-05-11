@@ -38,12 +38,17 @@ function _resolveCfg(overrideCfg) {
   const base = overrideCfg || dbCfg || {};
   return {
     provider:    base.provider    || (process.env.RESEND_API_KEY ? 'resend' : 'smtp'),
+    // Gmail OAuth
+    gmailIntegrationId: base.gmailIntegrationId ?? null,
+    // Resend
     resendApiKey: base.resendApiKey || process.env.RESEND_API_KEY || '',
+    // SMTP
     smtpHost:    base.smtpHost    || process.env.SMTP_HOST || '',
     smtpPort:    Number(base.smtpPort || process.env.SMTP_PORT || 587),
     smtpSecure:  base.smtpSecure  ?? (Number(base.smtpPort || process.env.SMTP_PORT) === 465),
     smtpUser:    base.smtpUser    || process.env.SMTP_USER || '',
     smtpPass:    base.smtpPass    || process.env.SMTP_PASS || '',
+    // Comunes
     fromName:    base.fromName    || process.env.MAIL_FROM_NAME  || 'Wapi101',
     fromEmail:   base.fromEmail   || process.env.MAIL_FROM_NOREPLY || 'noreply@wapi101.com',
     adminEmail:  base.adminEmail  || process.env.MAIL_ADMIN || 'luis@wapi101.com',

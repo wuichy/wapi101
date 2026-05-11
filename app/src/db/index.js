@@ -42,16 +42,24 @@ function getDb(dbPath) {
     // afecta — el OFF/ON es transparente.
     db.pragma('foreign_keys = OFF');
     try {
+      // Snapshot de violaciones PRE-migration para no fallar por violaciones
+      // pre-existentes que la migración no introdujo.
+      const priorViolations = new Set(
+        db.prepare('PRAGMA foreign_key_check').all()
+          .map(v => `${v.table}:${v.rowid}`)
+      );
+
       const trx = db.transaction(() => {
         db.exec(sql);
         db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
       });
       trx();
-      // Validar consistencia post-migration. Si hay violaciones, falla
-      // explícito (mejor que dejar la DB en estado inconsistente).
-      const violations = db.prepare('PRAGMA foreign_key_check').all();
-      if (violations.length) {
-        throw new Error(`Migration ${file} dejó ${violations.length} violaciones de FK: ${JSON.stringify(violations.slice(0, 5))}`);
+
+      // Solo fallar si la migración INTRODUJO violaciones nuevas.
+      const postViolations = db.prepare('PRAGMA foreign_key_check').all()
+        .filter(v => !priorViolations.has(`${v.table}:${v.rowid}`));
+      if (postViolations.length) {
+        throw new Error(`Migration ${file} introdujo ${postViolations.length} violaciones de FK: ${JSON.stringify(postViolations.slice(0, 5))}`);
       }
     } finally {
       db.pragma('foreign_keys = ON');

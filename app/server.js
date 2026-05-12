@@ -711,7 +711,20 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: err.message || 'Error inesperado' });
 });
 
-// ─── Estáticos (no-cache en dev) ───
+// ─── No-cache para app.js y styles.css (en todos los entornos) ───
+// Cloudflare ignora el query-string (?v=...) como cache key por defecto
+// → sirve el JS/CSS viejo aunque el HTML referencie una versión nueva.
+// La solución es decirle explícitamente que nunca cachee estos dos archivos.
+app.use((req, res, next) => {
+  if (/^\/(app|styles)(\.[\w]+)?\.js|styles\.css/.test(req.path) ||
+      req.path === '/app.js' || req.path === '/styles.css') {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
+  }
+  next();
+});
 if (config.env !== 'production') {
   app.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

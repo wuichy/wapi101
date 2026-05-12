@@ -11068,9 +11068,9 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .app-version { font-size: 11px; color: var(--text-muted); }
 
 /* ── Woo Modal ── */
-.woo-modal { display: flex; flex-direction: column; max-height: 85vh; }
-.woo-tabs { display: flex; gap: 2px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--bg-base); flex-shrink: 0; }
-.woo-tab { padding: 10px 16px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; }
+.woo-modal { display: flex; flex-direction: column; max-height: 85vh; width: min(720px, 100%); }
+.woo-tabs { display: flex; gap: 0; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--bg-base); flex-shrink: 0; overflow-x: auto; }
+.woo-tab { padding: 10px 13px; font-size: 12.5px; font-weight: 500; border: none; background: none; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; transition: color .15s, border-color .15s; }
 .woo-tab.is-active { color: var(--primary); border-bottom-color: var(--primary); }
 .woo-body { flex: 1; overflow-y: auto; }
 .woo-desc { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; }

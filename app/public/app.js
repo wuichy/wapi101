@@ -5071,6 +5071,7 @@ async function openExpDetail(id, from = 'expedientes') {
   showView('exp-detail');
   renderExpDetailInfo();
   renderExpDetailBots();
+  renderExpLeadTagsBar();
   await loadExpDetailConvos();
 }
 
@@ -5564,6 +5565,97 @@ async function loadExpDetailConvos() {
   if (EXP_DETAIL_CONVOS.length) {
     await selectExpDetailConvo(EXP_DETAIL_CONVOS[0].id);
   }
+}
+
+// ── Tags bar en header del chat ──────────────────────────────────────────────
+function renderExpLeadTagsBar() {
+  const bar = document.getElementById('expLeadTagsBar');
+  if (!bar || !EXP_DETAIL) return;
+  const tags = EXP_DETAIL.tags || [];
+
+  bar.innerHTML = tags.map(t => `
+    <span class="exp-tag-pill" data-tag="${escapeHtml(t)}">
+      ${escapeHtml(t)}
+      <button class="exp-tag-pill-del" data-tag="${escapeHtml(t)}" title="Eliminar etiqueta">×</button>
+    </span>
+  `).join('') + `
+    <button class="exp-tag-add-btn" id="expTagAddBtn" title="Añadir etiqueta">＋</button>
+    <span class="exp-tag-input-wrap" id="expTagInputWrap" hidden>
+      <input class="exp-tag-input" id="expTagInput" placeholder="Nueva etiqueta…" maxlength="40" autocomplete="off">
+    </span>`;
+
+  // Eliminar tag
+  bar.querySelectorAll('.exp-tag-pill-del').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const tag = btn.dataset.tag;
+      const newTags = (EXP_DETAIL.tags || []).filter(t => t !== tag);
+      await _saveExpLeadTags(newTags);
+    });
+  });
+
+  // Editar tag al hacer click en la pastilla (excepto en el ×)
+  bar.querySelectorAll('.exp-tag-pill').forEach(pill => {
+    pill.addEventListener('click', (e) => {
+      if (e.target.classList.contains('exp-tag-pill-del')) return;
+      const tag = pill.dataset.tag;
+      const wrap = document.getElementById('expTagInputWrap');
+      const inp  = document.getElementById('expTagInput');
+      if (!wrap || !inp) return;
+      wrap.hidden = false;
+      inp.value = tag;
+      inp.dataset.editing = tag;
+      inp.focus();
+      inp.select();
+    });
+  });
+
+  // Añadir tag
+  document.getElementById('expTagAddBtn')?.addEventListener('click', () => {
+    const wrap = document.getElementById('expTagInputWrap');
+    const inp  = document.getElementById('expTagInput');
+    if (!wrap || !inp) return;
+    wrap.hidden = false;
+    inp.value = '';
+    delete inp.dataset.editing;
+    inp.focus();
+  });
+
+  // Confirmar con Enter / cancelar con Escape
+  document.getElementById('expTagInput')?.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = e.target.value.trim();
+      const editing = e.target.dataset.editing;
+      if (val) {
+        let newTags = [...(EXP_DETAIL.tags || [])];
+        if (editing) newTags = newTags.map(t => t === editing ? val : t);
+        else if (!newTags.includes(val)) newTags.push(val);
+        await _saveExpLeadTags(newTags);
+      } else {
+        document.getElementById('expTagInputWrap').hidden = true;
+      }
+    } else if (e.key === 'Escape') {
+      document.getElementById('expTagInputWrap').hidden = true;
+    }
+  });
+
+  // Cerrar al perder foco
+  document.getElementById('expTagInput')?.addEventListener('blur', () => {
+    setTimeout(() => {
+      const wrap = document.getElementById('expTagInputWrap');
+      if (wrap) wrap.hidden = true;
+    }, 150);
+  });
+}
+
+async function _saveExpLeadTags(newTags) {
+  if (!EXP_DETAIL) return;
+  try {
+    await api('PATCH', `/api/expedients/${EXP_DETAIL.id}`, { tags: newTags });
+    EXP_DETAIL = { ...EXP_DETAIL, tags: newTags };
+    renderExpLeadTagsBar();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 function renderExpDetailConvoTabs() {

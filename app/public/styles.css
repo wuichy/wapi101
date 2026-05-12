@@ -7707,8 +7707,15 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .exp-run-name { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .exp-run-error-msg { font-size: 10px; color: #ef4444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .exp-run-meta  { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-.exp-run-wait-badge { font-size: 10px; color: #15803d; background: rgba(34,197,94,.10); border: 1px solid rgba(34,197,94,.25); padding: 1px 7px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+.exp-run-wait-row { display: flex; align-items: center; gap: 6px; }
+.exp-run-wait-badge { font-size: 11px; color: #15803d; background: rgba(34,197,94,.10); border: 1px solid rgba(34,197,94,.25); padding: 2px 9px; border-radius: 12px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
 .exp-run-wait-badge--manual { color: #b45309; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.30); }
+.exp-run-wait-badge.is-editable { cursor: pointer; transition: background .15s, border-color .15s; }
+.exp-run-wait-badge.is-editable:hover { background: rgba(34,197,94,.18); border-color: rgba(34,197,94,.45); }
+.exp-run-wait-edit { font-size: 9px; opacity: .6; }
+.exp-run-wait-editor { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; padding: 4px 0; }
+.exp-run-wait-num  { width: 60px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; font-size: 12px; background: var(--bg); color: var(--text); }
+.exp-run-wait-unit { padding: 4px 6px; border: 1px solid var(--border); border-radius: 5px; font-size: 12px; background: var(--bg); color: var(--text); }
 .exp-run-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; }
 .exp-run-btn {
   display: flex; align-items: center; justify-content: center;

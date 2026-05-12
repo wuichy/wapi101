@@ -162,6 +162,38 @@ module.exports = function createBotRouter(db) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
+  // POST /runs/:runId/adjust-wait — cambia el expires_at del bot_run_waits activo
+  // del run específico. NO toca la definición del bot — solo este run.
+  router.post('/runs/:runId/adjust-wait', (req, res) => {
+    try {
+      const runId   = Number(req.params.runId);
+      const seconds = Number(req.body?.seconds);
+      if (!Number.isFinite(seconds) || seconds < 0) return res.status(400).json({ error: 'seconds inválido' });
+      const run = db.prepare('SELECT * FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, req.tenantId);
+      if (!run) return res.status(404).json({ error: 'Run no encontrado' });
+      const now    = Math.floor(Date.now() / 1000);
+      const expires = now + seconds;
+      // Si el run está manualmente pausado, ajustar paused_remaining; sino ajustar expires_at
+      const result = db.prepare(
+        "UPDATE bot_run_waits SET expires_at = ?, paused_remaining = CASE WHEN paused_remaining IS NULL THEN NULL ELSE ? END WHERE run_id = ? AND status = 'waiting'"
+      ).run(expires, seconds, runId);
+      if (result.changes === 0) return res.status(400).json({ error: 'No hay wait activo para este run' });
+      if (run.expedient_id) {
+        const mins = Math.round(seconds / 60);
+        const label = mins < 60 ? `${mins} min` : (mins < 1440 ? `${Math.round(mins/60)}h` : `${Math.round(mins/1440)}d`);
+        activity.log(db, {
+          expedientId: run.expedient_id,
+          contactId:   run.contact_id,
+          type:        'bot_wait_adjusted',
+          description: `Timer del bot "${run.bot_name}" ajustado a ${label}`,
+          advisorId:   req.advisor?.id,
+          advisorName: req.advisor?.name,
+        });
+      }
+      res.json({ ok: true, expires_at: expires });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   router.post('/runs/:runId/resume', (req, res) => {
     try {
       const runId = Number(req.params.runId);

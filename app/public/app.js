@@ -5325,13 +5325,13 @@ async function renderExpDetailBots() {
           ${activeRuns.map(r => {
             const vis = runVisualState(r);
             const isManualPause = vis.color === 'manual';
+            const editable = !!r.wait_step_type && !isManualPause; // solo timers/waits naturales son ajustables
             return `
             <div class="exp-run-row exp-run-running" data-run-id="${r.id}">
               <div class="exp-run-header">
                 <span class="exp-run-pulse${isManualPause ? ' exp-run-pulse--paused' : ''}"></span>
                 <span class="exp-run-name">${escapeHtml(r.bot_name || 'Bot')}</span>
                 <span class="exp-run-meta">paso ${r.current_step}/${r.total_steps}</span>
-                ${vis.label ? `<span class="exp-run-wait-badge${isManualPause ? ' exp-run-wait-badge--manual' : ''}">${escapeHtml(vis.label)}</span>` : ''}
                 <div class="exp-run-actions">
                   <button class="exp-run-btn exp-run-btn--pause" data-run-id="${r.id}" data-paused="${vis.showPlay ? '1' : '0'}" title="${vis.showPlay ? 'Reanudar' : 'Pausar'}">
                     ${vis.showPlay
@@ -5343,12 +5343,63 @@ async function renderExpDetailBots() {
                   </button>
                 </div>
               </div>
+              ${vis.label ? `
+              <div class="exp-run-wait-row" data-run-id="${r.id}">
+                <span class="exp-run-wait-badge${isManualPause ? ' exp-run-wait-badge--manual' : ''}${editable ? ' is-editable' : ''}" ${editable ? `title="Click para ajustar timer (solo este lead)"` : ''}>${escapeHtml(vis.label)}${editable ? ' <span class="exp-run-wait-edit">✎</span>' : ''}</span>
+              </div>
+              <div class="exp-run-wait-editor" data-run-id="${r.id}" hidden>
+                <input class="exp-run-wait-num"  type="number" min="0" step="1" placeholder="0" value="" />
+                <select class="exp-run-wait-unit">
+                  <option value="60">minutos</option>
+                  <option value="3600" selected>horas</option>
+                  <option value="86400">días</option>
+                </select>
+                <button class="btn btn--primary btn--xs exp-run-wait-save" data-run-id="${r.id}">Guardar</button>
+                <button class="btn btn--ghost btn--xs exp-run-wait-cancel" data-run-id="${r.id}">✕</button>
+              </div>` : ''}
               <div class="exp-run-bar-wrap">
                 <div class="exp-run-bar${isManualPause ? ' exp-run-bar--paused' : ''}" style="width:${pctOf(r)}%"></div>
               </div>
             </div>`;
           }).join('')}
         </div>`;
+
+      // Click en badge editable → mostrar editor
+      root.querySelectorAll('.exp-run-wait-badge.is-editable').forEach(badge => {
+        badge.addEventListener('click', () => {
+          const row = badge.closest('.exp-run-row');
+          const editor = row?.querySelector('.exp-run-wait-editor');
+          const waitRow = row?.querySelector('.exp-run-wait-row');
+          if (!editor) return;
+          editor.hidden = false;
+          if (waitRow) waitRow.hidden = true;
+          editor.querySelector('.exp-run-wait-num')?.focus();
+        });
+      });
+      root.querySelectorAll('.exp-run-wait-cancel').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('.exp-run-row');
+          row?.querySelector('.exp-run-wait-editor').setAttribute('hidden', '');
+          row?.querySelector('.exp-run-wait-row')?.removeAttribute('hidden');
+        });
+      });
+      root.querySelectorAll('.exp-run-wait-save').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const runId = btn.dataset.runId;
+          const row = btn.closest('.exp-run-row');
+          const num  = Number(row.querySelector('.exp-run-wait-num').value);
+          const unit = Number(row.querySelector('.exp-run-wait-unit').value);
+          if (!Number.isFinite(num) || num < 0) return toast('Valor inválido', 'error');
+          const seconds = Math.floor(num * unit);
+          btn.disabled = true;
+          try {
+            await api('POST', `/api/bot/runs/${runId}/adjust-wait`, { seconds });
+            toast('Timer ajustado', 'success');
+            await Promise.all([reloadActivity(), refresh()]);
+          } catch (e) { toast(e.message, 'error'); }
+          finally { btn.disabled = false; }
+        });
+      });
 
       async function reloadActivity() {
         if (!EXP_DETAIL) return;

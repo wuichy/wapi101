@@ -11154,11 +11154,12 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-order-status--failed     { background:#fee2e2; color:#991b1b; }
 /* Status custom (ej. completado-facturado) */
 .woo-order-status { background:var(--bg-alt); color:var(--text-secondary); }
-.woo-tracking-badge { font-size:11px; padding:2px 8px; border-radius:10px; }
-.woo-tracking-badge--none { background:var(--bg-alt); color:var(--text-muted); }
-.woo-tracking-badge--pendiente { background:#fef3c7; color:#92400e; }
-.woo-tracking-badge--en_camino { background:#dbeafe; color:#1e40af; }
-.woo-tracking-badge--entregado { background:#d1fae5; color:#065f46; }
+.woo-tracking-badge { display:inline-flex; align-items:center; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+.woo-tracking-badge--none { background:var(--bg-alt); color:var(--text-muted); border:1px solid var(--border); }
+.woo-tracking-badge--pendiente { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
+.woo-tracking-badge--en_camino { background:#dbeafe; color:#1e40af; border:1px solid #93c5fd; }
+.woo-tracking-badge--entregado { background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; }
+.woo-tracking-num { font-size:11px; color:var(--text-secondary); margin-left:5px; }
 .woo-tracking-btn { margin-top:8px; }
 .woo-tracking-form { padding:10px 0 4px; }
 .woo-tracking-fields { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }

@@ -5176,6 +5176,20 @@ function renderExpDetailInfo() {
           <input class="edf-input" type="text" value="${escapeHtml(exp.contactName || '')}" data-original="${escapeHtml(exp.contactName || '')}" />
         </div>
       </div>
+      <div class="exp-detail-field editable-field" data-field-id="contactPhone" data-field-type="builtin">
+        <span class="exp-detail-field-label">Teléfono</span>
+        <div class="edf-cell">
+          <span class="exp-detail-field-value edf-display">${escapeHtml(exp.contactPhone || '—')}</span>
+          <input class="edf-input" type="tel" value="${escapeHtml(exp.contactPhone || '')}" data-original="${escapeHtml(exp.contactPhone || '')}" />
+        </div>
+      </div>
+      <div class="exp-detail-field editable-field" data-field-id="contactEmail" data-field-type="builtin">
+        <span class="exp-detail-field-label">Email</span>
+        <div class="edf-cell">
+          <span class="exp-detail-field-value edf-display">${escapeHtml(exp.contactEmail || '—')}</span>
+          <input class="edf-input" type="email" value="${escapeHtml(exp.contactEmail || '')}" data-original="${escapeHtml(exp.contactEmail || '')}" />
+        </div>
+      </div>
     </div>
 
     ${customFields.length ? `
@@ -5495,6 +5509,8 @@ async function saveExpDetailEdits() {
     else if (fieldId === 'pipeline') patch.pipelineId = Number(input.value);
     else if (fieldId === 'stage') patch.stageId = Number(input.value);
     else if (fieldId === 'contactName') patch.contactName = val;
+    else if (fieldId === 'contactPhone') patch.contactPhone = val;
+    else if (fieldId === 'contactEmail') patch.contactEmail = val;
     else if (fieldId === 'assignedAdvisor') patch.assignedAdvisorId = input.value ? Number(input.value) : null;
     else if (fieldId === 'value') patch.value = input.value !== '' ? (Number(input.value) || 0) : 0;
   });
@@ -5597,6 +5613,7 @@ const ACT_ICON = {
   name_change:         '✎',
   contact_name_change: '✎',
   phone_change:        '✎',
+  email_change:        '✎',
   tag_add:             '＋',
   tag_remove:          '－',
 };
@@ -20135,8 +20152,10 @@ function _buildOrderRows(orders, prefix, carriers) {
     const addrParts = [addr.address1, addr.address2, addr.city, addr.state, addr.postcode].filter(Boolean);
     const addrLine  = addrParts.join(', ');
 
+    const _tsLabels = { pendiente: '⏳ Pendiente', en_camino: '🚚 En camino', entregado: '✅ Entregado' };
+    const _tsKey    = o.tracking_status || (o.tracking_number ? 'pendiente' : '');
     const trackingBadge = o.tracking_number
-      ? `<span class="woo-tracking-badge woo-tracking-badge--${o.tracking_status||'pendiente'}">${escapeHtml(o.tracking_carrier||'')} · ${escapeHtml(o.tracking_number)}</span>`
+      ? `<span class="woo-tracking-badge woo-tracking-badge--${_tsKey}">${_tsLabels[_tsKey] || _tsKey}</span><span class="woo-tracking-num">${escapeHtml(o.tracking_carrier||'')} · ${escapeHtml(o.tracking_number)}</span>`
       : `<span class="woo-tracking-badge woo-tracking-badge--none">Sin rastreo</span>`;
 
     return `<div class="woo-order-card">

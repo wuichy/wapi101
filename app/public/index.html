@@ -991,6 +991,34 @@
             <div class="fields-add-row" id="fieldsAddRow">
               <button class="btn btn--ghost" id="fieldsAddBtn" data-i18n="fields.add">+ Agregar campo</button>
             </div>
+            <!-- Formulario inline para editar campo existente -->
+            <div class="fields-new-form" id="fieldsEditForm" hidden>
+              <div class="int-field">
+                <label>Nombre del campo <span class="int-field-required">*</span></label>
+                <input type="text" id="editFieldLabel" autocomplete="off" />
+              </div>
+              <div class="int-field">
+                <label>Tipo</label>
+                <div class="field-type-grid" id="editFieldTypeGrid">
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="text" /><span>Texto</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="number" /><span>Número</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="toggle" /><span>Interruptor</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="select" /><span>Selección</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="multi_select" /><span>Multi-selección</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="date" /><span>Día</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="url" /><span>URL</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="long_text" /><span>Texto largo</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="birthday" /><span>Cumpleaños</span></label>
+                  <label class="field-type-option"><input type="radio" name="editFieldType" value="datetime" /><span>Fecha y hora</span></label>
+                </div>
+              </div>
+              <div id="fieldsEditError" class="int-error" hidden></div>
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <button type="button" class="btn btn--ghost" id="fieldsEditCancel">Cancelar</button>
+                <button type="button" class="btn btn--primary" id="fieldsEditSave">Guardar cambios</button>
+              </div>
+            </div>
+
             <!-- Formulario inline para nuevo campo -->
             <div class="fields-new-form" id="fieldsNewForm" hidden>
               <div class="int-field">

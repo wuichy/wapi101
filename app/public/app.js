@@ -6119,15 +6119,22 @@ function renderFieldDefs() {
     </div>`).join('');
 
   list.querySelectorAll('[data-action="edit-field"]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const newLabel = prompt('Nombre del campo:', btn.dataset.label);
-      if (!newLabel || newLabel.trim() === btn.dataset.label) return;
-      try {
-        await api('PATCH', `/api/expedients/field-defs/${btn.dataset.id}`, { label: newLabel.trim() });
-        await loadExpFieldDefs();
-        renderFieldDefs();
-        toast('Campo actualizado', 'success');
-      } catch (err) { toast(err.message, 'error'); }
+    btn.addEventListener('click', () => {
+      const fd = EXP_FIELD_DEFS.find(f => String(f.id) === btn.dataset.id);
+      if (!fd) return;
+      // Ocultar formulario de nuevo campo si estaba abierto
+      document.getElementById('fieldsNewForm').hidden = true;
+      document.getElementById('fieldsAddRow').hidden = false;
+      // Poblar y mostrar formulario de edición
+      document.getElementById('editFieldLabel').value = fd.label;
+      const radio = document.querySelector(`input[name="editFieldType"][value="${fd.fieldType}"]`);
+      if (radio) radio.checked = true;
+      document.getElementById('fieldsEditError').hidden = true;
+      document.getElementById('fieldsEditSave').dataset.id = fd.id;
+      const editForm = document.getElementById('fieldsEditForm');
+      editForm.hidden = false;
+      editForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.getElementById('editFieldLabel').focus();
     });
   });
 
@@ -6430,6 +6437,28 @@ function setupExpedients() {
       const needsOptions = ['select', 'multi_select'].includes(radio.value);
       document.getElementById('fieldOptionsWrap').hidden = !needsOptions;
     });
+  });
+
+  // ── Editar campo existente ──
+  document.getElementById('fieldsEditCancel')?.addEventListener('click', () => {
+    document.getElementById('fieldsEditForm').hidden = true;
+    document.getElementById('fieldsEditError').hidden = true;
+  });
+
+  document.getElementById('fieldsEditSave')?.addEventListener('click', async () => {
+    const id = document.getElementById('fieldsEditSave').dataset.id;
+    const label = document.getElementById('editFieldLabel').value.trim();
+    const fieldType = document.querySelector('input[name="editFieldType"]:checked')?.value || 'text';
+    const errBox = document.getElementById('fieldsEditError');
+    errBox.hidden = true;
+    if (!label) { errBox.textContent = 'El nombre es obligatorio'; errBox.hidden = false; return; }
+    try {
+      await api('PATCH', `/api/expedients/field-defs/${id}`, { label, fieldType });
+      await loadExpFieldDefs();
+      renderFieldDefs();
+      document.getElementById('fieldsEditForm').hidden = true;
+      toast('Campo actualizado', 'success');
+    } catch (err) { errBox.textContent = err.message; errBox.hidden = false; }
   });
 
   document.getElementById('fieldsNewSave')?.addEventListener('click', async () => {

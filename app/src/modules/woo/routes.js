@@ -2,7 +2,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
-const { generateToken, processOrderProcessing, processOrderCompleted, fillCustomField } = require('./service');
+const { generateToken, processOrderProcessing, processOrderCompleted, processCartAbandoned, fillCustomField } = require('./service');
 const notifSvc = require('../notifications/service');
 
 const DEFAULT_CARRIERS = [
@@ -43,7 +43,61 @@ function authRouter(db) {
       initialStageId:     cfg.initial_stage_id    || null,
       triggerStatuses:    JSON.parse(cfg.trigger_statuses || '["processing","on-hold"]'),
       lastWebhookAt:      cfg.last_webhook_at || 0,
+      abandonedCart: {
+        enabled:        cfg.abandoned_cart_enabled === 1,
+        pipelineId:     cfg.abandoned_cart_pipeline_id || null,
+        stageId:        cfg.abandoned_cart_stage_id    || null,
+        templateId:     cfg.abandoned_cart_template_id || null,
+        dedupHours:     cfg.abandoned_cart_dedup_hours || 24,
+        minMinutes:     cfg.abandoned_cart_min_minutes || 60,
+        tag:            cfg.abandoned_cart_tag || 'Carrito abandonado',
+      },
     });
+  });
+
+  // PUT /api/apps/woo/abandoned-cart-config — guardar config de carritos abandonados
+  router.put('/abandoned-cart-config', (req, res) => {
+    const {
+      enabled, pipelineId, stageId, templateId, dedupHours, minMinutes, tag,
+    } = req.body || {};
+    db.prepare(`
+      UPDATE woo_config SET
+        abandoned_cart_enabled     = ?,
+        abandoned_cart_pipeline_id = ?,
+        abandoned_cart_stage_id    = ?,
+        abandoned_cart_template_id = ?,
+        abandoned_cart_dedup_hours = ?,
+        abandoned_cart_min_minutes = ?,
+        abandoned_cart_tag         = ?,
+        updated_at                 = unixepoch()
+      WHERE tenant_id = ?
+    `).run(
+      enabled ? 1 : 0,
+      pipelineId || null,
+      stageId    || null,
+      templateId || null,
+      Math.max(1, Math.min(168, Number(dedupHours) || 24)),
+      Math.max(5, Math.min(1440, Number(minMinutes) || 60)),
+      (tag || 'Carrito abandonado').slice(0, 60),
+      req.tenantId,
+    );
+    res.json({ ok: true });
+  });
+
+  // GET /api/apps/woo/abandoned-carts — histórico de carritos procesados
+  router.get('/abandoned-carts', (req, res) => {
+    const page  = Math.max(1, Number(req.query.page)  || 1);
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 25));
+    const offset = (page - 1) * limit;
+    const total = db.prepare('SELECT COUNT(*) as c FROM woo_abandoned_carts WHERE tenant_id = ?').get(req.tenantId).c;
+    const items = db.prepare(`
+      SELECT wac.*, c.first_name as contact_first_name, c.last_name as contact_last_name
+      FROM woo_abandoned_carts wac
+      LEFT JOIN contacts c ON c.id = wac.contact_id
+      WHERE wac.tenant_id = ?
+      ORDER BY wac.created_at DESC LIMIT ? OFFSET ?
+    `).all(req.tenantId, limit, offset);
+    res.json({ items, page, pages: Math.ceil(total / limit), total });
   });
 
   // POST /api/apps/woo/connect — genera token y guarda config inicial
@@ -462,7 +516,7 @@ function authRouter(db) {
 function webhookRouter(db) {
   const router = express.Router();
 
-  router.post('/', express.json({ limit: '2mb' }), (req, res) => {
+  router.post('/', express.json({ limit: '2mb' }), async (req, res) => {
     const token = req.headers['x-wapi-token'] || req.query.token;
     if (!token) return res.status(401).json({ error: 'Token requerido' });
 
@@ -483,8 +537,8 @@ function webhookRouter(db) {
     }
     if (!cfg.enabled)  return res.status(200).json({ ok: true, skipped: 'disabled' });
 
-    const { event, order } = req.body;
-    if (!event || !order) return res.status(400).json({ error: 'Payload inválido' });
+    const { event, order, cart } = req.body;
+    if (!event) return res.status(400).json({ error: 'Payload inválido: falta event' });
 
     const tenantId = cfg.tenant_id;
 
@@ -495,18 +549,35 @@ function webhookRouter(db) {
     } catch (_) {}
 
     try {
-      const triggerStatuses = JSON.parse(cfg.trigger_statuses || '["processing","on-hold"]');
-      const eventStatus = event.startsWith('order.') ? event.slice(6) : null;
       let result;
 
+      // Eventos de carritos abandonados (CartBounty)
+      if (event === 'cart.abandoned') {
+        if (!cart) return res.status(400).json({ error: 'Payload inválido: falta cart' });
+        result = await processCartAbandoned(db, tenantId, cart, cfg);
+        // Notificación campana solo si efectivamente se procesó (no skipped por dedup)
+        if (!result.skipped) {
+          const totalStr = cart.total ? ` · $${parseFloat(cart.total).toLocaleString('es-MX')}` : '';
+          notifyWooAdmins(db, tenantId,
+            `🛒 Carrito abandonado`,
+            `${cart.name || cart.phone || 'Cliente'}${totalStr}`,
+            'woo_cart_abandoned'
+          );
+        }
+        return res.json({ ok: true, result });
+      }
+
+      // Eventos de pedidos (lógica existente)
+      if (!order) return res.status(400).json({ error: 'Payload inválido: falta order' });
+      const triggerStatuses = JSON.parse(cfg.trigger_statuses || '["processing","on-hold"]');
+      const eventStatus = event.startsWith('order.') ? event.slice(6) : null;
+
       if (event === 'order.deleted') {
-        // Eliminar pedido de woo_orders
         const del = db.prepare('DELETE FROM woo_orders WHERE wc_order_id = ? AND tenant_id = ?')
           .run(order.id, tenantId);
         result = { deleted: del.changes };
       } else if (eventStatus && triggerStatuses.includes(eventStatus)) {
         result = processOrderProcessing(db, tenantId, order);
-        // Notificación campana: pedido nuevo
         const orderNum  = String(order.number || order.id);
         const custName  = [order.billing?.first_name, order.billing?.last_name].filter(Boolean).join(' ') || 'Cliente';
         const total     = order.total ? ` · $${parseFloat(order.total).toLocaleString('es-MX')}` : '';

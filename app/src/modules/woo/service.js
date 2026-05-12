@@ -381,4 +381,143 @@ function formatDate(d) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-module.exports = { generateToken, processOrderProcessing, processOrderCompleted, normalizePhoneForWA, fillCustomField };
+// ── Procesar carrito abandonado de CartBounty ────────────────────────────────
+// Llamado desde el webhook cuando event === 'cart.abandoned'.
+// payload.cart: {cb_cart_id, name, phone, email, products[], total, currency, cart_url}
+async function processCartAbandoned(db, tenantId, cart, cfg) {
+  const convoSvc = require('../conversations/service');
+  const tplSvc   = require('../templates/service');
+  const sender   = require('../conversations/sender');
+
+  if (!cfg.abandoned_cart_enabled) return { skipped: true, reason: 'disabled' };
+  if (!cart.phone) return { skipped: true, reason: 'no_phone' };
+
+  // 1) Dedup: ¿ya procesamos este cb_cart_id antes?
+  const existing = db.prepare(
+    'SELECT id FROM woo_abandoned_carts WHERE tenant_id = ? AND cb_cart_id = ? LIMIT 1'
+  ).get(tenantId, cart.cb_cart_id);
+  if (existing) return { skipped: true, reason: 'already_processed' };
+
+  // 2) Dedup por contacto: si el mismo teléfono recibió un cart abandonment
+  //    en las últimas N horas, NO mandar otro.
+  const phone = normalizePhoneForWA(cart.phone);
+  if (!phone) return { skipped: true, reason: 'invalid_phone' };
+
+  const dedupHours = cfg.abandoned_cart_dedup_hours || 24;
+  const recentForContact = db.prepare(`
+    SELECT wac.id FROM woo_abandoned_carts wac
+    JOIN contacts c ON c.id = wac.contact_id
+    WHERE c.phone = ? AND wac.tenant_id = ?
+      AND wac.message_sent = 1
+      AND wac.created_at > unixepoch() - (? * 3600)
+    LIMIT 1
+  `).get(phone, tenantId, dedupHours);
+  if (recentForContact) return { skipped: true, reason: 'dedup_window' };
+
+  // 3) Encontrar o crear contacto
+  const fullName = [cart.name || '', cart.surname || ''].filter(Boolean).join(' ').trim() || 'Cliente';
+  const firstName = (cart.name || '').trim() || fullName.split(/\s+/)[0] || 'Cliente';
+  const lastName  = (cart.surname || '').trim() || fullName.split(/\s+/).slice(1).join(' ') || null;
+  const email     = (cart.email || '').trim().toLowerCase() || null;
+
+  let contact = db.prepare('SELECT * FROM contacts WHERE phone = ? AND tenant_id = ?').get(phone, tenantId);
+  let isNewContact = false;
+  if (!contact) {
+    const r = db.prepare(`
+      INSERT INTO contacts (first_name, last_name, phone, email, tenant_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())
+    `).run(firstName, lastName, phone, email, tenantId);
+    contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(r.lastInsertRowid);
+    isNewContact = true;
+  } else if (firstName || lastName) {
+    // Actualizar nombre si lo nuevo tiene más info
+    db.prepare(`
+      UPDATE contacts SET
+        first_name = COALESCE(NULLIF(?, ''), first_name),
+        last_name  = COALESCE(NULLIF(?, ''), last_name),
+        email      = COALESCE(NULLIF(?, ''), email),
+        updated_at = unixepoch()
+      WHERE id = ?
+    `).run(firstName, lastName, email, contact.id);
+  }
+
+  // 4) Lead: si es contacto nuevo, crear en el pipeline configurado.
+  //    Si ya existía, NO mover su lead — solo respetamos donde esté.
+  let expId = null;
+  const existingExp = db.prepare(
+    'SELECT id FROM expedients WHERE contact_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+  ).get(contact.id, tenantId);
+
+  if (existingExp) {
+    expId = existingExp.id;
+  } else if (isNewContact && cfg.abandoned_cart_pipeline_id && cfg.abandoned_cart_stage_id) {
+    const leadName = `${firstName} ${lastName || ''}`.trim() + ' - Carrito abandonado';
+    const r = db.prepare(`
+      INSERT INTO expedients (contact_id, pipeline_id, stage_id, name, tenant_id, created_at, updated_at, stage_entered_at)
+      VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch(), unixepoch())
+    `).run(contact.id, cfg.abandoned_cart_pipeline_id, cfg.abandoned_cart_stage_id, leadName, tenantId);
+    expId = r.lastInsertRowid;
+  }
+
+  // 5) Agregar tag al lead si está configurado
+  const tag = cfg.abandoned_cart_tag || 'Carrito abandonado';
+  if (expId && tag) {
+    try {
+      db.prepare('INSERT OR IGNORE INTO expedient_tags (expedient_id, tag, tenant_id) VALUES (?, ?, ?)')
+        .run(expId, tag, tenantId);
+    } catch (_) {}
+  }
+
+  // 6) Encontrar/crear conversación WA Business API
+  let convo = null;
+  let sendError = null;
+  let messageSent = 0;
+  try {
+    const externalId = phone.replace(/\D/g, ''); // sin "+" para WA
+    convo = convoSvc.findOrCreate(db, tenantId, {
+      provider:     'whatsapp',
+      externalId,
+      contactPhone: phone,
+      contactName:  fullName,
+      contactId:    contact.id,
+    });
+
+    // 7) Enviar plantilla — los placeholders se rellenan desde cart_url + nombre
+    if (cfg.abandoned_cart_template_id && convo) {
+      const manualValues = [
+        firstName,
+        cart.cart_url || '',
+        cart.total ? String(cart.total) : '',
+      ];
+      const result = await sender.sendWhatsAppTemplate(db, convo, cfg.abandoned_cart_template_id, manualValues, { autoFallback: true });
+      convoSvc.addMessage(db, tenantId, convo.id, {
+        externalId: result.externalId,
+        direction:  'outgoing',
+        provider:   'whatsapp',
+        body:       result.renderedBody,
+        status:     'sent',
+      });
+      messageSent = 1;
+    }
+  } catch (err) {
+    sendError = err.message || String(err);
+    console.error('[woo abandoned cart] error enviando plantilla:', sendError);
+  }
+
+  // 8) Guardar histórico
+  db.prepare(`
+    INSERT OR IGNORE INTO woo_abandoned_carts (
+      tenant_id, cb_cart_id, contact_id, expedient_id, customer_name, customer_phone,
+      customer_email, cart_total, currency, products_json, cart_url, template_id, message_sent, send_error
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    tenantId, cart.cb_cart_id, contact.id, expId, fullName, phone, email,
+    cart.total || 0, cart.currency || 'MXN',
+    JSON.stringify(cart.products || []), cart.cart_url || null,
+    cfg.abandoned_cart_template_id || null, messageSent, sendError
+  );
+
+  return { contactId: contact.id, expId, isNewContact, messageSent: !!messageSent, sendError };
+}
+
+module.exports = { generateToken, processOrderProcessing, processOrderCompleted, processCartAbandoned, normalizePhoneForWA, fillCustomField };

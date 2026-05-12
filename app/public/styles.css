@@ -11089,7 +11089,7 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-desc { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; }
 .woo-empty { font-size: 13px; color: var(--text-muted); font-style: italic; margin: 8px 0; }
 /* ── Tarjeta de pedido ── */
-.woo-order-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; }
+.woo-order-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; flex-shrink: 0; }
 .woo-oc-top    { display: flex; align-items: center; gap: 8px; padding: 10px 14px 6px; flex-wrap: wrap; }
 .woo-oc-num    { font-size: 13.5px; }
 .woo-oc-date   { font-size: 11.5px; color: var(--text-muted); }

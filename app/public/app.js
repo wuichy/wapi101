@@ -19852,6 +19852,7 @@ async function openWooModal() {
   await loadWooPipelines();
   await loadWooOrders();
   await loadWooCarriers();
+  await loadWooProducts();
   setupWooTabs();
   setupWooEvents();
 }
@@ -19928,20 +19929,34 @@ async function loadWooPipelines() {
   } catch (e) { console.error('loadWooPipelines', e); }
 }
 
+async function loadWooProducts() {
+  const el = document.getElementById('wooProductsList');
+  if (!el) return;
+  try {
+    const data = await api('GET', '/api/apps/woo/wc-products');
+    _wooProducts = data.products || [];
+    renderWooProducts();
+  } catch (e) {
+    // Sin credenciales o error — mostrar aviso
+    el.innerHTML = '<p class="woo-empty">⚠️ Configura las credenciales WC REST API en la pestaña Conexión para ver tus productos.</p>';
+  }
+}
+
 function renderWooProducts() {
   const el = document.getElementById('wooProductsList');
-  if (!_wooProducts.length) { el.innerHTML = '<p class="woo-empty">Sin productos. Agrega uno abajo.</p>'; return; }
+  if (!el) return;
+  if (!_wooProducts.length) {
+    el.innerHTML = '<p class="woo-empty">Sin productos. Haz click en ↺ Sincronizar para cargar los de WooCommerce.</p>';
+    return;
+  }
   el.innerHTML = _wooProducts.map((p, i) => `
     <div class="woo-product-row">
-      <span class="woo-product-name">${escapeHtml(p.name)}</span>
-      <input type="number" class="int-input woo-days-input" value="${p.duration_days}" min="1" data-pi="${i}" style="width:80px" />
+      <span class="woo-product-name">${escapeHtml(p.name)}${p.sku ? `<small style="color:var(--text-muted);margin-left:6px">SKU: ${escapeHtml(p.sku)}</small>` : ''}</span>
+      <input type="number" class="int-input woo-days-input" value="${p.duration_days || 0}" min="0" data-pi="${i}" style="width:72px" />
       <span style="font-size:12px;color:var(--text-muted)">días</span>
-      <button class="btn btn--xs btn--danger-ghost" data-del-product="${i}">✕</button>
     </div>`).join('');
   el.querySelectorAll('.woo-days-input').forEach(inp =>
-    inp.addEventListener('change', () => { _wooProducts[Number(inp.dataset.pi)].duration_days = Number(inp.value); }));
-  el.querySelectorAll('[data-del-product]').forEach(btn =>
-    btn.addEventListener('click', () => { _wooProducts.splice(Number(btn.dataset.delProduct), 1); renderWooProducts(); }));
+    inp.addEventListener('input', () => { _wooProducts[Number(inp.dataset.pi)].duration_days = Number(inp.value); }));
 }
 
 function renderWooRules() {
@@ -20105,22 +20120,22 @@ function setupWooEvents() {
     toast('URL copiada', 'success');
   });
 
-  // Agregar producto
-  document.getElementById('wooAddProductBtn')?.addEventListener('click', () => {
-    const name = document.getElementById('wooNewProductName').value.trim();
-    const days = Number(document.getElementById('wooNewProductDays').value);
-    if (!name || !days) return toast('Nombre y días son obligatorios', 'error');
-    _wooProducts.push({ id: Date.now(), name, duration_days: days });
-    document.getElementById('wooNewProductName').value = '';
-    document.getElementById('wooNewProductDays').value = '';
-    renderWooProducts();
+  // Sincronizar productos desde WooCommerce
+  document.getElementById('wooSyncProductsBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('wooSyncProductsBtn');
+    btn.disabled = true; btn.textContent = '⏳ Sincronizando...';
+    try {
+      await loadWooProducts();
+      toast(`${_wooProducts.length} productos cargados de WooCommerce`, 'success');
+    } catch (e) { toast(e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = '↺ Sincronizar'; }
   });
 
-  // Guardar productos
+  // Guardar duraciones de productos
   document.getElementById('wooSaveProductsBtn')?.addEventListener('click', async () => {
     try {
       await api('PUT', '/api/apps/woo/products', { products: _wooProducts });
-      toast('Productos guardados', 'success');
+      toast('Duraciones guardadas', 'success');
     } catch (e) { toast(e.message, 'error'); }
   });
 

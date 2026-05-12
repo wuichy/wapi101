@@ -198,6 +198,36 @@ function authRouter(db) {
     }
   });
 
+  // GET /api/apps/woo/wc-products — trae productos de WooCommerce y los fusiona con duraciones guardadas
+  router.get('/wc-products', async (req, res) => {
+    const cfg = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(req.tenantId);
+    if (!cfg || !cfg.site_url || !cfg.wc_consumer_key || !cfg.wc_consumer_secret) {
+      return res.status(400).json({ error: 'Configura las credenciales WC REST API primero (pestaña Conexión)' });
+    }
+    const baseUrl  = cfg.site_url.replace(/\/$/, '');
+    const authHead = 'Basic ' + Buffer.from(`${cfg.wc_consumer_key}:${cfg.wc_consumer_secret}`).toString('base64');
+    const saved    = JSON.parse(cfg.products_json || '[]'); // [{id, name, duration_days}]
+    const savedMap = Object.fromEntries(saved.map(p => [String(p.id), p.duration_days || 0]));
+    try {
+      const url  = `${baseUrl}/wp-json/wc/v3/products?per_page=100&status=publish&orderby=title&order=asc`;
+      const resp = await fetch(url, { headers: { Authorization: authHead }, signal: AbortSignal.timeout(15000) });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        return res.status(502).json({ error: `WooCommerce API error ${resp.status}: ${txt.slice(0, 200)}` });
+      }
+      const wcProducts = await resp.json();
+      const merged = wcProducts.map(p => ({
+        id:            p.id,
+        name:          p.name,
+        sku:           p.sku || '',
+        duration_days: savedMap[String(p.id)] ?? 0,
+      }));
+      res.json({ products: merged });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // GET /api/apps/woo/plugin-download — descarga el plugin ZIP
   router.get('/plugin-download', (req, res) => {
     const zipPath = path.join(__dirname, '../../..', 'public', 'plugins', 'reelance-conexion-wapi101.zip');

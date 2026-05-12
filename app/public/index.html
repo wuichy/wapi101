@@ -1973,15 +1973,13 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             </div>
             <!-- TAB: Productos -->
             <div class="woo-tab-panel" data-panel="productos" hidden>
-              <p class="woo-desc">Define la duración de cada producto. Se usará para mover el lead al pipeline correcto al enviar el pedido.</p>
-              <div id="wooProductsList" class="woo-products-list"></div>
-              <div class="woo-add-product-row">
-                <input type="text" id="wooNewProductName" placeholder="Nombre del producto (igual que en WooCommerce)" class="int-input" />
-                <input type="number" id="wooNewProductDays" placeholder="Días" min="1" class="int-input" style="width:90px" />
-                <button class="btn btn--primary btn--sm" id="wooAddProductBtn">+ Agregar</button>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <p class="woo-desc" style="margin:0">Asigna duración en días a cada producto. Se usa para mover el lead al pipeline correcto al completar el pedido. Pon <strong>0</strong> si no aplica.</p>
+                <button class="btn btn--ghost btn--sm" id="wooSyncProductsBtn" style="flex-shrink:0;margin-left:12px">↺ Sincronizar</button>
               </div>
-              <div style="margin-top:16px;text-align:right">
-                <button class="btn btn--primary" id="wooSaveProductsBtn">Guardar productos</button>
+              <div id="wooProductsList" class="woo-products-list"></div>
+              <div style="margin-top:12px;text-align:right">
+                <button class="btn btn--primary" id="wooSaveProductsBtn">Guardar</button>
               </div>
             </div>
             <!-- TAB: Pipelines -->

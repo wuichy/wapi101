@@ -42,6 +42,7 @@ function authRouter(db) {
       initialPipelineId:  cfg.initial_pipeline_id || null,
       initialStageId:     cfg.initial_stage_id    || null,
       triggerStatuses:    JSON.parse(cfg.trigger_statuses || '["processing","on-hold"]'),
+      lastWebhookAt:      cfg.last_webhook_at || 0,
     });
   });
 

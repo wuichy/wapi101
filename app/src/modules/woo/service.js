@@ -230,8 +230,11 @@ function processOrderCompleted(db, tenantId, order, wooConfig) {
   let maxDays = 0;
   for (const item of lineItems) {
     const name = (item.name || '').toLowerCase().trim();
-    const def  = productDefs.find(p => p.name.toLowerCase().trim() === name);
-    if (def && def.duration_days > maxDays) maxDays = def.duration_days;
+    const def  = productDefs.find(p => p.id === item.product_id || p.name.toLowerCase().trim() === name);
+    if (def) {
+      const effectiveDays = def.duration_days * (item.quantity || 1);
+      if (effectiveDays > maxDays) maxDays = effectiveDays;
+    }
   }
 
   if (maxDays > 0 && rules.length > 0) {

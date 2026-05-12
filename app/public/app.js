@@ -3786,7 +3786,10 @@ function showView(viewName) {
   if (viewName === 'mail') { loadMailView(); initMailView(); }
   if (viewName === 'copiloto')   initCopiloto();
   if (viewName === 'comentarios') initComments();
-  if (viewName === 'pedidos') loadPedidosView();
+  if (viewName === 'pedidos') { loadPedidosView(); startPedidosPoller(); }
+  else stopPedidosPoller();
+  if (viewName === 'pipelines') startKanbanWooPoller();
+  else stopKanbanWooPoller();
 }
 
 function setupNav() {
@@ -19897,6 +19900,38 @@ async function updatePedidosNavVisibility() {
 }
 
 let _pedidosEventsReady = false;
+let _pedidosPoller = null;
+let _kanbanWooPoller = null;
+// Último last_webhook_at conocido — para detectar nuevos webhooks sin recargar en falso
+let _wooLastWebhookAt = 0;
+
+function startPedidosPoller() {
+  stopPedidosPoller();
+  _pedidosPoller = setInterval(() => {
+    if (document.body.dataset.viewActive === 'pedidos') loadPedidosView(_pedidosPage);
+  }, 20_000);
+}
+function stopPedidosPoller() {
+  if (_pedidosPoller) { clearInterval(_pedidosPoller); _pedidosPoller = null; }
+}
+
+function startKanbanWooPoller() {
+  stopKanbanWooPoller();
+  _kanbanWooPoller = setInterval(async () => {
+    if (document.body.dataset.viewActive !== 'pipelines') return;
+    try {
+      const cfg = await api('GET', '/api/apps/woo/config');
+      const ts = cfg?.lastWebhookAt || 0;
+      if (ts && ts !== _wooLastWebhookAt) {
+        _wooLastWebhookAt = ts;
+        loadPipelinesKanban();
+      }
+    } catch (_) {}
+  }, 20_000);
+}
+function stopKanbanWooPoller() {
+  if (_kanbanWooPoller) { clearInterval(_kanbanWooPoller); _kanbanWooPoller = null; }
+}
 
 async function loadPedidosView(page = _pedidosPage) {
   if (!_pedidosEventsReady) {

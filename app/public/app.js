@@ -14782,17 +14782,29 @@ function setupReplyForm() {
 function startChatPolling() {
   if (_chatPollTimer) clearInterval(_chatPollTimer);
   _chatPollTimer = setInterval(async () => {
-    if (document.body.dataset.viewActive !== 'chats') return;
-    const prevTotal = CONVERSATIONS.reduce((s, c) => s + c.unreadCount, 0);
-    await loadConversations();
-    // Si estamos viendo una conversación, refrescar mensajes y estado del reply form
-    if (ACTIVE_CONVO_ID) {
-      const prevCount = CHAT_MESSAGES.length;
-      await loadMessages(ACTIVE_CONVO_ID);
-      if (CHAT_MESSAGES.length > prevCount) {
-        api('PATCH', `/api/conversations/${ACTIVE_CONVO_ID}/read`).catch(() => {});
+    // Caso 1: vista de Chats con conversación activa
+    if (document.body.dataset.viewActive === 'chats') {
+      const prevTotal = CONVERSATIONS.reduce((s, c) => s + c.unreadCount, 0);
+      await loadConversations();
+      if (ACTIVE_CONVO_ID) {
+        const prevCount = CHAT_MESSAGES.length;
+        await loadMessages(ACTIVE_CONVO_ID);
+        if (CHAT_MESSAGES.length > prevCount) {
+          api('PATCH', `/api/conversations/${ACTIVE_CONVO_ID}/read`).catch(() => {});
+        }
+        refreshReplyFormState();
       }
-      refreshReplyFormState();
+      return;
+    }
+    // Caso 2: detalle del lead con conversación abierta — refrescar para que
+    // status de mensajes (sent → delivered → read → failed) actualice las
+    // palomitas / icono ⚠ en tiempo real sin tener que cambiar de vista.
+    if (document.body.dataset.viewActive === 'exp-detail' && EXP_DETAIL_CONVO_ID) {
+      try {
+        const data = await api('GET', `/api/conversations/${EXP_DETAIL_CONVO_ID}/messages`);
+        EXP_DETAIL_MSGS = data.items || [];
+        renderExpDetailMessages();
+      } catch (_) {}
     }
   }, 5000);
 }

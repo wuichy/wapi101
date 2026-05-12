@@ -96,10 +96,15 @@ function processOrderProcessing(db, tenantId, order) {
     console.warn('[woo] No hay pipeline/etapa configurada para pedidos nuevos (tenant', tenantId, '). Configúrala en Apps → WooCommerce → Pipelines.');
   }
 
-  // Buscar lead existente de este contacto en el mismo pipeline
+  // Buscar lead: 1) en el pipeline inicial configurado (más reciente), 2) fallback al lead más reciente del contacto
   let expedient = pipelineId ? db.prepare(
-    'SELECT id, pipeline_id, stage_id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
+    'SELECT id, pipeline_id, stage_id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
   ).get(contact.id, pipelineId, tenantId) : null;
+  if (!expedient) {
+    expedient = db.prepare(
+      'SELECT id, pipeline_id, stage_id FROM expedients WHERE contact_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+    ).get(contact.id, tenantId) || null;
+  }
 
   let expId;
   if (expedient) {
@@ -192,15 +197,16 @@ function processOrderCompleted(db, tenantId, order, wooConfig) {
   const contact = findContact(db, tenantId, phone, email);
   if (!contact) return { skipped: true, reason: 'contact_not_found' };
 
-  // Buscar el lead en pipeline CLIENTES
-  const clientesPipeline = db.prepare(
-    "SELECT id FROM pipelines WHERE LOWER(name) LIKE '%cliente%' AND tenant_id = ? LIMIT 1"
-  ).get(tenantId);
-  if (!clientesPipeline) return { skipped: true, reason: 'pipeline_not_found' };
-
-  const expedient = db.prepare(
-    'SELECT id, pipeline_id, stage_id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
-  ).get(contact.id, clientesPipeline.id, tenantId);
+  // Buscar lead: 1) en el pipeline inicial configurado (más reciente), 2) fallback al lead más reciente del contacto
+  const initialPipelineId = wooConfig?.initial_pipeline_id || null;
+  let expedient = initialPipelineId ? db.prepare(
+    'SELECT id, pipeline_id, stage_id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+  ).get(contact.id, initialPipelineId, tenantId) : null;
+  if (!expedient) {
+    expedient = db.prepare(
+      'SELECT id, pipeline_id, stage_id FROM expedients WHERE contact_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+    ).get(contact.id, tenantId) || null;
+  }
   if (!expedient) return { skipped: true, reason: 'expedient_not_found' };
 
   // Llenar Paquetería y Código de Rastreo

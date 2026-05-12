@@ -106,6 +106,28 @@ function processOrderProcessing(db, tenantId, order) {
   // Tag del lead: número de pedido únicamente
   if (expId) addExpedientTag(db, tenantId, expId, orderNum);
 
+  // Guardar/actualizar en woo_orders
+  const lineItems = order.line_items || [];
+  db.prepare(`
+    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email, status, products_json, raw_json, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+    ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
+      status = excluded.status,
+      products_json = excluded.products_json,
+      raw_json = excluded.raw_json,
+      updated_at = unixepoch()
+  `).run(
+    tenantId,
+    order.id,
+    order.number,
+    `${firstName} ${lastName}`.trim(),
+    billing.phone || '',
+    email,
+    'processing',
+    JSON.stringify(lineItems),
+    JSON.stringify(order)
+  );
+
   return { contactId: contact.id, expId, action: 'processing' };
 }
 
@@ -174,6 +196,28 @@ function processOrderCompleted(db, tenantId, order, wooConfig) {
       console.warn(`[woo] Regla de ${maxDays}d apunta a pipeline/stage eliminado (tenant ${tenantId})`);
     }
   }
+
+  // Guardar/actualizar en woo_orders
+  const lineItemsCompleted = order.line_items || [];
+  db.prepare(`
+    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email, status, products_json, raw_json, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+    ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
+      status = excluded.status,
+      products_json = excluded.products_json,
+      raw_json = excluded.raw_json,
+      updated_at = unixepoch()
+  `).run(
+    tenantId,
+    order.id,
+    order.number,
+    `${(billing.first_name || '').trim()} ${(billing.last_name || '').trim()}`.trim(),
+    billing.phone || '',
+    email,
+    'completed',
+    JSON.stringify(lineItemsCompleted),
+    JSON.stringify(order)
+  );
 
   return { contactId: contact.id, expId: expedient.id, maxDays, action: 'completed' };
 }

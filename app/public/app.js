@@ -19751,6 +19751,8 @@ let _appsData    = [];
 let _wooPipelines = [];
 let _wooProducts  = [];
 let _wooRules     = [];
+let _wooOrders    = [];
+let _wooCarriers  = [];
 
 async function loadAppsSection() {
   try {
@@ -19833,6 +19835,8 @@ async function openWooModal() {
   document.getElementById('wooAppModal').hidden = false;
   await loadWooConfig();
   await loadWooPipelines();
+  await loadWooOrders();
+  await loadWooCarriers();
   setupWooTabs();
   setupWooEvents();
 }
@@ -19937,6 +19941,108 @@ function renderWooRules() {
     btn.addEventListener('click', () => { _wooRules.splice(Number(btn.dataset.delRule), 1); renderWooRules(); }));
 }
 
+async function loadWooOrders() {
+  try {
+    const data = await api('GET', '/api/apps/woo/orders');
+    _wooOrders = data.orders || [];
+    renderWooOrders();
+  } catch (e) { console.error('loadWooOrders', e); }
+}
+
+async function loadWooCarriers() {
+  try {
+    const data = await api('GET', '/api/apps/woo/orders/carriers');
+    _wooCarriers = data.carriers || [];
+  } catch (e) { _wooCarriers = []; }
+}
+
+function renderWooOrders(filter = '') {
+  const el = document.getElementById('wooOrdersList');
+  if (!el) return;
+  const orders = filter
+    ? _wooOrders.filter(o =>
+        String(o.wc_order_number).includes(filter) ||
+        (o.customer_name || '').toLowerCase().includes(filter.toLowerCase()))
+    : _wooOrders;
+
+  if (!orders.length) {
+    el.innerHTML = '<p class="woo-empty">Sin pedidos aún. Los pedidos aparecen cuando WooCommerce envía un evento.</p>';
+    return;
+  }
+
+  el.innerHTML = orders.map(o => {
+    const products = o.products || JSON.parse(o.products_json || '[]');
+    const productNames = products.map(p => `${p.name} x${p.quantity}`).join(', ');
+    const trackingBadge = o.tracking_number
+      ? `<span class="woo-tracking-badge woo-tracking-badge--${o.tracking_status || 'pendiente'}">${escapeHtml(o.tracking_carrier || '')} ${escapeHtml(o.tracking_number)}</span>`
+      : `<span class="woo-tracking-badge woo-tracking-badge--none">Sin rastreo</span>`;
+    const statusBadge = `<span class="woo-order-status woo-order-status--${o.status}">${o.status === 'processing' ? 'Procesando' : 'Completado'}</span>`;
+    const date = new Date(o.created_at * 1000).toLocaleDateString('es-MX');
+    return `
+      <div class="woo-order-row" data-order-id="${o.id}">
+        <div class="woo-order-main">
+          <div class="woo-order-header">
+            <strong>#${escapeHtml(o.wc_order_number || String(o.wc_order_id))}</strong>
+            ${statusBadge}
+            <span class="woo-order-date">${date}</span>
+          </div>
+          <div class="woo-order-customer">${escapeHtml(o.customer_name || '')} · ${escapeHtml(o.customer_phone || '')}</div>
+          <div class="woo-order-products">${escapeHtml(productNames)}</div>
+          <div class="woo-order-tracking">${trackingBadge}</div>
+        </div>
+        <button class="btn btn--sm btn--ghost woo-tracking-btn" data-order-id="${o.id}">
+          ${o.tracking_number ? '✏️ Editar rastreo' : '📦 Agregar rastreo'}
+        </button>
+      </div>
+      <div class="woo-tracking-form" id="wooTrackingForm_${o.id}" hidden>
+        <div class="woo-tracking-fields">
+          <select class="int-input woo-carrier-sel" data-oid="${o.id}">
+            <option value="">Paquetería...</option>
+            ${_wooCarriers.map(c => `<option value="${escapeHtml(c.id)}" ${o.tracking_carrier === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+          <input type="text" class="int-input woo-tracknum-inp" data-oid="${o.id}"
+            placeholder="Número de rastreo" value="${escapeHtml(o.tracking_number || '')}" style="flex:1" />
+          <select class="int-input woo-trackstatus-sel" data-oid="${o.id}">
+            <option value="pendiente" ${(o.tracking_status || 'pendiente') === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+            <option value="en_camino" ${o.tracking_status === 'en_camino' ? 'selected' : ''}>En camino</option>
+            <option value="entregado" ${o.tracking_status === 'entregado' ? 'selected' : ''}>Entregado</option>
+          </select>
+          <button class="btn btn--primary btn--sm woo-save-tracking-btn" data-oid="${o.id}">Guardar</button>
+          <button class="btn btn--ghost btn--sm woo-cancel-tracking-btn" data-oid="${o.id}">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Event listeners
+  el.querySelectorAll('.woo-tracking-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`wooTrackingForm_${btn.dataset.orderId}`);
+      if (form) form.hidden = !form.hidden;
+    });
+  });
+  el.querySelectorAll('.woo-cancel-tracking-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`wooTrackingForm_${btn.dataset.oid}`);
+      if (form) form.hidden = true;
+    });
+  });
+  el.querySelectorAll('.woo-save-tracking-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const oid = btn.dataset.oid;
+      const carrier = document.querySelector(`.woo-carrier-sel[data-oid="${oid}"]`).value;
+      const tracking_number = document.querySelector(`.woo-tracknum-inp[data-oid="${oid}"]`).value.trim();
+      const tracking_status = document.querySelector(`.woo-trackstatus-sel[data-oid="${oid}"]`).value;
+      if (!carrier || !tracking_number) return toast('Selecciona paquetería y número de rastreo', 'error');
+      try {
+        btn.disabled = true;
+        const result = await api('PATCH', `/api/apps/woo/orders/${oid}/tracking`, { carrier, tracking_number, tracking_status });
+        toast(result.wcPush ? '✅ Rastreo guardado y enviado a WooCommerce' : '✅ Rastreo guardado (configura credenciales WC para sincronizar)', 'success');
+        await loadWooOrders();
+      } catch (e) { toast(e.message, 'error'); } finally { btn.disabled = false; }
+    });
+  });
+}
+
 function setupWooEvents() {
   // Conectar
   document.getElementById('wooConnectBtn')?.addEventListener('click', async () => {
@@ -20022,4 +20128,8 @@ function setupWooEvents() {
       errEl.hidden = false;
     }
   });
+
+  // Pedidos: refresh + búsqueda
+  document.getElementById('wooOrdersRefresh')?.addEventListener('click', loadWooOrders);
+  document.getElementById('wooOrdersSearch')?.addEventListener('input', (e) => renderWooOrders(e.target.value));
 }

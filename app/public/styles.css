@@ -11098,3 +11098,22 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-plugin-instructions h4 { margin: 0 0 12px; font-size: 15px; }
 .woo-plugin-instructions ol { padding-left: 20px; line-height: 2; }
 .woo-requirements { margin-top: 16px; padding: 10px 14px; background: var(--bg-base); border-radius: var(--radius-sm); border: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+.woo-orders-toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+.woo-orders-list { display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto; }
+.woo-order-row { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+.woo-order-header { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.woo-order-date { font-size:11px; color:var(--text-muted); margin-left:auto; }
+.woo-order-customer { font-size:12px; color:var(--text-muted); margin-bottom:2px; }
+.woo-order-products { font-size:12px; color:var(--text-secondary); margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.woo-order-tracking { margin-top:4px; }
+.woo-order-status { font-size:11px; font-weight:600; padding:2px 7px; border-radius:10px; }
+.woo-order-status--processing { background:#fef3c7; color:#92400e; }
+.woo-order-status--completed { background:#d1fae5; color:#065f46; }
+.woo-tracking-badge { font-size:11px; padding:2px 8px; border-radius:10px; }
+.woo-tracking-badge--none { background:var(--bg-alt); color:var(--text-muted); }
+.woo-tracking-badge--pendiente { background:#fef3c7; color:#92400e; }
+.woo-tracking-badge--en_camino { background:#dbeafe; color:#1e40af; }
+.woo-tracking-badge--entregado { background:#d1fae5; color:#065f46; }
+.woo-tracking-btn { margin-top:8px; }
+.woo-tracking-form { padding:10px 0 4px; }
+.woo-tracking-fields { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }

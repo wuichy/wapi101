@@ -1916,6 +1916,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <button class="woo-tab is-active" data-tab="conexion">Conexión</button>
             <button class="woo-tab" data-tab="productos">Productos</button>
             <button class="woo-tab" data-tab="pipelines">Pipelines</button>
+            <button class="woo-tab" data-tab="pedidos">Pedidos</button>
             <button class="woo-tab" data-tab="plugin">Plugin WP</button>
           </div>
           <div class="modal-body woo-body">
@@ -1983,6 +1984,16 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <div id="wooPipelineError" class="int-error" hidden></div>
               <div style="margin-top:16px;text-align:right">
                 <button class="btn btn--primary" id="wooSaveRulesBtn">Guardar reglas</button>
+              </div>
+            </div>
+            <!-- TAB: Pedidos -->
+            <div class="woo-tab-panel" data-panel="pedidos" hidden>
+              <div class="woo-orders-toolbar">
+                <input type="text" id="wooOrdersSearch" class="int-input" placeholder="Buscar por # orden o cliente..." style="flex:1;max-width:280px" />
+                <button class="btn btn--ghost btn--sm" id="wooOrdersRefresh">↺ Actualizar</button>
+              </div>
+              <div id="wooOrdersList" class="woo-orders-list">
+                <p class="woo-empty">Cargando pedidos...</p>
               </div>
             </div>
             <!-- TAB: Plugin WP -->

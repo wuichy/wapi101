@@ -174,18 +174,33 @@ function authRouter(db) {
             quantity: i.quantity, total: i.total || '0',
           }));
 
-          // Extraer tracking de meta_data
+          // Extraer tracking — WooCommerce Orders Tracking Premium (VillaTheme) usa prefijo _wot_
           let tCarrier = '', tNumber = '', tStatus = '';
-          const tMeta = (o.meta_data || []).find(m => m.key === '_wc_shipment_tracking_items');
-          if (tMeta && Array.isArray(tMeta.value) && tMeta.value.length) {
-            const t = tMeta.value[0];
-            tCarrier = t.formatted_tracking_provider || t.tracking_provider || t.carrier || '';
-            tNumber  = t.tracking_number || '';
-          } else {
-            tCarrier = (o.meta_data || []).find(m => m.key === '_order_tracking_carrier')?.value || '';
-            tNumber  = (o.meta_data || []).find(m => m.key === '_order_tracking_number')?.value || '';
+          const _meta = (key) => (o.meta_data || []).find(m => m.key === key)?.value || '';
+
+          // 1. VillaTheme WooCommerce Orders Tracking Premium (_wot_ prefix)
+          tNumber  = _meta('_wot_tracking_number');
+          tCarrier = _meta('_wot_tracking_carrier');
+          tStatus  = _meta('_wot_tracking_status');
+
+          // 2. Fallback: WooCommerce Shipment Tracking (SkyVerge/free) — _wc_shipment_tracking_items
+          if (!tNumber) {
+            const tMeta = (o.meta_data || []).find(m => m.key === '_wc_shipment_tracking_items');
+            if (tMeta && Array.isArray(tMeta.value) && tMeta.value.length) {
+              const t = tMeta.value[0];
+              tCarrier = t.formatted_tracking_provider || t.tracking_provider || t.carrier || '';
+              tNumber  = t.tracking_number || '';
+            }
           }
-          tStatus = (o.meta_data || []).find(m => m.key === '_wapi101_tracking_status')?.value || '';
+
+          // 3. Fallback: meta keys genéricas
+          if (!tNumber) {
+            tCarrier = _meta('_order_tracking_carrier') || _meta('_shipping_provider');
+            tNumber  = _meta('_order_tracking_number')  || _meta('_tracking_number');
+          }
+
+          // 4. Estado desde Wapi101 si no viene de VillaTheme
+          if (!tStatus) tStatus = _meta('_wapi101_tracking_status');
           if (!tStatus && o.status === 'completed' && tCarrier) tStatus = 'entregado';
 
           const wcOrderDate = o.date_created ? Math.floor(new Date(o.date_created).getTime() / 1000) : null;

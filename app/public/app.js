@@ -19780,10 +19780,12 @@ function _renderReminderTimerEditor(sid, c) {
 // ════════════════════════════════════════════════════════════════
 let _appsData    = [];
 let _wooPipelines = [];
-let _wooProducts  = [];
-let _wooRules     = [];
-let _wooOrders    = [];
-let _wooCarriers  = [];
+let _wooProducts      = [];
+let _wooRules         = [];
+let _wooOrders        = [];
+let _wooCarriers      = [];
+let _wooOrderStatuses = [];   // estatus disponibles en WC para cambiar desde tracking
+let _wooHasCredentials = false; // si hay consumer key/secret guardados
 let _wooOrdersPage  = 1;
 let _wooOrdersPages = 1;
 let _pedidosPage    = 1;
@@ -19965,6 +19967,7 @@ async function openWooModal() {
   await loadWooTriggerStatuses(wooCfg);
   await loadWooOrders();
   await loadWooCarriers();
+  await loadWooOrderStatuses();
   await loadWooProducts();
   setupWooTabs();
   setupWooEvents();
@@ -20019,6 +20022,7 @@ async function loadWooConfig() {
     if (ckEl && cfg.hasCredentials) ckEl.placeholder = 'ck_•••••••••••••••••••••••••• (guardado)';
     if (csEl && cfg.hasCredentials) csEl.placeholder = 'cs_•••••••••••••••••••••••••• (guardado)';
 
+    _wooHasCredentials = !!(cfg.hasCredentials);
     _wooProducts = cfg.products || [];
     _wooRules    = cfg.pipelineRules || [];
     renderWooProducts();
@@ -20158,6 +20162,13 @@ async function loadWooCarriers() {
   } catch (e) { _wooCarriers = []; }
 }
 
+async function loadWooOrderStatuses() {
+  try {
+    const data = await api('GET', '/api/apps/woo/order-statuses');
+    _wooOrderStatuses = (data.statuses || []).map(s => ({ slug: s.slug, label: s.name || s.slug }));
+  } catch (e) { _wooOrderStatuses = []; }
+}
+
 function _fmtMXN(val) {
   const n = parseFloat(val || '0');
   return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 });
@@ -20166,6 +20177,10 @@ function _fmtMXN(val) {
 function _buildOrderRows(orders, prefix, carriers) {
   if (!orders.length) return '<p class="woo-empty">Sin pedidos en esta página.</p>';
   const WOO_STATUS = { pending: 'Pendiente', processing: 'Procesando', 'on-hold': 'En espera', completed: 'Completado', cancelled: 'Cancelado', refunded: 'Reembolsado', failed: 'Fallido' };
+  // Construir opciones de estatus WC
+  const wcStatusOpts = _wooOrderStatuses.length
+    ? [{ slug: '', label: 'No cambiar estatus en WC' }, ..._wooOrderStatuses.map(s => ({ slug: s.slug, label: s.label || s.slug }))]
+    : [{ slug: '', label: _wooHasCredentials ? 'No cambiar estatus en WC' : '⚠️ Sin credenciales WC' }];
   return orders.map(o => {
     const products = o.products || JSON.parse(o.products_json || '[]');
     const addr     = (() => { try { return JSON.parse(o.shipping_address_json || '{}'); } catch { return {}; } })();
@@ -20230,6 +20245,7 @@ function _buildOrderRows(orders, prefix, carriers) {
     <button class="btn btn--xs btn--ghost woo-tracking-btn" data-order-id="${o.id}">${o.tracking_number ? '✏️' : '📦'}</button>
   </div>
   <div class="woo-tracking-form" id="${prefix}TrackingForm_${o.id}" hidden>
+    ${!_wooHasCredentials ? `<div class="woo-no-creds-warn">⚠️ Sin credenciales WC — el rastreo se guardará solo en Wapi101. Configura las credenciales REST API para sincronizar con WooCommerce.</div>` : ''}
     <div class="woo-tracking-fields">
       <select class="int-input ${prefix}-carrier-sel" data-oid="${o.id}">
         <option value="">Paquetería...</option>
@@ -20240,6 +20256,12 @@ function _buildOrderRows(orders, prefix, carriers) {
         <option value="pendiente" ${(o.tracking_status||'pendiente')==='pendiente'?'selected':''}>Pendiente</option>
         <option value="en_camino" ${o.tracking_status==='en_camino'?'selected':''}>En camino</option>
         <option value="entregado" ${o.tracking_status==='entregado'?'selected':''}>Entregado</option>
+      </select>
+    </div>
+    <div class="woo-tracking-fields woo-tracking-fields--second">
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">Estatus en WooCommerce:</span>
+      <select class="int-input ${prefix}-wcstatus-sel" data-oid="${o.id}" style="flex:1" ${!_wooHasCredentials ? 'disabled title="Configura credenciales WC REST API"' : ''}>
+        ${wcStatusOpts.map(s => `<option value="${escapeHtml(s.slug)}">${escapeHtml(s.label)}</option>`).join('')}
       </select>
       <button class="btn btn--primary btn--sm ${prefix}-save-tracking-btn" data-oid="${o.id}">Guardar</button>
       <button class="btn btn--ghost btn--sm ${prefix}-cancel-tracking-btn" data-oid="${o.id}">✕</button>
@@ -20339,15 +20361,23 @@ function _bindOrderRows(el, prefix, onSave) {
   });
   el.querySelectorAll(`.${prefix}-save-tracking-btn`).forEach(btn => {
     btn.addEventListener('click', async () => {
-      const oid            = btn.dataset.oid;
-      const carrier        = el.querySelector(`.${prefix}-carrier-sel[data-oid="${oid}"]`).value;
+      const oid             = btn.dataset.oid;
+      const carrier         = el.querySelector(`.${prefix}-carrier-sel[data-oid="${oid}"]`).value;
       const tracking_number = el.querySelector(`.${prefix}-tracknum-inp[data-oid="${oid}"]`).value.trim();
       const tracking_status = el.querySelector(`.${prefix}-trackstatus-sel[data-oid="${oid}"]`).value;
+      const wc_status_el    = el.querySelector(`.${prefix}-wcstatus-sel[data-oid="${oid}"]`);
+      const wc_status       = wc_status_el ? wc_status_el.value : '';
       if (!carrier || !tracking_number) return toast('Selecciona paquetería y número de rastreo', 'error');
       try {
         btn.disabled = true;
-        const result = await api('PATCH', `/api/apps/woo/orders/${oid}/tracking`, { carrier, tracking_number, tracking_status });
-        toast(result.wcPush ? '✅ Rastreo guardado y enviado a WooCommerce' : '✅ Rastreo guardado (configura credenciales WC para sincronizar)', 'success');
+        const payload = { carrier, tracking_number, tracking_status };
+        if (wc_status) payload.wc_status = wc_status;
+        const result = await api('PATCH', `/api/apps/woo/orders/${oid}/tracking`, payload);
+        let msg = '✅ Rastreo guardado';
+        if (result.wcPush) msg += ' y sincronizado con WooCommerce';
+        if (wc_status && result.hasCredentials) msg += ` · Estatus → ${wc_status}`;
+        if (!result.hasCredentials) msg += ' (configura credenciales WC para sincronizar)';
+        toast(msg, 'success');
         await onSave();
       } catch (e) { toast(e.message, 'error'); } finally { btn.disabled = false; }
     });

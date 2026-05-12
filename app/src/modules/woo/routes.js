@@ -377,33 +377,50 @@ function authRouter(db) {
 
   // PATCH /api/apps/woo/orders/:id/tracking — guardar tracking localmente + push a WC
   router.patch('/orders/:id/tracking', async (req, res) => {
-    const { carrier, tracking_number, tracking_status } = req.body;
+    const { carrier, tracking_number, tracking_status, wc_status } = req.body;
     const order = db.prepare('SELECT * FROM woo_orders WHERE id = ? AND tenant_id = ?').get(Number(req.params.id), req.tenantId);
     if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
 
     // Guardar en DB local
-    db.prepare('UPDATE woo_orders SET tracking_carrier=?, tracking_number=?, tracking_status=?, updated_at=unixepoch() WHERE id=?')
-      .run(carrier || '', tracking_number || '', tracking_status || '', order.id);
+    const updateFields = ['tracking_carrier=?', 'tracking_number=?', 'tracking_status=?', 'updated_at=unixepoch()'];
+    const updateVals   = [carrier || '', tracking_number || '', tracking_status || ''];
+    if (wc_status) { updateFields.push('status=?'); updateVals.push(wc_status); }
+    updateVals.push(order.id);
+    db.prepare(`UPDATE woo_orders SET ${updateFields.join(', ')} WHERE id=?`).run(...updateVals);
 
     // Push a WooCommerce si hay credenciales
     const cfg = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(req.tenantId);
+    let wcPush = false;
+    let wcError = null;
     if (cfg && cfg.site_url && cfg.wc_consumer_key && cfg.wc_consumer_secret) {
+      const baseUrl  = cfg.site_url.replace(/\/$/, '');
+      const authHead = 'Basic ' + Buffer.from(`${cfg.wc_consumer_key}:${cfg.wc_consumer_secret}`).toString('base64');
+
+      // 1. Actualizar estatus en WC si se indicó
+      if (wc_status) {
+        try {
+          const statusResp = await fetch(`${baseUrl}/wp-json/wc/v3/orders/${order.wc_order_id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: authHead },
+            body: JSON.stringify({ status: wc_status }),
+          });
+          if (!statusResp.ok) wcError = `Status update failed: ${await statusResp.text()}`;
+        } catch (e) { wcError = e.message; }
+      }
+
+      // 2. Enviar tracking al plugin WP
       try {
-        const url = `${cfg.site_url.replace(/\/$/, '')}/wp-json/wapi101/v1/orders/${order.wc_order_id}/tracking`;
+        const url = `${baseUrl}/wp-json/wapi101/v1/orders/${order.wc_order_id}/tracking`;
         const resp = await fetch(url, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-Wapi-Token': cfg.token },
           body: JSON.stringify({ carrier, tracking_number, tracking_status }),
         });
-        if (!resp.ok) {
-          const text = await resp.text();
-          return res.json({ ok: true, wcPush: false, wcError: text });
-        }
-      } catch (e) {
-        return res.json({ ok: true, wcPush: false, wcError: e.message });
-      }
+        if (resp.ok) wcPush = true;
+        else if (!wcError) wcError = await resp.text();
+      } catch (e) { if (!wcError) wcError = e.message; }
     }
-    res.json({ ok: true, wcPush: !!(cfg && cfg.site_url) });
+    res.json({ ok: true, wcPush, wcError, hasCredentials: !!(cfg && cfg.site_url && cfg.wc_consumer_key) });
   });
 
   // PUT /api/apps/woo/config/credentials — guardar credenciales WC REST API
@@ -430,7 +447,7 @@ function webhookRouter(db) {
     if (!cfg) {
       // Intentar identificar tenant por host header para notificar
       try {
-        const allCfgs = db.prepare('SELECT * FROM woo_config WHERE connected = 1').all();
+        const allCfgs = db.prepare('SELECT * FROM woo_config WHERE enabled = 1').all();
         for (const c of allCfgs) {
           notifyWooAdmins(db, c.tenant_id,
             '⚠️ WooCommerce: token inválido',
@@ -513,7 +530,7 @@ function checkWooInactivity(db) {
     const ONE_HOUR = 3600;
     const now = Math.floor(Date.now() / 1000);
     const configs = db.prepare(
-      'SELECT * FROM woo_config WHERE connected = 1 AND enabled = 1'
+      'SELECT * FROM woo_config WHERE enabled = 1'
     ).all();
 
     for (const cfg of configs) {

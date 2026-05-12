@@ -20121,7 +20121,10 @@ function _buildOrderRows(orders, prefix, carriers) {
     const addr      = (() => { try { return JSON.parse(o.shipping_address_json || '{}'); } catch { return {}; } })();
     const ts        = o.wc_order_date || o.created_at;
     const date      = ts ? new Date(ts * 1000).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) : '—';
-    const statusBadge  = `<span class="woo-order-status woo-order-status--${o.status}">${o.status === 'processing' ? 'Procesando' : 'Completado'}</span>`;
+    const _wooStatusLabels = { pending: 'Pendiente', processing: 'Procesando', 'on-hold': 'En espera', completed: 'Completado', cancelled: 'Cancelado', refunded: 'Reembolsado', failed: 'Fallido' };
+    const _statusSlug  = (o.status || '').replace(/^wc-/, '');
+    const _statusLabel = _wooStatusLabels[_statusSlug] || _statusSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const statusBadge  = `<span class="woo-order-status woo-order-status--${_statusSlug}">${escapeHtml(_statusLabel)}</span>`;
     const trackingBadge = o.tracking_number
       ? `<span class="woo-tracking-badge woo-tracking-badge--${o.tracking_status || 'pendiente'}">${escapeHtml(o.tracking_carrier || '')} · ${escapeHtml(o.tracking_number)}</span>`
       : `<span class="woo-tracking-badge woo-tracking-badge--none">Sin rastreo</span>`;

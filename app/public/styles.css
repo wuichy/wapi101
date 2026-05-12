@@ -11147,7 +11147,14 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-order-tracking { margin-top:4px; }
 .woo-order-status { font-size:11px; font-weight:600; padding:2px 7px; border-radius:10px; }
 .woo-order-status--processing { background:#fef3c7; color:#92400e; }
-.woo-order-status--completed { background:#d1fae5; color:#065f46; }
+.woo-order-status--completed  { background:#d1fae5; color:#065f46; }
+.woo-order-status--pending    { background:#f1f5f9; color:#475569; }
+.woo-order-status--on-hold    { background:#fef9c3; color:#854d0e; }
+.woo-order-status--cancelled  { background:#fee2e2; color:#991b1b; }
+.woo-order-status--refunded   { background:#ede9fe; color:#5b21b6; }
+.woo-order-status--failed     { background:#fee2e2; color:#991b1b; }
+/* Status custom (ej. completado-facturado) */
+.woo-order-status { background:var(--bg-alt); color:var(--text-secondary); }
 .woo-tracking-badge { font-size:11px; padding:2px 8px; border-radius:10px; }
 .woo-tracking-badge--none { background:var(--bg-alt); color:var(--text-muted); }
 .woo-tracking-badge--pendiente { background:#fef3c7; color:#92400e; }

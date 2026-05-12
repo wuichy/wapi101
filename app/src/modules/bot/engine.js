@@ -1528,13 +1528,8 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
   const wait = db.prepare('SELECT * FROM bot_run_waits WHERE id = ? AND status = ?').get(waitId, 'waiting');
   if (!wait) { _log('warn', `resumeRun: wait ${waitId} no encontrado o ya resumido`); return; }
 
-  // Marcar como resumido (atómico — evita doble-resume)
-  const upd = db.prepare(
-    `UPDATE bot_run_waits SET status = 'resumed', resumed_branch = ?, resumed_at = unixepoch() WHERE id = ? AND status = 'waiting'`
-  ).run(branch, waitId);
-  if (upd.changes === 0) { _log('info', `resumeRun: wait ${waitId} ya fue resumido por otro proceso`); return; }
-
-  // Cargar bot (sin filtrar por tenant — el wait ya estableció su tenant)
+  // Cargar bot ANTES de marcar como resumido — necesitamos el tipo de step
+  // para decidir si este branch aplica (timers solo se resumen por on_timeout).
   const botRow = db.prepare('SELECT * FROM salsbots WHERE id = ?').get(wait.bot_id);
   if (!botRow) { _log('error', `resumeRun: bot ${wait.bot_id} no existe`); return; }
   const tenantId = wait.tenant_id || botRow.tenant_id;
@@ -1559,6 +1554,23 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     return;
   }
   const isTimer = waitStep.type === 'timer';
+
+  // GUARD CRÍTICO: un timer SOLO se resume por expiración natural (on_timeout)
+  // o por adjust-wait manual (que cambia expires_at, no llama a esta función).
+  // Eventos como on_delivery_fail / on_text_reply son de mensajes y NO deben
+  // afectar timers — antes esto rompía cadenas enteras: si fallaba el envío
+  // del primer mensaje, todos los timers de la cadena se "resumían" y los
+  // bots avanzaban de stage en cascada.
+  if (isTimer && branch !== 'on_timeout') {
+    _log('info', `resumeWait: skip wait ${waitId} — timer no se resume por branch="${branch}" (solo on_timeout)`);
+    return;
+  }
+
+  // Marcar como resumido (atómico — evita doble-resume)
+  const upd = db.prepare(
+    `UPDATE bot_run_waits SET status = 'resumed', resumed_branch = ?, resumed_at = unixepoch() WHERE id = ? AND status = 'waiting'`
+  ).run(branch, waitId);
+  if (upd.changes === 0) { _log('info', `resumeRun: wait ${waitId} ya fue resumido por otro proceso`); return; }
 
   const branches = waitStep.config?.branches || {};
   const branchSteps = isTimer ? [] : (Array.isArray(branches[branch]) ? branches[branch] : []);

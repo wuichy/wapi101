@@ -6112,8 +6112,24 @@ function renderFieldDefs() {
     <div class="field-def-row">
       <span class="field-def-label">${escapeHtml(fd.label)}</span>
       <span class="field-def-type">${typeLabels[fd.fieldType] || fd.fieldType}</span>
-      <button class="btn btn--xs btn--danger-ghost" data-action="del-field" data-id="${fd.id}">Eliminar</button>
+      <div class="field-def-actions">
+        <button class="btn btn--xs btn--ghost" data-action="edit-field" data-id="${fd.id}" data-label="${escapeHtml(fd.label)}">Editar</button>
+        <button class="btn btn--xs btn--danger-ghost" data-action="del-field" data-id="${fd.id}">Eliminar</button>
+      </div>
     </div>`).join('');
+
+  list.querySelectorAll('[data-action="edit-field"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const newLabel = prompt('Nombre del campo:', btn.dataset.label);
+      if (!newLabel || newLabel.trim() === btn.dataset.label) return;
+      try {
+        await api('PATCH', `/api/expedients/field-defs/${btn.dataset.id}`, { label: newLabel.trim() });
+        await loadExpFieldDefs();
+        renderFieldDefs();
+        toast('Campo actualizado', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  });
 
   list.querySelectorAll('[data-action="del-field"]').forEach((btn) => {
     btn.addEventListener('click', async () => {

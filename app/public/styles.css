@@ -2274,6 +2274,7 @@ body.nav-collapsed .nav-notif-panel {
   font-size: 13px;
 }
 .field-def-label { flex: 1; font-weight: 600; }
+.field-def-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .field-def-type {
   font-size: 11px;
   color: var(--text-muted);

@@ -19755,6 +19755,10 @@ let _wooProducts  = [];
 let _wooRules     = [];
 let _wooOrders    = [];
 let _wooCarriers  = [];
+let _wooOrdersPage  = 1;
+let _wooOrdersPages = 1;
+let _pedidosPage    = 1;
+let _pedidosPages   = 1;
 
 async function loadAppsSection() {
   try {
@@ -19863,10 +19867,10 @@ async function updatePedidosNavVisibility() {
 
 let _pedidosEventsReady = false;
 
-async function loadPedidosView() {
+async function loadPedidosView(page = _pedidosPage) {
   if (!_pedidosEventsReady) {
     _pedidosEventsReady = true;
-    document.getElementById('pedidosRefreshBtn')?.addEventListener('click', loadPedidosView);
+    document.getElementById('pedidosRefreshBtn')?.addEventListener('click', () => loadPedidosView(1));
     document.getElementById('pedidosSearch')?.addEventListener('input', (e) => renderPedidosOrders(e.target.value));
     document.getElementById('pedidosSyncBtn')?.addEventListener('click', async () => {
       const btn = document.getElementById('pedidosSyncBtn');
@@ -19874,19 +19878,22 @@ async function loadPedidosView() {
       try {
         const res = await api('POST', '/api/apps/woo/orders/sync');
         toast(`✅ ${res.imported} órdenes importadas de WooCommerce`, 'success');
-        await loadPedidosView();
+        await loadPedidosView(1);
       } catch (e) { toast(e.message || 'Error al importar', 'error'); }
       finally { btn.disabled = false; btn.textContent = '⬇ Importar de WooCommerce'; }
     });
   }
+  _pedidosPage = page;
   const listEl = document.getElementById('pedidosOrdersList');
   if (listEl) listEl.innerHTML = '<p class="woo-empty">Cargando pedidos...</p>';
   try {
     const [ordersData] = await Promise.all([
-      api('GET', '/api/apps/woo/orders'),
+      api('GET', `/api/apps/woo/orders?page=${page}&limit=25`),
       loadWooCarriers(),
     ]);
-    _wooOrders = ordersData.orders || [];
+    _wooOrders      = ordersData.orders || [];
+    _pedidosPage    = ordersData.page  || 1;
+    _pedidosPages   = ordersData.pages || 1;
     renderPedidosOrders(document.getElementById('pedidosSearch')?.value || '');
   } catch (e) {
     if (listEl) listEl.innerHTML = '<p class="woo-empty">Error al cargar pedidos. Verifica la configuración de WooCommerce.</p>';
@@ -19908,75 +19915,12 @@ function renderPedidosOrders(filter = '') {
     return;
   }
 
-  el.innerHTML = orders.map(o => {
-    const products = o.products || JSON.parse(o.products_json || '[]');
-    const productNames = products.map(p => `${p.name} x${p.quantity}`).join(', ');
-    const trackingBadge = o.tracking_number
-      ? `<span class="woo-tracking-badge woo-tracking-badge--${o.tracking_status || 'pendiente'}">${escapeHtml(o.tracking_carrier || '')} ${escapeHtml(o.tracking_number)}</span>`
-      : `<span class="woo-tracking-badge woo-tracking-badge--none">Sin rastreo</span>`;
-    const statusBadge = `<span class="woo-order-status woo-order-status--${o.status}">${o.status === 'processing' ? 'Procesando' : 'Completado'}</span>`;
-    const date = new Date(o.created_at * 1000).toLocaleDateString('es-MX');
-    return `
-      <div class="woo-order-row" data-order-id="${o.id}">
-        <div class="woo-order-main">
-          <div class="woo-order-header">
-            <strong>#${escapeHtml(o.wc_order_number || String(o.wc_order_id))}</strong>
-            ${statusBadge}
-            <span class="woo-order-date">${date}</span>
-          </div>
-          <div class="woo-order-customer">${escapeHtml(o.customer_name || '')} · ${escapeHtml(o.customer_phone || '')}</div>
-          <div class="woo-order-products">${escapeHtml(productNames)}</div>
-          <div class="woo-order-tracking">${trackingBadge}</div>
-        </div>
-        <button class="btn btn--sm btn--ghost woo-tracking-btn" data-order-id="${o.id}">
-          ${o.tracking_number ? '✏️ Editar rastreo' : '📦 Agregar rastreo'}
-        </button>
-      </div>
-      <div class="woo-tracking-form" id="pedidosTrackingForm_${o.id}" hidden>
-        <div class="woo-tracking-fields">
-          <select class="int-input pedidos-carrier-sel" data-oid="${o.id}">
-            <option value="">Paquetería...</option>
-            ${_wooCarriers.map(c => `<option value="${escapeHtml(c.id)}" ${o.tracking_carrier === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
-          </select>
-          <input type="text" class="int-input pedidos-tracknum-inp" data-oid="${o.id}"
-            placeholder="Número de rastreo" value="${escapeHtml(o.tracking_number || '')}" style="flex:1" />
-          <select class="int-input pedidos-trackstatus-sel" data-oid="${o.id}">
-            <option value="pendiente" ${(o.tracking_status || 'pendiente') === 'pendiente' ? 'selected' : ''}>Pendiente</option>
-            <option value="en_camino" ${o.tracking_status === 'en_camino' ? 'selected' : ''}>En camino</option>
-            <option value="entregado" ${o.tracking_status === 'entregado' ? 'selected' : ''}>Entregado</option>
-          </select>
-          <button class="btn btn--primary btn--sm pedidos-save-tracking-btn" data-oid="${o.id}">Guardar</button>
-          <button class="btn btn--ghost btn--sm pedidos-cancel-tracking-btn" data-oid="${o.id}">✕</button>
-        </div>
-      </div>`;
-  }).join('');
+  el.innerHTML = _buildOrderRows(orders, 'pedidos', _wooCarriers)
+    + _buildPagination(_pedidosPage, _pedidosPages, p => loadPedidosView(p));
+  _bindOrderRows(el, 'pedidos', () => loadPedidosView(_pedidosPage));
 
-  el.querySelectorAll('.woo-tracking-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const form = document.getElementById(`pedidosTrackingForm_${btn.dataset.orderId}`);
-      if (form) form.hidden = !form.hidden;
-    });
-  });
-  el.querySelectorAll('.pedidos-cancel-tracking-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const form = document.getElementById(`pedidosTrackingForm_${btn.dataset.oid}`);
-      if (form) form.hidden = true;
-    });
-  });
-  el.querySelectorAll('.pedidos-save-tracking-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const oid = btn.dataset.oid;
-      const carrier        = document.querySelector(`.pedidos-carrier-sel[data-oid="${oid}"]`).value;
-      const tracking_number  = document.querySelector(`.pedidos-tracknum-inp[data-oid="${oid}"]`).value.trim();
-      const tracking_status  = document.querySelector(`.pedidos-trackstatus-sel[data-oid="${oid}"]`).value;
-      if (!carrier || !tracking_number) return toast('Selecciona paquetería y número de rastreo', 'error');
-      try {
-        btn.disabled = true;
-        const result = await api('PATCH', `/api/apps/woo/orders/${oid}/tracking`, { carrier, tracking_number, tracking_status });
-        toast(result.wcPush ? '✅ Rastreo guardado y enviado a WooCommerce' : '✅ Rastreo guardado (configura credenciales WC para sincronizar)', 'success');
-        await loadPedidosView();
-      } catch (e) { toast(e.message, 'error'); } finally { btn.disabled = false; }
-    });
+  el.querySelectorAll('.woo-pg-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadPedidosView(Number(btn.dataset.pg)));
   });
 }
 
@@ -20148,10 +20092,12 @@ function renderWooRules() {
     btn.addEventListener('click', () => { _wooRules.splice(Number(btn.dataset.delRule), 1); renderWooRules(); }));
 }
 
-async function loadWooOrders() {
+async function loadWooOrders(page = _wooOrdersPage) {
   try {
-    const data = await api('GET', '/api/apps/woo/orders');
-    _wooOrders = data.orders || [];
+    const data = await api('GET', `/api/apps/woo/orders?page=${page}&limit=25`);
+    _wooOrders      = data.orders || [];
+    _wooOrdersPage  = data.page  || 1;
+    _wooOrdersPages = data.pages || 1;
     renderWooOrders();
   } catch (e) { console.error('loadWooOrders', e); }
 }
@@ -20163,28 +20109,17 @@ async function loadWooCarriers() {
   } catch (e) { _wooCarriers = []; }
 }
 
-function renderWooOrders(filter = '') {
-  const el = document.getElementById('wooOrdersList');
-  if (!el) return;
-  const orders = filter
-    ? _wooOrders.filter(o =>
-        String(o.wc_order_number).includes(filter) ||
-        (o.customer_name || '').toLowerCase().includes(filter.toLowerCase()))
-    : _wooOrders;
-
-  if (!orders.length) {
-    el.innerHTML = '<p class="woo-empty">Sin pedidos aún. Los pedidos aparecen cuando WooCommerce envía un evento.</p>';
-    return;
-  }
-
-  el.innerHTML = orders.map(o => {
-    const products = o.products || JSON.parse(o.products_json || '[]');
+function _buildOrderRows(orders, prefix, carriers) {
+  if (!orders.length) return '<p class="woo-empty">Sin pedidos en esta página.</p>';
+  return orders.map(o => {
+    const products     = o.products || JSON.parse(o.products_json || '[]');
     const productNames = products.map(p => `${p.name} x${p.quantity}`).join(', ');
     const trackingBadge = o.tracking_number
       ? `<span class="woo-tracking-badge woo-tracking-badge--${o.tracking_status || 'pendiente'}">${escapeHtml(o.tracking_carrier || '')} ${escapeHtml(o.tracking_number)}</span>`
       : `<span class="woo-tracking-badge woo-tracking-badge--none">Sin rastreo</span>`;
     const statusBadge = `<span class="woo-order-status woo-order-status--${o.status}">${o.status === 'processing' ? 'Procesando' : 'Completado'}</span>`;
-    const date = new Date(o.created_at * 1000).toLocaleDateString('es-MX');
+    const ts  = o.wc_order_date || o.created_at;
+    const date = ts ? new Date(ts * 1000).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) : '—';
     return `
       <div class="woo-order-row" data-order-id="${o.id}">
         <div class="woo-order-main">
@@ -20201,52 +20136,83 @@ function renderWooOrders(filter = '') {
           ${o.tracking_number ? '✏️ Editar rastreo' : '📦 Agregar rastreo'}
         </button>
       </div>
-      <div class="woo-tracking-form" id="wooTrackingForm_${o.id}" hidden>
+      <div class="woo-tracking-form" id="${prefix}TrackingForm_${o.id}" hidden>
         <div class="woo-tracking-fields">
-          <select class="int-input woo-carrier-sel" data-oid="${o.id}">
+          <select class="int-input ${prefix}-carrier-sel" data-oid="${o.id}">
             <option value="">Paquetería...</option>
-            ${_wooCarriers.map(c => `<option value="${escapeHtml(c.id)}" ${o.tracking_carrier === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+            ${carriers.map(c => `<option value="${escapeHtml(c.id)}" ${o.tracking_carrier === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
           </select>
-          <input type="text" class="int-input woo-tracknum-inp" data-oid="${o.id}"
+          <input type="text" class="int-input ${prefix}-tracknum-inp" data-oid="${o.id}"
             placeholder="Número de rastreo" value="${escapeHtml(o.tracking_number || '')}" style="flex:1" />
-          <select class="int-input woo-trackstatus-sel" data-oid="${o.id}">
+          <select class="int-input ${prefix}-trackstatus-sel" data-oid="${o.id}">
             <option value="pendiente" ${(o.tracking_status || 'pendiente') === 'pendiente' ? 'selected' : ''}>Pendiente</option>
             <option value="en_camino" ${o.tracking_status === 'en_camino' ? 'selected' : ''}>En camino</option>
             <option value="entregado" ${o.tracking_status === 'entregado' ? 'selected' : ''}>Entregado</option>
           </select>
-          <button class="btn btn--primary btn--sm woo-save-tracking-btn" data-oid="${o.id}">Guardar</button>
-          <button class="btn btn--ghost btn--sm woo-cancel-tracking-btn" data-oid="${o.id}">✕</button>
+          <button class="btn btn--primary btn--sm ${prefix}-save-tracking-btn" data-oid="${o.id}">Guardar</button>
+          <button class="btn btn--ghost btn--sm ${prefix}-cancel-tracking-btn" data-oid="${o.id}">✕</button>
         </div>
       </div>`;
   }).join('');
+}
 
-  // Event listeners
+function _bindOrderRows(el, prefix, onSave) {
   el.querySelectorAll('.woo-tracking-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const form = document.getElementById(`wooTrackingForm_${btn.dataset.orderId}`);
+      const form = document.getElementById(`${prefix}TrackingForm_${btn.dataset.orderId}`);
       if (form) form.hidden = !form.hidden;
     });
   });
-  el.querySelectorAll('.woo-cancel-tracking-btn').forEach(btn => {
+  el.querySelectorAll(`.${prefix}-cancel-tracking-btn`).forEach(btn => {
     btn.addEventListener('click', () => {
-      const form = document.getElementById(`wooTrackingForm_${btn.dataset.oid}`);
+      const form = document.getElementById(`${prefix}TrackingForm_${btn.dataset.oid}`);
       if (form) form.hidden = true;
     });
   });
-  el.querySelectorAll('.woo-save-tracking-btn').forEach(btn => {
+  el.querySelectorAll(`.${prefix}-save-tracking-btn`).forEach(btn => {
     btn.addEventListener('click', async () => {
-      const oid = btn.dataset.oid;
-      const carrier = document.querySelector(`.woo-carrier-sel[data-oid="${oid}"]`).value;
-      const tracking_number = document.querySelector(`.woo-tracknum-inp[data-oid="${oid}"]`).value.trim();
-      const tracking_status = document.querySelector(`.woo-trackstatus-sel[data-oid="${oid}"]`).value;
+      const oid            = btn.dataset.oid;
+      const carrier        = el.querySelector(`.${prefix}-carrier-sel[data-oid="${oid}"]`).value;
+      const tracking_number = el.querySelector(`.${prefix}-tracknum-inp[data-oid="${oid}"]`).value.trim();
+      const tracking_status = el.querySelector(`.${prefix}-trackstatus-sel[data-oid="${oid}"]`).value;
       if (!carrier || !tracking_number) return toast('Selecciona paquetería y número de rastreo', 'error');
       try {
         btn.disabled = true;
         const result = await api('PATCH', `/api/apps/woo/orders/${oid}/tracking`, { carrier, tracking_number, tracking_status });
         toast(result.wcPush ? '✅ Rastreo guardado y enviado a WooCommerce' : '✅ Rastreo guardado (configura credenciales WC para sincronizar)', 'success');
-        await loadWooOrders();
+        await onSave();
       } catch (e) { toast(e.message, 'error'); } finally { btn.disabled = false; }
     });
+  });
+}
+
+function _buildPagination(currentPage, totalPages, onPageChange) {
+  if (totalPages <= 1) return '';
+  const prev = currentPage > 1 ? `<button class="woo-pg-btn" data-pg="${currentPage - 1}">‹ Ant</button>` : '';
+  const next = currentPage < totalPages ? `<button class="woo-pg-btn" data-pg="${currentPage + 1}">Sig ›</button>` : '';
+  return `<div class="woo-pagination">${prev}<span class="woo-pg-info">Página ${currentPage} de ${totalPages}</span>${next}</div>`;
+}
+
+function renderWooOrders(filter = '') {
+  const el = document.getElementById('wooOrdersList');
+  if (!el) return;
+  const orders = filter
+    ? _wooOrders.filter(o =>
+        String(o.wc_order_number).includes(filter) ||
+        (o.customer_name || '').toLowerCase().includes(filter.toLowerCase()))
+    : _wooOrders;
+
+  if (!orders.length) {
+    el.innerHTML = '<p class="woo-empty">Sin pedidos aún. Los pedidos aparecen cuando WooCommerce envía un evento.</p>';
+    return;
+  }
+
+  el.innerHTML = _buildOrderRows(orders, 'woo', _wooCarriers)
+    + _buildPagination(_wooOrdersPage, _wooOrdersPages, p => loadWooOrders(p));
+  _bindOrderRows(el, 'woo', () => loadWooOrders(_wooOrdersPage));
+
+  el.querySelectorAll('.woo-pg-btn').forEach(btn => {
+    btn.addEventListener('click', () => loadWooOrders(Number(btn.dataset.pg)));
   });
 }
 

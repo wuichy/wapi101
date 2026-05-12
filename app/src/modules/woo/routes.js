@@ -184,15 +184,17 @@ function authRouter(db) {
           tStatus = (o.meta_data || []).find(m => m.key === '_wapi101_tracking_status')?.value || '';
           if (!tStatus && o.status === 'completed' && tCarrier) tStatus = 'entregado';
 
+          const wcOrderDate = o.date_created ? Math.floor(new Date(o.date_created).getTime() / 1000) : null;
           db.prepare(`
             INSERT INTO woo_orders
               (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email,
-               status, products_json, tracking_carrier, tracking_number, tracking_status, raw_json, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,unixepoch())
+               status, products_json, tracking_carrier, tracking_number, tracking_status, raw_json, wc_order_date, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,unixepoch())
             ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
               status          = excluded.status,
               customer_name   = excluded.customer_name,
               products_json   = excluded.products_json,
+              wc_order_date   = COALESCE(excluded.wc_order_date, wc_order_date),
               tracking_carrier = CASE WHEN excluded.tracking_carrier != '' THEN excluded.tracking_carrier ELSE tracking_carrier END,
               tracking_number  = CASE WHEN excluded.tracking_number  != '' THEN excluded.tracking_number  ELSE tracking_number  END,
               tracking_status  = CASE WHEN excluded.tracking_status  != '' THEN excluded.tracking_status  ELSE tracking_status  END,
@@ -201,7 +203,7 @@ function authRouter(db) {
             req.tenantId, o.id, String(o.number), customerName,
             billing.phone || '', billing.email || '', o.status,
             JSON.stringify(products), tCarrier, tNumber, tStatus,
-            JSON.stringify({ id: o.id, number: o.number, status: o.status }),
+            JSON.stringify({ id: o.id, number: o.number, status: o.status }), wcOrderDate,
           );
           imported++;
         }
@@ -253,10 +255,21 @@ function authRouter(db) {
     res.download(zipPath, 'reelance-conexion-wapi101.zip');
   });
 
-  // GET /api/apps/woo/orders — listar órdenes
+  // GET /api/apps/woo/orders — listar órdenes con paginación
   router.get('/orders', (req, res) => {
-    const orders = db.prepare('SELECT * FROM woo_orders WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 100').all(req.tenantId);
-    res.json({ orders: orders.map(o => ({ ...o, products: JSON.parse(o.products_json || '[]') })) });
+    const page  = Math.max(1, parseInt(req.query.page  || '1', 10));
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '25', 10)));
+    const offset = (page - 1) * limit;
+    const total  = db.prepare('SELECT COUNT(*) as n FROM woo_orders WHERE tenant_id = ?').get(req.tenantId).n;
+    const orders = db.prepare(
+      'SELECT * FROM woo_orders WHERE tenant_id = ? ORDER BY COALESCE(wc_order_date, created_at) DESC LIMIT ? OFFSET ?'
+    ).all(req.tenantId, limit, offset);
+    res.json({
+      orders: orders.map(o => ({ ...o, products: JSON.parse(o.products_json || '[]') })),
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    });
   });
 
   // GET /api/apps/woo/orders/carriers — lista paqueterías desde WC

@@ -113,25 +113,22 @@ function processOrderProcessing(db, tenantId, order) {
   if (expId) addExpedientTag(db, tenantId, expId, orderNum);
 
   // Guardar/actualizar en woo_orders
-  const lineItems = order.line_items || [];
+  const lineItems   = order.line_items || [];
+  const wcOrderDate = order.date_created ? Math.floor(new Date(order.date_created).getTime() / 1000) : null;
   db.prepare(`
-    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email, status, products_json, raw_json, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email, status, products_json, raw_json, wc_order_date, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
     ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
-      status = excluded.status,
+      status        = excluded.status,
       products_json = excluded.products_json,
-      raw_json = excluded.raw_json,
-      updated_at = unixepoch()
+      raw_json      = excluded.raw_json,
+      wc_order_date = COALESCE(excluded.wc_order_date, wc_order_date),
+      updated_at    = unixepoch()
   `).run(
-    tenantId,
-    order.id,
-    order.number,
+    tenantId, order.id, order.number,
     `${firstName} ${lastName}`.trim(),
-    billing.phone || '',
-    email,
-    'processing',
-    JSON.stringify(lineItems),
-    JSON.stringify(order)
+    billing.phone || '', email, 'processing',
+    JSON.stringify(lineItems), JSON.stringify(order), wcOrderDate
   );
 
   return { contactId: contact.id, expId, action: 'processing' };
@@ -205,24 +202,21 @@ function processOrderCompleted(db, tenantId, order, wooConfig) {
 
   // Guardar/actualizar en woo_orders
   const lineItemsCompleted = order.line_items || [];
+  const wcOrderDateC = order.date_created ? Math.floor(new Date(order.date_created).getTime() / 1000) : null;
   db.prepare(`
-    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email, status, products_json, raw_json, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email, status, products_json, raw_json, wc_order_date, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
     ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
-      status = excluded.status,
+      status        = excluded.status,
       products_json = excluded.products_json,
-      raw_json = excluded.raw_json,
-      updated_at = unixepoch()
+      raw_json      = excluded.raw_json,
+      wc_order_date = COALESCE(excluded.wc_order_date, wc_order_date),
+      updated_at    = unixepoch()
   `).run(
-    tenantId,
-    order.id,
-    order.number,
+    tenantId, order.id, order.number,
     `${(billing.first_name || '').trim()} ${(billing.last_name || '').trim()}`.trim(),
-    billing.phone || '',
-    email,
-    'completed',
-    JSON.stringify(lineItemsCompleted),
-    JSON.stringify(order)
+    billing.phone || '', email, 'completed',
+    JSON.stringify(lineItemsCompleted), JSON.stringify(order), wcOrderDateC
   );
 
   return { contactId: contact.id, expId: expedient.id, maxDays, action: 'completed' };

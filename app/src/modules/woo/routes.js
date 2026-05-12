@@ -156,7 +156,7 @@ function authRouter(db) {
     let hasMore = true;
     try {
       while (hasMore) {
-        const url = `${baseUrl}/wp-json/wc/v3/orders?status=processing,completed&per_page=50&page=${page}&orderby=date&order=desc`;
+        const url = `${baseUrl}/wp-json/wc/v3/orders?per_page=50&page=${page}&orderby=date&order=desc`;
         const resp = await fetch(url, { headers: { Authorization: authHead }, signal: AbortSignal.timeout(15000) });
         if (!resp.ok) {
           const txt = await resp.text();

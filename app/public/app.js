@@ -2172,7 +2172,7 @@ function renderExpedientChips(expedients) {
     const sColor = stageColor(e);
     const pColor = e.pipelineColor || '#64748b';
     return `
-    <span class="exp-chip" title="${escapeHtml(e.name || "")} · $${e.value || 0}" style="border-left:3px solid ${escapeHtml(pColor)};">
+    <span class="exp-chip exp-chip--clickable" data-exp-id="${e.id}" title="${escapeHtml(e.name || "")} · $${e.value || 0} — clic para abrir" style="border-left:3px solid ${escapeHtml(pColor)};">
       <span class="exp-chip-dot" style="background:${escapeHtml(sColor)}"></span>
       <span class="exp-chip-pipeline" style="color:${escapeHtml(pColor)}">${escapeHtml(e.pipelineName)}</span>
       <span class="exp-chip-arrow">→</span>
@@ -2373,6 +2373,13 @@ function renderCustomers() {
       const c = CUSTOMERS.find((x) => x.id === id);
       if (!c) return;
       openContactDeleteModal(c);
+    });
+  });
+  root.querySelectorAll(".exp-chip--clickable").forEach((chip) => {
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const expId = Number(chip.dataset.expId);
+      if (expId) openExpDetail(expId, 'contactos');
     });
   });
 }
@@ -5051,7 +5058,12 @@ async function openExpDetail(id, from = 'expedientes') {
 
   // Update back button label
   const backLbl = document.querySelector('.exp-detail-back-label');
-  if (backLbl) backLbl.textContent = from === 'pipelines' ? 'Pipeline' : 'Leads';
+  if (backLbl) {
+    backLbl.textContent = from === 'pipelines' ? 'Pipeline'
+                        : from === 'contactos' ? 'Contactos'
+                        : from === 'chats' ? 'Chats'
+                        : 'Leads';
+  }
 
   showView('exp-detail');
   renderExpDetailInfo();

@@ -5270,6 +5270,9 @@ async function renderExpDetailBots() {
   async function refresh() {
     const expId = EXP_DETAIL?.id;
     if (!expId) { _stopBotRunsPolling(); return; }
+    // Si el usuario tiene abierto el editor del timer, no rebuildeamos el DOM —
+    // sino se cierra solo cada 1.5s y no le da chance de escribir.
+    if (document.querySelector('.exp-run-wait-editor:not([hidden])')) return;
 
     try {
       const runsData = await api('GET', `/api/expedients/${expId}/bot-runs`);

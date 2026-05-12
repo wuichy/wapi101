@@ -19777,6 +19777,8 @@ function renderApps() {
       btn.addEventListener('click', () => openApp(btn.dataset.appOpen)));
     installedGrid.querySelectorAll('[data-app-uninstall]').forEach(btn =>
       btn.addEventListener('click', () => uninstallApp(Number(btn.dataset.appUninstall))));
+    installedGrid.querySelectorAll('[data-app-toggle]').forEach(chk =>
+      chk.addEventListener('change', () => toggleApp(Number(chk.dataset.appToggle), chk.checked)));
   } else {
     installedEl.hidden = true;
   }
@@ -19790,8 +19792,9 @@ function renderApps() {
 
 function renderAppCard(a, installed) {
   const reqs = JSON.parse(a.requirements || '[]');
+  const isEnabled = a.install_enabled !== 0; // default true
   return `
-    <div class="app-card">
+    <div class="app-card ${installed && !isEnabled ? 'app-card--paused' : ''}">
       <div class="app-card-icon">${a.icon_emoji || '🧩'}</div>
       <div class="app-card-body">
         <div class="app-card-name">${escapeHtml(a.name)}</div>
@@ -19801,12 +19804,24 @@ function renderAppCard(a, installed) {
       <div class="app-card-actions">
         <span class="app-version">v${a.version}</span>
         ${installed
-          ? `<button class="btn btn--sm btn--ghost" data-app-open="${a.slug}">Abrir</button>
+          ? `<label class="toggle-switch app-card-toggle" title="${isEnabled ? 'Pausar app' : 'Activar app'}">
+               <input type="checkbox" data-app-toggle="${a.id}" ${isEnabled ? 'checked' : ''}>
+               <span class="toggle-slider"></span>
+             </label>
+             <button class="btn btn--sm btn--ghost" data-app-open="${a.slug}">Abrir</button>
              <button class="btn btn--sm btn--danger-ghost" data-app-uninstall="${a.id}">Desinstalar</button>`
           : `<button class="btn btn--sm btn--primary" data-app-install="${a.id}">Instalar</button>`
         }
       </div>
     </div>`;
+}
+
+async function toggleApp(id, enabled) {
+  try {
+    await api('PATCH', `/api/apps/${id}/toggle`, { enabled });
+    toast(enabled ? 'App activada' : 'App pausada', 'success');
+    await loadAppsSection();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function installApp(id) {

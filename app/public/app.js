@@ -3667,7 +3667,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','mail','copiloto','comentarios','apps']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','mail','copiloto','comentarios']);
 
 // Filtro de búsqueda de la vista Aplicaciones (topbar)
 let _appsSearch = '';
@@ -3748,10 +3748,6 @@ function showView(viewName) {
   } else if (viewName === 'plantillas') {
     if (searchInput) { searchInput.placeholder = 'Buscar plantilla…'; searchInput.value = (typeof _tplFilter !== 'undefined' ? _tplFilter : '') || ''; }
     if (plExtras) plExtras.hidden = true;
-  } else if (viewName === 'apps') {
-    if (searchInput) { searchInput.placeholder = 'Buscar…'; searchInput.value = ''; }
-    if (plExtras) plExtras.hidden = true;
-    loadAppsSection();
   } else {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
@@ -3761,7 +3757,7 @@ function showView(viewName) {
   const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail' || viewName === 'copiloto';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
-  if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta' || viewName === 'copiloto' || viewName === 'apps');
+  if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta' || viewName === 'copiloto');
   const customersExtras = document.getElementById('topbarCustomersExtras');
   if (customersExtras) customersExtras.hidden = (viewName !== 'contactos');
   const expExtras = document.getElementById('topbarExpExtras');
@@ -3823,6 +3819,7 @@ function setupSettingsTabs() {
       if (target === 'suscripcion') loadBilling();
       if (target === 'ia') loadAISettings();
       if (target === 'integraciones') loadIntegrations();
+      if (target === 'aplicaciones') loadAppsSection();
     });
   });
 

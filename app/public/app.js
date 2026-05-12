@@ -20038,7 +20038,11 @@ let _wooLastWebhookAt = 0;
 function startPedidosPoller() {
   stopPedidosPoller();
   _pedidosPoller = setInterval(() => {
-    if (document.body.dataset.viewActive === 'pedidos') loadPedidosView(_pedidosPage);
+    if (document.body.dataset.viewActive !== 'pedidos') return;
+    // No refrescar si hay un formulario de tracking abierto — el render rebuild
+    // borraría lo que el asesor está escribiendo.
+    if (document.querySelector('.woo-tracking-form:not([hidden])')) return;
+    loadPedidosView(_pedidosPage);
   }, 20_000);
 }
 function stopPedidosPoller() {
@@ -20081,7 +20085,10 @@ async function loadPedidosView(page = _pedidosPage) {
   }
   _pedidosPage = page;
   const listEl = document.getElementById('pedidosOrdersList');
-  if (listEl) listEl.innerHTML = '<p class="woo-empty">Cargando pedidos...</p>';
+  // Solo mostrar "Cargando..." si no hay contenido previo (primera carga).
+  // En refresh silencioso no parpadeamos el contenido existente.
+  const isFirstLoad = !listEl || !listEl.querySelector('.woo-order-card');
+  if (listEl && isFirstLoad) listEl.innerHTML = '<p class="woo-empty">Cargando pedidos...</p>';
   try {
     const [ordersData] = await Promise.all([
       api('GET', `/api/apps/woo/orders?page=${page}&limit=25`),

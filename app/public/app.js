@@ -20217,6 +20217,18 @@ function _buildOrderRows(orders, prefix, carriers) {
   }).join('');
 }
 
+const _MX_STATES = {
+  AGS:'Aguascalientes', BC:'Baja California', BCS:'Baja California Sur',
+  CAMP:'Campeche', CHIS:'Chiapas', CHIH:'Chihuahua', COAH:'Coahuila de Zaragoza',
+  COL:'Colima', CDMX:'Ciudad de México', DF:'Ciudad de México', CMX:'Ciudad de México',
+  DGO:'Durango', GTO:'Guanajuato', GRO:'Guerrero', HGO:'Hidalgo',
+  JAL:'Jalisco', MEX:'Estado de México', MICH:'Michoacán', MOR:'Morelos',
+  NAY:'Nayarit', NL:'Nuevo León', OAX:'Oaxaca', PUE:'Puebla',
+  QRO:'Querétaro', QROO:'Quintana Roo', SLP:'San Luis Potosí', SIN:'Sinaloa',
+  SON:'Sonora', TAB:'Tabasco', TAMPS:'Tamaulipas', TLAX:'Tlaxcala',
+  VER:'Veracruz', YUC:'Yucatán', ZAC:'Zacatecas',
+};
+
 function _openAddrModal({ num, name, phone, email, addr1, addr2, city, state, postcode, country, note }) {
   document.getElementById('wooAddrModal')?.remove();
   // Formatear dirección en 3 líneas estilo MX
@@ -20230,7 +20242,8 @@ function _openAddrModal({ num, name, phone, email, addr1, addr2, city, state, po
   // Línea 3: estado + CP
   const addrLine1 = addr1 || '';
   const addrLine2 = [addr2, city].filter(Boolean).join(', ');
-  const addrLine3 = [state, postcode ? `CP ${postcode}` : '', country].filter(Boolean).join(' · ');
+  const stateLabel = _MX_STATES[state] || state;
+  const addrLine3  = [stateLabel, postcode ? `CP ${postcode}` : '', country].filter(Boolean).join(' · ');
   const hasAddr   = addrLine1 || addrLine2 || addrLine3;
 
   const m = document.createElement('div');

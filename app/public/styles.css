@@ -11144,16 +11144,14 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-order-customer { font-size:12px; color:var(--text-muted); margin-bottom:2px; }
 .woo-order-products { font-size:12px; color:var(--text-secondary); margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .woo-order-tracking { margin-top:4px; }
-.woo-order-status { font-size:11px; font-weight:600; padding:2px 7px; border-radius:10px; }
-.woo-order-status--processing { background:#fef3c7; color:#92400e; }
-.woo-order-status--completed  { background:#d1fae5; color:#065f46; }
-.woo-order-status--pending    { background:#f1f5f9; color:#475569; }
-.woo-order-status--on-hold    { background:#fef9c3; color:#854d0e; }
-.woo-order-status--cancelled  { background:#fee2e2; color:#991b1b; }
-.woo-order-status--refunded   { background:#ede9fe; color:#5b21b6; }
-.woo-order-status--failed     { background:#fee2e2; color:#991b1b; }
-/* Status custom (ej. completado-facturado) */
-.woo-order-status { background:var(--bg-alt); color:var(--text-secondary); }
+.woo-order-status { display:inline-flex; align-items:center; font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; background:var(--bg-alt); color:var(--text-secondary); border:1px solid var(--border); }
+.woo-order-status--processing { background:#fef3c7; color:#92400e; border-color:#fcd34d; }
+.woo-order-status--completed  { background:#d1fae5; color:#065f46; border-color:#6ee7b7; }
+.woo-order-status--pending    { background:#f1f5f9; color:#475569; border-color:#cbd5e1; }
+.woo-order-status--on-hold    { background:#fef9c3; color:#854d0e; border-color:#fde047; }
+.woo-order-status--cancelled  { background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
+.woo-order-status--refunded   { background:#ede9fe; color:#5b21b6; border-color:#c4b5fd; }
+.woo-order-status--failed     { background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
 .woo-tracking-badge { display:inline-flex; align-items:center; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; white-space:nowrap; }
 .woo-tracking-badge--none { background:var(--bg-alt); color:var(--text-muted); border:1px solid var(--border); }
 .woo-tracking-badge--pendiente { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }

@@ -156,13 +156,16 @@ module.exports = function createExpedientsRouter(db) {
           description: `Nombre del contacto: "${prev.contactName || ''}" → "${item.contactName || ''}"` });
       }
 
-      // Cambio de teléfono — comparar via contacts table
-      if (req.body.phone !== undefined) {
-        const prevPhone = db.prepare('SELECT phone FROM contacts WHERE id = ? AND tenant_id = ?').get(prev.contactId, req.tenantId)?.phone;
-        if (prevPhone !== req.body.phone) {
-          activity.log(db, { ...base, type: 'phone_change',
-            description: `Teléfono: "${prevPhone || ''}" → "${req.body.phone || ''}"` });
-        }
+      // Cambio de teléfono
+      if (prev.contactPhone !== item.contactPhone) {
+        activity.log(db, { ...base, type: 'phone_change',
+          description: `Teléfono: "${prev.contactPhone || ''}" → "${item.contactPhone || ''}"` });
+      }
+
+      // Cambio de email
+      if (prev.contactEmail !== item.contactEmail) {
+        activity.log(db, { ...base, type: 'email_change',
+          description: `Email: "${prev.contactEmail || ''}" → "${item.contactEmail || ''}"` });
       }
 
       // Cambio de asesor asignado

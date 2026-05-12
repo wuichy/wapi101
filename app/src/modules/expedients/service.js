@@ -224,7 +224,7 @@ function create(db, tenantId, { contactId, pipelineId, stageId, name, value = 0,
   return getById(db, t, id);
 }
 
-function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fieldValues, contactId, contactName, assignedAdvisorId }) {
+function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fieldValues, contactId, contactName, contactPhone, contactEmail, assignedAdvisorId }) {
   const t = tenantId ?? _tenantFromExpedient(db, id);
   if (!t) return null;
   const row = db.prepare('SELECT * FROM expedients WHERE id = ? AND tenant_id = ?').get(id, t);
@@ -233,6 +233,16 @@ function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fiel
   if (contactName !== undefined && row.contact_id) {
     const trimmed = contactName.trim();
     db.prepare('UPDATE contacts SET first_name = ? WHERE id = ? AND tenant_id = ?').run(trimmed || null, row.contact_id, t);
+  }
+
+  if (contactPhone !== undefined && row.contact_id) {
+    const trimmed = (contactPhone || '').trim() || null;
+    db.prepare('UPDATE contacts SET phone = ? WHERE id = ? AND tenant_id = ?').run(trimmed, row.contact_id, t);
+  }
+
+  if (contactEmail !== undefined && row.contact_id) {
+    const trimmed = (contactEmail || '').trim() || null;
+    db.prepare('UPDATE contacts SET email = ? WHERE id = ? AND tenant_id = ?').run(trimmed, row.contact_id, t);
   }
 
   const fields = [];

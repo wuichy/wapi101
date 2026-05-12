@@ -298,7 +298,33 @@ module.exports = function createExpedientsRouter(db) {
         SELECT * FROM bot_runs WHERE contact_id = ? AND tenant_id = ?
         ORDER BY started_at DESC LIMIT 30
       `).all(exp.contactId, req.tenantId);
-      res.json({ items: runs, hasRunning: runs.some(r => r.status === 'running' || r.status === 'paused') });
+
+      // Enriquecer con info del wait actual para distinguir pausa natural vs manual
+      // y poder mostrar timer/respuesta restante en la UI.
+      const enriched = runs.map(r => {
+        if (r.status !== 'running' && r.status !== 'paused') return r;
+        const wait = db.prepare(
+          "SELECT wait_step_id, wait_step_index, expires_at, paused_remaining FROM bot_run_waits WHERE run_id = ? AND status = 'waiting' ORDER BY id DESC LIMIT 1"
+        ).get(r.id);
+        if (!wait) return r;
+        // Tipo del step (timer / wait_response / no_response) — lo sacamos del bot
+        let stepType = null;
+        try {
+          const botRow = db.prepare("SELECT steps FROM salsbots WHERE id = ?").get(r.bot_id);
+          const steps  = botRow?.steps ? JSON.parse(botRow.steps) : [];
+          const step   = steps[wait.wait_step_index];
+          if (step) stepType = step.type;
+        } catch (_) {}
+        return {
+          ...r,
+          wait_step_id:     wait.wait_step_id,
+          wait_step_index:  wait.wait_step_index,
+          wait_step_type:   stepType,
+          wait_expires_at:  wait.expires_at,
+          wait_paused_remaining: wait.paused_remaining,
+        };
+      });
+      res.json({ items: enriched, hasRunning: enriched.some(r => r.status === 'running' || r.status === 'paused') });
     } catch (e) { next(e); }
   });
 

@@ -64,7 +64,17 @@ function pauseRun(db, runId) {
   const sig = _signals.get(runId);
   if (sig) sig.pause = true;
   try {
-    if (db) db.prepare("UPDATE bot_runs SET status='paused' WHERE id=? AND status='running'").run(runId);
+    if (!db) return;
+    // Marcar pausa MANUAL: paused_manually=1, paused_at=now
+    db.prepare(
+      "UPDATE bot_runs SET status='paused', paused_manually=1, paused_at=unixepoch() WHERE id=? AND status IN ('running','paused')"
+    ).run(runId);
+    // Si hay un wait activo (timer/wait_response), congelar el contador:
+    // guardar segundos restantes en paused_remaining.
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare(
+      "UPDATE bot_run_waits SET paused_remaining = CASE WHEN expires_at > ? THEN expires_at - ? ELSE 0 END WHERE run_id = ? AND status = 'waiting' AND paused_remaining IS NULL"
+    ).run(now, now, runId);
   } catch (_) {}
 }
 
@@ -72,7 +82,21 @@ function resumeRun(db, runId) {
   const sig = _signals.get(runId);
   if (sig) sig.pause = false;
   try {
-    if (db) db.prepare("UPDATE bot_runs SET status='running' WHERE id=? AND status='paused'").run(runId);
+    if (!db) return;
+    // Reanudar timer: si había paused_remaining, recalcular expires_at = now + remaining
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare(
+      "UPDATE bot_run_waits SET expires_at = ? + paused_remaining, paused_remaining = NULL WHERE run_id = ? AND status = 'waiting' AND paused_remaining IS NOT NULL"
+    ).run(now, runId);
+    // Quitar flag manual. El status vuelve a 'paused' (natural wait) si hay wait activo,
+    // o a 'running' si no había wait.
+    const stillWaiting = db.prepare(
+      "SELECT 1 FROM bot_run_waits WHERE run_id = ? AND status = 'waiting' LIMIT 1"
+    ).get(runId);
+    const newStatus = stillWaiting ? 'paused' : 'running';
+    db.prepare(
+      "UPDATE bot_runs SET status=?, paused_manually=0, paused_at=NULL WHERE id=?"
+    ).run(newStatus, runId);
   } catch (_) {}
 }
 

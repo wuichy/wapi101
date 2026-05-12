@@ -5285,18 +5285,46 @@ async function renderExpDetailBots() {
 
       const pctOf = r => r.total_steps ? Math.round((r.current_step / r.total_steps) * 100) : 0;
 
+      // ── Helpers para distinguir pausa natural vs manual y mostrar info del wait ──
+      function fmtRemaining(seconds) {
+        if (seconds == null || seconds < 0) return '';
+        if (seconds < 60)    return `${seconds}s`;
+        if (seconds < 3600)  return `${Math.floor(seconds / 60)}m`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+        return `${Math.floor(seconds / 86400)}d ${Math.floor((seconds % 86400) / 3600)}h`;
+      }
+      function runVisualState(r) {
+        const isManual = !!r.paused_manually;
+        const inWait   = r.status === 'paused' && r.wait_step_type;
+        if (isManual)               return { color: 'manual',  showPlay: true,  label: '⏸ Pausado manualmente' };
+        if (inWait) {
+          const now = Math.floor(Date.now() / 1000);
+          const remaining = (r.wait_paused_remaining != null) ? r.wait_paused_remaining : (r.wait_expires_at ? r.wait_expires_at - now : null);
+          const remTxt = remaining != null ? fmtRemaining(remaining) : '';
+          if (r.wait_step_type === 'timer')         return { color: 'running', showPlay: false, label: remTxt ? `⏱ Espera ${remTxt}`         : '⏱ Esperando timer' };
+          if (r.wait_step_type === 'wait_response') return { color: 'running', showPlay: false, label: remTxt ? `💬 Espera respuesta · ${remTxt}` : '💬 Esperando respuesta' };
+          if (r.wait_step_type === 'no_response')   return { color: 'running', showPlay: false, label: remTxt ? `⏳ ${remTxt}`               : '⏳ Esperando' };
+          return { color: 'running', showPlay: false, label: '⏳ Esperando' };
+        }
+        return { color: 'running', showPlay: false, label: '' };
+      }
+
       root.innerHTML = `
         <div class="exp-detail-section exp-bots-section">
           <div class="exp-detail-section-title">Corriendo ahora</div>
-          ${activeRuns.map(r => `
+          ${activeRuns.map(r => {
+            const vis = runVisualState(r);
+            const isManualPause = vis.color === 'manual';
+            return `
             <div class="exp-run-row exp-run-running" data-run-id="${r.id}">
               <div class="exp-run-header">
-                <span class="exp-run-pulse${r.status === 'paused' ? ' exp-run-pulse--paused' : ''}"></span>
+                <span class="exp-run-pulse${isManualPause ? ' exp-run-pulse--paused' : ''}"></span>
                 <span class="exp-run-name">${escapeHtml(r.bot_name || 'Bot')}</span>
                 <span class="exp-run-meta">paso ${r.current_step}/${r.total_steps}</span>
+                ${vis.label ? `<span class="exp-run-wait-badge${isManualPause ? ' exp-run-wait-badge--manual' : ''}">${escapeHtml(vis.label)}</span>` : ''}
                 <div class="exp-run-actions">
-                  <button class="exp-run-btn exp-run-btn--pause" data-run-id="${r.id}" data-paused="${r.status === 'paused' ? '1' : '0'}" title="${r.status === 'paused' ? 'Reanudar' : 'Pausar'}">
-                    ${r.status === 'paused'
+                  <button class="exp-run-btn exp-run-btn--pause" data-run-id="${r.id}" data-paused="${vis.showPlay ? '1' : '0'}" title="${vis.showPlay ? 'Reanudar' : 'Pausar'}">
+                    ${vis.showPlay
                       ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>'
                       : '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'}
                   </button>
@@ -5306,9 +5334,10 @@ async function renderExpDetailBots() {
                 </div>
               </div>
               <div class="exp-run-bar-wrap">
-                <div class="exp-run-bar${r.status === 'paused' ? ' exp-run-bar--paused' : ''}" style="width:${pctOf(r)}%"></div>
+                <div class="exp-run-bar${isManualPause ? ' exp-run-bar--paused' : ''}" style="width:${pctOf(r)}%"></div>
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>`;
 
       async function reloadActivity() {

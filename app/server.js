@@ -125,6 +125,9 @@ mountSafe('/webhooks', require('./src/modules/integrations/webhooks'));
 // Stripe webhook va en su propio mount porque necesita raw body para verificar
 // la firma. NO se debe poner detrás de express.json() global.
 mountSafe('/webhooks/stripe', require('./src/modules/billing/webhook'));
+// WooCommerce webhook (autenticado por token en header, no necesita auth middleware)
+const { webhookRouter: wooWebhookRouter } = require('./src/modules/woo/routes');
+app.use('/webhooks/woo', wooWebhookRouter(db));
 
 // ─── Cache-busting de assets ─────────────────────────────────────────────
 // Problema: en cada deploy, navegadores (especialmente iOS Safari, Cloudflare,
@@ -696,6 +699,9 @@ mountSafe('/api/ai-knowledge',       require('./src/modules/ai-knowledge/routes'
 mountSafe('/api/analytics',          require('./src/modules/analytics/routes'));
 mountSafe('/api/business',           require('./src/modules/business/routes'));
 mountSafe('/api/appointments',       require('./src/modules/appointments/routes'));
+mountSafe('/api/apps',               require('./src/modules/apps/routes'));
+const { authRouter: wooAuthRouter }  = require('./src/modules/woo/routes');
+app.use('/api/apps/woo', require('./src/modules/auth/middleware')(db), wooAuthRouter(db));
 
 // Manejador global de errores
 app.use((err, _req, res, _next) => {

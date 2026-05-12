@@ -69,6 +69,15 @@ async function pollOne(row) {
     });
   }
 
+  // ⚠️ CRÍTICO: ImapFlow emite 'error' como EventEmitter cuando el socket muere
+  // después de connect() (timeouts, disconnects). Sin handler, Node tira
+  // UnhandledError y mata el proceso entero. Lo capturamos para que el
+  // poller pueda fallar grácilmente sin tumbar wapi101 (era la causa de los
+  // 502 cada ~5 min con la integración 15 de credenciales rotas).
+  client.on('error', err => {
+    console.error(`[email-poller] socket error en integración ${row.id}:`, err.message || err);
+  });
+
   await client.connect();
   try {
     const lock = await client.getMailboxLock('INBOX');

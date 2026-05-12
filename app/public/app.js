@@ -3667,7 +3667,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','mail','copiloto','comentarios']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','mail','copiloto','comentarios','apps']);
 
 // Filtro de búsqueda de la vista Aplicaciones (topbar)
 let _appsSearch = '';
@@ -3748,6 +3748,10 @@ function showView(viewName) {
   } else if (viewName === 'plantillas') {
     if (searchInput) { searchInput.placeholder = 'Buscar plantilla…'; searchInput.value = (typeof _tplFilter !== 'undefined' ? _tplFilter : '') || ''; }
     if (plExtras) plExtras.hidden = true;
+  } else if (viewName === 'apps') {
+    if (searchInput) { searchInput.placeholder = 'Buscar…'; searchInput.value = ''; }
+    if (plExtras) plExtras.hidden = true;
+    loadAppsSection();
   } else {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
@@ -3757,7 +3761,7 @@ function showView(viewName) {
   const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail' || viewName === 'copiloto';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
-  if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta' || viewName === 'copiloto');
+  if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta' || viewName === 'copiloto' || viewName === 'apps');
   const customersExtras = document.getElementById('topbarCustomersExtras');
   if (customersExtras) customersExtras.hidden = (viewName !== 'contactos');
   const expExtras = document.getElementById('topbarExpExtras');
@@ -19741,3 +19745,284 @@ function _renderReminderTimerEditor(sid, c) {
   `;
 }
 
+
+
+// ════════════════════════════════════════════════════════════════
+// APPS SECTION
+// ════════════════════════════════════════════════════════════════
+let _appsData    = [];
+let _wooPipelines = [];
+let _wooProducts  = [];
+let _wooRules     = [];
+
+async function loadAppsSection() {
+  try {
+    const data = await api('GET', '/api/apps');
+    _appsData = data.apps || [];
+    renderApps();
+  } catch (e) { console.error('loadApps', e); }
+}
+
+function renderApps() {
+  const installed = _appsData.filter(a => a.installed);
+  const catalog   = _appsData.filter(a => !a.installed);
+
+  const installedEl = document.getElementById('appsInstalled');
+  const installedGrid = document.getElementById('appsInstalledGrid');
+  const catalogGrid   = document.getElementById('appsCatalogGrid');
+
+  if (installed.length) {
+    installedEl.hidden = false;
+    installedGrid.innerHTML = installed.map(a => renderAppCard(a, true)).join('');
+    installedGrid.querySelectorAll('[data-app-open]').forEach(btn =>
+      btn.addEventListener('click', () => openApp(btn.dataset.appOpen)));
+    installedGrid.querySelectorAll('[data-app-uninstall]').forEach(btn =>
+      btn.addEventListener('click', () => uninstallApp(Number(btn.dataset.appUninstall))));
+  } else {
+    installedEl.hidden = true;
+  }
+
+  catalogGrid.innerHTML = catalog.length
+    ? catalog.map(a => renderAppCard(a, false)).join('')
+    : '<p style="color:var(--text-muted);font-size:13px">No hay más apps disponibles.</p>';
+  catalogGrid.querySelectorAll('[data-app-install]').forEach(btn =>
+    btn.addEventListener('click', () => installApp(Number(btn.dataset.appInstall))));
+}
+
+function renderAppCard(a, installed) {
+  const reqs = JSON.parse(a.requirements || '[]');
+  return `
+    <div class="app-card">
+      <div class="app-card-icon">${a.icon_emoji || '🧩'}</div>
+      <div class="app-card-body">
+        <div class="app-card-name">${escapeHtml(a.name)}</div>
+        <div class="app-card-desc">${escapeHtml(a.description || '')}</div>
+        ${reqs.length ? `<div class="app-card-reqs">Requiere: ${reqs.map(r => `<span>${escapeHtml(r)}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="app-card-actions">
+        <span class="app-version">v${a.version}</span>
+        ${installed
+          ? `<button class="btn btn--sm btn--ghost" data-app-open="${a.slug}">Abrir</button>
+             <button class="btn btn--sm btn--danger-ghost" data-app-uninstall="${a.id}">Desinstalar</button>`
+          : `<button class="btn btn--sm btn--primary" data-app-install="${a.id}">Instalar</button>`
+        }
+      </div>
+    </div>`;
+}
+
+async function installApp(id) {
+  try {
+    await api('POST', `/api/apps/${id}/install`);
+    toast('App instalada', 'success');
+    await loadAppsSection();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function uninstallApp(id) {
+  if (!confirm('¿Desinstalar esta app? Se perderá su configuración.')) return;
+  try {
+    await api('DELETE', `/api/apps/${id}/install`);
+    toast('App desinstalada', 'success');
+    await loadAppsSection();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function openApp(slug) {
+  if (slug === 'reelance-woocommerce') openWooModal();
+}
+
+// ── Woo App Modal ────────────────────────────────────────────────────────────
+async function openWooModal() {
+  document.getElementById('wooAppModal').hidden = false;
+  await loadWooConfig();
+  await loadWooPipelines();
+  setupWooTabs();
+  setupWooEvents();
+}
+
+function closeWooModal() {
+  document.getElementById('wooAppModal').hidden = true;
+}
+
+function setupWooTabs() {
+  document.querySelectorAll('.woo-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.woo-tab').forEach(t => t.classList.remove('is-active'));
+      document.querySelectorAll('.woo-tab-panel').forEach(p => p.hidden = true);
+      tab.classList.add('is-active');
+      document.querySelector(`.woo-tab-panel[data-panel="${tab.dataset.tab}"]`).hidden = false;
+    });
+  });
+}
+
+async function loadWooConfig() {
+  try {
+    const cfg = await api('GET', '/api/apps/woo/config');
+    const notConn = document.getElementById('wooNotConnected');
+    const conn    = document.getElementById('wooConnected');
+    if (!cfg.connected) {
+      notConn.hidden = false;
+      conn.hidden    = true;
+      return;
+    }
+    notConn.hidden = true;
+    conn.hidden    = false;
+
+    const statusDot   = document.getElementById('wooStatusDot');
+    const statusLabel = document.getElementById('wooStatusLabel');
+    if (cfg.enabled) {
+      statusDot.className   = 'woo-status-dot woo-status-dot--on';
+      statusLabel.textContent = 'Activo';
+    } else {
+      statusDot.className   = 'woo-status-dot woo-status-dot--off';
+      statusLabel.textContent = 'Pausado';
+    }
+    document.getElementById('wooEnabledToggle').checked = cfg.enabled;
+    document.getElementById('wooToken').textContent     = cfg.token;
+    document.getElementById('wooWebhookUrl').textContent = `${location.origin}/webhooks/woo`;
+
+    _wooProducts = cfg.products || [];
+    _wooRules    = cfg.pipelineRules || [];
+    renderWooProducts();
+    renderWooRules();
+  } catch (e) { console.error('loadWooConfig', e); }
+}
+
+async function loadWooPipelines() {
+  try {
+    const data = await api('GET', '/api/apps/woo/pipelines');
+    _wooPipelines = data.pipelines || [];
+    const sel = document.getElementById('wooRulePipeline');
+    sel.innerHTML = '<option value="">Pipeline...</option>' +
+      _wooPipelines.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+    sel.addEventListener('change', () => {
+      const p = _wooPipelines.find(x => String(x.id) === sel.value);
+      const stageSel = document.getElementById('wooRuleStage');
+      stageSel.innerHTML = '<option value="">Etapa...</option>' +
+        (p ? p.stages.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') : '');
+    });
+  } catch (e) { console.error('loadWooPipelines', e); }
+}
+
+function renderWooProducts() {
+  const el = document.getElementById('wooProductsList');
+  if (!_wooProducts.length) { el.innerHTML = '<p class="woo-empty">Sin productos. Agrega uno abajo.</p>'; return; }
+  el.innerHTML = _wooProducts.map((p, i) => `
+    <div class="woo-product-row">
+      <span class="woo-product-name">${escapeHtml(p.name)}</span>
+      <input type="number" class="int-input woo-days-input" value="${p.duration_days}" min="1" data-pi="${i}" style="width:80px" />
+      <span style="font-size:12px;color:var(--text-muted)">días</span>
+      <button class="btn btn--xs btn--danger-ghost" data-del-product="${i}">✕</button>
+    </div>`).join('');
+  el.querySelectorAll('.woo-days-input').forEach(inp =>
+    inp.addEventListener('change', () => { _wooProducts[Number(inp.dataset.pi)].duration_days = Number(inp.value); }));
+  el.querySelectorAll('[data-del-product]').forEach(btn =>
+    btn.addEventListener('click', () => { _wooProducts.splice(Number(btn.dataset.delProduct), 1); renderWooProducts(); }));
+}
+
+function renderWooRules() {
+  const el = document.getElementById('wooPipelineRulesList');
+  if (!_wooRules.length) { el.innerHTML = '<p class="woo-empty">Sin reglas. Agrega una abajo.</p>'; return; }
+  el.innerHTML = _wooRules.map((r, i) => {
+    const pip = _wooPipelines.find(p => p.id === r.pipeline_id);
+    const stg = pip?.stages.find(s => s.id === r.stage_id);
+    const warn = (!pip || !stg) ? '⚠️ Pipeline o etapa eliminada' : '';
+    return `
+      <div class="woo-rule-row ${warn ? 'woo-rule-row--warn' : ''}">
+        <span class="woo-rule-days">${r.duration_days} días</span>
+        <span>→</span>
+        <span class="woo-rule-dest">${pip ? escapeHtml(pip.name) : '?'} / ${stg ? escapeHtml(stg.name) : '?'}</span>
+        ${warn ? `<span class="woo-rule-warn">${warn}</span>` : ''}
+        <button class="btn btn--xs btn--danger-ghost" data-del-rule="${i}">✕</button>
+      </div>`;
+  }).join('');
+  el.querySelectorAll('[data-del-rule]').forEach(btn =>
+    btn.addEventListener('click', () => { _wooRules.splice(Number(btn.dataset.delRule), 1); renderWooRules(); }));
+}
+
+function setupWooEvents() {
+  // Conectar
+  document.getElementById('wooConnectBtn')?.addEventListener('click', async () => {
+    try {
+      await api('POST', '/api/apps/woo/connect');
+      await loadWooConfig();
+      toast('Conectado', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Toggle enabled
+  document.getElementById('wooEnabledToggle')?.addEventListener('change', async (e) => {
+    try {
+      await api('PATCH', '/api/apps/woo/toggle', { enabled: e.target.checked });
+      await loadWooConfig();
+      toast(e.target.checked ? 'Activado' : 'Pausado', 'success');
+    } catch (e2) { toast(e2.message, 'error'); }
+  });
+
+  // Desconectar
+  document.getElementById('wooDisconnectBtn')?.addEventListener('click', async () => {
+    if (!confirm('¿Desconectar WooCommerce? Se perderá el token y la configuración.')) return;
+    try {
+      await api('POST', '/api/apps/woo/disconnect');
+      await loadWooConfig();
+      toast('Desconectado', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Copiar token
+  document.getElementById('wooCopyToken')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('wooToken').textContent);
+    toast('Token copiado', 'success');
+  });
+  document.getElementById('wooCopyUrl')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(document.getElementById('wooWebhookUrl').textContent);
+    toast('URL copiada', 'success');
+  });
+
+  // Agregar producto
+  document.getElementById('wooAddProductBtn')?.addEventListener('click', () => {
+    const name = document.getElementById('wooNewProductName').value.trim();
+    const days = Number(document.getElementById('wooNewProductDays').value);
+    if (!name || !days) return toast('Nombre y días son obligatorios', 'error');
+    _wooProducts.push({ id: Date.now(), name, duration_days: days });
+    document.getElementById('wooNewProductName').value = '';
+    document.getElementById('wooNewProductDays').value = '';
+    renderWooProducts();
+  });
+
+  // Guardar productos
+  document.getElementById('wooSaveProductsBtn')?.addEventListener('click', async () => {
+    try {
+      await api('PUT', '/api/apps/woo/products', { products: _wooProducts });
+      toast('Productos guardados', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Agregar regla de pipeline
+  document.getElementById('wooAddRuleBtn')?.addEventListener('click', () => {
+    const days       = Number(document.getElementById('wooRuleDays').value);
+    const pipelineId = Number(document.getElementById('wooRulePipeline').value);
+    const stageId    = Number(document.getElementById('wooRuleStage').value);
+    if (!days || !pipelineId || !stageId) return toast('Completa todos los campos', 'error');
+    if (_wooRules.find(r => r.duration_days === days))
+      return toast(`Ya existe una regla para ${days} días`, 'error');
+    _wooRules.push({ duration_days: days, pipeline_id: pipelineId, stage_id: stageId });
+    _wooRules.sort((a, b) => a.duration_days - b.duration_days);
+    document.getElementById('wooRuleDays').value = '';
+    renderWooRules();
+  });
+
+  // Guardar reglas
+  document.getElementById('wooSaveRulesBtn')?.addEventListener('click', async () => {
+    try {
+      const errEl = document.getElementById('wooPipelineError');
+      errEl.hidden = true;
+      await api('PUT', '/api/apps/woo/pipeline-rules', { rules: _wooRules });
+      toast('Reglas guardadas', 'success');
+    } catch (e) {
+      const errEl = document.getElementById('wooPipelineError');
+      errEl.textContent = e.message;
+      errEl.hidden = false;
+    }
+  });
+}

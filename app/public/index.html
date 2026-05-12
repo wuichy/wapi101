@@ -99,6 +99,10 @@
           <span>Comentarios</span>
           <span class="nav-badge" id="navCommentsBadge" style="display:none"></span>
         </a>
+        <a href="#apps" class="nav-item" data-view="apps" id="navApps">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="9" height="9" rx="1"/><rect x="13" y="2" width="9" height="9" rx="1"/><rect x="2" y="13" width="9" height="9" rx="1"/><rect x="13" y="13" width="9" height="9" rx="1"/></svg>
+          <span>Apps</span>
+        </a>
         <a href="#ajustes" class="nav-item" data-view="ajustes" data-i18n="nav.ajustes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Configuración</span>
@@ -1892,6 +1896,143 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               Plantillas pre-armadas para casos comunes de venta. Click en una para abrirla en el editor — puedes personalizarla antes de guardar.
             </p>
             <div class="bot-templates-grid" id="botTemplatesGrid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── VISTA: APPS ─── -->
+      <section class="view view-apps" data-view="apps" hidden>
+        <div class="apps-shell">
+          <div class="apps-header">
+            <div>
+              <h2 class="apps-title">Apps</h2>
+              <p class="apps-subtitle">Conecta Wapi101 con tus otras herramientas</p>
+            </div>
+          </div>
+          <!-- Instaladas -->
+          <div id="appsInstalled" hidden>
+            <h3 class="apps-section-title">Instaladas</h3>
+            <div class="apps-grid" id="appsInstalledGrid"></div>
+          </div>
+          <!-- Catálogo -->
+          <h3 class="apps-section-title">Catálogo</h3>
+          <div class="apps-grid" id="appsCatalogGrid">
+            <div class="apps-loading">Cargando apps...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── MODAL: App WooCommerce dashboard ─── -->
+      <div class="modal" id="wooAppModal" hidden>
+        <div class="modal-backdrop" onclick="closeWooModal()"></div>
+        <div class="modal-card modal-card--lg woo-modal">
+          <header class="modal-header">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:24px">🛒</span>
+              <div>
+                <h3>Reelance WooCommerce</h3>
+                <p style="font-size:12px;color:var(--text-muted);margin:0">Sincronización de pedidos</p>
+              </div>
+            </div>
+            <button class="icon-btn" onclick="closeWooModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="woo-tabs">
+            <button class="woo-tab is-active" data-tab="conexion">Conexión</button>
+            <button class="woo-tab" data-tab="productos">Productos</button>
+            <button class="woo-tab" data-tab="pipelines">Pipelines</button>
+            <button class="woo-tab" data-tab="plugin">Plugin WP</button>
+          </div>
+          <div class="modal-body woo-body">
+            <!-- TAB: Conexión -->
+            <div class="woo-tab-panel" data-panel="conexion">
+              <div id="wooNotConnected">
+                <p class="woo-desc">Conecta tu tienda WooCommerce para sincronizar pedidos automáticamente.</p>
+                <button class="btn btn--primary" id="wooConnectBtn">Conectar WooCommerce</button>
+              </div>
+              <div id="wooConnected" hidden>
+                <div class="woo-status-row">
+                  <span class="woo-status-dot" id="wooStatusDot"></span>
+                  <span id="wooStatusLabel"></span>
+                  <div style="margin-left:auto;display:flex;gap:8px">
+                    <label class="toggle-switch" title="Activar / Pausar">
+                      <input type="checkbox" id="wooEnabledToggle">
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <button class="btn btn--xs btn--danger-ghost" id="wooDisconnectBtn">Desconectar</button>
+                  </div>
+                </div>
+                <div class="woo-token-box">
+                  <label>Token de conexión (pégalo en el plugin de WordPress)</label>
+                  <div class="woo-token-row">
+                    <code id="wooToken" class="woo-token-code"></code>
+                    <button class="btn btn--xs btn--ghost" id="wooCopyToken">Copiar</button>
+                  </div>
+                </div>
+                <div class="woo-token-box" style="margin-top:8px">
+                  <label>URL del webhook (pégala en el plugin de WordPress)</label>
+                  <div class="woo-token-row">
+                    <code id="wooWebhookUrl" class="woo-token-code"></code>
+                    <button class="btn btn--xs btn--ghost" id="wooCopyUrl">Copiar</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- TAB: Productos -->
+            <div class="woo-tab-panel" data-panel="productos" hidden>
+              <p class="woo-desc">Define la duración de cada producto. Se usará para mover el lead al pipeline correcto al enviar el pedido.</p>
+              <div id="wooProductsList" class="woo-products-list"></div>
+              <div class="woo-add-product-row">
+                <input type="text" id="wooNewProductName" placeholder="Nombre del producto (igual que en WooCommerce)" class="int-input" />
+                <input type="number" id="wooNewProductDays" placeholder="Días" min="1" class="int-input" style="width:90px" />
+                <button class="btn btn--primary btn--sm" id="wooAddProductBtn">+ Agregar</button>
+              </div>
+              <div style="margin-top:16px;text-align:right">
+                <button class="btn btn--primary" id="wooSaveProductsBtn">Guardar productos</button>
+              </div>
+            </div>
+            <!-- TAB: Pipelines -->
+            <div class="woo-tab-panel" data-panel="pipelines" hidden>
+              <p class="woo-desc">Define a qué pipeline y etapa mover el lead cuando se complete el pedido, según la duración máxima de los productos comprados.</p>
+              <div id="wooPipelineRulesList" class="woo-rules-list"></div>
+              <div class="woo-add-rule-row" id="wooAddRuleRow">
+                <input type="number" id="wooRuleDays" placeholder="Días" min="1" class="int-input" style="width:80px" />
+                <select id="wooRulePipeline" class="int-input">
+                  <option value="">Pipeline...</option>
+                </select>
+                <select id="wooRuleStage" class="int-input">
+                  <option value="">Etapa...</option>
+                </select>
+                <button class="btn btn--primary btn--sm" id="wooAddRuleBtn">+ Agregar</button>
+              </div>
+              <div id="wooPipelineError" class="int-error" hidden></div>
+              <div style="margin-top:16px;text-align:right">
+                <button class="btn btn--primary" id="wooSaveRulesBtn">Guardar reglas</button>
+              </div>
+            </div>
+            <!-- TAB: Plugin WP -->
+            <div class="woo-tab-panel" data-panel="plugin" hidden>
+              <div class="woo-plugin-instructions">
+                <h4>Cómo instalar</h4>
+                <ol>
+                  <li>Descarga el plugin con el botón de abajo</li>
+                  <li>En WordPress → Plugins → Añadir nuevo → Subir plugin</li>
+                  <li>Selecciona el ZIP y haz clic en "Instalar ahora"</li>
+                  <li>Actívalo y ve a <strong>WooCommerce → Reelance Wapi101</strong></li>
+                  <li>Pega el <strong>Token</strong> y la <strong>URL del webhook</strong> que aparecen en la pestaña Conexión</li>
+                  <li>Activa el switch y guarda</li>
+                </ol>
+                <div style="margin-top:16px">
+                  <a href="/api/apps/woo/plugin-download" class="btn btn--primary" download>
+                    ⬇ Descargar plugin ZIP
+                  </a>
+                </div>
+                <div class="woo-requirements">
+                  <strong>Requisitos:</strong> WordPress 6+, WooCommerce 8+, WooCommerce Orders Tracking Premium (para tracking automático)
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

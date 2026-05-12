@@ -20256,8 +20256,106 @@ async function openWooModal() {
   await loadWooCarriers();
   await loadWooOrderStatuses();
   await loadWooProducts();
+  await loadAbandonedCartConfig(wooCfg);
   setupWooTabs();
   setupWooEvents();
+}
+
+// ─── Carritos Abandonados ─────────────────────────────────────────────────
+async function loadAbandonedCartConfig(cfg) {
+  const ac = cfg?.abandonedCart || {};
+  document.getElementById('acEnabledToggle').checked = !!ac.enabled;
+  document.getElementById('acTagInput').value         = ac.tag || 'Carrito abandonado';
+  document.getElementById('acDedupHours').value       = ac.dedupHours || 24;
+
+  // Pipelines
+  const pipelineSel = document.getElementById('acPipelineSel');
+  const stageSel    = document.getElementById('acStageSel');
+  try {
+    const pipelinesData = await api('GET', '/api/apps/woo/pipelines');
+    const pipelines = pipelinesData.pipelines || [];
+    pipelineSel.innerHTML = '<option value="">— Selecciona pipeline —</option>' +
+      pipelines.map(p => `<option value="${p.id}" ${p.id === ac.pipelineId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+    const renderStages = () => {
+      const p = pipelines.find(x => x.id === Number(pipelineSel.value));
+      const stages = p?.stages || [];
+      stageSel.innerHTML = '<option value="">— Selecciona etapa —</option>' +
+        stages.map(s => `<option value="${s.id}" ${s.id === ac.stageId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+    };
+    renderStages();
+    pipelineSel.onchange = renderStages;
+  } catch (_) {}
+
+  // Plantillas WA Business aprobadas
+  const tplSel = document.getElementById('acTemplateSel');
+  try {
+    const tplsData = await api('GET', '/api/templates');
+    const tpls = (tplsData.items || []).filter(t => t.type === 'wa_api' && t.waStatus === 'approved');
+    tplSel.innerHTML = '<option value="">— Selecciona plantilla —</option>' +
+      tpls.map(t => `<option value="${t.id}" ${t.id === ac.templateId ? 'selected' : ''}>${escapeHtml(t.name || t.displayName || `#${t.id}`)}</option>`).join('');
+    if (!tpls.length) {
+      tplSel.innerHTML = '<option value="">— No tienes plantillas aprobadas —</option>';
+    }
+  } catch (_) {}
+
+  // Handlers
+  document.getElementById('acSaveBtn')?.addEventListener('click', saveAbandonedCartConfig, { once: true });
+  document.getElementById('acHistoryRefresh')?.addEventListener('click', () => loadAbandonedCartHistory(), { once: true });
+
+  await loadAbandonedCartHistory();
+}
+
+async function saveAbandonedCartConfig() {
+  const body = {
+    enabled:    document.getElementById('acEnabledToggle').checked,
+    pipelineId: Number(document.getElementById('acPipelineSel').value) || null,
+    stageId:    Number(document.getElementById('acStageSel').value) || null,
+    templateId: Number(document.getElementById('acTemplateSel').value) || null,
+    tag:        document.getElementById('acTagInput').value.trim() || 'Carrito abandonado',
+    dedupHours: Number(document.getElementById('acDedupHours').value) || 24,
+  };
+  if (body.enabled && !body.templateId) return toast('Selecciona una plantilla aprobada para activar', 'error');
+  if (body.enabled && (!body.pipelineId || !body.stageId)) return toast('Configura el pipeline y la etapa', 'error');
+  try {
+    await api('PUT', '/api/apps/woo/abandoned-cart-config', body);
+    toast('Configuración guardada', 'success');
+    // Re-bind para próximo save
+    document.getElementById('acSaveBtn').addEventListener('click', saveAbandonedCartConfig, { once: true });
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadAbandonedCartHistory() {
+  const el = document.getElementById('acHistoryList');
+  if (!el) return;
+  try {
+    const data = await api('GET', '/api/apps/woo/abandoned-carts?page=1&limit=20');
+    const items = data.items || [];
+    if (!items.length) {
+      el.innerHTML = '<p class="woo-empty">Aún no hay carritos abandonados procesados.</p>';
+      return;
+    }
+    el.innerHTML = items.map(c => {
+      const date = new Date(c.created_at * 1000).toLocaleString('es-MX', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+      const name = c.customer_name || [c.contact_first_name, c.contact_last_name].filter(Boolean).join(' ') || '—';
+      const total = c.cart_total ? `$${Number(c.cart_total).toLocaleString('es-MX')}` : '—';
+      const status = c.message_sent
+        ? '<span class="ac-status ac-sent">✓ Mensaje enviado</span>'
+        : `<span class="ac-status ac-fail" title="${escapeHtml(c.send_error || '')}">✕ ${escapeHtml(c.send_error || 'No enviado')}</span>`;
+      return `<div class="ac-history-row">
+        <div class="ac-row-main">
+          <strong>${escapeHtml(name)}</strong>
+          <span class="ac-row-phone">${escapeHtml(c.customer_phone || '')}</span>
+        </div>
+        <div class="ac-row-meta">
+          <span>${date}</span>
+          <span>${total}</span>
+          ${status}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<p class="woo-empty">Error al cargar: ${escapeHtml(e.message)}</p>`;
+  }
 }
 
 function closeWooModal() {

@@ -1,5 +1,14 @@
 'use strict';
-const crypto = require('crypto');
+const crypto    = require('crypto');
+const botEngine = require('../bot/engine');
+
+// ── Mata todos los bots activos de un contacto ────────────────────────────────
+function killAllBotsForContact(db, contactId, tenantId) {
+  const runs = db.prepare(
+    "SELECT id FROM bot_runs WHERE contact_id = ? AND tenant_id = ? AND status IN ('running','paused')"
+  ).all(contactId, tenantId);
+  for (const run of runs) botEngine.killRun(db, run.id);
+}
 
 // ── Normalización de teléfono para WhatsApp ──────────────────────────────────
 // Devuelve formato E.164: +521XXXXXXXXXX (México), +1XXXXXXXXXX (USA), etc.
@@ -89,17 +98,27 @@ function processOrderProcessing(db, tenantId, order) {
 
   // Buscar lead existente de este contacto en el mismo pipeline
   let expedient = pipelineId ? db.prepare(
-    'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
+    'SELECT id, pipeline_id, stage_id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
   ).get(contact.id, pipelineId, tenantId) : null;
 
   let expId;
   if (expedient) {
+    const prevStageId = expedient.stage_id;
+    // Matar bots activos antes de mover la etapa
+    killAllBotsForContact(db, contact.id, tenantId);
     // Actualizar nombre y mover a la etapa inicial
     db.prepare(`
       UPDATE expedients SET name = ?, stage_id = ?, updated_at = unixepoch(), stage_entered_at = unixepoch()
       WHERE id = ?
     `).run(leadName, stageId, expedient.id);
     expId = expedient.id;
+    // Disparar bots de salida/entrada si la etapa cambió
+    if (prevStageId && prevStageId !== stageId) {
+      try {
+        botEngine.triggerPipelineStageLeave(db, { expedientId: expId, contactId: contact.id, pipelineId, stageId: prevStageId });
+        botEngine.triggerPipelineStage(db, { expedientId: expId, contactId: contact.id, pipelineId, stageId });
+      } catch (e) { console.error('[woo] error disparando bot (processing):', e.message); }
+    }
   } else if (pipelineId && stageId) {
     // Crear lead nuevo
     const r = db.prepare(`
@@ -107,6 +126,10 @@ function processOrderProcessing(db, tenantId, order) {
       VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch(), unixepoch())
     `).run(contact.id, pipelineId, stageId, leadName, tenantId);
     expId = r.lastInsertRowid;
+    // Disparar bot de la etapa inicial
+    try {
+      botEngine.triggerPipelineStage(db, { expedientId: expId, contactId: contact.id, pipelineId, stageId });
+    } catch (e) { console.error('[woo] error disparando bot (nuevo lead):', e.message); }
   }
 
   // Tag del lead: número de pedido únicamente
@@ -176,7 +199,7 @@ function processOrderCompleted(db, tenantId, order, wooConfig) {
   if (!clientesPipeline) return { skipped: true, reason: 'pipeline_not_found' };
 
   const expedient = db.prepare(
-    'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
+    'SELECT id, pipeline_id, stage_id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
   ).get(contact.id, clientesPipeline.id, tenantId);
   if (!expedient) return { skipped: true, reason: 'expedient_not_found' };
 
@@ -215,10 +238,22 @@ function processOrderCompleted(db, tenantId, order, wooConfig) {
       .get(rule.stage_id, rule.pipeline_id) : null;
 
     if (pipeline && stage) {
+      const prevPipelineId = expedient.pipeline_id;
+      const prevStageId    = expedient.stage_id;
+      // Matar todos los bots activos del contacto antes de mover
+      killAllBotsForContact(db, contact.id, tenantId);
+      // Mover el lead
       db.prepare(`
         UPDATE expedients SET pipeline_id = ?, stage_id = ?, updated_at = unixepoch(), stage_entered_at = unixepoch()
         WHERE id = ?
       `).run(rule.pipeline_id, rule.stage_id, expedient.id);
+      // Disparar bots de salida del stage anterior y entrada al nuevo
+      try {
+        if (prevStageId) {
+          botEngine.triggerPipelineStageLeave(db, { expedientId: expedient.id, contactId: contact.id, pipelineId: prevPipelineId, stageId: prevStageId });
+        }
+        botEngine.triggerPipelineStage(db, { expedientId: expedient.id, contactId: contact.id, pipelineId: rule.pipeline_id, stageId: rule.stage_id });
+      } catch (e) { console.error('[woo] error disparando bot (completed):', e.message); }
     } else {
       console.warn(`[woo] Regla de ${maxDays}d apunta a pipeline/stage eliminado (tenant ${tenantId})`);
     }

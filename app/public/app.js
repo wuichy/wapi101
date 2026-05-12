@@ -3667,7 +3667,7 @@ function setupDashboard() {
 }
 
 // ═══════ Navegación ═══════
-const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','mail','copiloto','comentarios']);
+const NAV_VIEWS = new Set(['inicio','chats','pipelines','expedientes','contactos','plantillas','integraciones','bot','ajustes','cuenta','suscripcion','calendario','mail','copiloto','comentarios','pedidos']);
 
 // Filtro de búsqueda de la vista Aplicaciones (topbar)
 let _appsSearch = '';
@@ -3754,7 +3754,7 @@ function showView(viewName) {
   }
   const cleanTopbar = (viewName === 'contactos');
   if (title) title.hidden = cleanTopbar;
-  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail' || viewName === 'copiloto';
+  const hideActions = cleanTopbar || viewName === 'expedientes' || viewName === 'integraciones' || viewName === 'pipelines' || viewName === 'inicio' || viewName === 'calendario' || viewName === 'plantillas' || viewName === 'bot' || viewName === 'mail' || viewName === 'copiloto' || viewName === 'pedidos';
   if (topbarActions) topbarActions.hidden = hideActions;
   const topbarEl = document.querySelector('.topbar');
   if (topbarEl) topbarEl.hidden = (viewName === 'ajustes' || viewName === 'cuenta' || viewName === 'copiloto');
@@ -3779,6 +3779,7 @@ function showView(viewName) {
   if (viewName === 'mail') { loadMailView(); initMailView(); }
   if (viewName === 'copiloto')   initCopiloto();
   if (viewName === 'comentarios') initComments();
+  if (viewName === 'pedidos') loadPedidosView();
 }
 
 function setupNav() {
@@ -14966,6 +14967,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadSplitConfig(),
     applyAIConditionalVisibility(),
     applySocialCommentsVisibility(),
+    updatePedidosNavVisibility(),
   ]);
   startChatPolling();
   startVersionCheck();
@@ -19821,6 +19823,7 @@ async function toggleApp(id, enabled) {
     await api('PATCH', `/api/apps/${id}/toggle`, { enabled });
     toast(enabled ? 'App activada' : 'App pausada', 'success');
     await loadAppsSection();
+    await updatePedidosNavVisibility();
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -19829,6 +19832,7 @@ async function installApp(id) {
     await api('POST', `/api/apps/${id}/install`);
     toast('App instalada', 'success');
     await loadAppsSection();
+    await updatePedidosNavVisibility();
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -19838,7 +19842,142 @@ async function uninstallApp(id) {
     await api('DELETE', `/api/apps/${id}/install`);
     toast('App desinstalada', 'success');
     await loadAppsSection();
+    await updatePedidosNavVisibility();
+    // Si el usuario está viendo Pedidos y desinstala la app, redirigir a chats
+    if (document.body.dataset.viewActive === 'pedidos') showView('chats');
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// ── Pedidos nav ───────────────────────────────────────────────────────────────
+async function updatePedidosNavVisibility() {
+  try {
+    const data = await api('GET', '/api/apps');
+    const wooApp = (data.apps || []).find(a => a.slug === 'reelance-woocommerce');
+    const isInstalled = !!(wooApp?.installed);
+    const navEl = document.getElementById('navPedidos');
+    if (navEl) navEl.hidden = !isInstalled;
+  } catch (e) {
+    console.error('updatePedidosNavVisibility', e);
+  }
+}
+
+let _pedidosEventsReady = false;
+
+async function loadPedidosView() {
+  if (!_pedidosEventsReady) {
+    _pedidosEventsReady = true;
+    document.getElementById('pedidosRefreshBtn')?.addEventListener('click', loadPedidosView);
+    document.getElementById('pedidosSearch')?.addEventListener('input', (e) => renderPedidosOrders(e.target.value));
+    document.getElementById('pedidosSyncBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('pedidosSyncBtn');
+      btn.disabled = true; btn.textContent = '⏳ Importando...';
+      try {
+        const res = await api('POST', '/api/apps/woo/orders/sync');
+        toast(`✅ ${res.imported} órdenes importadas de WooCommerce`, 'success');
+        await loadPedidosView();
+      } catch (e) { toast(e.message || 'Error al importar', 'error'); }
+      finally { btn.disabled = false; btn.textContent = '⬇ Importar de WooCommerce'; }
+    });
+  }
+  const listEl = document.getElementById('pedidosOrdersList');
+  if (listEl) listEl.innerHTML = '<p class="woo-empty">Cargando pedidos...</p>';
+  try {
+    const [ordersData] = await Promise.all([
+      api('GET', '/api/apps/woo/orders'),
+      loadWooCarriers(),
+    ]);
+    _wooOrders = ordersData.orders || [];
+    renderPedidosOrders(document.getElementById('pedidosSearch')?.value || '');
+  } catch (e) {
+    if (listEl) listEl.innerHTML = '<p class="woo-empty">Error al cargar pedidos. Verifica la configuración de WooCommerce.</p>';
+    console.error('loadPedidosView', e);
+  }
+}
+
+function renderPedidosOrders(filter = '') {
+  const el = document.getElementById('pedidosOrdersList');
+  if (!el) return;
+  const orders = filter
+    ? _wooOrders.filter(o =>
+        String(o.wc_order_number).includes(filter) ||
+        (o.customer_name || '').toLowerCase().includes(filter.toLowerCase()))
+    : _wooOrders;
+
+  if (!orders.length) {
+    el.innerHTML = '<p class="woo-empty">Sin pedidos. Importa desde WooCommerce o espera el próximo webhook.</p>';
+    return;
+  }
+
+  el.innerHTML = orders.map(o => {
+    const products = o.products || JSON.parse(o.products_json || '[]');
+    const productNames = products.map(p => `${p.name} x${p.quantity}`).join(', ');
+    const trackingBadge = o.tracking_number
+      ? `<span class="woo-tracking-badge woo-tracking-badge--${o.tracking_status || 'pendiente'}">${escapeHtml(o.tracking_carrier || '')} ${escapeHtml(o.tracking_number)}</span>`
+      : `<span class="woo-tracking-badge woo-tracking-badge--none">Sin rastreo</span>`;
+    const statusBadge = `<span class="woo-order-status woo-order-status--${o.status}">${o.status === 'processing' ? 'Procesando' : 'Completado'}</span>`;
+    const date = new Date(o.created_at * 1000).toLocaleDateString('es-MX');
+    return `
+      <div class="woo-order-row" data-order-id="${o.id}">
+        <div class="woo-order-main">
+          <div class="woo-order-header">
+            <strong>#${escapeHtml(o.wc_order_number || String(o.wc_order_id))}</strong>
+            ${statusBadge}
+            <span class="woo-order-date">${date}</span>
+          </div>
+          <div class="woo-order-customer">${escapeHtml(o.customer_name || '')} · ${escapeHtml(o.customer_phone || '')}</div>
+          <div class="woo-order-products">${escapeHtml(productNames)}</div>
+          <div class="woo-order-tracking">${trackingBadge}</div>
+        </div>
+        <button class="btn btn--sm btn--ghost woo-tracking-btn" data-order-id="${o.id}">
+          ${o.tracking_number ? '✏️ Editar rastreo' : '📦 Agregar rastreo'}
+        </button>
+      </div>
+      <div class="woo-tracking-form" id="pedidosTrackingForm_${o.id}" hidden>
+        <div class="woo-tracking-fields">
+          <select class="int-input pedidos-carrier-sel" data-oid="${o.id}">
+            <option value="">Paquetería...</option>
+            ${_wooCarriers.map(c => `<option value="${escapeHtml(c.id)}" ${o.tracking_carrier === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+          <input type="text" class="int-input pedidos-tracknum-inp" data-oid="${o.id}"
+            placeholder="Número de rastreo" value="${escapeHtml(o.tracking_number || '')}" style="flex:1" />
+          <select class="int-input pedidos-trackstatus-sel" data-oid="${o.id}">
+            <option value="pendiente" ${(o.tracking_status || 'pendiente') === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+            <option value="en_camino" ${o.tracking_status === 'en_camino' ? 'selected' : ''}>En camino</option>
+            <option value="entregado" ${o.tracking_status === 'entregado' ? 'selected' : ''}>Entregado</option>
+          </select>
+          <button class="btn btn--primary btn--sm pedidos-save-tracking-btn" data-oid="${o.id}">Guardar</button>
+          <button class="btn btn--ghost btn--sm pedidos-cancel-tracking-btn" data-oid="${o.id}">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.querySelectorAll('.woo-tracking-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`pedidosTrackingForm_${btn.dataset.orderId}`);
+      if (form) form.hidden = !form.hidden;
+    });
+  });
+  el.querySelectorAll('.pedidos-cancel-tracking-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const form = document.getElementById(`pedidosTrackingForm_${btn.dataset.oid}`);
+      if (form) form.hidden = true;
+    });
+  });
+  el.querySelectorAll('.pedidos-save-tracking-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const oid = btn.dataset.oid;
+      const carrier        = document.querySelector(`.pedidos-carrier-sel[data-oid="${oid}"]`).value;
+      const tracking_number  = document.querySelector(`.pedidos-tracknum-inp[data-oid="${oid}"]`).value.trim();
+      const tracking_status  = document.querySelector(`.pedidos-trackstatus-sel[data-oid="${oid}"]`).value;
+      if (!carrier || !tracking_number) return toast('Selecciona paquetería y número de rastreo', 'error');
+      try {
+        btn.disabled = true;
+        const result = await api('PATCH', `/api/apps/woo/orders/${oid}/tracking`, { carrier, tracking_number, tracking_status });
+        toast(result.wcPush ? '✅ Rastreo guardado y enviado a WooCommerce' : '✅ Rastreo guardado (configura credenciales WC para sincronizar)', 'success');
+        await loadPedidosView();
+      } catch (e) { toast(e.message, 'error'); } finally { btn.disabled = false; }
+    });
+  });
 }
 
 function openApp(slug) {

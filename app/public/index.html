@@ -1923,7 +1923,6 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <button class="woo-tab" data-tab="productos">Productos</button>
             <button class="woo-tab" data-tab="pipelines">Pipelines</button>
             <button class="woo-tab" data-tab="pedidos">Pedidos</button>
-            <button class="woo-tab" data-tab="carritos">Carritos abandonados</button>
             <button class="woo-tab" data-tab="plugin">Plugin WP</button>
           </div>
           <div class="modal-body woo-body">
@@ -2055,66 +2054,6 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <p class="woo-empty">Cargando pedidos...</p>
               </div>
             </div>
-            <!-- TAB: Carritos abandonados -->
-            <div class="woo-tab-panel" data-panel="carritos" hidden>
-              <p class="woo-desc" style="margin-bottom:14px">
-                Cuando alguien deja un carrito abandonado en CartBounty Pro, Wapi101 le envía automáticamente una plantilla de WhatsApp Business.
-                Requiere tener instalado CartBounty Pro en tu WordPress.
-              </p>
-
-              <div class="ac-config" style="display:flex;flex-direction:column;gap:14px">
-                <!-- Activar -->
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                  <input type="checkbox" id="acEnabledToggle" />
-                  <span style="font-size:13px;font-weight:600">Activar sincronización de carritos abandonados</span>
-                </label>
-
-                <!-- Pipeline + Etapa para contactos nuevos -->
-                <div>
-                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">📋 Pipeline + Etapa (solo contactos nuevos)</p>
-                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Si el contacto NO existe, se crea un lead aquí. Si ya existe, su lead actual no se mueve.</p>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap">
-                    <select id="acPipelineSel" class="int-input" style="flex:1;min-width:160px"></select>
-                    <select id="acStageSel" class="int-input" style="flex:1;min-width:160px"></select>
-                  </div>
-                </div>
-
-                <!-- Plantilla -->
-                <div>
-                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">💬 Plantilla de WhatsApp Business</p>
-                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Debe estar aprobada por Meta. Se usan placeholders {{1}}=nombre, {{2}}=link del carrito, {{3}}=total.</p>
-                  <select id="acTemplateSel" class="int-input" style="width:100%"></select>
-                </div>
-
-                <!-- Tag -->
-                <div>
-                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">🏷️ Etiqueta para el lead</p>
-                  <input type="text" id="acTagInput" class="int-input" placeholder="Carrito abandonado" maxlength="60" style="width:100%" />
-                </div>
-
-                <!-- Dedup -->
-                <div>
-                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">⏱ Ventana de deduplicación (horas)</p>
-                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Si el mismo contacto deja otro carrito dentro de este tiempo, no se le manda otro mensaje. Default: 24h.</p>
-                  <input type="number" id="acDedupHours" class="int-input" min="1" max="168" value="24" style="width:120px" />
-                </div>
-
-                <div style="display:flex;gap:8px;margin-top:6px">
-                  <button class="btn btn--primary" id="acSaveBtn">Guardar configuración</button>
-                </div>
-              </div>
-
-              <!-- Historial -->
-              <div style="margin-top:24px;padding-top:18px;border-top:1px solid var(--border)">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-                  <p style="font-size:13px;font-weight:600;margin:0">Historial de carritos procesados</p>
-                  <button class="btn btn--ghost btn--sm" id="acHistoryRefresh">↺ Actualizar</button>
-                </div>
-                <div id="acHistoryList">
-                  <p class="woo-empty">Cargando historial...</p>
-                </div>
-              </div>
-            </div>
             <!-- TAB: Plugin WP -->
             <div class="woo-tab-panel" data-panel="plugin" hidden>
               <div class="woo-plugin-instructions">
@@ -2134,6 +2073,86 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 </div>
                 <div class="woo-requirements">
                   <strong>Requisitos:</strong> WordPress 6+, WooCommerce 8+, WooCommerce Orders Tracking Premium (para tracking automático)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── MODAL: App Carritos Abandonados ─── -->
+      <div class="modal" id="acAppModal" hidden>
+        <div class="modal-backdrop" onclick="closeAbandonedCartModal()"></div>
+        <div class="modal-card modal-card--lg woo-modal">
+          <header class="modal-header">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:24px">🛍️</span>
+              <div>
+                <h3>Carritos Abandonados</h3>
+                <p style="font-size:12px;color:var(--text-muted);margin:0">Recupera ventas vía WhatsApp Business</p>
+              </div>
+            </div>
+            <button class="icon-btn" onclick="closeAbandonedCartModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="modal-body" style="padding:18px 20px">
+            <!-- Aviso si no hay woo_config aún -->
+            <div id="acRequiresWoo" class="ac-warn" hidden>
+              <p>⚠️ Esta app requiere la app de <strong>Reelance WooCommerce</strong> instalada primero (para usar el mismo token + webhook).</p>
+              <button class="btn btn--primary btn--sm" onclick="closeAbandonedCartModal(); openApp('reelance-woocommerce')">Ir a WooCommerce</button>
+            </div>
+
+            <div id="acConfigBlock">
+              <p class="woo-desc" style="margin-bottom:14px">
+                Cuando alguien deja un carrito abandonado en CartBounty Pro, Wapi101 le envía automáticamente una plantilla de WhatsApp Business.
+                Requiere tener instalado <strong>CartBounty Pro</strong> en tu WordPress.
+              </p>
+
+              <div class="ac-config" style="display:flex;flex-direction:column;gap:14px">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input type="checkbox" id="acEnabledToggle" />
+                  <span style="font-size:13px;font-weight:600">Activar sincronización de carritos abandonados</span>
+                </label>
+
+                <div>
+                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">📋 Pipeline + Etapa (solo contactos nuevos)</p>
+                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Si el contacto NO existe, se crea un lead aquí. Si ya existe, su lead actual no se mueve.</p>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <select id="acPipelineSel" class="int-input" style="flex:1;min-width:160px"></select>
+                    <select id="acStageSel" class="int-input" style="flex:1;min-width:160px"></select>
+                  </div>
+                </div>
+
+                <div>
+                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">💬 Plantilla de WhatsApp Business</p>
+                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Debe estar aprobada por Meta. Placeholders {{1}}=nombre, {{2}}=link del carrito, {{3}}=total.</p>
+                  <select id="acTemplateSel" class="int-input" style="width:100%"></select>
+                </div>
+
+                <div>
+                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">🏷️ Etiqueta para el lead</p>
+                  <input type="text" id="acTagInput" class="int-input" placeholder="Carrito abandonado" maxlength="60" style="width:100%" />
+                </div>
+
+                <div>
+                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">⏱ Ventana de deduplicación (horas)</p>
+                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Si el mismo contacto deja otro carrito dentro de este tiempo, no se le manda otro mensaje. Default: 24h.</p>
+                  <input type="number" id="acDedupHours" class="int-input" min="1" max="168" value="24" style="width:120px" />
+                </div>
+
+                <div style="display:flex;gap:8px;margin-top:6px">
+                  <button class="btn btn--primary" id="acSaveBtn">Guardar configuración</button>
+                </div>
+              </div>
+
+              <div style="margin-top:24px;padding-top:18px;border-top:1px solid var(--border)">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                  <p style="font-size:13px;font-weight:600;margin:0">Historial de carritos procesados</p>
+                  <button class="btn btn--ghost btn--sm" id="acHistoryRefresh">↺ Actualizar</button>
+                </div>
+                <div id="acHistoryList">
+                  <p class="woo-empty">Cargando historial...</p>
                 </div>
               </div>
             </div>

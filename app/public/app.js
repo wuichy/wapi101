@@ -20243,7 +20243,8 @@ function renderPedidosOrders(filter = '') {
 }
 
 function openApp(slug) {
-  if (slug === 'reelance-woocommerce') openWooModal();
+  if (slug === 'reelance-woocommerce')    openWooModal();
+  if (slug === 'reelance-abandoned-cart') openAbandonedCartModal();
 }
 
 // ── Woo App Modal ────────────────────────────────────────────────────────────
@@ -20256,12 +20257,35 @@ async function openWooModal() {
   await loadWooCarriers();
   await loadWooOrderStatuses();
   await loadWooProducts();
-  await loadAbandonedCartConfig(wooCfg);
   setupWooTabs();
   setupWooEvents();
 }
 
-// ─── Carritos Abandonados ─────────────────────────────────────────────────
+// ─── App Carritos Abandonados (independiente) ──────────────────────────────
+async function openAbandonedCartModal() {
+  document.getElementById('acAppModal').hidden = false;
+  // Requiere que woo_config exista — si no, mostrar aviso de que primero
+  // hay que instalar/conectar la app de WooCommerce
+  let cfg;
+  try {
+    cfg = await api('GET', '/api/apps/woo/config');
+  } catch (e) {
+    cfg = { connected: false };
+  }
+  if (!cfg.connected) {
+    document.getElementById('acRequiresWoo').hidden = false;
+    document.getElementById('acConfigBlock').hidden = true;
+    return;
+  }
+  document.getElementById('acRequiresWoo').hidden = true;
+  document.getElementById('acConfigBlock').hidden = false;
+  await loadAbandonedCartConfig(cfg);
+}
+
+function closeAbandonedCartModal() {
+  document.getElementById('acAppModal').hidden = true;
+}
+
 async function loadAbandonedCartConfig(cfg) {
   const ac = cfg?.abandonedCart || {};
   document.getElementById('acEnabledToggle').checked = !!ac.enabled;

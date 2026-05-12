@@ -66,29 +66,35 @@ function processOrderProcessing(db, tenantId, order) {
   // Nombre del lead: "Nombre Apellido DD/MM/AAAA"
   const leadName = `${firstName} ${lastName} ${orderDate}`.trim();
 
-  // Buscar etapa "Recientes" en pipeline CLIENTES (id=4)
-  const clientesPipeline = db.prepare(
-    "SELECT id FROM pipelines WHERE LOWER(name) LIKE '%cliente%' AND tenant_id = ? LIMIT 1"
-  ).get(tenantId);
-  const recientesStage = clientesPipeline ? db.prepare(
-    "SELECT id FROM stages WHERE pipeline_id = ? AND LOWER(name) LIKE '%reciente%' LIMIT 1"
-  ).get(clientesPipeline.id) : null;
-
-  const pipelineId = clientesPipeline?.id;
-  const stageId    = recientesStage?.id;
+  // Pipeline/etapa inicial — usar config guardada, con fallback a búsqueda por nombre
+  const wooConfig   = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(tenantId);
+  let pipelineId = wooConfig?.initial_pipeline_id || null;
+  let stageId    = wooConfig?.initial_stage_id    || null;
 
   if (!pipelineId || !stageId) {
-    console.warn('[woo] No se encontró pipeline CLIENTES o etapa Recientes para tenant', tenantId);
+    // Fallback: buscar por nombre (compatibilidad hacia atrás)
+    const clientesPipeline = db.prepare(
+      "SELECT id FROM pipelines WHERE LOWER(name) LIKE '%cliente%' AND tenant_id = ? LIMIT 1"
+    ).get(tenantId);
+    const recientesStage = clientesPipeline ? db.prepare(
+      "SELECT id FROM stages WHERE pipeline_id = ? AND LOWER(name) LIKE '%reciente%' LIMIT 1"
+    ).get(clientesPipeline.id) : null;
+    pipelineId = clientesPipeline?.id || null;
+    stageId    = recientesStage?.id   || null;
   }
 
-  // Buscar lead existente de este contacto en pipeline CLIENTES
+  if (!pipelineId || !stageId) {
+    console.warn('[woo] No hay pipeline/etapa configurada para pedidos nuevos (tenant', tenantId, '). Configúrala en Apps → WooCommerce → Pipelines.');
+  }
+
+  // Buscar lead existente de este contacto en el mismo pipeline
   let expedient = pipelineId ? db.prepare(
     'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
   ).get(contact.id, pipelineId, tenantId) : null;
 
   let expId;
   if (expedient) {
-    // Actualizar nombre y mover a Recientes
+    // Actualizar nombre y mover a la etapa inicial
     db.prepare(`
       UPDATE expedients SET name = ?, stage_id = ?, updated_at = unixepoch(), stage_entered_at = unixepoch()
       WHERE id = ?

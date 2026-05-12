@@ -1984,7 +1984,23 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             </div>
             <!-- TAB: Pipelines -->
             <div class="woo-tab-panel" data-panel="pipelines" hidden>
-              <p class="woo-desc">Define a qué pipeline y etapa mover el lead cuando se complete el pedido, según la duración máxima de los productos comprados.</p>
+              <!-- Sección 1: pipeline inicial -->
+              <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+                <p style="font-size:12px;font-weight:600;margin:0 0 6px">📥 Al recibir un pedido nuevo</p>
+                <p class="woo-desc" style="margin:0 0 10px">Pipeline y etapa donde se crea el lead cuando llega un pedido en estado <em>Procesando</em>.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <select id="wooInitialPipeline" class="int-input" style="flex:1;min-width:140px">
+                    <option value="">Pipeline...</option>
+                  </select>
+                  <select id="wooInitialStage" class="int-input" style="flex:1;min-width:140px">
+                    <option value="">Etapa...</option>
+                  </select>
+                  <button class="btn btn--primary btn--sm" id="wooSaveInitialPipelineBtn">Guardar</button>
+                </div>
+              </div>
+              <!-- Sección 2: reglas por duración -->
+              <p style="font-size:12px;font-weight:600;margin:0 0 6px">📦 Al completar el pedido</p>
+              <p class="woo-desc">Mueve el lead al pipeline correspondiente según la duración máxima de los productos comprados.</p>
               <div id="wooPipelineRulesList" class="woo-rules-list"></div>
               <div class="woo-add-rule-row" id="wooAddRuleRow">
                 <input type="number" id="wooRuleDays" placeholder="Días" min="1" class="int-input" style="width:80px" />

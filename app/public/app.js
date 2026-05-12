@@ -19848,8 +19848,8 @@ function openApp(slug) {
 // ── Woo App Modal ────────────────────────────────────────────────────────────
 async function openWooModal() {
   document.getElementById('wooAppModal').hidden = false;
-  await loadWooConfig();
-  await loadWooPipelines();
+  const wooCfg = await loadWooConfig();
+  await loadWooPipelines(wooCfg);
   await loadWooOrders();
   await loadWooCarriers();
   await loadWooProducts();
@@ -19910,22 +19910,52 @@ async function loadWooConfig() {
     _wooRules    = cfg.pipelineRules || [];
     renderWooProducts();
     renderWooRules();
+    return cfg;
   } catch (e) { console.error('loadWooConfig', e); }
 }
 
-async function loadWooPipelines() {
+async function loadWooPipelines(cfg) {
   try {
     const data = await api('GET', '/api/apps/woo/pipelines');
     _wooPipelines = data.pipelines || [];
-    const sel = document.getElementById('wooRulePipeline');
-    sel.innerHTML = '<option value="">Pipeline...</option>' +
+    const pipelineOpts = '<option value="">Pipeline...</option>' +
       _wooPipelines.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-    sel.addEventListener('change', () => {
-      const p = _wooPipelines.find(x => String(x.id) === sel.value);
-      const stageSel = document.getElementById('wooRuleStage');
-      stageSel.innerHTML = '<option value="">Etapa...</option>' +
-        (p ? p.stages.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') : '');
-    });
+
+    // Selector de reglas por duración
+    const sel = document.getElementById('wooRulePipeline');
+    if (sel) {
+      sel.innerHTML = pipelineOpts;
+      sel.addEventListener('change', () => {
+        const p = _wooPipelines.find(x => String(x.id) === sel.value);
+        const stageSel = document.getElementById('wooRuleStage');
+        stageSel.innerHTML = '<option value="">Etapa...</option>' +
+          (p ? p.stages.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') : '');
+      });
+    }
+
+    // Selector de pipeline inicial (order.processing)
+    const initPipSel = document.getElementById('wooInitialPipeline');
+    const initStgSel = document.getElementById('wooInitialStage');
+    if (initPipSel) {
+      initPipSel.innerHTML = pipelineOpts;
+      // Pre-seleccionar si ya está guardado
+      if (cfg?.initialPipelineId) {
+        initPipSel.value = String(cfg.initialPipelineId);
+        const p = _wooPipelines.find(x => x.id === cfg.initialPipelineId);
+        if (p && initStgSel) {
+          initStgSel.innerHTML = '<option value="">Etapa...</option>' +
+            p.stages.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+          initStgSel.value = String(cfg.initialStageId || '');
+        }
+      }
+      initPipSel.addEventListener('change', () => {
+        const p = _wooPipelines.find(x => String(x.id) === initPipSel.value);
+        if (initStgSel) {
+          initStgSel.innerHTML = '<option value="">Etapa...</option>' +
+            (p ? p.stages.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('') : '');
+        }
+      });
+    }
   } catch (e) { console.error('loadWooPipelines', e); }
 }
 
@@ -20136,6 +20166,17 @@ function setupWooEvents() {
     try {
       await api('PUT', '/api/apps/woo/products', { products: _wooProducts });
       toast('Duraciones guardadas', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Guardar pipeline inicial (order.processing)
+  document.getElementById('wooSaveInitialPipelineBtn')?.addEventListener('click', async () => {
+    const pipeline_id = Number(document.getElementById('wooInitialPipeline')?.value);
+    const stage_id    = Number(document.getElementById('wooInitialStage')?.value);
+    if (!pipeline_id || !stage_id) return toast('Selecciona pipeline y etapa', 'error');
+    try {
+      await api('PUT', '/api/apps/woo/initial-pipeline', { pipeline_id, stage_id });
+      toast('Pipeline inicial guardado', 'success');
     } catch (e) { toast(e.message, 'error'); }
   });
 

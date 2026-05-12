@@ -27,14 +27,16 @@ function authRouter(db) {
     let cfg = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(tenantId);
     if (!cfg) return res.json({ connected: false });
     res.json({
-      connected:      true,
-      enabled:        cfg.enabled === 1,
-      token:          cfg.token,
-      connectedAt:    cfg.connected_at,
-      products:       JSON.parse(cfg.products_json || '[]'),
-      pipelineRules:  JSON.parse(cfg.pipeline_rules || '[]'),
-      site_url:       cfg.site_url || '',
-      hasCredentials: !!(cfg.wc_consumer_key && cfg.wc_consumer_secret),
+      connected:          true,
+      enabled:            cfg.enabled === 1,
+      token:              cfg.token,
+      connectedAt:        cfg.connected_at,
+      products:           JSON.parse(cfg.products_json || '[]'),
+      pipelineRules:      JSON.parse(cfg.pipeline_rules || '[]'),
+      site_url:           cfg.site_url || '',
+      hasCredentials:     !!(cfg.wc_consumer_key && cfg.wc_consumer_secret),
+      initialPipelineId:  cfg.initial_pipeline_id || null,
+      initialStageId:     cfg.initial_stage_id    || null,
     });
   });
 
@@ -74,6 +76,19 @@ function authRouter(db) {
     if (!Array.isArray(products)) return res.status(400).json({ error: 'products debe ser un array' });
     db.prepare('UPDATE woo_config SET products_json = ?, updated_at = unixepoch() WHERE tenant_id = ?')
       .run(JSON.stringify(products), req.tenantId);
+    res.json({ ok: true });
+  });
+
+  // PUT /api/apps/woo/initial-pipeline — guardar pipeline/etapa inicial (order.processing)
+  router.put('/initial-pipeline', (req, res) => {
+    const { pipeline_id, stage_id } = req.body;
+    if (!pipeline_id || !stage_id) return res.status(400).json({ error: 'pipeline_id y stage_id son requeridos' });
+    const pip = db.prepare('SELECT id FROM pipelines WHERE id = ? AND tenant_id = ?').get(Number(pipeline_id), req.tenantId);
+    const stg = db.prepare('SELECT id FROM stages WHERE id = ? AND pipeline_id = ?').get(Number(stage_id), Number(pipeline_id));
+    if (!pip) return res.status(400).json({ error: 'Pipeline no encontrado' });
+    if (!stg) return res.status(400).json({ error: 'Etapa no encontrada en ese pipeline' });
+    db.prepare('UPDATE woo_config SET initial_pipeline_id = ?, initial_stage_id = ?, updated_at = unixepoch() WHERE tenant_id = ?')
+      .run(Number(pipeline_id), Number(stage_id), req.tenantId);
     res.json({ ok: true });
   });
 

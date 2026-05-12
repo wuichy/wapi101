@@ -52,6 +52,10 @@ function killRun(db, runId) {
       db.prepare(
         "UPDATE bot_runs SET status='killed', finished_at=unixepoch() WHERE id=? AND status IN ('running','paused')"
       ).run(runId);
+      // Cancelar waits persistentes (timer / wait_response) — sin esto el poller los seguiría disparando.
+      db.prepare(
+        "UPDATE bot_run_waits SET status='cancelled' WHERE run_id=? AND status='waiting'"
+      ).run(runId);
     }
   } catch (_) {}
 }
@@ -670,23 +674,52 @@ async function executeStep(db, step, ctx) {
       } else {
         ms = (Number(c.amount) || 1) * (MS[c.unit] || MS.minutos);
       }
-      _log('info', `timer: esperando ${ms}ms`);
-      if (ms > 0) {
-        const chunk = 1000;
-        let elapsed = 0;
-        while (elapsed < ms) {
-          const sig = ctx.runId ? _signals.get(ctx.runId) : null;
-          if (sig?.kill) { _log('info', `timer interrumpido por kill (run ${ctx.runId})`); return false; }
-          // While paused, hold without consuming timer budget
-          while (sig?.pause && !sig?.kill) {
-            await new Promise(r => setTimeout(r, 500));
-          }
-          if (sig?.kill) { _log('info', `timer interrumpido por kill tras pausa (run ${ctx.runId})`); return false; }
-          await new Promise(r => setTimeout(r, Math.min(chunk, ms - elapsed)));
-          elapsed += chunk;
-        }
+      if (ms <= 0) return false;
+
+      // Timers <5s se ejecutan in-memory (overhead de persistir no se justifica).
+      // Cualquier cosa mayor se persiste en bot_run_waits para sobrevivir reinicios.
+      if (ms < 5000) {
+        _log('info', `timer: esperando ${ms}ms in-memory`);
+        await new Promise(r => setTimeout(r, ms));
+        return false;
       }
-      return false;
+
+      const runId = ctx._runId;
+      const stepIndex = ctx._stepIndex;
+      if (!runId) {
+        _log('warn', `timer: sin _runId — fallback in-memory ${ms}ms (no se podra resumir tras restart)`);
+        await new Promise(r => setTimeout(r, ms));
+        return false;
+      }
+      const expiresAt = Math.floor(Date.now() / 1000) + Math.ceil(ms / 1000);
+      const ctxSnapshot = {
+        chainDepth:    ctx.chainDepth || 0,
+        provider:      ctx.provider || null,
+        integrationId: ctx.integrationId || null,
+        pipelineId:    ctx.pipelineId || null,
+        stageId:       ctx.stageId || null,
+        messageBody:   ctx.messageBody || '',
+        path:          Array.isArray(ctx._stepPath) ? ctx._stepPath : [stepIndex],
+      };
+      db.prepare(`
+        INSERT INTO bot_run_waits (
+          tenant_id, run_id, bot_id, contact_id, conversation_id, expedient_id,
+          wait_step_id, wait_step_index, ctx_json, expires_at, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'waiting')
+      `).run(
+        ctx.tenantId,
+        runId,
+        db.prepare('SELECT bot_id FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, ctx.tenantId)?.bot_id || 0,
+        ctx.contactId || null,
+        ctx.convoId || null,
+        ctx.expedientId || null,
+        step._id || `s${stepIndex}`,
+        stepIndex,
+        JSON.stringify(ctxSnapshot),
+        expiresAt
+      );
+      _log('info', `timer: run ${runId} suspendido hasta ${new Date(expiresAt*1000).toISOString()} (${ms}ms)`);
+      return 'suspend';
     }
 
     case 'stage': {
@@ -1497,13 +1530,14 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     : [wait.wait_step_index];
   const located = _walkStepPath(allSteps, path);
   const waitStep = located?.step;
-  if (!waitStep || waitStep.type !== 'wait_response') {
-    _log('error', `resumeRun: no se encontró wait_response en path ${JSON.stringify(path)}`);
+  if (!waitStep || (waitStep.type !== 'wait_response' && waitStep.type !== 'timer')) {
+    _log('error', `resumeRun: no se encontró wait_response/timer en path ${JSON.stringify(path)} (got ${waitStep?.type})`);
     return;
   }
+  const isTimer = waitStep.type === 'timer';
 
   const branches = waitStep.config?.branches || {};
-  const branchSteps = Array.isArray(branches[branch]) ? branches[branch] : [];
+  const branchSteps = isTimer ? [] : (Array.isArray(branches[branch]) ? branches[branch] : []);
   // Asegurar _ids únicos
   const branchStepsHydrated = branchSteps.map((s, i) => ({ ...s, _id: s._id || `${wait.wait_step_id}-${branch}-${i}` }));
   const contact = wait.contact_id
@@ -1525,15 +1559,19 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     ...extraCtx,
   };
 
-  _log('info', `resumeRun: ejecutando ${branchStepsHydrated.length} pasos de rama "${branch}" del run ${wait.run_id}`);
+  if (isTimer) {
+    _log('info', `resumeRun: timer expiró run ${wait.run_id} — continuando con hermanos`);
+  } else {
+    _log('info', `resumeRun: ejecutando ${branchStepsHydrated.length} pasos de rama "${branch}" del run ${wait.run_id}`);
+  }
 
   // Ejecutar los pasos de la rama. Si hay otro wait_response dentro, vuelve a suspender.
   let suspended = false;
   let errored = false;
   let stopped = false;
   // Nuevo shape simple: si rama es 'on_timeout' y onTimeout === 'stop', pausar SOLO este bot
-  // para este contacto (consistente con stop_bot).
-  if (branch === 'on_timeout' && waitStep.config?.onTimeout === 'stop') {
+  // para este contacto (consistente con stop_bot). Solo aplica a wait_response.
+  if (!isTimer && branch === 'on_timeout' && waitStep.config?.onTimeout === 'stop') {
     _log('info', `resumeRun: timeout con onTimeout=stop, pausando bot ${wait.bot_id} para contacto ${wait.contact_id}`);
     if (wait.contact_id && wait.bot_id) {
       try {
@@ -1625,14 +1663,17 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
       `).run(status, wait.run_id);
     } catch (_) {}
     if (ctx.expedientId) {
+      const desc = isTimer
+        ? (status === 'done' ? 'Bot completado tras timer' : 'Bot falló tras timer')
+        : (status === 'done' ? `Bot resumió rama "${branch}" y completó` : `Bot rama "${branch}" falló`);
       activitySvc.log(db, {
         expedientId: ctx.expedientId,
         contactId:   ctx.contactId,
         type:        status === 'done' ? 'bot_done' : 'bot_error',
-        description: status === 'done' ? `Bot resumió rama "${branch}" y completó` : `Bot rama "${branch}" falló`,
+        description: desc,
       });
     }
-    _log('info', `run ${wait.run_id} finalizado (${status}) tras rama ${branch}`);
+    _log('info', `run ${wait.run_id} finalizado (${status}) tras ${isTimer ? 'timer' : 'rama '+branch}`);
   }
 }
 

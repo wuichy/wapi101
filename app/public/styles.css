@@ -2698,6 +2698,24 @@ body.nav-collapsed .nav-notif-panel {
 .exp-chip--clickable:hover { background: #eef2f7; transform: translateY(-1px); }
 .exp-chip--clickable:active { transform: translateY(0); }
 
+/* ═══════ Global Loader (barra arriba, aparece durante requests) ═══════ */
+.global-loader {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 99999;
+  background: linear-gradient(90deg, transparent 0%, var(--primary, #6366f1) 30%, var(--primary, #6366f1) 60%, transparent 100%);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s ease;
+}
+.global-loader.is-active {
+  opacity: 1;
+  animation: global-loader-slide 1.1s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes global-loader-slide {
+  0%   { background-position: -50% 0; }
+  100% { background-position: 150% 0; }
+}
+
 /* ═══════ Toast ═══════ */
 .toast-container {
   position: fixed;

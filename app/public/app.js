@@ -1183,6 +1183,27 @@ function markConnSuccess() {
   }
 }
 
+// ═══════ Global loader — barra arriba mientras hay requests en vuelo ═══════
+let _pendingRequests = 0;
+let _loaderShowTimer = null;
+function _trackRequestStart() {
+  _pendingRequests++;
+  // Mostrar después de 200ms — evita parpadeo en requests rápidas (<200ms).
+  if (_pendingRequests === 1 && !_loaderShowTimer) {
+    _loaderShowTimer = setTimeout(() => {
+      document.getElementById('globalLoader')?.classList.add('is-active');
+      _loaderShowTimer = null;
+    }, 200);
+  }
+}
+function _trackRequestEnd() {
+  _pendingRequests = Math.max(0, _pendingRequests - 1);
+  if (_pendingRequests === 0) {
+    if (_loaderShowTimer) { clearTimeout(_loaderShowTimer); _loaderShowTimer = null; }
+    document.getElementById('globalLoader')?.classList.remove('is-active');
+  }
+}
+
 async function api(method, url, body) {
   // cache:'no-store' fuerza al browser a NO usar copias cacheadas (Safari es agresivo).
   // Combina con Cache-Control: no-store del backend para garantía total.
@@ -1195,14 +1216,17 @@ async function api(method, url, body) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
   }
+  _trackRequestStart();
   let res;
   try {
     res = await fetch(url, opts);
   } catch (err) {
     // Fallo de red (sin respuesta)
+    _trackRequestEnd();
     markConnFailure();
     throw err;
   }
+  _trackRequestEnd();
   if (res.status >= 500 && res.status !== 503) markConnFailure();
   else markConnSuccess();
   if (res.status === 401) { logout(); return; }

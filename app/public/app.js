@@ -5295,7 +5295,10 @@ async function renderExpDetailBots() {
       }
       function runVisualState(r) {
         const isManual = !!r.paused_manually;
-        const inWait   = r.status === 'paused' && r.wait_step_type;
+        // El wait_step_type viene del API si hay un bot_run_waits activo.
+        // Esto detecta wait independiente del status (que puede estar desincronizado
+        // por código viejo que no contemplaba waits naturales).
+        const inWait   = !!r.wait_step_type;
         if (isManual)               return { color: 'manual',  showPlay: true,  label: '⏸ Pausado manualmente' };
         if (inWait) {
           const now = Math.floor(Date.now() / 1000);

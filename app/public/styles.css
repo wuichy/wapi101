@@ -11147,6 +11147,10 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-rule-warn  { font-size: 11px; color: #d97706; }
 .woo-days-input { width: 70px !important; }
 .woo-add-product-row, .woo-add-rule-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.woo-rules-count { font-size: 11px; font-weight: 600; color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); padding: 2px 10px; border-radius: 20px; }
+.woo-add-rule-box { border: 1.5px dashed var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 4px; background: var(--bg-muted, #fafafa); }
+.woo-add-rule-title { font-size: 11px; font-weight: 600; color: var(--text-muted); margin: 0 0 8px; }
+.woo-add-rule-lbl { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 
 .woo-plugin-instructions { font-size: 13px; }
 .woo-plugin-instructions h4 { margin: 0 0 12px; font-size: 15px; }

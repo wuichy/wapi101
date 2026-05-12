@@ -20091,7 +20091,9 @@ function renderWooProducts() {
 
 function renderWooRules() {
   const el = document.getElementById('wooPipelineRulesList');
-  if (!_wooRules.length) { el.innerHTML = '<p class="woo-empty">Sin reglas. Agrega una abajo.</p>'; return; }
+  const countEl = document.getElementById('wooRulesCount');
+  if (countEl) countEl.textContent = _wooRules.length === 1 ? '1 regla' : `${_wooRules.length} reglas`;
+  if (!_wooRules.length) { el.innerHTML = '<p class="woo-empty">Sin reglas configuradas. Agrega la primera abajo.</p>'; return; }
   el.innerHTML = _wooRules.map((r, i) => {
     const pip = _wooPipelines.find(p => p.id === r.pipeline_id);
     const stg = pip?.stages.find(s => s.id === r.stage_id);
@@ -20432,7 +20434,10 @@ function setupWooEvents() {
     _wooRules.push({ duration_days: days, pipeline_id: pipelineId, stage_id: stageId });
     _wooRules.sort((a, b) => a.duration_days - b.duration_days);
     document.getElementById('wooRuleDays').value = '';
+    document.getElementById('wooRulePipeline').value = '';
+    document.getElementById('wooRuleStage').innerHTML = '<option value="">Etapa...</option>';
     renderWooRules();
+    toast('Regla agregada — recuerda guardar', 'success');
   });
 
   // Guardar reglas

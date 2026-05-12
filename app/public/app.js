@@ -19921,6 +19921,9 @@ async function loadPedidosView(page = _pedidosPage) {
     const [ordersData] = await Promise.all([
       api('GET', `/api/apps/woo/orders?page=${page}&limit=25`),
       loadWooCarriers(),
+      loadWooOrderStatuses(),
+      // Asegurar que _wooHasCredentials esté actualizado
+      api('GET', '/api/apps/woo/config').then(cfg => { _wooHasCredentials = !!(cfg?.hasCredentials); }).catch(() => {}),
     ]);
     _wooOrders      = ordersData.orders || [];
     _pedidosPage    = ordersData.page  || 1;

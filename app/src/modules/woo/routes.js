@@ -3,6 +3,7 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const { generateToken, processOrderProcessing, processOrderCompleted } = require('./service');
+const notifSvc = require('../notifications/service');
 
 const DEFAULT_CARRIERS = [
   { id: 'estafeta',       name: 'Estafeta' },
@@ -323,14 +324,33 @@ function webhookRouter(db) {
     const token = req.headers['x-wapi-token'] || req.query.token;
     if (!token) return res.status(401).json({ error: 'Token requerido' });
 
+    // Token inválido → notificar a todos los admins del tenant que coincida por site_url
     const cfg = db.prepare('SELECT * FROM woo_config WHERE token = ?').get(token);
-    if (!cfg)          return res.status(401).json({ error: 'Token inválido' });
+    if (!cfg) {
+      // Intentar identificar tenant por host header para notificar
+      try {
+        const allCfgs = db.prepare('SELECT * FROM woo_config WHERE connected = 1').all();
+        for (const c of allCfgs) {
+          notifyWooAdmins(db, c.tenant_id,
+            '⚠️ WooCommerce: token inválido',
+            'Se recibió un webhook con un token incorrecto. Verifica que el plugin esté bien configurado.',
+            'woo_token_invalid');
+        }
+      } catch (_) {}
+      return res.status(401).json({ error: 'Token inválido' });
+    }
     if (!cfg.enabled)  return res.status(200).json({ ok: true, skipped: 'disabled' });
 
     const { event, order } = req.body;
     if (!event || !order) return res.status(400).json({ error: 'Payload inválido' });
 
     const tenantId = cfg.tenant_id;
+
+    // Actualizar last_webhook_at y limpiar flag de notificación de inactividad
+    try {
+      db.prepare('UPDATE woo_config SET last_webhook_at = unixepoch(), last_disconnect_notif_at = NULL WHERE tenant_id = ?')
+        .run(tenantId);
+    } catch (_) {}
 
     try {
       let result;
@@ -351,4 +371,67 @@ function webhookRouter(db) {
   return router;
 }
 
-module.exports = { authRouter, webhookRouter };
+// ── Helpers de notificaciones ────────────────────────────────────────────────
+function notifyWooAdmins(db, tenantId, title, body, type = 'woo_alert') {
+  try {
+    const admins = db.prepare(
+      "SELECT id FROM advisors WHERE tenant_id = ? AND (role = 'admin' OR role = 'owner') AND active = 1"
+    ).all(tenantId);
+    for (const adv of admins) {
+      notifSvc.createNotification(db, {
+        tenantId,
+        advisorId: adv.id,
+        type,
+        title,
+        body,
+        link: null,
+      });
+    }
+  } catch (e) {
+    console.error('[woo notify]', e.message);
+  }
+}
+
+// ── Check de inactividad (llamado desde server.js cada hora) ──────────────────
+// Si han pasado más de 1 hora sin recibir un webhook y la app está conectada,
+// crea una notificación. Se deduplica con last_disconnect_notif_at para no spamear.
+function checkWooInactivity(db) {
+  try {
+    const ONE_HOUR = 3600;
+    const now = Math.floor(Date.now() / 1000);
+    const configs = db.prepare(
+      'SELECT * FROM woo_config WHERE connected = 1 AND enabled = 1'
+    ).all();
+
+    for (const cfg of configs) {
+      // Solo revisar si alguna vez llegó un webhook (evita falsos positivos en tiendas nuevas sin pedidos)
+      const lastEvent = cfg.last_webhook_at;
+      if (!lastEvent) continue;
+
+      const sinceLastEvent = now - lastEvent;
+      if (sinceLastEvent < ONE_HOUR) continue; // Menos de 1h → ok
+
+      // Ya notificamos hace menos de 1h → no spamear
+      if (cfg.last_disconnect_notif_at && (now - cfg.last_disconnect_notif_at) < ONE_HOUR) continue;
+
+      // Registrar que ya notificamos
+      db.prepare('UPDATE woo_config SET last_disconnect_notif_at = ? WHERE tenant_id = ?')
+        .run(now, cfg.tenant_id);
+
+      const mins = Math.round(sinceLastEvent / 60);
+      const label = mins < 120 ? `${mins} minutos` : `${Math.round(mins / 60)} horas`;
+      notifyWooAdmins(
+        db,
+        cfg.tenant_id,
+        '🔌 WooCommerce sin actividad',
+        `No se han recibido eventos de WooCommerce en los últimos ${label}. Verifica que el plugin esté activo y el sitio en línea.`,
+        'woo_inactivity'
+      );
+      console.log(`[woo] inactivity notification sent → tenant ${cfg.tenant_id} (${label} without webhook)`);
+    }
+  } catch (e) {
+    console.error('[woo inactivity check]', e.message);
+  }
+}
+
+module.exports = { authRouter, webhookRouter, checkWooInactivity };

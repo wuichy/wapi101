@@ -126,8 +126,10 @@ mountSafe('/webhooks', require('./src/modules/integrations/webhooks'));
 // la firma. NO se debe poner detrás de express.json() global.
 mountSafe('/webhooks/stripe', require('./src/modules/billing/webhook'));
 // WooCommerce webhook (autenticado por token en header, no necesita auth middleware)
-const { webhookRouter: wooWebhookRouter } = require('./src/modules/woo/routes');
+const { webhookRouter: wooWebhookRouter, checkWooInactivity } = require('./src/modules/woo/routes');
 app.use('/webhooks/woo', wooWebhookRouter(db));
+// Check de inactividad WooCommerce cada hora (arranca 5min después del boot)
+setTimeout(() => { checkWooInactivity(db); setInterval(() => checkWooInactivity(db), 60 * 60 * 1000); }, 5 * 60 * 1000);
 
 // ─── Cache-busting de assets ─────────────────────────────────────────────
 // Problema: en cada deploy, navegadores (especialmente iOS Safari, Cloudflare,

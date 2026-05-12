@@ -20164,15 +20164,19 @@ function _buildOrderRows(orders, prefix, carriers) {
     ${statusBadge}
     <span class="woo-oc-date">${date}</span>
     <span class="woo-oc-flex"></span>
-    ${addrLine ? `<button class="woo-addr-btn" data-oid="${o.id}">📍 Ver domicilio</button>` : ''}
+    ${(addrLine || o.customer_note) ? `<button class="woo-addr-btn"
+      data-oid="${o.id}"
+      data-num="${escapeHtml(o.wc_order_number||String(o.wc_order_id))}"
+      data-name="${escapeHtml(o.customer_name||'')}"
+      data-phone="${escapeHtml(o.customer_phone||'')}"
+      data-email="${escapeHtml(o.customer_email||'')}"
+      data-addr="${escapeHtml(addrLine+(addr.country?', '+addr.country:''))}"
+      data-note="${escapeHtml(o.customer_note||'')}">📍 Ver domicilio</button>` : ''}
   </div>
   <div class="woo-oc-client">
     <span>${escapeHtml(o.customer_name||'—')}</span>
     ${o.customer_phone ? `<span class="woo-oc-sep">·</span><span>${escapeHtml(o.customer_phone)}</span>` : ''}
     ${o.customer_email ? `<span class="woo-oc-sep">·</span><span class="woo-oc-muted">${escapeHtml(o.customer_email)}</span>` : ''}
-  </div>
-  <div class="woo-order-addr-panel" id="${prefix}Addr_${o.id}" hidden>
-    📦 <strong>Entrega:</strong> ${escapeHtml(addrLine)}${addr.country ? ', '+escapeHtml(addr.country) : ''}
   </div>
   <div class="woo-oc-products">
     ${products.length
@@ -20189,7 +20193,6 @@ function _buildOrderRows(orders, prefix, carriers) {
     ${trackingBadge}
     <button class="btn btn--xs btn--ghost woo-tracking-btn" data-order-id="${o.id}">${o.tracking_number ? '✏️' : '📦'}</button>
   </div>
-  ${o.customer_note ? `<div class="woo-oc-notes">💬 ${escapeHtml(o.customer_note)}</div>` : ''}
   <div class="woo-tracking-form" id="${prefix}TrackingForm_${o.id}" hidden>
     <div class="woo-tracking-fields">
       <select class="int-input ${prefix}-carrier-sel" data-oid="${o.id}">
@@ -20210,11 +20213,41 @@ function _buildOrderRows(orders, prefix, carriers) {
   }).join('');
 }
 
+function _openAddrModal({ num, name, phone, email, addr, note }) {
+  document.getElementById('wooAddrModal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'wooAddrModal';
+  m.className = 'woo-addr-modal-backdrop';
+  m.innerHTML = `
+    <div class="woo-addr-modal" role="dialog" aria-modal="true">
+      <div class="woo-addr-modal-hdr">
+        <strong>📦 Pedido #${escapeHtml(num)}</strong>
+        <button class="woo-addr-modal-x" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="woo-addr-modal-body">
+        <div class="woo-addr-row"><span class="woo-addr-lbl">👤 Nombre</span><span>${escapeHtml(name||'—')}</span></div>
+        ${phone ? `<div class="woo-addr-row"><span class="woo-addr-lbl">📞 Teléfono</span><a href="tel:${escapeHtml(phone)}" class="woo-addr-link">${escapeHtml(phone)}</a></div>` : ''}
+        ${email ? `<div class="woo-addr-row"><span class="woo-addr-lbl">✉️ Email</span><a href="mailto:${escapeHtml(email)}" class="woo-addr-link">${escapeHtml(email)}</a></div>` : ''}
+        ${addr  ? `<div class="woo-addr-row"><span class="woo-addr-lbl">📍 Dirección</span><span>${escapeHtml(addr)}</span></div>` : ''}
+        ${note  ? `<div class="woo-addr-row woo-addr-note-row"><span class="woo-addr-lbl">💬 Nota</span><span>${escapeHtml(note)}</span></div>` : ''}
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  m.querySelector('.woo-addr-modal-x').addEventListener('click', () => m.remove());
+  m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+}
+
 function _bindOrderRows(el, prefix, onSave) {
   el.querySelectorAll('.woo-addr-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const panel = document.getElementById(`${prefix}Addr_${btn.dataset.oid}`);
-      if (panel) { panel.hidden = !panel.hidden; btn.textContent = panel.hidden ? '📍 Ver domicilio' : '📍 Ocultar'; }
+      _openAddrModal({
+        num:   btn.dataset.num,
+        name:  btn.dataset.name,
+        phone: btn.dataset.phone,
+        email: btn.dataset.email,
+        addr:  btn.dataset.addr,
+        note:  btn.dataset.note,
+      });
     });
   });
   el.querySelectorAll('.woo-tracking-btn').forEach(btn => {

@@ -1184,7 +1184,13 @@ function markConnSuccess() {
 }
 
 async function api(method, url, body) {
-  const opts = { method, headers: { Authorization: `Bearer ${getToken()}` } };
+  // cache:'no-store' fuerza al browser a NO usar copias cacheadas (Safari es agresivo).
+  // Combina con Cache-Control: no-store del backend para garantía total.
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${getToken()}`, 'Cache-Control': 'no-cache' },
+    cache: 'no-store',
+  };
   if (body !== undefined) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);

@@ -436,6 +436,18 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
+// ─── Cache-Control para TODAS las respuestas /api/* ───
+// Las respuestas de la API son dinámicas (leads, pedidos, contactos, etc.).
+// Sin estos headers, Safari y Cloudflare las cachean libremente y muestran
+// datos viejos aunque el server ya tenga la versión nueva.
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+  next();
+});
+
 // ─── Proteger todas las rutas /api/* con auth ───
 app.use('/api', authMiddleware(db));
 

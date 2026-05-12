@@ -20,6 +20,9 @@ const DEFAULT_CARRIERS = [
 
 // ── Rutas autenticadas /api/apps/woo/* ───────────────────────────────────────
 function authRouter(db) {
+  // Migración: agregar columna trigger_statuses si no existe
+  try { db.prepare("ALTER TABLE woo_config ADD COLUMN trigger_statuses TEXT DEFAULT '[\"processing\",\"on-hold\"]'").run(); } catch (_) {}
+
   const router = express.Router();
 
   // GET /api/apps/woo/config
@@ -38,6 +41,7 @@ function authRouter(db) {
       hasCredentials:     !!(cfg.wc_consumer_key && cfg.wc_consumer_secret),
       initialPipelineId:  cfg.initial_pipeline_id || null,
       initialStageId:     cfg.initial_stage_id    || null,
+      triggerStatuses:    JSON.parse(cfg.trigger_statuses || '["processing","on-hold"]'),
     });
   });
 
@@ -111,6 +115,44 @@ function authRouter(db) {
 
     db.prepare('UPDATE woo_config SET pipeline_rules = ?, updated_at = unixepoch() WHERE tenant_id = ?')
       .run(JSON.stringify(rules), tenantId);
+    res.json({ ok: true });
+  });
+
+  // GET /api/apps/woo/order-statuses — trae estatus de WooCommerce (default + custom)
+  router.get('/order-statuses', async (req, res) => {
+    const cfg = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(req.tenantId);
+    const DEFAULT_STATUSES = [
+      { slug: 'pending',    name: 'Pago pendiente' },
+      { slug: 'processing', name: 'Procesando' },
+      { slug: 'on-hold',    name: 'En espera' },
+      { slug: 'completed',  name: 'Completado' },
+      { slug: 'cancelled',  name: 'Cancelado' },
+      { slug: 'refunded',   name: 'Reembolsado' },
+      { slug: 'failed',     name: 'Fallido' },
+    ];
+    if (!cfg?.site_url || !cfg?.wc_consumer_key) return res.json({ statuses: DEFAULT_STATUSES });
+    try {
+      const base = cfg.site_url.replace(/\/$/, '');
+      const auth = 'Basic ' + Buffer.from(`${cfg.wc_consumer_key}:${cfg.wc_consumer_secret}`).toString('base64');
+      const resp = await fetch(`${base}/wp-json/wc/v3/reports/orders/totals`, {
+        headers: { Authorization: auth }, signal: AbortSignal.timeout(8000),
+      });
+      if (!resp.ok) return res.json({ statuses: DEFAULT_STATUSES });
+      const data = await resp.json();
+      const statuses = Array.isArray(data)
+        ? data.map(s => ({ slug: s.slug, name: s.name }))
+        : DEFAULT_STATUSES;
+      res.json({ statuses });
+    } catch (_) { res.json({ statuses: DEFAULT_STATUSES }); }
+  });
+
+  // PUT /api/apps/woo/trigger-statuses — guarda qué estatus disparan la creación de lead
+  router.put('/trigger-statuses', (req, res) => {
+    const { statuses } = req.body;
+    if (!Array.isArray(statuses) || statuses.length === 0)
+      return res.status(400).json({ error: 'Selecciona al menos un estatus' });
+    db.prepare('UPDATE woo_config SET trigger_statuses = ?, updated_at = unixepoch() WHERE tenant_id = ?')
+      .run(JSON.stringify(statuses), req.tenantId);
     res.json({ ok: true });
   });
 
@@ -412,9 +454,21 @@ function webhookRouter(db) {
     } catch (_) {}
 
     try {
+      const triggerStatuses = JSON.parse(cfg.trigger_statuses || '["processing","on-hold"]');
+      const eventStatus = event.startsWith('order.') ? event.slice(6) : null;
       let result;
-      if (event === 'order.processing') {
+
+      if (eventStatus && triggerStatuses.includes(eventStatus)) {
         result = processOrderProcessing(db, tenantId, order);
+        // Notificación campana: pedido nuevo
+        const orderNum  = String(order.number || order.id);
+        const custName  = [order.billing?.first_name, order.billing?.last_name].filter(Boolean).join(' ') || 'Cliente';
+        const total     = order.total ? ` · $${parseFloat(order.total).toLocaleString('es-MX')}` : '';
+        notifyWooAdmins(db, tenantId,
+          `🛒 Pedido #${orderNum}`,
+          `${custName}${total}`,
+          'woo_new_order'
+        );
       } else if (event === 'order.completed') {
         result = processOrderCompleted(db, tenantId, order, cfg);
       } else {

@@ -19962,6 +19962,7 @@ async function openWooModal() {
   document.getElementById('wooAppModal').hidden = false;
   const wooCfg = await loadWooConfig();
   await loadWooPipelines(wooCfg);
+  await loadWooTriggerStatuses(wooCfg);
   await loadWooOrders();
   await loadWooCarriers();
   await loadWooProducts();
@@ -20069,6 +20070,23 @@ async function loadWooPipelines(cfg) {
       });
     }
   } catch (e) { console.error('loadWooPipelines', e); }
+}
+
+async function loadWooTriggerStatuses(cfg) {
+  const el = document.getElementById('wooTriggerStatusList');
+  if (!el) return;
+  try {
+    const data = await api('GET', '/api/apps/woo/order-statuses');
+    const statuses = data.statuses || [];
+    const selected = new Set(cfg?.triggerStatuses || ['processing', 'on-hold']);
+    el.innerHTML = statuses.map(s => `
+      <label class="woo-status-chip">
+        <input type="checkbox" value="${escapeHtml(s.slug)}" ${selected.has(s.slug) ? 'checked' : ''}>
+        ${escapeHtml(s.name)}
+      </label>`).join('');
+  } catch (e) {
+    el.innerHTML = '<p class="woo-empty">No se pudieron cargar los estatus.</p>';
+  }
 }
 
 async function loadWooProducts() {
@@ -20432,6 +20450,17 @@ function setupWooEvents() {
     try {
       await api('PUT', '/api/apps/woo/initial-pipeline', { pipeline_id, stage_id });
       toast('Pipeline inicial guardado', 'success');
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Guardar estatus que disparan lead
+  document.getElementById('wooSaveTriggerStatusBtn')?.addEventListener('click', async () => {
+    const checks = document.querySelectorAll('#wooTriggerStatusList input[type=checkbox]:checked');
+    const statuses = Array.from(checks).map(c => c.value);
+    if (!statuses.length) return toast('Selecciona al menos un estatus', 'error');
+    try {
+      await api('PUT', '/api/apps/woo/trigger-statuses', { statuses });
+      toast('Estatus guardados', 'success');
     } catch (e) { toast(e.message, 'error'); }
   });
 

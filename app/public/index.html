@@ -1988,10 +1988,19 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             </div>
             <!-- TAB: Pipelines -->
             <div class="woo-tab-panel" data-panel="pipelines" hidden>
+              <!-- Sección 0: estatus que disparan el lead -->
+              <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+                <p style="font-size:12px;font-weight:600;margin:0 0 4px">⚡ Estatus que crean/mueven un lead</p>
+                <p class="woo-desc" style="margin:0 0 10px">Cuando un pedido cambie a cualquiera de estos estatus, se creará o moverá el lead al pipeline configurado abajo.</p>
+                <div id="wooTriggerStatusList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+                  <span style="font-size:12px;color:var(--text-muted)">Cargando estatus...</span>
+                </div>
+                <button class="btn btn--primary btn--sm" id="wooSaveTriggerStatusBtn">Guardar estatus</button>
+              </div>
               <!-- Sección 1: pipeline inicial -->
               <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)">
                 <p style="font-size:12px;font-weight:600;margin:0 0 6px">📥 Al recibir un pedido nuevo</p>
-                <p class="woo-desc" style="margin:0 0 10px">Pipeline y etapa donde se crea el lead cuando llega un pedido en estado <em>Procesando</em>.</p>
+                <p class="woo-desc" style="margin:0 0 10px">Pipeline y etapa donde se crea el lead cuando llega un pedido con los estatus de arriba.</p>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                   <select id="wooInitialPipeline" class="int-input" style="flex:1;min-width:140px">
                     <option value="">Pipeline...</option>

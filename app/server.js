@@ -701,7 +701,7 @@ mountSafe('/api/business',           require('./src/modules/business/routes'));
 mountSafe('/api/appointments',       require('./src/modules/appointments/routes'));
 mountSafe('/api/apps',               require('./src/modules/apps/routes'));
 const { authRouter: wooAuthRouter }  = require('./src/modules/woo/routes');
-app.use('/api/apps/woo', require('./src/modules/auth/middleware')(db), wooAuthRouter(db));
+app.use('/api/apps/woo', authMiddleware, wooAuthRouter(db));
 
 // Manejador global de errores
 app.use((err, _req, res, _next) => {

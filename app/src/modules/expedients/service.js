@@ -82,7 +82,8 @@ function hydrate(db, tenantId, row) {
 function _lastDeliveryFailure(db, tenantId, contactId) {
   if (!contactId) return null;
   try {
-    const row = db.prepare(`
+    // 1) Si el último mensaje saliente está failed → reportar directo (sin resolver)
+    const last = db.prepare(`
       SELECT m.status, m.error_reason, m.created_at, m.provider
         FROM messages m
         JOIN conversations c ON c.id = m.conversation_id
@@ -90,11 +91,33 @@ function _lastDeliveryFailure(db, tenantId, contactId) {
        ORDER BY m.created_at DESC, m.id DESC
        LIMIT 1
     `).get(contactId, tenantId);
-    if (row && row.status === 'failed') {
+    if (last && last.status === 'failed') {
       return {
-        reason: row.error_reason || 'Error desconocido',
-        at: row.created_at,
-        provider: row.provider,
+        reason: last.error_reason || 'Error desconocido',
+        at: last.created_at,
+        provider: last.provider,
+        resolved: false,
+      };
+    }
+    // 2) Si el último NO falló pero hubo failed en las últimas 48h → reportar como "reciente".
+    // Caso típico: cascada de 6 mensajes que fallaron por privacidad/bloqueo, y luego un
+    // template que pasó por excepción. El asesor debe saber que hubo problemas.
+    const recent = db.prepare(`
+      SELECT m.status, m.error_reason, m.created_at, m.provider, COUNT(*) OVER () as failed_count
+        FROM messages m
+        JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.contact_id = ? AND c.tenant_id = ? AND m.direction = 'outgoing'
+         AND m.status = 'failed' AND m.created_at > unixepoch() - 172800
+       ORDER BY m.created_at DESC, m.id DESC
+       LIMIT 1
+    `).get(contactId, tenantId);
+    if (recent) {
+      return {
+        reason: recent.error_reason || 'Error desconocido',
+        at: recent.created_at,
+        provider: recent.provider,
+        resolved: true,
+        failedCount: recent.failed_count,
       };
     }
   } catch (_) {}

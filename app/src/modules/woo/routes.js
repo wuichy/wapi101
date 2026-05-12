@@ -33,6 +33,8 @@ function authRouter(db) {
       connectedAt:    cfg.connected_at,
       products:       JSON.parse(cfg.products_json || '[]'),
       pipelineRules:  JSON.parse(cfg.pipeline_rules || '[]'),
+      site_url:       cfg.site_url || '',
+      hasCredentials: !!(cfg.wc_consumer_key && cfg.wc_consumer_secret),
     });
   });
 
@@ -106,6 +108,94 @@ function authRouter(db) {
         .all(p.id, 'in_progress'),
     }));
     res.json({ pipelines: result });
+  });
+
+  // GET /api/apps/woo/ping — verifica que el plugin WP esté respondiendo
+  router.get('/ping', async (req, res) => {
+    const cfg = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(req.tenantId);
+    if (!cfg || !cfg.site_url) return res.json({ ok: false, reason: 'no_site_url' });
+    try {
+      const url = `${cfg.site_url.replace(/\/$/, '')}/wp-json/wapi101/v1/carriers`;
+      const resp = await fetch(url, {
+        headers: { 'X-Wapi-Token': cfg.token },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (resp.ok) return res.json({ ok: true });
+      return res.json({ ok: false, reason: `HTTP ${resp.status}` });
+    } catch (e) {
+      return res.json({ ok: false, reason: e.message });
+    }
+  });
+
+  // POST /api/apps/woo/orders/sync — importa órdenes desde WC REST API
+  router.post('/orders/sync', async (req, res) => {
+    const cfg = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(req.tenantId);
+    if (!cfg || !cfg.site_url || !cfg.wc_consumer_key || !cfg.wc_consumer_secret) {
+      return res.status(400).json({ error: 'Configura la URL y credenciales WC REST API primero (pestaña Conexión)' });
+    }
+    const baseUrl  = cfg.site_url.replace(/\/$/, '');
+    const authHead = 'Basic ' + Buffer.from(`${cfg.wc_consumer_key}:${cfg.wc_consumer_secret}`).toString('base64');
+    let imported = 0;
+    let page = 1;
+    let hasMore = true;
+    try {
+      while (hasMore) {
+        const url = `${baseUrl}/wp-json/wc/v3/orders?status=processing,completed&per_page=50&page=${page}&orderby=date&order=desc`;
+        const resp = await fetch(url, { headers: { Authorization: authHead }, signal: AbortSignal.timeout(15000) });
+        if (!resp.ok) {
+          const txt = await resp.text();
+          return res.status(502).json({ error: `WooCommerce API error ${resp.status}: ${txt.slice(0,200)}` });
+        }
+        const orders = await resp.json();
+        if (!Array.isArray(orders) || !orders.length) { hasMore = false; break; }
+
+        for (const o of orders) {
+          const billing      = o.billing || {};
+          const customerName = `${billing.first_name || ''} ${billing.last_name || ''}`.trim();
+          const products     = (o.line_items || []).map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity }));
+
+          // Extraer tracking de meta_data
+          let tCarrier = '', tNumber = '', tStatus = '';
+          const tMeta = (o.meta_data || []).find(m => m.key === '_wc_shipment_tracking_items');
+          if (tMeta && Array.isArray(tMeta.value) && tMeta.value.length) {
+            const t = tMeta.value[0];
+            tCarrier = t.formatted_tracking_provider || t.tracking_provider || t.carrier || '';
+            tNumber  = t.tracking_number || '';
+          } else {
+            tCarrier = (o.meta_data || []).find(m => m.key === '_order_tracking_carrier')?.value || '';
+            tNumber  = (o.meta_data || []).find(m => m.key === '_order_tracking_number')?.value || '';
+          }
+          tStatus = (o.meta_data || []).find(m => m.key === '_wapi101_tracking_status')?.value || '';
+          if (!tStatus && o.status === 'completed' && tCarrier) tStatus = 'entregado';
+
+          db.prepare(`
+            INSERT INTO woo_orders
+              (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email,
+               status, products_json, tracking_carrier, tracking_number, tracking_status, raw_json, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,unixepoch())
+            ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
+              status          = excluded.status,
+              customer_name   = excluded.customer_name,
+              products_json   = excluded.products_json,
+              tracking_carrier = CASE WHEN excluded.tracking_carrier != '' THEN excluded.tracking_carrier ELSE tracking_carrier END,
+              tracking_number  = CASE WHEN excluded.tracking_number  != '' THEN excluded.tracking_number  ELSE tracking_number  END,
+              tracking_status  = CASE WHEN excluded.tracking_status  != '' THEN excluded.tracking_status  ELSE tracking_status  END,
+              updated_at      = unixepoch()
+          `).run(
+            req.tenantId, o.id, String(o.number), customerName,
+            billing.phone || '', billing.email || '', o.status,
+            JSON.stringify(products), tCarrier, tNumber, tStatus,
+            JSON.stringify({ id: o.id, number: o.number, status: o.status }),
+          );
+          imported++;
+        }
+        if (orders.length < 50 || page >= 10) hasMore = false;
+        else page++;
+      }
+      res.json({ ok: true, imported });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // GET /api/apps/woo/plugin-download — descarga el plugin ZIP

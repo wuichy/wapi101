@@ -19882,6 +19882,14 @@ async function loadWooConfig() {
     document.getElementById('wooToken').textContent     = cfg.token;
     document.getElementById('wooWebhookUrl').textContent = `${location.origin}/webhooks/woo`;
 
+    // Poblar campos de credenciales
+    const siteUrlEl = document.getElementById('wooSiteUrl');
+    if (siteUrlEl) siteUrlEl.value = cfg.site_url || '';
+    const ckEl = document.getElementById('wooConsumerKey');
+    const csEl = document.getElementById('wooConsumerSecret');
+    if (ckEl && cfg.hasCredentials) ckEl.placeholder = 'ck_•••••••••••••••••••••••••• (guardado)';
+    if (csEl && cfg.hasCredentials) csEl.placeholder = 'cs_•••••••••••••••••••••••••• (guardado)';
+
     _wooProducts = cfg.products || [];
     _wooRules    = cfg.pipelineRules || [];
     renderWooProducts();
@@ -20132,4 +20140,55 @@ function setupWooEvents() {
   // Pedidos: refresh + búsqueda
   document.getElementById('wooOrdersRefresh')?.addEventListener('click', loadWooOrders);
   document.getElementById('wooOrdersSearch')?.addEventListener('input', (e) => renderWooOrders(e.target.value));
+
+  // Pedidos: importar desde WooCommerce
+  document.getElementById('wooSyncOrdersBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('wooSyncOrdersBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Importando...';
+    try {
+      const res = await api('POST', '/api/apps/woo/orders/sync');
+      toast(`✅ ${res.imported} órdenes importadas de WooCommerce`, 'success');
+      await loadWooOrders();
+    } catch (e) { toast(e.message || 'Error al importar', 'error'); }
+    finally { btn.disabled = false; btn.textContent = '⬇ Importar de WooCommerce'; }
+  });
+
+  // Guardar credenciales WC REST API
+  document.getElementById('wooSaveCredentialsBtn')?.addEventListener('click', async () => {
+    const site_url          = document.getElementById('wooSiteUrl')?.value.trim();
+    const wc_consumer_key   = document.getElementById('wooConsumerKey')?.value.trim();
+    const wc_consumer_secret = document.getElementById('wooConsumerSecret')?.value.trim();
+    if (!site_url) return toast('Ingresa la URL de tu tienda', 'error');
+    try {
+      await api('PUT', '/api/apps/woo/config/credentials', { site_url, wc_consumer_key, wc_consumer_secret });
+      toast('Credenciales guardadas', 'success');
+      await loadWooConfig();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  // Verificar plugin WP
+  document.getElementById('wooPingBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('wooPingBtn');
+    const dot = document.getElementById('wooPluginStatusDot');
+    const lbl = document.getElementById('wooPluginStatusLabel');
+    btn.disabled = true;
+    btn.textContent = '🔄 Verificando...';
+    try {
+      const res = await api('GET', '/api/apps/woo/ping');
+      if (res.ok) {
+        dot.className = 'woo-status-dot woo-status-dot--on';
+        lbl.textContent = '✅ Plugin detectado y vinculado';
+        lbl.style.color = 'var(--success, #16a34a)';
+      } else {
+        dot.className = 'woo-status-dot woo-status-dot--off';
+        lbl.textContent = `⚠️ No se pudo conectar (${res.reason})`;
+        lbl.style.color = 'var(--warning, #d97706)';
+      }
+    } catch (e) {
+      dot.className = 'woo-status-dot woo-status-dot--off';
+      lbl.textContent = '⚠️ Error al verificar';
+    }
+    finally { btn.disabled = false; btn.textContent = '🔍 Verificar plugin'; }
+  });
 }

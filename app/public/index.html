@@ -1952,6 +1952,23 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     <button class="btn btn--xs btn--ghost" id="wooCopyUrl">Copiar</button>
                   </div>
                 </div>
+                <!-- Estado del plugin -->
+                <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
+                  <span id="wooPluginStatusDot" class="woo-status-dot"></span>
+                  <span id="wooPluginStatusLabel" style="font-size:13px;color:var(--text-muted)">Plugin no verificado</span>
+                  <button class="btn btn--xs btn--ghost" id="wooPingBtn" style="margin-left:auto">🔍 Verificar plugin</button>
+                </div>
+                <!-- Credenciales WC REST API -->
+                <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+                  <p style="font-size:12px;font-weight:600;margin:0 0 6px">🔑 Credenciales WC REST API</p>
+                  <p style="font-size:11px;color:var(--text-muted);margin:0 0 10px">Necesarias para importar órdenes y enviar tracking. Genera las claves en WooCommerce → Ajustes → Avanzado → REST API.</p>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <input type="url" id="wooSiteUrl" class="int-input" placeholder="https://tu-tienda.com" />
+                    <input type="text" id="wooConsumerKey" class="int-input" placeholder="Consumer Key  (ck_...)" autocomplete="off" />
+                    <input type="password" id="wooConsumerSecret" class="int-input" placeholder="Consumer Secret  (cs_...)" autocomplete="off" />
+                    <button class="btn btn--primary btn--sm" id="wooSaveCredentialsBtn" style="align-self:flex-start;margin-top:2px">Guardar credenciales</button>
+                  </div>
+                </div>
               </div>
             </div>
             <!-- TAB: Productos -->
@@ -1989,8 +2006,9 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <!-- TAB: Pedidos -->
             <div class="woo-tab-panel" data-panel="pedidos" hidden>
               <div class="woo-orders-toolbar">
-                <input type="text" id="wooOrdersSearch" class="int-input" placeholder="Buscar por # orden o cliente..." style="flex:1;max-width:280px" />
+                <input type="text" id="wooOrdersSearch" class="int-input" placeholder="Buscar por # orden o cliente..." style="flex:1;max-width:240px" />
                 <button class="btn btn--ghost btn--sm" id="wooOrdersRefresh">↺ Actualizar</button>
+                <button class="btn btn--primary btn--sm" id="wooSyncOrdersBtn">⬇ Importar de WooCommerce</button>
               </div>
               <div id="wooOrdersList" class="woo-orders-list">
                 <p class="woo-empty">Cargando pedidos...</p>

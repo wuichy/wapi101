@@ -20174,6 +20174,7 @@ function _buildOrderRows(orders, prefix, carriers) {
       data-city="${escapeHtml(addr.city||'')}"
       data-state="${escapeHtml(addr.state||'')}"
       data-postcode="${escapeHtml(addr.postcode||'')}"
+      data-country="${escapeHtml(addr.country||'')}"
       data-note="${escapeHtml(o.customer_note||'')}">📍 Ver domicilio</button>` : ''}
   </div>
   <div class="woo-oc-client">
@@ -20216,7 +20217,7 @@ function _buildOrderRows(orders, prefix, carriers) {
   }).join('');
 }
 
-function _openAddrModal({ num, name, phone, email, addr1, addr2, city, state, postcode, note }) {
+function _openAddrModal({ num, name, phone, email, addr1, addr2, city, state, postcode, country, note }) {
   document.getElementById('wooAddrModal')?.remove();
   // Formatear dirección en 3 líneas estilo MX
   const lineStreet   = [addr1, addr2].filter(Boolean).join(', ');          // Calle y núm, Colonia
@@ -20229,7 +20230,7 @@ function _openAddrModal({ num, name, phone, email, addr1, addr2, city, state, po
   // Línea 3: estado + CP
   const addrLine1 = addr1 || '';
   const addrLine2 = [addr2, city].filter(Boolean).join(', ');
-  const addrLine3 = [state, postcode ? `CP ${postcode}` : ''].filter(Boolean).join(' · ');
+  const addrLine3 = [state, postcode ? `CP ${postcode}` : '', country].filter(Boolean).join(' · ');
   const hasAddr   = addrLine1 || addrLine2 || addrLine3;
 
   const m = document.createElement('div');
@@ -20274,6 +20275,7 @@ function _bindOrderRows(el, prefix, onSave) {
         city:     btn.dataset.city,
         state:    btn.dataset.state,
         postcode: btn.dataset.postcode,
+        country:  btn.dataset.country,
         note:     btn.dataset.note,
       });
     });

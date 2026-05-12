@@ -19764,7 +19764,7 @@ function renderApps() {
   const installed = _appsData.filter(a => a.installed);
   const catalog   = _appsData.filter(a => !a.installed);
 
-  const installedEl = document.getElementById('appsInstalled');
+  const installedEl = document.getElementById('appsTabInstalled');
   const installedGrid = document.getElementById('appsInstalledGrid');
   const catalogGrid   = document.getElementById('appsCatalogGrid');
 

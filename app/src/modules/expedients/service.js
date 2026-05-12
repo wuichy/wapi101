@@ -153,8 +153,8 @@ function list(db, tenantId, { search = '', page = 1, pageSize = 50, sortBy = 'cr
 
   if (search) {
     const likeVal = `%${search}%`;
-    conditions.push(`(e.name LIKE ? OR c.first_name LIKE ? OR c.last_name LIKE ? OR p.name LIKE ? OR c.phone LIKE ? OR LOWER(IFNULL(c.email,'')) LIKE ?)`);
-    params.push(likeVal, likeVal, likeVal, likeVal, likeVal, likeVal.toLowerCase());
+    conditions.push(`(e.name LIKE ? OR c.first_name LIKE ? OR c.last_name LIKE ? OR (c.first_name || ' ' || COALESCE(c.last_name,'')) LIKE ? OR p.name LIKE ? OR c.phone LIKE ? OR LOWER(IFNULL(c.email,'')) LIKE ?)`);
+    params.push(likeVal, likeVal, likeVal, likeVal, likeVal, likeVal, likeVal.toLowerCase());
   }
 
   const tagList = Array.isArray(tags) ? tags : (tags ? [tags] : []);
@@ -372,9 +372,9 @@ function searchContacts(db, tenantId, q) {
   return db.prepare(`
     SELECT id, first_name, last_name, phone, email FROM contacts
     WHERE tenant_id = ?
-      AND (first_name LIKE ? OR last_name LIKE ? OR phone LIKE ? OR email LIKE ?)
+      AND (first_name LIKE ? OR last_name LIKE ? OR (first_name || ' ' || COALESCE(last_name,'')) LIKE ? OR phone LIKE ? OR email LIKE ?)
     ORDER BY first_name COLLATE NOCASE LIMIT 20
-  `).all(tenantId, like, like, like, like).map((c) => ({
+  `).all(tenantId, like, like, like, like, like).map((c) => ({
     id: c.id,
     name: [c.first_name, c.last_name].filter(Boolean).join(' '),
     phone: c.phone,

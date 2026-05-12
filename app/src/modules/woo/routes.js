@@ -475,7 +475,12 @@ function webhookRouter(db) {
       const eventStatus = event.startsWith('order.') ? event.slice(6) : null;
       let result;
 
-      if (eventStatus && triggerStatuses.includes(eventStatus)) {
+      if (event === 'order.deleted') {
+        // Eliminar pedido de woo_orders
+        const del = db.prepare('DELETE FROM woo_orders WHERE wc_order_id = ? AND tenant_id = ?')
+          .run(order.id, tenantId);
+        result = { deleted: del.changes };
+      } else if (eventStatus && triggerStatuses.includes(eventStatus)) {
         result = processOrderProcessing(db, tenantId, order);
         // Notificación campana: pedido nuevo
         const orderNum  = String(order.number || order.id);

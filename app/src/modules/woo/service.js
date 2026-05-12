@@ -175,7 +175,7 @@ function processOrderProcessing(db, tenantId, order) {
   `).run(
     tenantId, order.id, order.number,
     `${firstName} ${lastName}`.trim(),
-    billing.phone || '', email, 'processing',
+    billing.phone || '', email, (order.status || 'processing'),
     JSON.stringify(lineItems), JSON.stringify(order), wcOrderDate,
     order.payment_method_title || order.payment_method || '',
     order.total || '0', order.shipping_total || '0',

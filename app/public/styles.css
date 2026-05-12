@@ -11089,28 +11089,27 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-desc { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; }
 .woo-empty { font-size: 13px; color: var(--text-muted); font-style: italic; margin: 8px 0; }
 /* ── Tarjeta de pedido ── */
-.woo-order-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.woo-order-card-header { padding: 10px 14px 8px; border-bottom: 1px solid var(--border); }
-.woo-order-card-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.woo-order-card-customer { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; }
-.woo-addr-btn { font-size: 11px; background: none; border: none; color: var(--primary, #2563eb); cursor: pointer; padding: 0; }
+.woo-order-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; }
+.woo-oc-top    { display: flex; align-items: center; gap: 8px; padding: 10px 14px 6px; flex-wrap: wrap; }
+.woo-oc-num    { font-size: 13.5px; }
+.woo-oc-date   { font-size: 11.5px; color: var(--text-muted); }
+.woo-oc-flex   { flex: 1; }
+.woo-oc-client { display: flex; align-items: center; gap: 6px; padding: 0 14px 8px; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.woo-oc-sep    { color: var(--text-muted); }
+.woo-oc-muted  { color: var(--text-muted); }
+.woo-order-addr-panel { padding: 6px 14px; font-size: 12px; color: var(--text-secondary); background: var(--bg-alt); border-bottom: 1px solid var(--border); }
+.woo-addr-btn  { font-size: 11.5px; background: none; border: none; color: var(--primary, #2563eb); cursor: pointer; padding: 0; white-space: nowrap; }
 .woo-addr-btn:hover { text-decoration: underline; }
-.woo-order-addr-panel { margin-top: 6px; font-size: 12px; color: var(--text-muted); background: var(--bg-alt); border-radius: 6px; padding: 6px 10px; }
-.woo-addr-label { font-weight: 600; color: var(--text-secondary); }
-.woo-order-card-body { display: flex; gap: 0; }
-.woo-order-section { flex: 1; padding: 10px 14px; border-right: 1px solid var(--border); min-width: 0; }
-.woo-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin-bottom: 6px; }
-.woo-products-list { display: flex; flex-direction: column; gap: 3px; }
-.woo-product-row { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; }
-.woo-product-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.woo-product-qty { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-.woo-product-total { font-size: 11px; color: var(--text-secondary); white-space: nowrap; margin-left: auto; }
-.woo-order-meta { flex: 1.1; padding: 10px 14px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.woo-meta-row { display: flex; gap: 8px; font-size: 12px; align-items: flex-start; }
-.woo-meta-key { font-weight: 600; color: var(--text-muted); white-space: nowrap; min-width: 46px; font-size: 11px; }
-.woo-meta-val { flex: 1; color: var(--text); word-break: break-word; }
-.woo-neto { color: var(--success, #16a34a); font-weight: 600; }
-.woo-note { font-style: italic; color: var(--text-secondary); }
+.woo-oc-products { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.woo-oc-product  { display: flex; align-items: baseline; gap: 6px; }
+.woo-oc-dot      { color: var(--text-muted); width: 10px; flex-shrink: 0; }
+.woo-oc-pname    { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.woo-oc-qty      { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.woo-oc-ptotal   { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; margin-left: auto; }
+.woo-oc-footer   { display: flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 12px; flex-wrap: wrap; }
+.woo-oc-pay      { color: var(--text-secondary); }
+.woo-neto        { color: var(--success, #16a34a); font-weight: 600; }
+.woo-oc-notes    { padding: 5px 14px 8px; font-size: 12px; font-style: italic; color: var(--text-secondary); border-top: 1px solid var(--border); }
 .woo-tracking-form { padding: 8px 14px 12px; border-top: 1px solid var(--border); background: var(--bg-alt); }
 
 .woo-status-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; font-size: 14px; font-weight: 500; }

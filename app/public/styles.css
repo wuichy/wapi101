@@ -11111,6 +11111,10 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-addr-lbl { color:var(--text-muted); min-width:76px; flex-shrink:0; font-size:12px; padding-top:1px; }
 .woo-addr-link { color:var(--primary,#2563eb); text-decoration:none; }
 .woo-addr-link:hover { text-decoration:underline; }
+.woo-addr-multiline { align-items:flex-start; }
+.woo-addr-lines { display:flex; flex-direction:column; gap:2px; }
+.woo-addr-lines span { font-size:13px; line-height:1.5; }
+.woo-addr-lbl2 { font-size:12px !important; color:var(--text-muted); }
 .woo-addr-note-row { border-top:1px solid var(--border); padding-top:11px; margin-top:2px; }
 .woo-oc-products { display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
 .woo-oc-product  { display: flex; align-items: baseline; gap: 6px; }

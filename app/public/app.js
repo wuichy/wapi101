@@ -20165,12 +20165,15 @@ function _buildOrderRows(orders, prefix, carriers) {
     <span class="woo-oc-date">${date}</span>
     <span class="woo-oc-flex"></span>
     ${(addrLine || o.customer_note) ? `<button class="woo-addr-btn"
-      data-oid="${o.id}"
       data-num="${escapeHtml(o.wc_order_number||String(o.wc_order_id))}"
       data-name="${escapeHtml(o.customer_name||'')}"
       data-phone="${escapeHtml(o.customer_phone||'')}"
       data-email="${escapeHtml(o.customer_email||'')}"
-      data-addr="${escapeHtml(addrLine+(addr.country?', '+addr.country:''))}"
+      data-addr1="${escapeHtml(addr.address1||'')}"
+      data-addr2="${escapeHtml(addr.address2||'')}"
+      data-city="${escapeHtml(addr.city||'')}"
+      data-state="${escapeHtml(addr.state||'')}"
+      data-postcode="${escapeHtml(addr.postcode||'')}"
       data-note="${escapeHtml(o.customer_note||'')}">📍 Ver domicilio</button>` : ''}
   </div>
   <div class="woo-oc-client">
@@ -20213,8 +20216,22 @@ function _buildOrderRows(orders, prefix, carriers) {
   }).join('');
 }
 
-function _openAddrModal({ num, name, phone, email, addr, note }) {
+function _openAddrModal({ num, name, phone, email, addr1, addr2, city, state, postcode, note }) {
   document.getElementById('wooAddrModal')?.remove();
+  // Formatear dirección en 3 líneas estilo MX
+  const lineStreet   = [addr1, addr2].filter(Boolean).join(', ');          // Calle y núm, Colonia
+  const lineCity     = [addr2 ? '' : '', city].filter(Boolean).join('');   // Municipio (city)
+  const lineCityFull = addr2 && city ? city : '';                          // Municipio solo si ya mostramos addr2
+  const lineState    = [state, postcode ? `CP ${postcode}` : ''].filter(Boolean).join(', '); // Estado, CP
+
+  // Línea 1: calle + número (addr1)
+  // Línea 2: colonia (addr2) + municipio (city)
+  // Línea 3: estado + CP
+  const addrLine1 = addr1 || '';
+  const addrLine2 = [addr2, city].filter(Boolean).join(', ');
+  const addrLine3 = [state, postcode ? `CP ${postcode}` : ''].filter(Boolean).join(' · ');
+  const hasAddr   = addrLine1 || addrLine2 || addrLine3;
+
   const m = document.createElement('div');
   m.id = 'wooAddrModal';
   m.className = 'woo-addr-modal-backdrop';
@@ -20228,8 +20245,15 @@ function _openAddrModal({ num, name, phone, email, addr, note }) {
         <div class="woo-addr-row"><span class="woo-addr-lbl">👤 Nombre</span><span>${escapeHtml(name||'—')}</span></div>
         ${phone ? `<div class="woo-addr-row"><span class="woo-addr-lbl">📞 Teléfono</span><a href="tel:${escapeHtml(phone)}" class="woo-addr-link">${escapeHtml(phone)}</a></div>` : ''}
         ${email ? `<div class="woo-addr-row"><span class="woo-addr-lbl">✉️ Email</span><a href="mailto:${escapeHtml(email)}" class="woo-addr-link">${escapeHtml(email)}</a></div>` : ''}
-        ${addr  ? `<div class="woo-addr-row"><span class="woo-addr-lbl">📍 Dirección</span><span>${escapeHtml(addr)}</span></div>` : ''}
-        ${note  ? `<div class="woo-addr-row woo-addr-note-row"><span class="woo-addr-lbl">💬 Nota</span><span>${escapeHtml(note)}</span></div>` : ''}
+        ${hasAddr ? `<div class="woo-addr-row woo-addr-multiline">
+          <span class="woo-addr-lbl">📍 Dirección</span>
+          <span class="woo-addr-lines">
+            ${addrLine1 ? `<span>${escapeHtml(addrLine1)}</span>` : ''}
+            ${addrLine2 ? `<span>${escapeHtml(addrLine2)}</span>` : ''}
+            ${addrLine3 ? `<span class="woo-addr-lbl2">${escapeHtml(addrLine3)}</span>` : ''}
+          </span>
+        </div>` : ''}
+        ${note ? `<div class="woo-addr-row woo-addr-note-row"><span class="woo-addr-lbl">💬 Nota</span><span>${escapeHtml(note)}</span></div>` : ''}
       </div>
     </div>`;
   document.body.appendChild(m);
@@ -20241,12 +20265,16 @@ function _bindOrderRows(el, prefix, onSave) {
   el.querySelectorAll('.woo-addr-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       _openAddrModal({
-        num:   btn.dataset.num,
-        name:  btn.dataset.name,
-        phone: btn.dataset.phone,
-        email: btn.dataset.email,
-        addr:  btn.dataset.addr,
-        note:  btn.dataset.note,
+        num:      btn.dataset.num,
+        name:     btn.dataset.name,
+        phone:    btn.dataset.phone,
+        email:    btn.dataset.email,
+        addr1:    btn.dataset.addr1,
+        addr2:    btn.dataset.addr2,
+        city:     btn.dataset.city,
+        state:    btn.dataset.state,
+        postcode: btn.dataset.postcode,
+        note:     btn.dataset.note,
       });
     });
   });

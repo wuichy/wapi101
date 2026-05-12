@@ -166,9 +166,13 @@ function authRouter(db) {
         if (!Array.isArray(orders) || !orders.length) { hasMore = false; break; }
 
         for (const o of orders) {
-          const billing      = o.billing || {};
+          const billing      = o.billing  || {};
+          const shipping     = o.shipping || {};
           const customerName = `${billing.first_name || ''} ${billing.last_name || ''}`.trim();
-          const products     = (o.line_items || []).map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity }));
+          const products     = (o.line_items || []).map(i => ({
+            product_id: i.product_id, name: i.name,
+            quantity: i.quantity, total: i.total || '0',
+          }));
 
           // Extraer tracking de meta_data
           let tCarrier = '', tNumber = '', tStatus = '';
@@ -185,25 +189,52 @@ function authRouter(db) {
           if (!tStatus && o.status === 'completed' && tCarrier) tStatus = 'entregado';
 
           const wcOrderDate = o.date_created ? Math.floor(new Date(o.date_created).getTime() / 1000) : null;
+          const shippingAddr = {
+            name:     `${shipping.first_name || ''} ${shipping.last_name || ''}`.trim() || customerName,
+            address1: shipping.address_1 || '',
+            address2: shipping.address_2 || '',
+            city:     shipping.city      || '',
+            state:    shipping.state     || '',
+            postcode: shipping.postcode  || '',
+            country:  shipping.country   || '',
+          };
+
           db.prepare(`
             INSERT INTO woo_orders
               (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email,
-               status, products_json, tracking_carrier, tracking_number, tracking_status, raw_json, wc_order_date, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,unixepoch())
+               status, products_json, tracking_carrier, tracking_number, tracking_status, raw_json,
+               wc_order_date, payment_method, order_total, shipping_total, discount_total, tax_total,
+               shipping_address_json, customer_note, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,unixepoch())
             ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
-              status          = excluded.status,
-              customer_name   = excluded.customer_name,
-              products_json   = excluded.products_json,
-              wc_order_date   = COALESCE(excluded.wc_order_date, wc_order_date),
+              status               = excluded.status,
+              customer_name        = excluded.customer_name,
+              products_json        = excluded.products_json,
+              wc_order_date        = COALESCE(excluded.wc_order_date, wc_order_date),
+              payment_method       = excluded.payment_method,
+              order_total          = excluded.order_total,
+              shipping_total       = excluded.shipping_total,
+              discount_total       = excluded.discount_total,
+              tax_total            = excluded.tax_total,
+              shipping_address_json = excluded.shipping_address_json,
+              customer_note        = excluded.customer_note,
               tracking_carrier = CASE WHEN excluded.tracking_carrier != '' THEN excluded.tracking_carrier ELSE tracking_carrier END,
               tracking_number  = CASE WHEN excluded.tracking_number  != '' THEN excluded.tracking_number  ELSE tracking_number  END,
               tracking_status  = CASE WHEN excluded.tracking_status  != '' THEN excluded.tracking_status  ELSE tracking_status  END,
-              updated_at      = unixepoch()
+              updated_at       = unixepoch()
           `).run(
             req.tenantId, o.id, String(o.number), customerName,
             billing.phone || '', billing.email || '', o.status,
             JSON.stringify(products), tCarrier, tNumber, tStatus,
-            JSON.stringify({ id: o.id, number: o.number, status: o.status }), wcOrderDate,
+            JSON.stringify({ id: o.id, number: o.number, status: o.status }),
+            wcOrderDate,
+            o.payment_method_title || o.payment_method || '',
+            o.total          || '0',
+            o.shipping_total || '0',
+            o.discount_total || '0',
+            o.total_tax      || '0',
+            JSON.stringify(shippingAddr),
+            o.customer_note || '',
           );
           imported++;
         }

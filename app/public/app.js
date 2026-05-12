@@ -20109,54 +20109,94 @@ async function loadWooCarriers() {
   } catch (e) { _wooCarriers = []; }
 }
 
+function _fmtMXN(val) {
+  const n = parseFloat(val || '0');
+  return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 });
+}
+
 function _buildOrderRows(orders, prefix, carriers) {
   if (!orders.length) return '<p class="woo-empty">Sin pedidos en esta página.</p>';
   return orders.map(o => {
-    const products     = o.products || JSON.parse(o.products_json || '[]');
-    const productNames = products.map(p => `${p.name} x${p.quantity}`).join(', ');
+    const products  = o.products || JSON.parse(o.products_json || '[]');
+    const addr      = (() => { try { return JSON.parse(o.shipping_address_json || '{}'); } catch { return {}; } })();
+    const ts        = o.wc_order_date || o.created_at;
+    const date      = ts ? new Date(ts * 1000).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+    const statusBadge  = `<span class="woo-order-status woo-order-status--${o.status}">${o.status === 'processing' ? 'Procesando' : 'Completado'}</span>`;
     const trackingBadge = o.tracking_number
-      ? `<span class="woo-tracking-badge woo-tracking-badge--${o.tracking_status || 'pendiente'}">${escapeHtml(o.tracking_carrier || '')} ${escapeHtml(o.tracking_number)}</span>`
+      ? `<span class="woo-tracking-badge woo-tracking-badge--${o.tracking_status || 'pendiente'}">${escapeHtml(o.tracking_carrier || '')} · ${escapeHtml(o.tracking_number)}</span>`
       : `<span class="woo-tracking-badge woo-tracking-badge--none">Sin rastreo</span>`;
-    const statusBadge = `<span class="woo-order-status woo-order-status--${o.status}">${o.status === 'processing' ? 'Procesando' : 'Completado'}</span>`;
-    const ts  = o.wc_order_date || o.created_at;
-    const date = ts ? new Date(ts * 1000).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+
+    // Totales: total | envío | neto
+    const total    = parseFloat(o.order_total    || '0');
+    const shipping = parseFloat(o.shipping_total || '0');
+    const discount = parseFloat(o.discount_total || '0');
+    const neto     = total - shipping + discount;
+
+    // Domicilio
+    const addrParts = [addr.address1, addr.address2, addr.city, addr.state, addr.postcode, addr.country].filter(Boolean);
+    const addrLine  = addrParts.join(', ') || '—';
+
+    // Productos como filas
+    const productRows = products.length
+      ? products.map(p => `<div class="woo-product-row"><span class="woo-product-name">${escapeHtml(p.name)}</span><span class="woo-product-qty">x${p.quantity}</span>${p.total ? `<span class="woo-product-total">${_fmtMXN(p.total)}</span>` : ''}</div>`).join('')
+      : '<div class="woo-product-row" style="color:var(--text-muted)">Sin productos</div>';
+
     return `
-      <div class="woo-order-row" data-order-id="${o.id}">
-        <div class="woo-order-main">
-          <div class="woo-order-header">
+      <div class="woo-order-card">
+        <div class="woo-order-card-header">
+          <div class="woo-order-card-title">
             <strong>#${escapeHtml(o.wc_order_number || String(o.wc_order_id))}</strong>
             ${statusBadge}
             <span class="woo-order-date">${date}</span>
           </div>
-          <div class="woo-order-customer">${escapeHtml(o.customer_name || '')} · ${escapeHtml(o.customer_phone || '')}</div>
-          <div class="woo-order-products">${escapeHtml(productNames)}</div>
-          <div class="woo-order-tracking">${trackingBadge}</div>
+          <div class="woo-order-card-customer">
+            <span>${escapeHtml(o.customer_name || '')}${o.customer_phone ? ' · ' + escapeHtml(o.customer_phone) : ''}</span>
+            ${addrLine !== '—' ? `<button class="woo-addr-btn" data-oid="${o.id}" title="Ver domicilio de entrega">📍 Ver domicilio</button>` : ''}
+          </div>
+          <div class="woo-order-addr-panel" id="${prefix}Addr_${o.id}" hidden>
+            <span class="woo-addr-label">Entrega:</span> ${escapeHtml(addrLine)}
+          </div>
         </div>
-        <button class="btn btn--sm btn--ghost woo-tracking-btn" data-order-id="${o.id}">
-          ${o.tracking_number ? '✏️ Editar rastreo' : '📦 Agregar rastreo'}
-        </button>
-      </div>
-      <div class="woo-tracking-form" id="${prefix}TrackingForm_${o.id}" hidden>
-        <div class="woo-tracking-fields">
-          <select class="int-input ${prefix}-carrier-sel" data-oid="${o.id}">
-            <option value="">Paquetería...</option>
-            ${carriers.map(c => `<option value="${escapeHtml(c.id)}" ${o.tracking_carrier === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
-          </select>
-          <input type="text" class="int-input ${prefix}-tracknum-inp" data-oid="${o.id}"
-            placeholder="Número de rastreo" value="${escapeHtml(o.tracking_number || '')}" style="flex:1" />
-          <select class="int-input ${prefix}-trackstatus-sel" data-oid="${o.id}">
-            <option value="pendiente" ${(o.tracking_status || 'pendiente') === 'pendiente' ? 'selected' : ''}>Pendiente</option>
-            <option value="en_camino" ${o.tracking_status === 'en_camino' ? 'selected' : ''}>En camino</option>
-            <option value="entregado" ${o.tracking_status === 'entregado' ? 'selected' : ''}>Entregado</option>
-          </select>
-          <button class="btn btn--primary btn--sm ${prefix}-save-tracking-btn" data-oid="${o.id}">Guardar</button>
-          <button class="btn btn--ghost btn--sm ${prefix}-cancel-tracking-btn" data-oid="${o.id}">✕</button>
+        <div class="woo-order-card-body">
+          <div class="woo-order-section">
+            <div class="woo-section-label">Productos</div>
+            <div class="woo-products-list">${productRows}</div>
+          </div>
+          <div class="woo-order-meta">
+            ${o.payment_method ? `<div class="woo-meta-row"><span class="woo-meta-key">Pago</span><span class="woo-meta-val">${escapeHtml(o.payment_method)}</span></div>` : ''}
+            <div class="woo-meta-row"><span class="woo-meta-key">Total</span><span class="woo-meta-val"><strong>${_fmtMXN(o.order_total)}</strong>${shipping > 0 ? ` · Envío ${_fmtMXN(o.shipping_total)}` : ''}${discount > 0 ? ` · Desc. -${_fmtMXN(o.discount_total)}` : ''} · <span class="woo-neto">Neto ${_fmtMXN(neto)}</span></span></div>
+            ${o.customer_note ? `<div class="woo-meta-row"><span class="woo-meta-key">Notas</span><span class="woo-meta-val woo-note">${escapeHtml(o.customer_note)}</span></div>` : ''}
+            <div class="woo-meta-row"><span class="woo-meta-key">Rastreo</span><span class="woo-meta-val">${trackingBadge} <button class="btn btn--xs btn--ghost woo-tracking-btn" data-order-id="${o.id}">${o.tracking_number ? '✏️ Editar' : '📦 Agregar'}</button></span></div>
+          </div>
+        </div>
+        <div class="woo-tracking-form" id="${prefix}TrackingForm_${o.id}" hidden>
+          <div class="woo-tracking-fields">
+            <select class="int-input ${prefix}-carrier-sel" data-oid="${o.id}">
+              <option value="">Paquetería...</option>
+              ${carriers.map(c => `<option value="${escapeHtml(c.id)}" ${o.tracking_carrier === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+            </select>
+            <input type="text" class="int-input ${prefix}-tracknum-inp" data-oid="${o.id}"
+              placeholder="Número de rastreo" value="${escapeHtml(o.tracking_number || '')}" style="flex:1" />
+            <select class="int-input ${prefix}-trackstatus-sel" data-oid="${o.id}">
+              <option value="pendiente" ${(o.tracking_status || 'pendiente') === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+              <option value="en_camino" ${o.tracking_status === 'en_camino' ? 'selected' : ''}>En camino</option>
+              <option value="entregado" ${o.tracking_status === 'entregado' ? 'selected' : ''}>Entregado</option>
+            </select>
+            <button class="btn btn--primary btn--sm ${prefix}-save-tracking-btn" data-oid="${o.id}">Guardar</button>
+            <button class="btn btn--ghost btn--sm ${prefix}-cancel-tracking-btn" data-oid="${o.id}">✕</button>
+          </div>
         </div>
       </div>`;
   }).join('');
 }
 
 function _bindOrderRows(el, prefix, onSave) {
+  el.querySelectorAll('.woo-addr-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const panel = document.getElementById(`${prefix}Addr_${btn.dataset.oid}`);
+      if (panel) { panel.hidden = !panel.hidden; btn.textContent = panel.hidden ? '📍 Ver domicilio' : '📍 Ocultar'; }
+    });
+  });
   el.querySelectorAll('.woo-tracking-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const form = document.getElementById(`${prefix}TrackingForm_${btn.dataset.orderId}`);

@@ -113,22 +113,46 @@ function processOrderProcessing(db, tenantId, order) {
   if (expId) addExpedientTag(db, tenantId, expId, orderNum);
 
   // Guardar/actualizar en woo_orders
-  const lineItems   = order.line_items || [];
+  const lineItems   = (order.line_items || []).map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity, total: i.total || '0' }));
   const wcOrderDate = order.date_created ? Math.floor(new Date(order.date_created).getTime() / 1000) : null;
+  const shippingP   = order.shipping || {};
+  const shippingAddr = {
+    name:     `${shippingP.first_name || ''} ${shippingP.last_name || ''}`.trim() || `${firstName} ${lastName}`.trim(),
+    address1: shippingP.address_1 || billing.address_1 || '',
+    address2: shippingP.address_2 || '',
+    city:     shippingP.city      || billing.city || '',
+    state:    shippingP.state     || billing.state || '',
+    postcode: shippingP.postcode  || billing.postcode || '',
+    country:  shippingP.country   || billing.country || '',
+  };
   db.prepare(`
-    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email, status, products_json, raw_json, wc_order_date, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email,
+      status, products_json, raw_json, wc_order_date,
+      payment_method, order_total, shipping_total, discount_total, tax_total,
+      shipping_address_json, customer_note, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
     ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
-      status        = excluded.status,
-      products_json = excluded.products_json,
-      raw_json      = excluded.raw_json,
-      wc_order_date = COALESCE(excluded.wc_order_date, wc_order_date),
-      updated_at    = unixepoch()
+      status                = excluded.status,
+      products_json         = excluded.products_json,
+      raw_json              = excluded.raw_json,
+      wc_order_date         = COALESCE(excluded.wc_order_date, wc_order_date),
+      payment_method        = excluded.payment_method,
+      order_total           = excluded.order_total,
+      shipping_total        = excluded.shipping_total,
+      discount_total        = excluded.discount_total,
+      tax_total             = excluded.tax_total,
+      shipping_address_json = excluded.shipping_address_json,
+      customer_note         = excluded.customer_note,
+      updated_at            = unixepoch()
   `).run(
     tenantId, order.id, order.number,
     `${firstName} ${lastName}`.trim(),
     billing.phone || '', email, 'processing',
-    JSON.stringify(lineItems), JSON.stringify(order), wcOrderDate
+    JSON.stringify(lineItems), JSON.stringify(order), wcOrderDate,
+    order.payment_method_title || order.payment_method || '',
+    order.total || '0', order.shipping_total || '0',
+    order.discount_total || '0', order.total_tax || '0',
+    JSON.stringify(shippingAddr), order.customer_note || ''
   );
 
   return { contactId: contact.id, expId, action: 'processing' };
@@ -201,22 +225,46 @@ function processOrderCompleted(db, tenantId, order, wooConfig) {
   }
 
   // Guardar/actualizar en woo_orders
-  const lineItemsCompleted = order.line_items || [];
+  const custName     = `${(billing.first_name || '').trim()} ${(billing.last_name || '').trim()}`.trim();
+  const lineItemsC   = (order.line_items || []).map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity, total: i.total || '0' }));
   const wcOrderDateC = order.date_created ? Math.floor(new Date(order.date_created).getTime() / 1000) : null;
+  const shippingC    = order.shipping || {};
+  const shippingAddrC = {
+    name:     `${shippingC.first_name || ''} ${shippingC.last_name || ''}`.trim() || custName,
+    address1: shippingC.address_1 || billing.address_1 || '',
+    address2: shippingC.address_2 || '',
+    city:     shippingC.city      || billing.city || '',
+    state:    shippingC.state     || billing.state || '',
+    postcode: shippingC.postcode  || billing.postcode || '',
+    country:  shippingC.country   || billing.country || '',
+  };
   db.prepare(`
-    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email, status, products_json, raw_json, wc_order_date, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+    INSERT INTO woo_orders (tenant_id, wc_order_id, wc_order_number, customer_name, customer_phone, customer_email,
+      status, products_json, raw_json, wc_order_date,
+      payment_method, order_total, shipping_total, discount_total, tax_total,
+      shipping_address_json, customer_note, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
     ON CONFLICT(tenant_id, wc_order_id) DO UPDATE SET
-      status        = excluded.status,
-      products_json = excluded.products_json,
-      raw_json      = excluded.raw_json,
-      wc_order_date = COALESCE(excluded.wc_order_date, wc_order_date),
-      updated_at    = unixepoch()
+      status                = excluded.status,
+      products_json         = excluded.products_json,
+      raw_json              = excluded.raw_json,
+      wc_order_date         = COALESCE(excluded.wc_order_date, wc_order_date),
+      payment_method        = excluded.payment_method,
+      order_total           = excluded.order_total,
+      shipping_total        = excluded.shipping_total,
+      discount_total        = excluded.discount_total,
+      tax_total             = excluded.tax_total,
+      shipping_address_json = excluded.shipping_address_json,
+      customer_note         = excluded.customer_note,
+      updated_at            = unixepoch()
   `).run(
-    tenantId, order.id, order.number,
-    `${(billing.first_name || '').trim()} ${(billing.last_name || '').trim()}`.trim(),
+    tenantId, order.id, order.number, custName,
     billing.phone || '', email, 'completed',
-    JSON.stringify(lineItemsCompleted), JSON.stringify(order), wcOrderDateC
+    JSON.stringify(lineItemsC), JSON.stringify(order), wcOrderDateC,
+    order.payment_method_title || order.payment_method || '',
+    order.total || '0', order.shipping_total || '0',
+    order.discount_total || '0', order.total_tax || '0',
+    JSON.stringify(shippingAddrC), order.customer_note || ''
   );
 
   return { contactId: contact.id, expId: expedient.id, maxDays, action: 'completed' };

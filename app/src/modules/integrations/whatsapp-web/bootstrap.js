@@ -23,9 +23,11 @@ function getIntegrationContext(db, integrationId) {
 function ensureExpedient(db, tenantId, contactId, routing) {
   if (!routing?.pipelineId || !routing?.stageId) return;
   if (!tenantId || !contactId) return;
+  // Verificar si el contacto ya tiene CUALQUIER lead (no solo en el pipeline de routing).
+  // Si ya tiene uno (aunque WooCommerce lo haya movido a otro pipeline), no crear duplicado.
   const existing = db.prepare(
-    'SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? LIMIT 1'
-  ).get(contactId, routing.pipelineId, tenantId);
+    'SELECT id FROM expedients WHERE contact_id = ? AND tenant_id = ? LIMIT 1'
+  ).get(contactId, tenantId);
   if (existing) return;
   try {
     expedientSvc.create(db, tenantId, {

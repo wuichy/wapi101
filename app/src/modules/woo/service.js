@@ -140,6 +140,14 @@ function processOrderProcessing(db, tenantId, order) {
   // Tag del lead: número de pedido únicamente
   if (expId) addExpedientTag(db, tenantId, expId, orderNum);
 
+  // Campos personalizados del lead: Ultima Compra
+  if (expId) {
+    const purchaseDate = order.date_created
+      ? formatDate(new Date(order.date_created))
+      : formatDate(new Date());
+    fillCustomField(db, tenantId, expId, 'Ultima Compra', purchaseDate);
+  }
+
   // Guardar/actualizar en woo_orders
   const lineItems   = (order.line_items || []).map(i => ({ product_id: i.product_id, name: i.name, quantity: i.quantity, total: i.total || '0' }));
   const wcOrderDate = order.date_created ? Math.floor(new Date(order.date_created).getTime() / 1000) : null;
@@ -209,15 +217,18 @@ function processOrderCompleted(db, tenantId, order, wooConfig) {
   }
   if (!expedient) return { skipped: true, reason: 'expedient_not_found' };
 
-  // Llenar Paquetería y Código de Rastreo
+  // Campos personalizados: Ultima Compra, Paquetería y Número de Rastreo
+  const purchaseDateCompleted = order.date_created
+    ? formatDate(new Date(order.date_created))
+    : formatDate(new Date());
+  fillCustomField(db, tenantId, expedient.id, 'Ultima Compra', purchaseDateCompleted);
+
   const shipping = order.shipping_tracking || {};
   const carrier  = (shipping.carrier  || '').trim();
   const tracking = (shipping.tracking_number || '').trim();
 
-  if (carrier || tracking) {
-    fillCustomField(db, tenantId, expedient.id, 'Paqueteria',        carrier);
-    fillCustomField(db, tenantId, expedient.id, 'Código de Rastreo:', tracking);
-  }
+  if (carrier) fillCustomField(db, tenantId, expedient.id, 'Paqueteria',         carrier);
+  if (tracking) fillCustomField(db, tenantId, expedient.id, 'Número de Rastreo:', tracking);
 
   // Determinar pipeline destino según duración máxima de productos
   const products = db.prepare(
@@ -370,4 +381,4 @@ function formatDate(d) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-module.exports = { generateToken, processOrderProcessing, processOrderCompleted, normalizePhoneForWA };
+module.exports = { generateToken, processOrderProcessing, processOrderCompleted, normalizePhoneForWA, fillCustomField };

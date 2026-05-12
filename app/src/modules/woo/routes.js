@@ -2,7 +2,7 @@
 const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
-const { generateToken, processOrderProcessing, processOrderCompleted } = require('./service');
+const { generateToken, processOrderProcessing, processOrderCompleted, fillCustomField } = require('./service');
 const notifSvc = require('../notifications/service');
 
 const DEFAULT_CARRIERS = [
@@ -388,6 +388,29 @@ function authRouter(db) {
     if (wc_status) { updateFields.push('status=?'); updateVals.push(wc_status); }
     updateVals.push(order.id);
     db.prepare(`UPDATE woo_orders SET ${updateFields.join(', ')} WHERE id=?`).run(...updateVals);
+
+    // Llenar campos del lead: Paqueteria y Número de Rastreo
+    try {
+      const tenantId = req.tenantId;
+      // Buscar contacto por teléfono o email de la orden
+      const contact = order.customer_phone
+        ? db.prepare("SELECT id FROM contacts WHERE phone LIKE ? AND tenant_id = ? LIMIT 1")
+            .get(`%${order.customer_phone.replace(/\D/g, '').slice(-10)}%`, tenantId)
+        : null;
+      if (contact) {
+        const wooCfg = db.prepare('SELECT initial_pipeline_id FROM woo_config WHERE tenant_id = ?').get(tenantId);
+        const expRow = wooCfg?.initial_pipeline_id
+          ? db.prepare('SELECT id FROM expedients WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1')
+              .get(contact.id, wooCfg.initial_pipeline_id, tenantId)
+          : null;
+        const expId = expRow?.id || db.prepare('SELECT id FROM expedients WHERE contact_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1')
+          .get(contact.id, tenantId)?.id;
+        if (expId) {
+          if (carrier)         fillCustomField(db, tenantId, expId, 'Paqueteria',          carrier);
+          if (tracking_number) fillCustomField(db, tenantId, expId, 'Número de Rastreo:',  tracking_number);
+        }
+      }
+    } catch (e) { console.error('[woo tracking fields]', e.message); }
 
     // Push a WooCommerce si hay credenciales
     const cfg = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(req.tenantId);

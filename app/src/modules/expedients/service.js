@@ -43,6 +43,8 @@ function hydrate(db, tenantId, row) {
     nameIsAuto:   !!row.name_is_auto,
     contactId:    row.contact_id,
     contactName:  row.contact_name || null,
+    contactFirstName: row.contact_first_name || null,
+    contactLastName:  row.contact_last_name  || null,
     contactEmail: row.contact_email || null,
     contactPhone: row.contact_phone || null,
     contactAvatarUrl: row.contact_avatar_url || null,
@@ -102,6 +104,8 @@ function _lastDeliveryFailure(db, tenantId, contactId) {
 const BASE_SELECT = `
   SELECT e.*,
     (c.first_name || COALESCE(' ' || c.last_name, '')) AS contact_name,
+    c.first_name AS contact_first_name,
+    c.last_name  AS contact_last_name,
     c.email AS contact_email,
     c.phone AS contact_phone,
     c.avatar_url AS contact_avatar_url,
@@ -224,15 +228,28 @@ function create(db, tenantId, { contactId, pipelineId, stageId, name, value = 0,
   return getById(db, t, id);
 }
 
-function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fieldValues, contactId, contactName, contactPhone, contactEmail, assignedAdvisorId }) {
+function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fieldValues, contactId, contactName, contactFirstName, contactLastName, contactPhone, contactEmail, assignedAdvisorId }) {
   const t = tenantId ?? _tenantFromExpedient(db, id);
   if (!t) return null;
   const row = db.prepare('SELECT * FROM expedients WHERE id = ? AND tenant_id = ?').get(id, t);
   if (!row) return null;
 
-  if (contactName !== undefined && row.contact_id) {
+  // Soporta first_name y last_name separados (preferido) y contactName legacy.
+  if (contactFirstName !== undefined && row.contact_id) {
+    const trimmed = (contactFirstName || '').trim() || null;
+    db.prepare('UPDATE contacts SET first_name = ? WHERE id = ? AND tenant_id = ?').run(trimmed, row.contact_id, t);
+  }
+  if (contactLastName !== undefined && row.contact_id) {
+    const trimmed = (contactLastName || '').trim() || null;
+    db.prepare('UPDATE contacts SET last_name = ? WHERE id = ? AND tenant_id = ?').run(trimmed, row.contact_id, t);
+  }
+  if (contactName !== undefined && contactFirstName === undefined && contactLastName === undefined && row.contact_id) {
+    // Legacy: si solo viene contactName completo, partir en first/last por primer espacio.
     const trimmed = contactName.trim();
-    db.prepare('UPDATE contacts SET first_name = ? WHERE id = ? AND tenant_id = ?').run(trimmed || null, row.contact_id, t);
+    const space   = trimmed.indexOf(' ');
+    const fn = space === -1 ? trimmed : trimmed.slice(0, space).trim();
+    const ln = space === -1 ? null    : trimmed.slice(space + 1).trim() || null;
+    db.prepare('UPDATE contacts SET first_name = ?, last_name = ? WHERE id = ? AND tenant_id = ?').run(fn || null, ln, row.contact_id, t);
   }
 
   if (contactPhone !== undefined && row.contact_id) {

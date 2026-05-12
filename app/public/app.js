@@ -5191,11 +5191,18 @@ function renderExpDetailInfo() {
 
     <div class="exp-detail-section">
       <div class="exp-detail-section-title">Contacto</div>
-      <div class="exp-detail-field editable-field" data-field-id="contactName" data-field-type="builtin">
-        <span class="exp-detail-field-label">Nombre</span>
+      <div class="exp-detail-field editable-field" data-field-id="contactFirstName" data-field-type="builtin">
+        <span class="exp-detail-field-label">Nombre(s)</span>
         <div class="edf-cell">
-          <span class="exp-detail-field-value edf-display">${escapeHtml(exp.contactName || '—')}</span>
-          <input class="edf-input" type="text" value="${escapeHtml(exp.contactName || '')}" data-original="${escapeHtml(exp.contactName || '')}" />
+          <span class="exp-detail-field-value edf-display">${escapeHtml(exp.contactFirstName || '—')}</span>
+          <input class="edf-input" type="text" value="${escapeHtml(exp.contactFirstName || '')}" data-original="${escapeHtml(exp.contactFirstName || '')}" />
+        </div>
+      </div>
+      <div class="exp-detail-field editable-field" data-field-id="contactLastName" data-field-type="builtin">
+        <span class="exp-detail-field-label">Apellido(s)</span>
+        <div class="edf-cell">
+          <span class="exp-detail-field-value edf-display">${escapeHtml(exp.contactLastName || '—')}</span>
+          <input class="edf-input" type="text" value="${escapeHtml(exp.contactLastName || '')}" data-original="${escapeHtml(exp.contactLastName || '')}" />
         </div>
       </div>
       <div class="exp-detail-field editable-field" data-field-id="contactPhone" data-field-type="builtin">
@@ -5562,6 +5569,8 @@ async function saveExpDetailEdits() {
     if (fieldId === 'name') patch.name = val;
     else if (fieldId === 'pipeline') patch.pipelineId = Number(input.value);
     else if (fieldId === 'stage') patch.stageId = Number(input.value);
+    else if (fieldId === 'contactFirstName') patch.contactFirstName = val;
+    else if (fieldId === 'contactLastName')  patch.contactLastName  = val;
     else if (fieldId === 'contactName') patch.contactName = val;
     else if (fieldId === 'contactPhone') patch.contactPhone = val;
     else if (fieldId === 'contactEmail') patch.contactEmail = val;

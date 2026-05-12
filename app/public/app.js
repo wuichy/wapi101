@@ -5530,6 +5530,10 @@ function openPipelinePicker() {
       if (display && p) {
         display.innerHTML = `<span class="exp-detail-stage-badge"><span class="edf-stage-dot" style="background:${p.color || '#94a3b8'}"></span>${escapeHtml(p.name)}</span>`;
       }
+      // Al cambiar de pipeline, la etapa anterior ya no aplica → forzar
+      // que el usuario elija una etapa del pipeline nuevo. setTimeout para
+      // que el modal del pipeline termine de cerrar antes de abrir el otro.
+      setTimeout(() => openStagePicker(), 100);
     }
   });
 }
@@ -5668,6 +5672,15 @@ async function saveExpDetailEdits() {
 
   if (!Object.keys(patch).length) {
     document.getElementById('expDetailActionsBar').hidden = true;
+    return;
+  }
+
+  // Validación: si se cambió el pipeline, OBLIGAR a que también haya stageId válido.
+  // Sin esto, el lead quedaría en el pipeline nuevo pero apuntando a un stage
+  // del pipeline viejo (foreign key inválida).
+  if (patch.pipelineId && (!patch.stageId || patch.stageId === 0)) {
+    toast('Cambiar de pipeline requiere elegir también una etapa', 'error');
+    openStagePicker();
     return;
   }
 

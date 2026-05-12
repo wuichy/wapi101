@@ -45,7 +45,7 @@ VALUES (
   '1.0.0',
   '🛒',
   'integration',
-  '["WordPress", "WooCommerce"]',
+  '["WordPress", "WooCommerce", "WooCommerce Orders Tracking Premium"]',
   '/api/apps/woo/plugin-download',
   1
 );

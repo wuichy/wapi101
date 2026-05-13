@@ -10956,6 +10956,17 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .mail-message-body { font-size: 14px; line-height: 1.65; color: var(--text); }
 .mail-message-body-text { white-space: pre-wrap; }
 .mail-message-iframe { width: 100%; min-height: 120px; border: 0; background: #fff; display: block; border-radius: 6px; }
+.mail-loading-skeleton { padding: 8px; display: flex; flex-direction: column; gap: 12px; }
+.mail-skel-item { display: flex; gap: 12px; padding: 12px; align-items: center; }
+.mail-skel-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: mail-skel-shimmer 1.4s infinite; flex-shrink: 0; }
+.mail-skel-text { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.mail-skel-line { height: 10px; border-radius: 4px; background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: mail-skel-shimmer 1.4s infinite; }
+.mail-skel-line.w70 { width: 70%; }
+.mail-skel-line.w90 { width: 90%; }
+@keyframes mail-skel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 .mail-detail-header-row { display: flex; align-items: flex-start; gap: 14px; }
 .mail-detail-avatar { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 18px; flex-shrink: 0; }
 .mail-detail-header-text { flex: 1; min-width: 0; }

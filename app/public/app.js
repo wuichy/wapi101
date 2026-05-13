@@ -18797,16 +18797,20 @@ function updateMailNavVisibility() {
 async function loadMailView() {
   updateMailNavVisibility();
   if (!MAIL_EMAIL_INTEGRATIONS.length) return;
+  // Loader visible mientras pega — antes solo había "Cargando..." mudo.
+  const list = document.getElementById('mailListItems');
+  if (list && !MAIL_CONVOS.length) {
+    list.innerHTML = '<div class="mail-loading-skeleton">' +
+      Array.from({length:6}).map(() => '<div class="mail-skel-item"><div class="mail-skel-avatar"></div><div class="mail-skel-text"><div class="mail-skel-line w70"></div><div class="mail-skel-line w90"></div></div></div>').join('') +
+      '</div>';
+  }
   try {
-    // Solo pedimos providers que tienen al menos una integración conectada.
-    // Antes pedíamos los 5 fijos aunque tuvieras solo 1 cuenta — 4 requests de
-    // más que volvían vacíos.
+    // Una sola query con todos los providers (antes eran 5 calls paralelos
+    // que cada uno disparaba ~200 sub-queries por N+1 en hydrateConvo).
     const activeProviders = [...new Set(MAIL_EMAIL_INTEGRATIONS.map(i => i._provider || i.provider).filter(Boolean))];
     if (!activeProviders.length) { MAIL_CONVOS = []; renderMailList(); return; }
-    const results = await Promise.all(
-      activeProviders.map(p => api('GET', `/api/conversations?provider=${p}&pageSize=100`).catch(() => ({ items: [] })))
-    );
-    MAIL_CONVOS = results.flatMap(r => r.items || []);
+    const data = await api('GET', `/api/conversations?providersIn=${activeProviders.join(',')}&pageSize=200`).catch(() => ({ items: [] }));
+    MAIL_CONVOS = data.items || [];
     renderMailList();
     renderMailAccounts();
     renderMailComposePicker();
@@ -19052,10 +19056,19 @@ function renderMailList() {
 
 async function openMailConvo(convoId) {
   MAIL_SELECTED_ID = convoId;
+
+  // Marcar como leído optimista: si la convo tenía unread, actualizamos local
+  // y disparamos el PATCH en paralelo (no esperamos al backend para renderear).
+  const convoLocal = MAIL_CONVOS.find(c => c.id === convoId);
+  if (convoLocal && (convoLocal.unreadCount || 0) > 0) {
+    convoLocal.unreadCount = 0;
+    updateMailUnreadBadge();
+    api('PATCH', `/api/conversations/${convoId}/read`).catch(() => {});
+  }
   renderMailList();
   const detail = document.getElementById('mailDetailCol');
   if (!detail) return;
-  detail.innerHTML = '<div class="mail-loading">Cargando...</div>';
+  detail.innerHTML = '<div class="mail-loading">Cargando correo…</div>';
   try {
     const [convo, msgData] = await Promise.all([
       api('GET', `/api/conversations/${convoId}`),

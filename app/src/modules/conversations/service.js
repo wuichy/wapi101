@@ -86,7 +86,13 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
   const conditions = ['c.tenant_id = ?'];
   const params = [tenantId];
 
-  if (provider) {
+  if (Array.isArray(provider) && provider.length > 0) {
+    // Lista de providers (usado por la vista Mail para traer todos los emails
+    // en una sola query en lugar de N requests paralelos).
+    const placeholders = provider.map(() => '?').join(',');
+    conditions.push(`c.provider IN (${placeholders})`);
+    params.push(...provider);
+  } else if (provider) {
     conditions.push('c.provider = ?'); params.push(provider);
   } else {
     // Email conversations belong to the Mail view, not the main chat

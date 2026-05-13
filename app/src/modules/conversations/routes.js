@@ -65,13 +65,17 @@ module.exports = function createConversationsRouter(db) {
 
   // GET /api/conversations
   router.get('/', (req, res) => {
-    const { q, provider, unread, page, pageSize, contactId, pipelineIds, includeOrphans } = req.query;
+    const { q, provider, providersIn, unread, page, pageSize, contactId, pipelineIds, includeOrphans } = req.query;
     const parsedPipelineIds = pipelineIds
       ? pipelineIds.split(',').map(Number).filter(n => n > 0)
       : null;
+    // providersIn = "gmail,outlook,icloud_mail" → array, evita N requests paralelos.
+    const parsedProviderList = providersIn
+      ? String(providersIn).split(',').map(s => s.trim()).filter(Boolean)
+      : null;
     const result = svc.list(db, req.tenantId, {
       search:         q || '',
-      provider:       provider || '',
+      provider:       parsedProviderList || provider || '',
       unreadOnly:     unread === '1',
       contactId:      contactId ? Number(contactId) : null,
       page:           Number(page) || 1,

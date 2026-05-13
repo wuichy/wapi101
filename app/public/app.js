@@ -18315,11 +18315,13 @@ async function renderChatInfoPanel() {
 
   try {
     // Cargar contacto + leads + tareas pendientes en paralelo
-    const [contact, leadsResp, tasksResp] = await Promise.all([
+    const [contactResp, leadsResp, tasksResp] = await Promise.all([
       convo.contactId ? api('GET', `/api/contacts/${convo.contactId}`).catch(() => null) : Promise.resolve(null),
       convo.contactId ? api('GET', `/api/expedients?contactId=${convo.contactId}&pageSize=10`).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
       convo.contactId ? api('GET', `/api/tasks?contactId=${convo.contactId}&filter=pending&limit=10`).catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
     ]);
+    // La API devuelve { item: {...} } — extraer el objeto real
+    const contact = contactResp?.item || null;
 
     const name = contact ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Sin nombre' : (convo.name || convo.externalId || 'Sin nombre');
     const initials = name.split(/\s+/).slice(0,2).map(s => s.charAt(0).toUpperCase()).join('') || '?';

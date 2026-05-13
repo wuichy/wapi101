@@ -18812,7 +18812,7 @@ async function loadMailView() {
 }
 
 function updateMailUnreadBadge() {
-  const unread = MAIL_CONVOS.filter(c => c.unread_count > 0).length;
+  const unread = MAIL_CONVOS.filter(c => c.unreadCount > 0).length;
   const badge = document.getElementById('mailInboxBadge');
   if (badge) { badge.textContent = unread || ''; badge.hidden = !unread; }
   const navBadge = document.getElementById('navMailBadge');
@@ -18832,14 +18832,17 @@ function mailFilteredConvos() {
     convos = convos.filter(c => c.integrationId === MAIL_ACCOUNT_FILTER);
   }
   if (MAIL_FOLDER === 'sent') {
-    convos = convos.filter(c => c.last_message_direction === 'outgoing');
+    // El API no expone "direction" del último mensaje. Deducimos: si
+    // lastIncomingAt es null/0 o menor que lastMessageAt, el último msj fue
+    // saliente.
+    convos = convos.filter(c => (c.lastIncomingAt || 0) < (c.lastMessageAt || 0));
   }
   if (MAIL_SEARCH) {
     const q = MAIL_SEARCH.toLowerCase();
     convos = convos.filter(c =>
-      (c.contact_name || '').toLowerCase().includes(q) ||
-      (c.external_id || '').toLowerCase().includes(q) ||
-      (c.last_message_body || '').toLowerCase().includes(q)
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.externalId || '').toLowerCase().includes(q) ||
+      (c.lastMessage || '').toLowerCase().includes(q)
     );
   }
   return convos;
@@ -18877,18 +18880,18 @@ function renderMailList() {
     return;
   }
   el.innerHTML = convos.map(c => {
-    const isUnread = c.unread_count > 0;
+    const isUnread = (c.unreadCount || 0) > 0;
     const isSelected = c.id === MAIL_SELECTED_ID;
-    const subject = parseEmailSubject(c.last_message_body);
-    const preview = parseEmailPreview(c.last_message_body);
-    const senderName = c.contact_name || c.external_id || 'Desconocido';
+    const subject = parseEmailSubject(c.lastMessage);
+    const preview = parseEmailPreview(c.lastMessage);
+    const senderName = c.name || c.externalId || 'Desconocido';
     const avatar = senderName.slice(0, 2).toUpperCase();
     return `<div class="mail-item${isSelected ? ' mail-item--selected' : ''}${isUnread ? ' mail-item--unread' : ''}" data-id="${c.id}">
       <div class="mail-item-avatar">${escapeHtml(avatar)}</div>
       <div class="mail-item-body">
         <div class="mail-item-top">
           <span class="mail-item-from">${escapeHtml(senderName)}</span>
-          <span class="mail-item-date">${mailFmtDate(c.last_message_at)}</span>
+          <span class="mail-item-date">${mailFmtDate(c.lastMessageAt)}</span>
         </div>
         <div class="mail-item-subject">${escapeHtml(subject)}</div>
         <div class="mail-item-preview">${escapeHtml(preview)}</div>
@@ -18915,8 +18918,8 @@ async function openMailConvo(convoId) {
     ]);
     const msgs = (msgData.items || []).slice().reverse();
     const subject = parseEmailSubject(msgs[0]?.body || '');
-    const fromEmail = convo.external_id || '';
-    const fromName = convo.contact_name || fromEmail;
+    const fromEmail = convo.externalId || '';
+    const fromName = convo.name || fromEmail;
 
     detail.innerHTML = `
       <div class="mail-detail-inner">

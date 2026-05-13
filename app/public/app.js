@@ -18798,12 +18798,15 @@ async function loadMailView() {
   updateMailNavVisibility();
   if (!MAIL_EMAIL_INTEGRATIONS.length) return;
   try {
-    const EMAIL_PROVIDERS = ['email', 'gmail', 'outlook', 'icloud_mail', 'yahoo_mail'];
+    // Solo pedimos providers que tienen al menos una integración conectada.
+    // Antes pedíamos los 5 fijos aunque tuvieras solo 1 cuenta — 4 requests de
+    // más que volvían vacíos.
+    const activeProviders = [...new Set(MAIL_EMAIL_INTEGRATIONS.map(i => i._provider || i.provider).filter(Boolean))];
+    if (!activeProviders.length) { MAIL_CONVOS = []; renderMailList(); return; }
     const results = await Promise.all(
-      EMAIL_PROVIDERS.map(p => api('GET', `/api/conversations?provider=${p}&pageSize=100`).catch(() => ({ items: [] })))
+      activeProviders.map(p => api('GET', `/api/conversations?provider=${p}&pageSize=100`).catch(() => ({ items: [] })))
     );
-    const data = { items: results.flatMap(r => r.items || []) };
-    MAIL_CONVOS = data.items || [];
+    MAIL_CONVOS = results.flatMap(r => r.items || []);
     renderMailList();
     renderMailAccounts();
     renderMailComposePicker();
@@ -18870,6 +18873,56 @@ function _decodeQuotedPrintable(str) {
   });
 }
 
+// Decodifica una "parte" individual del MIME según su Content-Transfer-Encoding.
+function _decodePart(headers, content) {
+  if (/content-transfer-encoding:\s*quoted-printable/i.test(headers)) {
+    return _decodeQuotedPrintable(content);
+  }
+  if (/content-transfer-encoding:\s*base64/i.test(headers)) {
+    try {
+      const raw = atob(content.replace(/\s/g, ''));
+      // Convertir bytes a UTF-8
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch { return content; }
+  }
+  return content;
+}
+
+// Recursivo: parsea un bloque multipart y devuelve {html, text} de la primera parte que matchee.
+function _parseMultipart(body, boundary, depth = 0) {
+  if (depth > 5) return { html: null, text: null }; // safety
+  const marker = '--' + boundary;
+  const parts = body.split(marker);
+  let htmlPart = null, textPart = null;
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed || trimmed === '--') continue;
+
+    const headerEnd = part.search(/\r?\n\r?\n/);
+    if (headerEnd === -1) continue;
+
+    const rawHeaders = part.slice(0, headerEnd);
+    const content = part.slice(headerEnd).replace(/^\r?\n\r?\n/, '');
+
+    // Si esta parte es ella misma multipart, recurse (anidación)
+    const nested = rawHeaders.match(/Content-Type:\s*multipart\/[^;]*;\s*boundary=["']?([^"'\r\n]+)["']?/i);
+    if (nested) {
+      const inner = _parseMultipart(content, nested[1], depth + 1);
+      if (inner.html && !htmlPart) htmlPart = inner.html;
+      if (inner.text && !textPart) textPart = inner.text;
+      continue;
+    }
+
+    const decoded = _decodePart(rawHeaders, content.trim());
+    if (/Content-Type:\s*text\/html/i.test(rawHeaders) && !htmlPart) htmlPart = decoded;
+    else if (/Content-Type:\s*text\/plain/i.test(rawHeaders) && !textPart) textPart = decoded;
+  }
+  return { html: htmlPart, text: textPart };
+}
+
 // Parsea un email body crudo (puede ser MIME multipart o texto plano)
 // Devuelve { content, isHtml }
 function parseEmailBody(raw) {
@@ -18882,33 +18935,28 @@ function parseEmailBody(raw) {
     if (idx > -1) body = body.slice(idx + 2);
   }
 
-  // Detectar Content-Type multipart con boundary
-  const mp = body.match(/Content-Type:\s*multipart\/[^;]*;\s*boundary=["']?([^"'\r\n]+)["']?/i);
-  if (mp) {
-    const boundary = '--' + mp[1];
-    const parts = body.split(boundary);
-    let htmlPart = null, textPart = null;
-    for (const part of parts) {
-      const headerEnd = part.search(/\r?\n\r?\n/);
-      if (headerEnd === -1) continue;
-      const headers = part.slice(0, headerEnd).toLowerCase();
-      let content = part.slice(headerEnd).replace(/^\r?\n\r?\n/, '').trim();
-      if (/content-transfer-encoding:\s*quoted-printable/.test(headers)) {
-        content = _decodeQuotedPrintable(content);
-      } else if (/content-transfer-encoding:\s*base64/.test(headers)) {
-        try { content = decodeURIComponent(escape(atob(content.replace(/\s/g, '')))); }
-        catch { /* keep raw */ }
-      }
-      if (/content-type:\s*text\/html/.test(headers) && !htmlPart) htmlPart = content;
-      else if (/content-type:\s*text\/plain/.test(headers) && !textPart) textPart = content;
-    }
-    if (htmlPart) return { content: htmlPart, isHtml: true };
-    if (textPart) return { content: textPart, isHtml: false };
+  // Detectar boundary del MIME — puede venir de un Content-Type header,
+  // O directamente al inicio del body (cuando el servidor ya quitó el header pero dejó las partes).
+  let boundary = null;
+  const ctMatch = body.match(/Content-Type:\s*multipart\/[^;]*;\s*boundary=["']?([^"'\r\n]+)["']?/i);
+  if (ctMatch) {
+    boundary = ctMatch[1];
+  } else {
+    // Buscar boundary "huérfano" al inicio del body. Patrón típico de Zoho/Adobe:
+    //   ------=_Part_xxx_yyy.zzz
+    //   o cualquier --<token>\n
+    const orphan = body.match(/^----+=?_?[A-Za-z0-9_.\-]+/m);
+    if (orphan) boundary = orphan[0].replace(/^--/, '');
   }
 
-  // Decodificar quoted-printable si el body tiene marcas típicas (=3D, =\n)
-  if (/=[0-9A-F]{2}/.test(body) && /Content-Transfer-Encoding:\s*quoted-printable/i.test(body)) {
-    // Eliminar headers iniciales
+  if (boundary) {
+    const result = _parseMultipart(body, boundary);
+    if (result.html) return { content: result.html, isHtml: true };
+    if (result.text) return { content: result.text, isHtml: false };
+  }
+
+  // Si no es multipart pero tiene headers + quoted-printable, decode
+  if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(body)) {
     const hEnd = body.search(/\r?\n\r?\n/);
     if (hEnd > -1) body = body.slice(hEnd).replace(/^\r?\n\r?\n/, '');
     body = _decodeQuotedPrintable(body);
@@ -18939,6 +18987,25 @@ function parseEmailPreview(body) {
   return text.replace(/\s+/g, ' ').trim().slice(0, 100);
 }
 
+// Fecha+hora completa para el detalle del mail (ej. "13 may 2026, 14:32")
+function mailFmtDateTimeFull(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const date = d.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+  const time = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${date} · ${time}`;
+}
+
+// Color de avatar a partir del email/nombre — consistente por persona.
+// 8 colores curados que se ven bien con texto blanco.
+function _avatarColorFor(seed) {
+  const palette = ['#2563eb', '#0891b2', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0d9488', '#dc2626'];
+  const s = String(seed || '').toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = ((hash << 5) - hash) + s.charCodeAt(i) | 0;
+  return palette[Math.abs(hash) % palette.length];
+}
+
 function mailFmtDate(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
@@ -18963,8 +19030,9 @@ function renderMailList() {
     const preview = parseEmailPreview(c.lastMessage);
     const senderName = c.name || c.externalId || 'Desconocido';
     const avatar = senderName.slice(0, 2).toUpperCase();
+    const avatarBg = _avatarColorFor(c.externalId || c.name);
     return `<div class="mail-item${isSelected ? ' mail-item--selected' : ''}${isUnread ? ' mail-item--unread' : ''}" data-id="${c.id}">
-      <div class="mail-item-avatar">${escapeHtml(avatar)}</div>
+      <div class="mail-item-avatar" style="background:${avatarBg};color:#fff">${escapeHtml(avatar)}</div>
       <div class="mail-item-body">
         <div class="mail-item-top">
           <span class="mail-item-from">${escapeHtml(senderName)}</span>
@@ -18998,12 +19066,21 @@ async function openMailConvo(convoId) {
     const fromEmail = convo.externalId || '';
     const fromName = convo.name || fromEmail;
 
+    const initials = (fromName || fromEmail || '?').slice(0, 2).toUpperCase();
+    const avatarColor = _avatarColorFor(fromEmail || fromName);
+
     detail.innerHTML = `
       <div class="mail-detail-inner">
         <div class="mail-detail-header">
-          <h2 class="mail-detail-subject">${escapeHtml(subject)}</h2>
-          <div class="mail-detail-meta">
-            <span class="mail-detail-from">${escapeHtml(fromName)} &lt;${escapeHtml(fromEmail)}&gt;</span>
+          <div class="mail-detail-header-row">
+            <div class="mail-detail-avatar" style="background:${avatarColor}">${escapeHtml(initials)}</div>
+            <div class="mail-detail-header-text">
+              <h2 class="mail-detail-subject">${escapeHtml(subject)}</h2>
+              <div class="mail-detail-meta">
+                <span class="mail-detail-from-name">${escapeHtml(fromName)}</span>
+                <span class="mail-detail-from-email">&lt;${escapeHtml(fromEmail)}&gt;</span>
+              </div>
+            </div>
           </div>
         </div>
         <div class="mail-thread" id="mailThread">
@@ -19015,12 +19092,18 @@ async function openMailConvo(convoId) {
               ? content.split('\n').slice(2).join('\n')
               : content;
             const bodyHtml = isHtml
-              ? `<iframe class="mail-message-iframe" sandbox="allow-same-origin allow-popups" srcdoc="${escapeHtml(stripped)}" onload="try{const d=this.contentDocument;if(d){d.body.style.margin='0';d.body.style.fontFamily='-apple-system,BlinkMacSystemFont,sans-serif';this.style.height=(d.documentElement.scrollHeight+20)+'px';}}catch(e){}"></iframe>`
+              ? `<iframe class="mail-message-iframe" loading="lazy" sandbox="allow-same-origin allow-popups" srcdoc="${escapeHtml(stripped)}" onload="try{const d=this.contentDocument;if(d){d.body.style.margin='0';d.body.style.fontFamily='-apple-system,BlinkMacSystemFont,sans-serif';d.body.style.fontSize='14px';this.style.height=(d.documentElement.scrollHeight+20)+'px';}}catch(e){}"></iframe>`
               : `<div class="mail-message-body-text">${escapeHtml(stripped).replace(/\n/g, '<br>')}</div>`;
+            const who = isOut ? 'Tú' : fromName;
+            const whoInitials = (who || '?').slice(0, 2).toUpperCase();
+            const whoColor = isOut ? '#2563eb' : avatarColor;
             return `<div class="mail-message${isOut ? ' mail-message--out' : ''}">
               <div class="mail-message-meta">
-                <span class="mail-message-who">${isOut ? 'Tú' : escapeHtml(fromName)}</span>
-                <span class="mail-message-time">${mailFmtDate(m.createdAt)}</span>
+                <div class="mail-message-meta-left">
+                  <div class="mail-message-avatar" style="background:${whoColor}">${escapeHtml(whoInitials)}</div>
+                  <span class="mail-message-who">${escapeHtml(who)}</span>
+                </div>
+                <span class="mail-message-time" title="${escapeHtml(mailFmtDateTimeFull(m.createdAt))}">${escapeHtml(mailFmtDateTimeFull(m.createdAt))}</span>
               </div>
               <div class="mail-message-body">${bodyHtml}</div>
             </div>`;

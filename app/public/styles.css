@@ -10955,7 +10955,14 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .mail-message-who { font-weight: 600; color: var(--text); }
 .mail-message-body { font-size: 14px; line-height: 1.65; color: var(--text); }
 .mail-message-body-text { white-space: pre-wrap; }
-.mail-message-iframe { width: 100%; min-height: 120px; border: 0; background: #fff; display: block; }
+.mail-message-iframe { width: 100%; min-height: 120px; border: 0; background: #fff; display: block; border-radius: 6px; }
+.mail-detail-header-row { display: flex; align-items: flex-start; gap: 14px; }
+.mail-detail-avatar { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 18px; flex-shrink: 0; }
+.mail-detail-header-text { flex: 1; min-width: 0; }
+.mail-detail-from-name { font-weight: 600; color: var(--text); }
+.mail-detail-from-email { color: var(--text-muted); margin-left: 6px; font-size: 13px; }
+.mail-message-meta-left { display: flex; align-items: center; gap: 8px; }
+.mail-message-avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 11px; flex-shrink: 0; }
 .mail-reply-box { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .mail-reply-label { padding: 10px 14px; font-size: 12px; color: var(--text-muted); background: var(--surface); border-bottom: 1px solid var(--border); }
 .mail-reply-textarea { width: 100%; padding: 14px; border: none; outline: none; resize: vertical; font-size: 14px; font-family: inherit; color: var(--text); background: var(--bg); min-height: 100px; box-sizing: border-box; }

@@ -15466,9 +15466,11 @@ function _renderTplPickerList(query) {
 
   const q = query.toLowerCase().trim();
   const items = _tplItems.filter(t => {
-    // Mostramos ambos tipos. En modo bot-message, click en wa_api solo
-    // copia el body como texto (no la envía como template). Para envío
-    // real como wa_api template existe el step "Enviar plantilla".
+    // En modo bot-message solo mostramos básicas (free_form). Las wa_api
+    // tienen su propio step "Enviar plantilla" — evitamos que el usuario
+    // crea que está mandando como template aprobada cuando en realidad
+    // sería texto plano (y fallaría fuera de las 24h).
+    if (ctx.mode === 'bot-message' && t.type === 'wa_api') return false;
     if (q && !(t.displayName || t.name || '').toLowerCase().includes(q) &&
              !(t.body || '').toLowerCase().includes(q)) return false;
     return true;
@@ -15491,7 +15493,7 @@ function _renderTplPickerList(query) {
 
   // Hint en modo bot-message para clarificar el comportamiento
   const botModeHint = ctx.mode === 'bot-message'
-    ? '<div class="rh-tpl-mode-hint">💡 Click en cualquier plantilla → se copia el <strong>texto</strong> al mensaje. <strong>Importante:</strong> el bot la enviará como TEXTO (sujeto a la ventana 24h de WhatsApp aunque uses el body de una plantilla aprobada). Para garantizar envío como template aprobada (sirve fuera 24h), agrega un step <strong>"Enviar plantilla"</strong>.</div>'
+    ? '<div class="rh-tpl-mode-hint">💡 Solo se muestran plantillas <strong>básicas</strong>. El bot las enviará como TEXTO (solo funciona dentro de la ventana de 24h). Para enviar una plantilla aprobada por WhatsApp API (sirve fuera 24h), usa el step <strong>"Enviar plantilla"</strong>.</div>'
     : '';
 
   let lastType = null;

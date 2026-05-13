@@ -20313,12 +20313,15 @@ async function loadAbandonedCartConfig(cfg) {
   // Plantillas WA Business aprobadas
   const tplSel = document.getElementById('acTemplateSel');
   try {
-    const tplsData = await api('GET', '/api/templates');
-    const tpls = (tplsData.items || []).filter(t => t.type === 'wa_api' && t.waStatus === 'approved');
-    tplSel.innerHTML = '<option value="">— Selecciona plantilla —</option>' +
-      tpls.map(t => `<option value="${t.id}" ${t.id === ac.templateId ? 'selected' : ''}>${escapeHtml(t.name || t.displayName || `#${t.id}`)}</option>`).join('');
+    const tplsData = await api('GET', '/api/templates?type=wa_api');
+    // El endpoint retorna array directo (no { items })
+    const allTpls = Array.isArray(tplsData) ? tplsData : (tplsData?.items || []);
+    const tpls = allTpls.filter(t => t.type === 'wa_api' && t.waStatus === 'approved');
     if (!tpls.length) {
       tplSel.innerHTML = '<option value="">— No tienes plantillas aprobadas —</option>';
+    } else {
+      tplSel.innerHTML = '<option value="">— Selecciona plantilla —</option>' +
+        tpls.map(t => `<option value="${t.id}" ${t.id === ac.templateId ? 'selected' : ''}>${escapeHtml(t.name || t.displayName || `#${t.id}`)}</option>`).join('');
     }
   } catch (_) {}
 

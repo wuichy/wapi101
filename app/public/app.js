@@ -18946,11 +18946,24 @@ function parseEmailBody(raw) {
   if (ctMatch) {
     boundary = ctMatch[1];
   } else {
-    // Buscar boundary "huérfano" al inicio del body. Patrón típico de Zoho/Adobe:
-    //   ------=_Part_xxx_yyy.zzz
-    //   o cualquier --<token>\n
-    const orphan = body.match(/^----+=?_?[A-Za-z0-9_.\-]+/m);
-    if (orphan) boundary = orphan[0].replace(/^--/, '');
+    // Buscar boundary "huérfano" en cualquier línea que empiece con 2+ guiones.
+    // Patrones reales:
+    //   --000000000000502b3606512d51e9          (Google/Gmail — solo 2 dashes)
+    //   ------=_Part_5175109_149173476.xxx       (Zoho — 6 dashes)
+    //   --Apple-Mail=_ABC-DEF                    (Apple Mail)
+    //   --===============1234567890==            (clientes viejos)
+    // Buscamos línea que empiece con --, tenga ≥8 chars de boundary,
+    // y luego aparezca al menos una vez más en el body (señal fuerte de MIME).
+    const candidates = body.match(/^--[A-Za-z0-9_=.+\-]{8,}/gm) || [];
+    for (const c of candidates) {
+      // Para descartar falsos positivos, el boundary debe aparecer ≥2 veces.
+      const escaped = c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const occurrences = (body.match(new RegExp(escaped, 'g')) || []).length;
+      if (occurrences >= 2) {
+        boundary = c.replace(/^--/, '');
+        break;
+      }
+    }
   }
 
   if (boundary) {

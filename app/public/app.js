@@ -18855,11 +18855,88 @@ function parseEmailSubject(body) {
   return body.split('\n')[0].slice(0, 60) || '(Sin asunto)';
 }
 
+// Decodifica quoted-printable (=3D → =, =E2=80=99 → '…')
+function _decodeQuotedPrintable(str) {
+  // Soft line breaks (=\n o =\r\n) se eliminan
+  str = str.replace(/=\r?\n/g, '');
+  // Convierte secuencias de bytes =HH a UTF-8 correcto
+  return str.replace(/(=[0-9A-Fa-f]{2})+/g, m => {
+    const bytes = [];
+    for (let i = 0; i < m.length; i += 3) {
+      bytes.push(parseInt(m.slice(i + 1, i + 3), 16));
+    }
+    try { return new TextDecoder('utf-8').decode(new Uint8Array(bytes)); }
+    catch { return m; }
+  });
+}
+
+// Parsea un email body crudo (puede ser MIME multipart o texto plano)
+// Devuelve { content, isHtml }
+function parseEmailBody(raw) {
+  if (!raw) return { content: '', isHtml: false };
+  let body = String(raw);
+
+  // Saltar prefijo interno "📧 Subject\n\n" si lo tiene
+  if (body.startsWith('📧')) {
+    const idx = body.indexOf('\n\n');
+    if (idx > -1) body = body.slice(idx + 2);
+  }
+
+  // Detectar Content-Type multipart con boundary
+  const mp = body.match(/Content-Type:\s*multipart\/[^;]*;\s*boundary=["']?([^"'\r\n]+)["']?/i);
+  if (mp) {
+    const boundary = '--' + mp[1];
+    const parts = body.split(boundary);
+    let htmlPart = null, textPart = null;
+    for (const part of parts) {
+      const headerEnd = part.search(/\r?\n\r?\n/);
+      if (headerEnd === -1) continue;
+      const headers = part.slice(0, headerEnd).toLowerCase();
+      let content = part.slice(headerEnd).replace(/^\r?\n\r?\n/, '').trim();
+      if (/content-transfer-encoding:\s*quoted-printable/.test(headers)) {
+        content = _decodeQuotedPrintable(content);
+      } else if (/content-transfer-encoding:\s*base64/.test(headers)) {
+        try { content = decodeURIComponent(escape(atob(content.replace(/\s/g, '')))); }
+        catch { /* keep raw */ }
+      }
+      if (/content-type:\s*text\/html/.test(headers) && !htmlPart) htmlPart = content;
+      else if (/content-type:\s*text\/plain/.test(headers) && !textPart) textPart = content;
+    }
+    if (htmlPart) return { content: htmlPart, isHtml: true };
+    if (textPart) return { content: textPart, isHtml: false };
+  }
+
+  // Decodificar quoted-printable si el body tiene marcas típicas (=3D, =\n)
+  if (/=[0-9A-F]{2}/.test(body) && /Content-Transfer-Encoding:\s*quoted-printable/i.test(body)) {
+    // Eliminar headers iniciales
+    const hEnd = body.search(/\r?\n\r?\n/);
+    if (hEnd > -1) body = body.slice(hEnd).replace(/^\r?\n\r?\n/, '');
+    body = _decodeQuotedPrintable(body);
+  }
+
+  // Detectar si parece HTML
+  const isHtml = /<!DOCTYPE\s+html|<html[\s>]|<body[\s>]|<table[\s>]|<div[\s>]/i.test(body);
+  return { content: body, isHtml };
+}
+
 function parseEmailPreview(body) {
   if (!body) return '';
-  const lines = body.split('\n').filter(l => l.trim());
-  const start = lines[0]?.startsWith('📧') ? 1 : 0;
-  return lines.slice(start).join(' ').slice(0, 100);
+  // Si es MIME/HTML, sacar texto plano para el preview
+  const { content, isHtml } = parseEmailBody(body);
+  let text = content;
+  if (isHtml) {
+    // Strip HTML tags y entities básicas
+    text = text.replace(/<style[\s\S]*?<\/style>/gi, '')
+               .replace(/<script[\s\S]*?<\/script>/gi, '')
+               .replace(/<[^>]+>/g, ' ')
+               .replace(/&nbsp;/g, ' ')
+               .replace(/&amp;/g, '&')
+               .replace(/&lt;/g, '<')
+               .replace(/&gt;/g, '>')
+               .replace(/&quot;/g, '"')
+               .replace(/&#39;/g, "'");
+  }
+  return text.replace(/\s+/g, ' ').trim().slice(0, 100);
 }
 
 function mailFmtDate(ts) {
@@ -18932,14 +19009,20 @@ async function openMailConvo(convoId) {
         <div class="mail-thread" id="mailThread">
           ${msgs.map(m => {
             const isOut = m.direction === 'outgoing';
-            const body = m.body || '';
-            const bodyClean = isOut ? body : (body.includes('\n\n') ? body.split('\n\n').slice(1).join('\n\n') : body);
+            const { content, isHtml } = parseEmailBody(m.body || '');
+            // Strip primer línea si es el subject duplicado en outgoing
+            const stripped = isOut && content.split('\n')[0]?.startsWith('📧')
+              ? content.split('\n').slice(2).join('\n')
+              : content;
+            const bodyHtml = isHtml
+              ? `<iframe class="mail-message-iframe" sandbox="allow-same-origin allow-popups" srcdoc="${escapeHtml(stripped)}" onload="try{const d=this.contentDocument;if(d){d.body.style.margin='0';d.body.style.fontFamily='-apple-system,BlinkMacSystemFont,sans-serif';this.style.height=(d.documentElement.scrollHeight+20)+'px';}}catch(e){}"></iframe>`
+              : `<div class="mail-message-body-text">${escapeHtml(stripped).replace(/\n/g, '<br>')}</div>`;
             return `<div class="mail-message${isOut ? ' mail-message--out' : ''}">
               <div class="mail-message-meta">
                 <span class="mail-message-who">${isOut ? 'Tú' : escapeHtml(fromName)}</span>
-                <span class="mail-message-time">${mailFmtDate(m.created_at)}</span>
+                <span class="mail-message-time">${mailFmtDate(m.createdAt)}</span>
               </div>
-              <div class="mail-message-body">${escapeHtml(bodyClean).replace(/\n/g, '<br>')}</div>
+              <div class="mail-message-body">${bodyHtml}</div>
             </div>`;
           }).join('')}
         </div>

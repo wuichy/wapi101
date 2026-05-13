@@ -10953,7 +10953,9 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .mail-message--out { background: #f0fdf4; border-color: #bbf7d0; }
 .mail-message-meta { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 12px; color: var(--text-muted); }
 .mail-message-who { font-weight: 600; color: var(--text); }
-.mail-message-body { font-size: 14px; line-height: 1.65; color: var(--text); white-space: pre-wrap; }
+.mail-message-body { font-size: 14px; line-height: 1.65; color: var(--text); }
+.mail-message-body-text { white-space: pre-wrap; }
+.mail-message-iframe { width: 100%; min-height: 120px; border: 0; background: #fff; display: block; }
 .mail-reply-box { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .mail-reply-label { padding: 10px 14px; font-size: 12px; color: var(--text-muted); background: var(--surface); border-bottom: 1px solid var(--border); }
 .mail-reply-textarea { width: 100%; padding: 14px; border: none; outline: none; resize: vertical; font-size: 14px; font-family: inherit; color: var(--text); background: var(--bg); min-height: 100px; box-sizing: border-box; }

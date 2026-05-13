@@ -18407,7 +18407,10 @@ async function renderChatInfoPanel() {
       });
     });
     document.getElementById('ciEditContactBtn')?.addEventListener('click', () => {
-      if (contact && typeof openContactModal === 'function') openContactModal(contact.id);
+      if (contact && typeof openCustomerModal === 'function') {
+        toggleChatInfoPanel(false);
+        openCustomerModal(contact);
+      }
     });
   } catch (err) {
     body.innerHTML = `<p class="ci-empty" style="color:#ef4444">Error: ${escapeHtml(err.message)}</p>`;

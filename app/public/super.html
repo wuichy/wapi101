@@ -57,11 +57,10 @@
       display: flex; align-items: center; justify-content: center; gap: 8px;
     }
     .login-brand-mark {
-      width: 32px; height: 32px; background: var(--sa-sidebar);
-      color: #fff; border-radius: 6px;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-weight: 700;
+      width: 32px; height: 32px; display: inline-flex;
+      align-items: center; justify-content: center;
     }
+    .login-brand-mark img { width: 100%; height: 100%; display: block; }
     .login-box p {
       color: var(--sa-muted); font-size: 13px; margin: 0 0 20px;
       text-align: center;
@@ -113,10 +112,10 @@
     }
     .sa-brand-mark {
       width: 28px; height: 28px;
-      background: var(--sa-accent); color: #fff;
       display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 4px; font-weight: 700;
+      background: #fff; border-radius: 4px; padding: 2px;
     }
+    .sa-brand-mark img { width: 100%; height: 100%; display: block; }
     .sa-nav { padding: 6px 0; flex: 1; }
     .sa-nav-item {
       display: flex; align-items: center; gap: 8px;
@@ -601,7 +600,7 @@
 <div id="loginView" class="login-wrap" hidden>
   <div class="login-box">
     <div class="login-brand">
-      <span class="login-brand-mark">W</span>
+      <span class="login-brand-mark"><img src="/icons/wapi101-logo.svg" alt="Wapi101" /></span>
       <span>Super Admin</span>
     </div>
     <p>Acceso restringido. Solo administradores raíz de Wapi101.</p>
@@ -621,7 +620,7 @@
   <!-- Sidebar -->
   <aside class="sa-sidebar">
     <div class="sa-brand">
-      <span class="sa-brand-mark">W</span>
+      <span class="sa-brand-mark"><img src="/icons/wapi101-logo.svg" alt="Wapi101" /></span>
       <span class="sa-brand-text">Wapi101 Super</span>
     </div>
     <nav class="sa-nav" id="saNav">

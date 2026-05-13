@@ -471,6 +471,29 @@ const I18N_TRANSLATIONS = {
     'mail.from': 'Desde',
     'mail.discard': 'Descartar',
     'mail.select_email': 'Selecciona un correo',
+    'mail.loading_email': 'Cargando correo…',
+    'mail.loading': 'Cargando...',
+    'mail.no_emails': 'Sin correos',
+    'mail.no_results': 'Sin resultados',
+    'mail.no_subject_paren': '(Sin asunto)',
+    'mail.unknown_sender': 'Desconocido',
+    'mail.you': 'Tú',
+    'mail.reply_to': 'Responder a {name}',
+    'mail.reply_placeholder': 'Escribe tu respuesta...',
+    'mail.reply_send': 'Enviar respuesta',
+    'mail.all_accounts': 'Todas las cuentas',
+    'mail.sent_ok': 'Correo enviado',
+    'mail.send_error': 'Error al enviar: {msg}',
+    'mail.compose_send': 'Enviar',
+    'mail.compose_to_placeholder': 'destinatario@ejemplo.com',
+    'mail.compose_subject_placeholder': 'Asunto',
+    'mail.compose_body_placeholder': 'Escribe tu mensaje aquí...',
+    'mail.compose_validate': 'Escribe el destinatario y el mensaje',
+    'mail.error_prefix': 'Error: {msg}',
+    // Bot — template picker hint en modo bot-message
+    'bot.tpl.basic_hint': '💡 Solo se muestran plantillas <strong>básicas</strong>. El bot las enviará como TEXTO (solo funciona dentro de la ventana de 24h). Para enviar una plantilla aprobada por WhatsApp API (sirve fuera 24h), usa el step <strong>"Enviar plantilla"</strong>.',
+    // Errores de entrega Meta — mapeo desde error_reason del backend
+    'error.wa.131047': 'Pasaron más de 24h sin respuesta del lead — solo plantillas aprobadas pasan (mandaste texto plano).',
     // Buttons extra
     'btn.copy': 'Copiar',
     'btn.fields': 'Campos',
@@ -992,6 +1015,29 @@ const I18N_TRANSLATIONS = {
     'mail.from': 'From',
     'mail.discard': 'Discard',
     'mail.select_email': 'Select an email',
+    'mail.loading_email': 'Loading email…',
+    'mail.loading': 'Loading...',
+    'mail.no_emails': 'No emails',
+    'mail.no_results': 'No results',
+    'mail.no_subject_paren': '(No subject)',
+    'mail.unknown_sender': 'Unknown',
+    'mail.you': 'You',
+    'mail.reply_to': 'Reply to {name}',
+    'mail.reply_placeholder': 'Type your reply...',
+    'mail.reply_send': 'Send reply',
+    'mail.all_accounts': 'All accounts',
+    'mail.sent_ok': 'Email sent',
+    'mail.send_error': 'Send error: {msg}',
+    'mail.compose_send': 'Send',
+    'mail.compose_to_placeholder': 'recipient@example.com',
+    'mail.compose_subject_placeholder': 'Subject',
+    'mail.compose_body_placeholder': 'Type your message here...',
+    'mail.compose_validate': 'Enter the recipient and message',
+    'mail.error_prefix': 'Error: {msg}',
+    // Bot — template picker hint in bot-message mode
+    'bot.tpl.basic_hint': '💡 Only <strong>basic</strong> templates are shown. The bot will send them as PLAIN TEXT (only works inside the 24h window). To send a WhatsApp API approved template (works outside 24h), use the <strong>"Send template"</strong> step.',
+    // Meta delivery errors — map from backend error_reason
+    'error.wa.131047': "More than 24h since the lead's last reply — only approved templates work outside the window (you sent plain text).",
     // Buttons extra
     'btn.copy': 'Copy',
     'btn.fields': 'Fields',
@@ -2041,6 +2087,18 @@ function updateBotToggleUI() {
   btn.title = _chatBotPaused ? 'Reanudar bot para este contacto' : 'Parar bot para este contacto';
 }
 
+// Mapea un error_reason en español (lo que persistió el backend) al locale
+// actual cuando coincide con un mensaje conocido. Si no hay match, devuelve
+// el texto tal cual.
+const _ERROR_REASON_I18N_MAP = {
+  'Pasaron más de 24h sin respuesta del lead — solo plantillas aprobadas pasan (mandaste texto plano).': 'error.wa.131047',
+};
+function translateErrorReason(reason) {
+  if (!reason) return reason;
+  const key = _ERROR_REASON_I18N_MAP[reason];
+  return key ? t(key) : reason;
+}
+
 // Iconos para los 4 estados de un mensaje saliente (estilo WhatsApp).
 // sent      → ✓ gris claro
 // delivered → ✓✓ gris
@@ -2050,7 +2108,7 @@ function msgStatusHtml(m) {
   if (m.direction !== 'outgoing') return '';
   const status = m.status || 'sent';
   if (status === 'failed') {
-    const reason = m.errorReason || 'No se pudo entregar el mensaje';
+    const reason = translateErrorReason(m.errorReason) || 'No se pudo entregar el mensaje';
     return `<span class="rh-msg-status rh-failed" title="${escapeHtml(reason)}">⚠</span>`;
   }
   // ✓ y ✓✓ con SVG
@@ -2096,7 +2154,7 @@ function renderMessages() {
     if (m.direction !== 'outgoing' || m.status !== 'failed') continue;
     if (_lastSeenFailedIds.has(m.id)) continue;
     _lastSeenFailedIds.add(m.id);
-    const reason = m.errorReason || 'No se pudo entregar';
+    const reason = translateErrorReason(m.errorReason) || 'No se pudo entregar';
     const contactName = activeConvo?.name || 'el lead';
     toast(`⚠ Mensaje a ${contactName} no se entregó: ${reason}`, 'error');
   }
@@ -2111,7 +2169,7 @@ function renderMessages() {
       : `<span class="rh-message-meta">${fmtMsgTime(m.createdAt)}${statusIco ? ' ' + statusIco : ''}</span>`;
     const bubbleClass = (dir === 'outgoing' && m.status === 'failed') ? 'rh-bubble is-failed' : 'rh-bubble';
     const errLine = (dir === 'outgoing' && m.status === 'failed' && m.errorReason)
-      ? `<div class="rh-msg-error">⚠ ${escapeHtml(m.errorReason)}</div>` : '';
+      ? `<div class="rh-msg-error">⚠ ${escapeHtml(translateErrorReason(m.errorReason))}</div>` : '';
     // Render del media (si lo trae). Detecta tipo por extensión.
     let mediaHtml = '';
     if (m.mediaUrl) {
@@ -15493,7 +15551,7 @@ function _renderTplPickerList(query) {
 
   // Hint en modo bot-message para clarificar el comportamiento
   const botModeHint = ctx.mode === 'bot-message'
-    ? '<div class="rh-tpl-mode-hint">💡 Solo se muestran plantillas <strong>básicas</strong>. El bot las enviará como TEXTO (solo funciona dentro de la ventana de 24h). Para enviar una plantilla aprobada por WhatsApp API (sirve fuera 24h), usa el step <strong>"Enviar plantilla"</strong>.</div>'
+    ? `<div class="rh-tpl-mode-hint">${t('bot.tpl.basic_hint')}</div>`
     : '';
 
   let lastType = null;
@@ -18856,10 +18914,10 @@ function mailFilteredConvos() {
 }
 
 function parseEmailSubject(body) {
-  if (!body) return '(Sin asunto)';
+  if (!body) return t('mail.no_subject_paren');
   const m = body.match(/^📧\s*(.+)/);
   if (m) return m[1].split('\n')[0].trim();
-  return body.split('\n')[0].slice(0, 60) || '(Sin asunto)';
+  return body.split('\n')[0].slice(0, 60) || t('mail.no_subject_paren');
 }
 
 // Decodifica quoted-printable (=3D → =, =E2=80=99 → '…')
@@ -19037,7 +19095,7 @@ function renderMailList() {
   if (!el) return;
   const convos = mailFilteredConvos();
   if (!convos.length) {
-    el.innerHTML = `<div class="mail-empty-list">${MAIL_SEARCH ? 'Sin resultados' : 'Sin correos'}</div>`;
+    el.innerHTML = `<div class="mail-empty-list">${MAIL_SEARCH ? t('mail.no_results') : t('mail.no_emails')}</div>`;
     return;
   }
   el.innerHTML = convos.map(c => {
@@ -19045,7 +19103,7 @@ function renderMailList() {
     const isSelected = c.id === MAIL_SELECTED_ID;
     const subject = parseEmailSubject(c.lastMessage);
     const preview = parseEmailPreview(c.lastMessage);
-    const senderName = c.name || c.externalId || 'Desconocido';
+    const senderName = c.name || c.externalId || t('mail.unknown_sender');
     const avatar = senderName.slice(0, 2).toUpperCase();
     const avatarBg = _avatarColorFor(c.externalId || c.name);
     return `<div class="mail-item${isSelected ? ' mail-item--selected' : ''}${isUnread ? ' mail-item--unread' : ''}" data-id="${c.id}">
@@ -19081,7 +19139,7 @@ async function openMailConvo(convoId) {
   renderMailList();
   const detail = document.getElementById('mailDetailCol');
   if (!detail) return;
-  detail.innerHTML = '<div class="mail-loading">Cargando correo…</div>';
+  detail.innerHTML = `<div class="mail-loading">${t('mail.loading_email')}</div>`;
   try {
     const [convo, msgData] = await Promise.all([
       api('GET', `/api/conversations/${convoId}`),
@@ -19120,7 +19178,7 @@ async function openMailConvo(convoId) {
             const bodyHtml = isHtml
               ? `<iframe class="mail-message-iframe" loading="lazy" sandbox="allow-same-origin allow-popups" srcdoc="${escapeHtml(stripped)}" onload="try{const d=this.contentDocument;if(d){d.body.style.margin='0';d.body.style.fontFamily='-apple-system,BlinkMacSystemFont,sans-serif';d.body.style.fontSize='14px';this.style.height=(d.documentElement.scrollHeight+20)+'px';}}catch(e){}"></iframe>`
               : `<div class="mail-message-body-text">${escapeHtml(stripped).replace(/\n/g, '<br>')}</div>`;
-            const who = isOut ? 'Tú' : fromName;
+            const who = isOut ? t('mail.you') : fromName;
             const whoInitials = (who || '?').slice(0, 2).toUpperCase();
             const whoColor = isOut ? '#2563eb' : avatarColor;
             return `<div class="mail-message${isOut ? ' mail-message--out' : ''}">
@@ -19136,12 +19194,12 @@ async function openMailConvo(convoId) {
           }).join('')}
         </div>
         <div class="mail-reply-box">
-          <div class="mail-reply-label">Responder a ${escapeHtml(fromName)}</div>
-          <textarea class="mail-reply-textarea" id="mailReplyText" placeholder="Escribe tu respuesta..." rows="4"></textarea>
+          <div class="mail-reply-label">${escapeHtml(t('mail.reply_to').replace('{name}', fromName))}</div>
+          <textarea class="mail-reply-textarea" id="mailReplyText" placeholder="${escapeHtml(t('mail.reply_placeholder'))}" rows="4"></textarea>
           <div class="mail-reply-actions">
             <button class="btn btn--primary btn--sm" id="mailReplySendBtn" data-id="${convoId}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              Enviar respuesta
+              ${escapeHtml(t('mail.reply_send'))}
             </button>
           </div>
         </div>
@@ -19156,9 +19214,9 @@ async function openMailConvo(convoId) {
         await api('POST', `/api/conversations/${convoId}/messages`, { body: text });
         await openMailConvo(convoId);
         await loadMailView();
-        toast('Correo enviado', 'success');
+        toast(t('mail.sent_ok'), 'success');
       } catch(e) {
-        toast('Error al enviar: ' + e.message, 'error');
+        toast(t('mail.send_error').replace('{msg}', e.message), 'error');
         btn.disabled = false;
       }
     });
@@ -19171,7 +19229,7 @@ async function openMailConvo(convoId) {
       updateMailUnreadBadge();
     }
   } catch(e) {
-    detail.innerHTML = `<div class="mail-error">Error: ${escapeHtml(e.message)}</div>`;
+    detail.innerHTML = `<div class="mail-error">${escapeHtml(t('mail.error_prefix').replace('{msg}', e.message))}</div>`;
   }
 }
 
@@ -19183,7 +19241,7 @@ function renderMailAccounts() {
   const items = [
     `<div class="mail-account-item${allActive ? ' mail-account-item--active' : ''}" data-account="all" style="cursor:pointer">
       <div class="mail-account-dot" style="background:#64748b"></div>
-      <span>Todas las cuentas</span>
+      <span>${escapeHtml(t('mail.all_accounts'))}</span>
     </div>`,
     ...MAIL_EMAIL_INTEGRATIONS.map(i => {
       const color = providerColor[i._provider] || '#6366f1';
@@ -19250,19 +19308,19 @@ async function mailComposeSend() {
   const subject = document.getElementById('mailComposeSubject')?.value?.trim();
   const body    = document.getElementById('mailComposeBody')?.value?.trim();
   const integId = document.getElementById('mailComposeFrom')?.value;
-  if (!to || !body) { toast('Escribe el destinatario y el mensaje', 'error'); return; }
+  if (!to || !body) { toast(t('mail.compose_validate'), 'error'); return; }
   const btn = document.getElementById('mailComposeSendBtn');
   btn.disabled = true;
   try {
-    await api('POST', '/api/mail/compose', { to, subject: subject || '(Sin asunto)', body, integrationId: Number(integId) });
+    await api('POST', '/api/mail/compose', { to, subject: subject || t('mail.no_subject_paren'), body, integrationId: Number(integId) });
     document.getElementById('mailComposePanel').hidden = true;
     document.getElementById('mailComposeTo').value = '';
     document.getElementById('mailComposeSubject').value = '';
     document.getElementById('mailComposeBody').value = '';
     await loadMailView();
-    toast('Correo enviado', 'success');
+    toast(t('mail.sent_ok'), 'success');
   } catch(e) {
-    toast('Error: ' + e.message, 'error');
+    toast(t('mail.error_prefix').replace('{msg}', e.message), 'error');
   } finally {
     btn.disabled = false;
   }

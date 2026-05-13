@@ -3320,7 +3320,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
         <input type="text" id="mailSearchInput" data-i18n-placeholder="mail.search.placeholder" placeholder="Buscar correos..." class="mail-search-input">
       </div>
       <div class="mail-list-items" id="mailListItems">
-        <div class="mail-empty-list">Cargando...</div>
+        <div class="mail-empty-list" data-i18n="mail.loading">Cargando...</div>
       </div>
     </div>
     <div class="mail-detail-col" id="mailDetailCol">
@@ -3340,22 +3340,22 @@ Ana, , ana@hotmail.com, 5551112222</pre>
     <div class="mail-compose-fields">
       <div class="mail-compose-row">
         <label data-i18n="mail.to">Para</label>
-        <input type="email" id="mailComposeTo" placeholder="destinatario@ejemplo.com" class="mail-compose-input">
+        <input type="email" id="mailComposeTo" data-i18n-placeholder="mail.compose_to_placeholder" placeholder="destinatario@ejemplo.com" class="mail-compose-input">
       </div>
       <div class="mail-compose-row">
         <label data-i18n="mail.subject">Asunto</label>
-        <input type="text" id="mailComposeSubject" placeholder="Asunto" class="mail-compose-input">
+        <input type="text" id="mailComposeSubject" data-i18n-placeholder="mail.compose_subject_placeholder" placeholder="Asunto" class="mail-compose-input">
       </div>
       <div class="mail-compose-row mail-compose-row--account">
         <label data-i18n="mail.from">Desde</label>
         <select id="mailComposeFrom" class="mail-compose-input"></select>
       </div>
     </div>
-    <textarea id="mailComposeBody" placeholder="Escribe tu mensaje aquí..." class="mail-compose-body"></textarea>
+    <textarea id="mailComposeBody" data-i18n-placeholder="mail.compose_body_placeholder" placeholder="Escribe tu mensaje aquí..." class="mail-compose-body"></textarea>
     <div class="mail-compose-footer">
       <button class="btn btn--primary" id="mailComposeSendBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        Enviar
+        <span data-i18n="mail.compose_send">Enviar</span>
       </button>
       <button class="btn btn--ghost" id="mailComposeDiscard" data-i18n="mail.discard">Descartar</button>
     </div>

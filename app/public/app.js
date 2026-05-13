@@ -20351,9 +20351,12 @@ async function saveAbandonedCartConfig() {
   try {
     await api('PUT', '/api/apps/woo/abandoned-cart-config', body);
     toast('Configuración guardada', 'success');
-    // Re-bind para próximo save
-    document.getElementById('acSaveBtn').addEventListener('click', saveAbandonedCartConfig, { once: true });
-  } catch (e) { toast(e.message, 'error'); }
+    closeAbandonedCartModal();
+  } catch (e) {
+    toast(e.message, 'error');
+    // Re-bind para próximo save (solo si falló — si tuvo éxito el modal se cierra)
+    document.getElementById('acSaveBtn')?.addEventListener('click', saveAbandonedCartConfig, { once: true });
+  }
 }
 
 async function loadAbandonedCartHistory() {

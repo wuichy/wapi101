@@ -243,7 +243,29 @@ function findOrCreate(db, tenantId, { provider, externalId, integrationId, conta
     contact = db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(contactId, t);
   } else if (contactPhone) {
     const normPhone = customerService.normalizePhone(contactPhone);
+    // 1. Exact match con el teléfono ya normalizado
     contact = db.prepare('SELECT * FROM contacts WHERE phone = ? AND tenant_id = ?').get(normPhone, t);
+    // 2. Si no encontró: buscar normalizando también el lado de la DB (elimina espacios/guiones/paréntesis)
+    //    Cubre casos como "+52 16142514143" vs "+5216142514143"
+    if (!contact && normPhone) {
+      contact = db.prepare(
+        "SELECT * FROM contacts WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone,' ',''),'-',''),'(',''),')','') = ? AND tenant_id = ? LIMIT 1"
+      ).get(normPhone, t);
+    }
+    // 3. Si tampoco: buscar por últimos 10 dígitos (cubre +521 vs +52 en MX)
+    if (!contact && normPhone) {
+      const last10 = normPhone.replace(/\D/g, '').slice(-10);
+      if (last10.length === 10) {
+        contact = db.prepare(
+          "SELECT * FROM contacts WHERE SUBSTR(REPLACE(REPLACE(REPLACE(phone,'+',''),'-',''),' ',''), -10) = ? AND tenant_id = ? LIMIT 1"
+        ).get(last10, t);
+      }
+    }
+    // 4. Si encontró por fuzzy match, normalizar el teléfono guardado para que el próximo sea exact
+    if (contact && contact.phone !== normPhone) {
+      db.prepare('UPDATE contacts SET phone = ? WHERE id = ?').run(normPhone, contact.id);
+      contact = { ...contact, phone: normPhone };
+    }
     if (!contact) {
       const parts = (contactName || '').trim().split(/\s+/);
       const firstName = parts[0] || normPhone || 'Desconocido';

@@ -39,15 +39,20 @@ async function sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, ca
 }
 
 function _getWAClientCreds(db, convo) {
+  // Normalizar: findOrCreate devuelve rows con snake_case (integration_id),
+  // las rutas API devuelven camelCase (integrationId). Soportar ambos.
+  const tenantId = convo.tenantId ?? convo.tenant_id;
+  if (!convo.integrationId && convo.integration_id) convo.integrationId = convo.integration_id;
+
   // Auto-heal: si la convo no tiene integration_id, buscar integración WA activa
   // del mismo tenant y vincularla al vuelo (igual que getIntegrationCreds para Messenger).
-  if (!convo.integrationId && convo.id && convo.tenantId) {
+  if (!convo.integrationId && convo.id && tenantId) {
     const integration = db.prepare(
-      "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? AND status = 'connected' ORDER BY id DESC LIMIT 1"
-    ).get(convo.tenantId);
+      "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
+    ).get(tenantId);
     if (integration) {
       db.prepare('UPDATE conversations SET integration_id = ? WHERE id = ? AND tenant_id = ?')
-        .run(integration.id, convo.id, convo.tenantId);
+        .run(integration.id, convo.id, tenantId);
       convo.integrationId = integration.id;
       console.log(`[sender] wa auto-cured: convo ${convo.id} → integration ${integration.id}`);
     }
@@ -462,6 +467,11 @@ async function sendTikTokReply(db, convo, text) {
 }
 
 function getIntegrationCreds(db, integrationId, convo = null) {
+  // Normalizar snake_case → camelCase si viene de findOrCreate (row crudo de SQLite).
+  if (convo && !integrationId && convo.integration_id) integrationId = convo.integration_id;
+  if (convo && !convo.integrationId && convo.integration_id) convo.integrationId = convo.integration_id;
+  if (convo && !convo.tenantId && convo.tenant_id) convo.tenantId = convo.tenant_id;
+
   // Auto-heal: si la convo no tiene integration_id (huérfana), buscamos una
   // integración activa del mismo provider+tenant y la vinculamos al vuelo.
   // Solo se dispara cuando el código YA iba a fallar — sin convo o sin datos

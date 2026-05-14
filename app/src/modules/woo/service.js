@@ -484,8 +484,9 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
 
   // Buscar integración WA activa para que la convo NO quede con integration_id=NULL
   // (sin esto _getWAClientCreds cae en ENV y usa phone_number_id incorrecto).
+  // Buscar integración WA — preferir 'connected', caer en cualquier otra si no hay.
   const waIntegration = db.prepare(
-    "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? AND status = 'connected' ORDER BY id DESC LIMIT 1"
+    "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
   ).get(tenantId);
 
   try {

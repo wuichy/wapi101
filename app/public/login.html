@@ -3,6 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <script>
+    // Auto-redirect a /app si ya hay sesión iniciada (token en cookie o storage).
+    (function () {
+      try {
+        var t = localStorage.getItem('rh_token')
+             || sessionStorage.getItem('rh_token')
+             || (document.cookie.match(/(?:^|;\s*)rh_token=([^;]+)/) || [])[1];
+        if (t) { location.replace('/app'); }
+      } catch (e) {}
+    })();
+  </script>
   <title>Iniciar sesión · Wapi101 CRM</title>
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#2563eb" />

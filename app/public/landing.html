@@ -3,6 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <script>
+    // Auto-redirect a /app si ya hay sesión iniciada (token en cookie o storage).
+    // Corre antes de cualquier render → cero flash de landing.
+    (function () {
+      try {
+        var t = localStorage.getItem('rh_token')
+             || sessionStorage.getItem('rh_token')
+             || (document.cookie.match(/(?:^|;\s*)rh_token=([^;]+)/) || [])[1];
+        if (t) { location.replace('/app'); }
+      } catch (e) { /* SSR / privacy mode → mostrar landing */ }
+    })();
+  </script>
   <title id="pageTitle">Wapi101 · CRM para WhatsApp Business | Multicanal México y LATAM</title>
   <meta name="description" content="CRM para WhatsApp Business con bots visuales, pipelines kanban y plantillas aprobadas. Multicanal: WhatsApp, Messenger, Instagram y Telegram en una sola bandeja. Hecho en México para PyMEs LATAM. Prueba gratis 14 días sin tarjeta." />
   <meta name="keywords" content="crm whatsapp, crm whatsapp business, crm para pymes mexico, crm multicanal, automatizar whatsapp ventas, bot whatsapp, plantillas whatsapp aprobadas, pipelines ventas, crm latam" />

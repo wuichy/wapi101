@@ -408,25 +408,46 @@ module.exports = function createWebhooksRouter(db) {
 
   function friendlyDeliveryError(code, fallbackTitle, fallbackDetails) {
     const codeNum = Number(code);
+    const details = (fallbackDetails || '').toLowerCase();
+
+    // 131049: Meta no especifica la causa exacta, pero los detalles a veces dan pistas
+    if (codeNum === 131049) {
+      if (details.includes('re-engagement') || details.includes('experiment'))
+        return 'Meta bloqueó el reenganche — el lead no ha respondido recientemente (posible baja calidad del número)';
+      if (details.includes('block'))
+        return 'El lead bloqueó tu número de WhatsApp';
+      if (details.includes('spam'))
+        return 'Meta detectó el mensaje como spam — revisa el Quality Rating de tu WABA';
+      // Sin detalle específico: razón más probable
+      return 'Meta bloqueó la entrega — causa más probable: lead bloqueó el número o baja calidad del WABA';
+    }
+
+    // 131026: número sin WA o bloqueado — los detalles a veces especifican
+    if (codeNum === 131026) {
+      if (details.includes('block'))
+        return 'El lead bloqueó tu número de WhatsApp';
+      if (details.includes('not exist') || details.includes('no account'))
+        return 'El número no tiene WhatsApp activo';
+      return 'Número sin WhatsApp activo — o el lead bloqueó tu número';
+    }
+
     const map = {
-      131026: 'Número sin WhatsApp activo o el lead te bloqueó',
-      131047: 'Pasaron más de 24h sin respuesta del lead — solo plantillas aprobadas pasan (mandaste texto plano).',
-      131049: 'Meta bloqueó la entrega (posible spam o el lead bloqueó el número)',
-      131051: 'Tipo de mensaje no soportado por el destinatario',
-      131052: 'El lead bloqueó tus mensajes',
-      131053: 'No se pudo enviar el archivo (formato no soportado por Meta)',
-      131056: 'Pareja de números bloqueada (rate limit)',
-      131057: 'Cuenta del lead pausada o suspendida',
-      132000: 'Plantilla expiró o ya no está aprobada',
+      131047: 'Ventana de 24h cerrada — el lead no ha respondido en más de 24h, solo puedes enviar plantillas aprobadas',
+      131051: 'Tipo de mensaje no soportado por el dispositivo del lead',
+      131052: 'El lead bloqueó tu número de WhatsApp',
+      131053: 'Archivo rechazado por Meta (formato no soportado)',
+      131056: 'Demasiados mensajes al mismo número — espera antes de reintentar',
+      131057: 'Cuenta de WhatsApp del lead pausada o suspendida',
+      132000: 'La plantilla expiró o ya no está aprobada por Meta',
       132001: 'Categoría de plantilla incorrecta',
-      132005: 'Variable de plantilla con texto demasiado largo',
-      132007: 'Idioma de plantilla no soportado',
-      133000: 'El lead no recibe mensajes (cuenta suspendida)',
-      133010: 'Número del lead no es válido',
-      133015: 'Número no registrado en WhatsApp',
+      132005: 'Una variable de la plantilla tiene texto demasiado largo',
+      132007: 'Idioma de la plantilla no soportado',
+      133000: 'El lead no puede recibir mensajes (cuenta suspendida en Meta)',
+      133010: 'Número de teléfono del lead inválido',
+      133015: 'El número no está registrado en WhatsApp',
       470:    'Ventana de 24h cerrada — solo plantillas aprobadas',
     };
-    return map[codeNum] || fallbackTitle || fallbackDetails || `Error ${code || 'desconocido'}`;
+    return map[codeNum] || fallbackTitle || fallbackDetails || `Error desconocido (código ${code || '?'})`;
   }
 
   function processWhatsAppStatuses(value, integration) {

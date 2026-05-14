@@ -2098,10 +2098,10 @@ const _ERROR_REASON_I18N_MAP = {
 };
 // Textos en inglés que Meta devuelve como fallback cuando no hay código mapeado
 const _ERROR_REASON_EN_MAP = {
-  'This message was not delivered to maintain healthy ecosystem engagement.': 'Meta bloqueó la entrega (posible spam o el lead bloqueó el número)',
-  'User\'s number is part of an experiment':                                  'Número del lead en experimento de Meta — reintenta más tarde',
-  'Message failed to send because more than 24 hours have passed since the customer last replied to this number': 'Ventana de 24h cerrada — solo plantillas aprobadas',
-  'Re-engagement message':                                                    'Meta bloqueó el reenganche (lead sin actividad reciente)',
+  'This message was not delivered to maintain healthy ecosystem engagement.': 'Meta bloqueó la entrega — causa más probable: lead bloqueó el número o baja calidad del WABA',
+  'User\'s number is part of an experiment':                                  'Meta bloqueó el reenganche — el lead no ha respondido recientemente (posible baja calidad del número)',
+  'Re-engagement message':                                                    'Meta bloqueó el reenganche — el lead no ha respondido recientemente (posible baja calidad del número)',
+  'Message failed to send because more than 24 hours have passed since the customer last replied to this number': 'Ventana de 24h cerrada — el lead no ha respondido en más de 24h, solo puedes enviar plantillas aprobadas',
 };
 function translateErrorReason(reason) {
   if (!reason) return reason;

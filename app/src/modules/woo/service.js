@@ -472,8 +472,15 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
   let convo = null;
   let sendError = null;
   let messageSent = 0;
+  const externalId = phone.replace(/\D/g, ''); // sin "+" para WA
+
+  // Detectar si la conversación ya existía: si no, y el envío falla, la borramos
+  // para no dejar chats fantasma en el inbox.
+  const preExistedConvo = db.prepare(
+    'SELECT id FROM conversations WHERE provider = ? AND external_id = ? AND tenant_id = ?'
+  ).get('whatsapp', externalId, tenantId);
+
   try {
-    const externalId = phone.replace(/\D/g, ''); // sin "+" para WA
     convo = convoSvc.findOrCreate(db, tenantId, {
       provider:     'whatsapp',
       externalId,
@@ -502,6 +509,15 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
   } catch (err) {
     sendError = err.message || String(err);
     console.error('[woo abandoned cart] error enviando plantilla:', sendError);
+
+    if (convo && !preExistedConvo && messageSent === 0) {
+      try {
+        db.prepare('DELETE FROM conversations WHERE id = ?').run(convo.id);
+        convo = null;
+      } catch (delErr) {
+        console.error('[woo abandoned cart] no se pudo borrar convo huérfana:', delErr.message);
+      }
+    }
   }
 
   // 8) Guardar histórico

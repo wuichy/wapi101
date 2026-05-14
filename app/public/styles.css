@@ -2666,37 +2666,33 @@ body.nav-collapsed .nav-notif-panel {
 .exp-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  background: #fafbfc;
-  border: 1px solid var(--border);
+  gap: 4px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 100%;
 }
 .exp-chip-dot {
-  width: 7px; height: 7px;
+  width: 6px; height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow:
-    inset 0 0 0 1px rgba(0,0,0,0.35),
-    0 0 0 1.5px rgba(255,255,255,0.85);
+  margin-right: 2px;
 }
-.exp-chip-pipeline { font-weight: 500; }
-.exp-chip-arrow { color: var(--text-muted); font-size: 10px; }
+/* Tinted pills — texto siempre oscuro para legibilidad con cualquier color */
+.exp-chip-pipeline,
 .exp-chip-stage {
-  font-weight: 600;
-  padding: 1px 7px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
   border-radius: 99px;
-  font-size: 10px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.4;
 }
+.exp-chip-arrow { color: var(--text-muted); font-size: 10px; }
 .exp-chip-empty { color: var(--text-muted); font-size: 12px; }
-.exp-chip--clickable { cursor: pointer; transition: background 0.15s, transform 0.1s; }
-.exp-chip--clickable:hover { background: #eef2f7; transform: translateY(-1px); }
+.exp-chip--clickable { cursor: pointer; transition: opacity 0.12s, transform 0.1s; }
+.exp-chip--clickable:hover { opacity: 0.85; transform: translateY(-1px); }
 .exp-chip--clickable:active { transform: translateY(0); }
 
 /* ═══════ Global Loader (barra arriba, aparece durante requests) ═══════ */
@@ -9496,27 +9492,28 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   line-height: 1.5;
 }
 
-/* Card de bot — display de pipeline + etapa cuando trigger es pipeline_stage */
+/* Card de bot — display de pipeline + etapa cuando trigger es pipeline_stage.
+   Tinted style: fondo color ~14%, borde ~33%, texto siempre oscuro. */
 .bot-row-pipeline-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 12px;
 }
-.bot-row-pipeline-name {
-  color: #475569;
-  font-weight: 500;
-}
-.bot-row-pipeline-arrow { color: #94a3b8; margin: 0 2px; }
+.bot-row-pipeline-name,
 .bot-row-stage-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 11px;
   font-weight: 500;
-  border: 1px solid;
+  border: 1px solid transparent;
+  color: var(--text, #0f172a);
+  line-height: 1.4;
 }
+.bot-row-pipeline-arrow { color: #94a3b8; margin: 0 2px; }
 .bot-row-stage-dot {
   width: 6px;
   height: 6px;

@@ -2263,11 +2263,14 @@ function renderExpedientChips(expedients) {
     const sColor = stageColor(e);
     const pColor = e.pipelineColor || '#64748b';
     return `
-    <span class="exp-chip exp-chip--clickable" data-exp-id="${e.id}" title="${escapeHtml(e.name || "")} · $${e.value || 0} — clic para abrir" style="border-left:3px solid ${escapeHtml(pColor)};">
-      <span class="exp-chip-dot" style="background:${escapeHtml(sColor)}"></span>
-      <span class="exp-chip-pipeline" style="color:${escapeHtml(pColor)}">${escapeHtml(e.pipelineName)}</span>
+    <span class="exp-chip exp-chip--clickable" data-exp-id="${e.id}" title="${escapeHtml(e.name || "")} · $${e.value || 0} — clic para abrir">
+      <span class="exp-chip-pipeline" style="background:${escapeHtml(pColor)}24;border-color:${escapeHtml(pColor)}55">
+        <span class="exp-chip-dot" style="background:${escapeHtml(pColor)}"></span>${escapeHtml(e.pipelineName)}
+      </span>
       <span class="exp-chip-arrow">→</span>
-      <span class="exp-chip-stage" style="background:${escapeHtml(sColor)}1a;color:${escapeHtml(sColor)};border:1px solid ${escapeHtml(sColor)}66">${escapeHtml(e.stageName)}</span>
+      <span class="exp-chip-stage" style="background:${escapeHtml(sColor)}24;border-color:${escapeHtml(sColor)}55">
+        <span class="exp-chip-dot" style="background:${escapeHtml(sColor)}"></span>${escapeHtml(e.stageName)}
+      </span>
     </span>
   `;
   }).join("");
@@ -7324,7 +7327,7 @@ const BOT_TRIGGER_REGISTRY = {
     summaryHtml(bot) {
       const info = _resolveStage(bot.trigger_value);
       if (info) {
-        return `: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name">${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}1a;color:${escHtml(info.color)};border-color:${escHtml(info.color)}66"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
+        return `: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name" style="background:${escHtml(info.pipelineColor)}24;border-color:${escHtml(info.pipelineColor)}55"><span class="bot-row-stage-dot" style="background:${escHtml(info.pipelineColor)}"></span>${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}24;border-color:${escHtml(info.color)}55"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
       }
       return `: stage #${escHtml(bot.trigger_value)} (no encontrada)`;
     },
@@ -7343,7 +7346,7 @@ const BOT_TRIGGER_REGISTRY = {
     summaryHtml(bot) {
       const info = _resolveStage(bot.trigger_value);
       if (info) {
-        return `: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name">${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}1a;color:${escHtml(info.color)};border-color:${escHtml(info.color)}66"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
+        return `: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name" style="background:${escHtml(info.pipelineColor)}24;border-color:${escHtml(info.pipelineColor)}55"><span class="bot-row-stage-dot" style="background:${escHtml(info.pipelineColor)}"></span>${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}24;border-color:${escHtml(info.color)}55"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
       }
       return `: stage #${escHtml(bot.trigger_value)} (no encontrada)`;
     },
@@ -7608,7 +7611,12 @@ function _resolveStage(stageId) {
   for (const p of PIPELINES) {
     if (!Array.isArray(p.stages)) continue;
     const stage = p.stages.find(s => Number(s.id) === sid);
-    if (stage) return { pipelineName: p.name, stageName: stage.name, color: stage.color || '#94a3b8' };
+    if (stage) return {
+      pipelineName: p.name,
+      stageName: stage.name,
+      color: stage.color || '#94a3b8',
+      pipelineColor: p.color || '#94a3b8',
+    };
   }
   return null;
 }

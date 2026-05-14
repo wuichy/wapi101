@@ -5769,6 +5769,13 @@ async function loadExpDetailConvos() {
   renderExpDetailConvoTabs();
   if (EXP_DETAIL_CONVOS.length) {
     await selectExpDetailConvo(EXP_DETAIL_CONVOS[0].id);
+  } else {
+    // Limpiar mensajes del lead anterior para no mostrar chat equivocado
+    EXP_DETAIL_MSGS     = [];
+    EXP_DETAIL_ACTIVITY = [];
+    EXP_DETAIL_CONVO_ID = null;
+    const msgRoot = document.getElementById('expDetailMessages');
+    if (msgRoot) msgRoot.innerHTML = '';
   }
 }
 

@@ -295,11 +295,67 @@ function markAuthFailed(db, integrationId, errorMessage) {
     `).run(String(errorMessage || 'Auth error').slice(0, 500), integrationId);
     if (r.changes > 0) {
       console.warn(`[integrations] id=${integrationId} marcada disconnected por auth error: ${errorMessage}`);
+      _notifyDisconnected(db, integrationId, errorMessage);
     }
     return r.changes > 0;
   } catch (e) {
     console.error('[integrations.markAuthFailed]', e.message);
     return false;
+  }
+}
+
+// Crea notificación in-app (campana) + push para los admins del tenant.
+// Se llama UNA sola vez por integración: la siguiente llamada a markAuthFailed
+// no entra al if (status ya es 'disconnected') y por tanto no spamea.
+function _notifyDisconnected(db, integrationId, errorMessage) {
+  try {
+    const integ = db.prepare(
+      'SELECT tenant_id, provider, display_name FROM integrations WHERE id = ?'
+    ).get(integrationId);
+    if (!integ) return;
+
+    const providerLabel = {
+      whatsapp:       'WhatsApp Cloud',
+      'whatsapp-lite':'WhatsApp Lite',
+      messenger:      'Messenger',
+      instagram:      'Instagram',
+      tiktok:         'TikTok',
+      telegram:       'Telegram',
+      gmail:          'Gmail',
+      outlook:        'Outlook',
+      icloud_mail:    'iCloud Mail',
+    }[integ.provider] || integ.provider;
+
+    const title = `⚠️ ${providerLabel} desconectado`;
+    const body  = `${integ.display_name || providerLabel} requiere reconexión: ${String(errorMessage || '').slice(0, 140)}`;
+    const link  = 'ajustes';
+
+    // In-app: notificar a todos los admins activos del tenant
+    const notifSvc = require('../notifications/service');
+    const admins = db.prepare(
+      `SELECT id FROM advisors WHERE tenant_id = ? AND role = 'admin' AND active = 1`
+    ).all(integ.tenant_id);
+    for (const a of admins) {
+      try {
+        notifSvc.createNotification(db, {
+          tenantId:  integ.tenant_id,
+          advisorId: a.id,
+          type:      'integration_disconnected',
+          title, body, link,
+        });
+      } catch (_) {}
+    }
+
+    // Push (best-effort) con cooldown 5min para no machacar si pasa otra vez
+    try {
+      notifSvc.sendToAll(db, integ.tenant_id, { title, body, url: '/' }, {
+        kind: 'integration_disconnected',
+        cooldownKey: String(integrationId),
+        cooldownMs: 5 * 60 * 1000,
+      });
+    } catch (_) {}
+  } catch (e) {
+    console.error('[integrations._notifyDisconnected]', e.message);
   }
 }
 

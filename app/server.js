@@ -707,6 +707,7 @@ mountSafe('/api/advisors',           require('./src/modules/advisors/routes'));
 mountSafe('/api/trash',              require('./src/modules/trash/routes'));
 mountSafe('/api/reports',            require('./src/modules/reports/routes'));
 mountSafe('/api/push',               require('./src/modules/notifications/routes'));
+mountSafe('/api/notifications',      require('./src/modules/notifications/routes'));
 mountSafe('/api/billing',            require('./src/modules/billing/routes'));
 mountSafe('/api/tasks',              require('./src/modules/tasks/routes'));
 mountSafe('/api/ai-knowledge',       require('./src/modules/ai-knowledge/routes'));

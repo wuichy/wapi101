@@ -420,7 +420,9 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
   const lastName  = (cart.surname || '').trim() || fullName.split(/\s+/).slice(1).join(' ') || null;
   const email     = (cart.email || '').trim().toLowerCase() || null;
 
-  let contact = db.prepare('SELECT * FROM contacts WHERE phone = ? AND tenant_id = ?').get(phone, tenantId);
+  // Usar last-10-digits (igual que findContact / processOrderProcessing) para no
+  // crear duplicados cuando el formato varía (+52... vs +521...).
+  let contact = findContact(db, tenantId, phone, email);
   let isNewContact = false;
   if (!contact) {
     const r = db.prepare(`
@@ -480,13 +482,20 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
     'SELECT id FROM conversations WHERE provider = ? AND external_id = ? AND tenant_id = ?'
   ).get('whatsapp', externalId, tenantId);
 
+  // Buscar integración WA activa para que la convo NO quede con integration_id=NULL
+  // (sin esto _getWAClientCreds cae en ENV y usa phone_number_id incorrecto).
+  const waIntegration = db.prepare(
+    "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? AND status = 'connected' ORDER BY id DESC LIMIT 1"
+  ).get(tenantId);
+
   try {
     convo = convoSvc.findOrCreate(db, tenantId, {
-      provider:     'whatsapp',
+      provider:      'whatsapp',
       externalId,
-      contactPhone: phone,
-      contactName:  fullName,
-      contactId:    contact.id,
+      contactPhone:  phone,
+      contactName:   fullName,
+      contactId:     contact.id,
+      integrationId: waIntegration?.id || null,
     });
 
     // 7) Enviar plantilla — los placeholders se rellenan desde cart_url + nombre

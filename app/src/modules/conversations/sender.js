@@ -39,6 +39,20 @@ async function sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, ca
 }
 
 function _getWAClientCreds(db, convo) {
+  // Auto-heal: si la convo no tiene integration_id, buscar integración WA activa
+  // del mismo tenant y vincularla al vuelo (igual que getIntegrationCreds para Messenger).
+  if (!convo.integrationId && convo.id && convo.tenantId) {
+    const integration = db.prepare(
+      "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? AND status = 'connected' ORDER BY id DESC LIMIT 1"
+    ).get(convo.tenantId);
+    if (integration) {
+      db.prepare('UPDATE conversations SET integration_id = ? WHERE id = ? AND tenant_id = ?')
+        .run(integration.id, convo.id, convo.tenantId);
+      convo.integrationId = integration.id;
+      console.log(`[sender] wa auto-cured: convo ${convo.id} → integration ${integration.id}`);
+    }
+  }
+
   let phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   let accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
   if (convo.integrationId) {

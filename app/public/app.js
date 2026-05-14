@@ -15503,7 +15503,7 @@ function openTplPickerForBotMessage(triggerEl, textarea) {
   return openTplPicker(triggerEl, textarea, 'whatsapp', null, 'bot-message');
 }
 
-async function openTplPicker(triggerEl, textarea, provider, lastIncomingAt, mode = 'chat') {
+async function openTplPicker(triggerEl, textarea, provider, lastIncomingAt, mode = 'chat', convoId = null) {
   const picker = document.getElementById('rhTplPicker');
   if (!picker) return;
 
@@ -15514,7 +15514,7 @@ async function openTplPicker(triggerEl, textarea, provider, lastIncomingAt, mode
     return;
   }
 
-  _tplPickerCtx = { textarea, provider, lastIncomingAt, mode };
+  _tplPickerCtx = { textarea, provider, lastIncomingAt, mode, convoId };
 
   // Load templates if not yet loaded
   if (!_tplItems.length) {
@@ -15624,8 +15624,9 @@ function _renderTplPickerList(query) {
 
       if (tpl.type === 'wa_api') {
         // wa_api → abrir modal "Enviar plantilla" (auto-llena del contacto, pide manuales)
+        // Usar convoId del contexto (lead detail) si está disponible, si no el del chat sidebar.
         document.getElementById('rhTplPicker').hidden = true;
-        openSendTemplateModal(tpl, ACTIVE_CONVO_ID);
+        openSendTemplateModal(tpl, _tplPickerCtx?.convoId ?? ACTIVE_CONVO_ID);
         return;
       }
 
@@ -15708,7 +15709,7 @@ function setupTplPicker() {
     const convo = EXP_DETAIL_CONVOS.find(c => c.id === EXP_DETAIL_CONVO_ID);
     const ta = document.getElementById('expDetailReplyText');
     if (!ta) return;
-    openTplPicker(e.currentTarget, ta, convo?.provider, convo?.lastIncomingAt);
+    openTplPicker(e.currentTarget, ta, convo?.provider, convo?.lastIncomingAt, 'chat', EXP_DETAIL_CONVO_ID);
   });
 
   async function _aiSuggest(convoId, textarea) {
@@ -16609,7 +16610,8 @@ async function openSendTemplateModal(tpl, convoId) {
   if (!modal || !meta || !vars) return;
   if (err) { err.hidden = true; err.textContent = ''; }
 
-  const convo = CONVERSATIONS.find(c => c.id === convoId);
+  const convo = CONVERSATIONS.find(c => c.id === convoId)
+             || EXP_DETAIL_CONVOS.find(c => c.id === convoId);
 
   // Cargar el contacto REAL (con first_name/last_name/email separados) para
   // poder llenar correctamente los placeholders mapeados.

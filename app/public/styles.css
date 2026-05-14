@@ -10294,6 +10294,7 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .ci-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .ci-actions .btn { font-size: 12px; padding: 6px 12px; }
 .ci-empty { color: #94a3b8; font-style: italic; font-size: 13px; }
+.ci-muted { color: #94a3b8; font-size: 13px; }
 
 /* ─── Mobile (≤720px) ─── */
 @media (max-width: 720px) {

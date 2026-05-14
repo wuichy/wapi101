@@ -6033,12 +6033,17 @@ function renderExpDetailMessages() {
     const dir = item.direction === 'incoming' ? 'incoming' : 'outgoing';
     const isLastIncoming = item === lastIncomingItem;
     const footExtra = isLastIncoming && isWhatsappExp ? wa24Html('whatsapp', item.createdAt) : '';
+    const statusIco = msgStatusHtml(item);
     const footContent = dir === 'incoming'
       ? `Contacto · <span class="rh-message-meta">${fmtMsgTime(item.createdAt)}</span>${footExtra}`
-      : `<span class="rh-message-meta">${fmtMsgTime(item.createdAt)}${item.status === 'read' ? ' ' + checkSvg : ''}</span>`;
+      : `<span class="rh-message-meta">${fmtMsgTime(item.createdAt)}${statusIco ? ' ' + statusIco : ''}</span>`;
+    const bubbleClass = (dir === 'outgoing' && item.status === 'failed') ? 'rh-bubble is-failed' : 'rh-bubble';
+    const errLine = (dir === 'outgoing' && item.status === 'failed' && item.errorReason)
+      ? `<div class="rh-msg-error">⚠ ${escapeHtml(translateErrorReason(item.errorReason))}</div>` : '';
     return `
       <article class="rh-message rh-${dir}">
-        <div class="rh-bubble">${highlightText(item.body, q).replace(/\n/g, '<br/>')}</div>
+        <div class="${bubbleClass}">${highlightText(item.body, q).replace(/\n/g, '<br/>')}</div>
+        ${errLine}
         <div class="rh-message-foot${dir === 'outgoing' ? ' rh-foot-out' : ''}">${footContent}</div>
       </article>`;
   }).join('');

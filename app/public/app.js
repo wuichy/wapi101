@@ -19175,8 +19175,16 @@ async function openMailConvo(convoId) {
             const stripped = isOut && content.split('\n')[0]?.startsWith('📧')
               ? content.split('\n').slice(2).join('\n')
               : content;
+            // Inyectamos <meta name="referrer" content="no-referrer"> para que
+            // los servidores de imágenes (Mailchimp, SendGrid, etc.) no bloqueen
+            // los <img> por referrer "about:srcdoc". Si el HTML ya tiene <head>,
+            // injectamos ahí; si no, lo envolvemos.
+            const referrerMeta = '<meta name="referrer" content="no-referrer"><base target="_blank">';
+            const htmlWithReferrer = /<head[^>]*>/i.test(stripped)
+              ? stripped.replace(/<head[^>]*>/i, m => m + referrerMeta)
+              : `<!DOCTYPE html><html><head><meta charset="utf-8">${referrerMeta}</head><body>${stripped}</body></html>`;
             const bodyHtml = isHtml
-              ? `<iframe class="mail-message-iframe" loading="lazy" sandbox="allow-same-origin allow-popups" srcdoc="${escapeHtml(stripped)}" onload="try{const d=this.contentDocument;if(d){d.body.style.margin='0';d.body.style.fontFamily='-apple-system,BlinkMacSystemFont,sans-serif';d.body.style.fontSize='14px';this.style.height=(d.documentElement.scrollHeight+20)+'px';}}catch(e){}"></iframe>`
+              ? `<iframe class="mail-message-iframe" loading="lazy" referrerpolicy="no-referrer" sandbox="allow-same-origin allow-popups" srcdoc="${escapeHtml(htmlWithReferrer)}" onload="try{const d=this.contentDocument;if(d){d.body.style.margin='0';d.body.style.fontFamily='-apple-system,BlinkMacSystemFont,sans-serif';d.body.style.fontSize='14px';this.style.height=(d.documentElement.scrollHeight+20)+'px';}}catch(e){}"></iframe>`
               : `<div class="mail-message-body-text">${escapeHtml(stripped).replace(/\n/g, '<br>')}</div>`;
             const who = isOut ? t('mail.you') : fromName;
             const whoInitials = (who || '?').slice(0, 2).toUpperCase();

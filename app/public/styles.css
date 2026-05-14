@@ -2021,16 +2021,21 @@ body.nav-collapsed .nav-notif-panel {
   font-size: 12px;
   white-space: nowrap;
 }
-.exp-pipeline-name { font-weight: 600; padding: 2px 8px 2px 6px; }
 .exp-pipeline-arrow { color: var(--text-muted); font-size: 10px; }
+/* Tinted pill style — fondo color a ~14%, borde a ~33%, texto siempre oscuro
+   para legibilidad sin importar qué color escoja el usuario. */
+.exp-pipeline-pill,
 .exp-stage-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 9px;
+  gap: 6px;
+  padding: 3px 10px;
   border-radius: 99px;
+  border: 1px solid transparent;
   font-size: 11px;
   font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
 }
 .exp-stage-dot {
   width: 7px; height: 7px;
@@ -3957,34 +3962,34 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .rh-pipeline-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: #f1f5f9;
-  border: 1px solid transparent;
-  border-radius: 99px;
-  padding: 3px 6px 3px 10px;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
   font-size: 11px;
   color: var(--rh-text);
   cursor: pointer;
-  transition: background .12s, border-color .12s, box-shadow .12s;
   font-family: inherit;
 }
-.rh-pipeline-pill:hover {
-  background: #fff;
-  border-color: var(--accent, #2563eb);
-  box-shadow: 0 1px 3px rgba(15,23,42,.08);
+.rh-pipeline-pill:hover .rh-pipeline-pill-name,
+.rh-pipeline-pill:hover .rh-pipeline-pill-stage {
+  filter: brightness(0.96);
 }
-.rh-pipeline-pill-name { font-weight: 500; color: var(--rh-text); }
-.rh-pipeline-pill-arrow { color: var(--rh-muted); font-size: 10px; margin: 0 1px; }
+/* Tinted style — fondo color a ~14%, borde a ~33%, texto siempre oscuro */
+.rh-pipeline-pill-name,
 .rh-pipeline-pill-stage {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
+  gap: 5px;
+  padding: 2px 9px;
   border-radius: 99px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   border: 1px solid transparent;
+  color: var(--rh-text);
+  line-height: 1.4;
 }
+.rh-pipeline-pill-arrow { color: var(--rh-muted); font-size: 10px; margin: 0 1px; }
 .rh-pipeline-pill-dot {
   width: 5px;
   height: 5px;

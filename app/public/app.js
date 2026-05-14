@@ -1850,9 +1850,12 @@ async function openConversation(convoId) {
 
       const pipelinePill = exp ? `
         <button type="button" class="rh-pipeline-pill" data-open-exp="${exp.id}" title="Ver lead">
-          <span class="rh-pipeline-pill-name">${escapeHtml(exp.pipelineName || 'Pipeline')}</span>
+          <span class="rh-pipeline-pill-name" style="background:${exp.pipelineColor || '#94a3b8'}24;border-color:${exp.pipelineColor || '#94a3b8'}55">
+            <span class="rh-pipeline-pill-dot" style="background:${exp.pipelineColor || '#94a3b8'}"></span>
+            ${escapeHtml(exp.pipelineName || 'Pipeline')}
+          </span>
           <span class="rh-pipeline-pill-arrow">→</span>
-          <span class="rh-pipeline-pill-stage" style="background:${exp.stageColor || '#94a3b8'}1a;color:${exp.stageColor || '#475569'};border-color:${exp.stageColor || '#cbd5e1'}66">
+          <span class="rh-pipeline-pill-stage" style="background:${exp.stageColor || '#94a3b8'}24;border-color:${exp.stageColor || '#94a3b8'}55">
             <span class="rh-pipeline-pill-dot" style="background:${exp.stageColor || '#94a3b8'}"></span>
             ${escapeHtml(exp.stageName || 'Etapa')}
           </span>
@@ -5072,9 +5075,12 @@ function renderExpedientRows(items) {
         <td>${emailHtml}</td>
         <td>
           <span class="exp-pipeline-badge-wrap">
-            <span class="exp-pipeline-name" style="color:${pColor};border-left:3px solid ${pColor}">${escapeHtml(exp.pipelineName || '')}</span>
+            <span class="exp-pipeline-pill" style="background:${pColor}24;border-color:${pColor}55">
+              <span class="exp-stage-dot" style="background:${pColor}"></span>
+              ${escapeHtml(exp.pipelineName || '')}
+            </span>
             <span class="exp-pipeline-arrow">→</span>
-            <span class="exp-stage-pill" style="background:${sColor}1a;color:${sColor};border:1px solid ${sColor}66">
+            <span class="exp-stage-pill" style="background:${sColor}24;border-color:${sColor}55">
               <span class="exp-stage-dot" style="background:${sColor}"></span>
               ${escapeHtml(exp.stageName || '')}
             </span>

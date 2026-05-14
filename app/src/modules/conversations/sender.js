@@ -3,6 +3,21 @@ const { decryptJson } = require('../../security/crypto');
 const { friendlyMetaError, isMetaAuthError } = require('../integrations/meta-errors');
 const integrationsSvc = require('../integrations/service');
 
+// Normaliza un objeto convo que puede venir como row crudo de SQLite (snake_case)
+// o como objeto camelCase del API. Devuelve siempre camelCase sin mutar el original.
+function _normalizeConvo(convo) {
+  if (!convo) return convo;
+  return {
+    ...convo,
+    id:            convo.id,
+    integrationId: convo.integrationId ?? convo.integration_id ?? null,
+    externalId:    convo.externalId    ?? convo.external_id    ?? null,
+    contactId:     convo.contactId     ?? convo.contact_id     ?? null,
+    tenantId:      convo.tenantId      ?? convo.tenant_id      ?? null,
+    provider:      convo.provider,
+  };
+}
+
 // Si el error es de auth (token caducado/inválido), marca la integración como
 // disconnected para que el frontend muestre el aviso de reconectar.
 // `errOrData` puede ser un Error (string en .message) o el objeto data.error de Meta.
@@ -13,6 +28,7 @@ function _maybeMarkAuthFailed(db, integrationId, errOrData, friendly) {
 }
 
 async function sendMessage(db, convo, text) {
+  convo = _normalizeConvo(convo);
   if (convo.provider === 'whatsapp')        return sendWhatsApp(db, convo, text);
   if (convo.provider === 'whatsapp-lite')   return sendWhatsAppLite(db, convo, text);
   if (convo.provider === 'messenger')       return sendMessenger(db, convo, text);
@@ -73,6 +89,7 @@ function _getWAClientCreds(db, convo) {
 }
 
 async function sendWhatsApp(db, convo, text) {
+  convo = _normalizeConvo(convo);
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
   const res = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
@@ -99,6 +116,7 @@ async function sendWhatsApp(db, convo, text) {
 //   1) POST /<phone_number_id>/media (multipart) → media_id
 //   2) POST /<phone_number_id>/messages con { type, <type>: { id, caption?, filename? } }
 async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, caption, mediaType }) {
+  convo = _normalizeConvo(convo);
   if (!buffer || !buffer.length) throw new Error('Archivo vacío');
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
@@ -173,6 +191,7 @@ function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = fals
 //   templateId    → id en message_templates de la plantilla a enviar
 //   manualValues  → array (index = placeholder N-1) con valores para los Manual
 async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { autoFallback = false } = {}) {
+  convo = _normalizeConvo(convo);
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
 
   // Cargar plantilla con sus campos parseados (buttons, bodyPlaceholders).

@@ -10276,9 +10276,18 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .ci-lead-name { font-weight: 600; color: #0f172a; cursor: pointer; }
 .ci-lead-name:hover { color: #2563eb; }
 .ci-lead-pipeline {
-  display: flex; gap: 6px; align-items: center;
-  font-size: 12px; color: #64748b; margin-top: 4px;
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  font-size: 12px; margin-top: 6px;
 }
+.ci-lead-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 99px;
+  border: 1px solid transparent;
+  font-size: 11px; font-weight: 500;
+  color: var(--text, #0f172a); line-height: 1.4;
+}
+.ci-lead-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ci-lead-arrow { color: var(--text-muted); font-size: 10px; }
 .ci-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .ci-actions .btn { font-size: 12px; padding: 6px 12px; }
 .ci-empty { color: #94a3b8; font-style: italic; font-size: 13px; }

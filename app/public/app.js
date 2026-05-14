@@ -11254,12 +11254,15 @@ function isDarkColor(hex) {
 // Devuelve el style inline para una pill, escogiendo contraste adecuado:
 // - color oscuro → bg sólido del color + texto blanco
 // - color claro → bg tintado 10% + texto del color (legible sobre tinte claro)
+// Tinted pill style — fondo color ~14%, borde ~33%, texto oscuro siempre.
+// Para colores muy oscuros (negro, navy), mantenemos texto blanco sobre fondo sólido
+// porque ahí sí se ve mejor que un tinted casi negro.
 function tplTagPillStyle(color) {
   const c = color || '#94a3b8';
   if (isDarkColor(c)) {
     return `background:${escHtml(c)};color:#fff;border-color:${escHtml(c)}`;
   }
-  return `background:${escHtml(c)}1a;color:${escHtml(c)};border-color:${escHtml(c)}66`;
+  return `background:${escHtml(c)}24;color:var(--text);border-color:${escHtml(c)}55`;
 }
 
 function renderTplTagsPickers() {
@@ -11273,7 +11276,7 @@ function renderTplTagsPickers() {
     const on = _tplDraftTagIds.includes(t.id);
     const styleStr = on
       ? tplTagPillStyle(t.color)
-      : `background:${escHtml(t.color)}12;color:${escHtml(t.color)};border-color:${escHtml(t.color)}66`;
+      : `background:${escHtml(t.color)}12;color:var(--text);border-color:${escHtml(t.color)}55`;
     return `<button type="button" class="bot-tag-pill ${on ? 'is-on' : 'is-off'}" data-toggle-tag="${t.id}" style="${styleStr}"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</button>`;
   }).join('');
 }
@@ -18410,16 +18413,24 @@ async function renderChatInfoPanel() {
 
     const leads = (leadsResp.items || []).filter(e => e.stageKind !== 'won' && e.stageKind !== 'lost');
     const leadsHtml = leads.length
-      ? leads.map(e => `
-          <div class="ci-lead-card">
-            <div class="ci-lead-name" data-go-to-exp="${e.id}">${escapeHtml(e.name || 'Sin nombre')}</div>
-            <div class="ci-lead-pipeline">
-              <span style="color:${e.pipelineColor || '#64748b'}">${escapeHtml(e.pipelineName || '')}</span>
-              <span>›</span>
-              <span style="color:${e.stageColor || '#64748b'}">${escapeHtml(e.stageName || '')}</span>
+      ? leads.map(e => {
+          const pColor = e.pipelineColor || '#94a3b8';
+          const sColor = e.stageColor || '#94a3b8';
+          return `
+            <div class="ci-lead-card">
+              <div class="ci-lead-name" data-go-to-exp="${e.id}">${escapeHtml(e.name || 'Sin nombre')}</div>
+              <div class="ci-lead-pipeline">
+                <span class="ci-lead-pill" style="background:${pColor}24;border-color:${pColor}55">
+                  <span class="ci-lead-dot" style="background:${pColor}"></span>${escapeHtml(e.pipelineName || '')}
+                </span>
+                <span class="ci-lead-arrow">›</span>
+                <span class="ci-lead-pill" style="background:${sColor}24;border-color:${sColor}55">
+                  <span class="ci-lead-dot" style="background:${sColor}"></span>${escapeHtml(e.stageName || '')}
+                </span>
+              </div>
             </div>
-          </div>
-        `).join('')
+          `;
+        }).join('')
       : '<p class="ci-empty">Sin leads abiertos.</p>';
 
     const tasks = tasksResp.items || [];

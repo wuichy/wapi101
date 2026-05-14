@@ -411,6 +411,7 @@ module.exports = function createWebhooksRouter(db) {
     const map = {
       131026: 'Número sin WhatsApp activo o el lead te bloqueó',
       131047: 'Pasaron más de 24h sin respuesta del lead — solo plantillas aprobadas pasan (mandaste texto plano).',
+      131049: 'Meta bloqueó la entrega (posible spam o el lead bloqueó el número)',
       131051: 'Tipo de mensaje no soportado por el destinatario',
       131052: 'El lead bloqueó tus mensajes',
       131053: 'No se pudo enviar el archivo (formato no soportado por Meta)',

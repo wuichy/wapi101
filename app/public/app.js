@@ -2096,10 +2096,20 @@ function updateBotToggleUI() {
 const _ERROR_REASON_I18N_MAP = {
   'Pasaron más de 24h sin respuesta del lead — solo plantillas aprobadas pasan (mandaste texto plano).': 'error.wa.131047',
 };
+// Textos en inglés que Meta devuelve como fallback cuando no hay código mapeado
+const _ERROR_REASON_EN_MAP = {
+  'This message was not delivered to maintain healthy ecosystem engagement.': 'Meta bloqueó la entrega (posible spam o el lead bloqueó el número)',
+  'User\'s number is part of an experiment':                                  'Número del lead en experimento de Meta — reintenta más tarde',
+  'Message failed to send because more than 24 hours have passed since the customer last replied to this number': 'Ventana de 24h cerrada — solo plantillas aprobadas',
+  'Re-engagement message':                                                    'Meta bloqueó el reenganche (lead sin actividad reciente)',
+};
 function translateErrorReason(reason) {
   if (!reason) return reason;
-  const key = _ERROR_REASON_I18N_MAP[reason];
-  return key ? t(key) : reason;
+  const i18nKey = _ERROR_REASON_I18N_MAP[reason];
+  if (i18nKey) return t(i18nKey);
+  const enTranslation = _ERROR_REASON_EN_MAP[reason];
+  if (enTranslation) return enTranslation;
+  return reason;
 }
 
 // Iconos para los 4 estados de un mensaje saliente (estilo WhatsApp).

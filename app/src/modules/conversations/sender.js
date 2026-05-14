@@ -234,7 +234,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
 }
 
 async function sendMessenger(db, convo, text) {
-  const creds = getIntegrationCreds(db, convo.integrationId);
+  const creds = getIntegrationCreds(db, convo.integrationId, convo);
   const token = creds?.pageAccessToken;
   if (!token) throw new Error('No hay Page Access Token de Messenger configurado');
 
@@ -256,7 +256,7 @@ async function sendMessenger(db, convo, text) {
 // Messenger acepta media como URL pública (vía attachment.payload.url).
 // type: 'image' | 'video' | 'audio' | 'file'
 async function sendMessengerMedia(db, convo, { publicUrl, mediaType }) {
-  const creds = getIntegrationCreds(db, convo.integrationId);
+  const creds = getIntegrationCreds(db, convo.integrationId, convo);
   const token = creds?.pageAccessToken;
   if (!token) throw new Error('No hay Page Access Token de Messenger configurado');
   if (!publicUrl) throw new Error('Messenger requiere URL pública del archivo');
@@ -281,7 +281,7 @@ async function sendMessengerMedia(db, convo, { publicUrl, mediaType }) {
 }
 
 async function sendInstagram(db, convo, text) {
-  const creds = getIntegrationCreds(db, convo.integrationId);
+  const creds = getIntegrationCreds(db, convo.integrationId, convo);
   const token = creds?.accessToken;
   if (!token) throw new Error('No hay Access Token de Instagram configurado');
 
@@ -303,7 +303,7 @@ async function sendInstagram(db, convo, text) {
 // Instagram solo soporta image / video / audio (NO file/document).
 async function sendInstagramMedia(db, convo, { publicUrl, mediaType }) {
   if (mediaType === 'document') throw new Error('Instagram no permite enviar documentos. Solo imágenes, videos y audios.');
-  const creds = getIntegrationCreds(db, convo.integrationId);
+  const creds = getIntegrationCreds(db, convo.integrationId, convo);
   const token = creds?.accessToken;
   if (!token) throw new Error('No hay Access Token de Instagram configurado');
   if (!publicUrl) throw new Error('Instagram requiere URL pública del archivo');
@@ -327,7 +327,7 @@ async function sendInstagramMedia(db, convo, { publicUrl, mediaType }) {
 }
 
 async function sendTelegram(db, convo, text) {
-  const creds = getIntegrationCreds(db, convo.integrationId);
+  const creds = getIntegrationCreds(db, convo.integrationId, convo);
   const token = creds?.botToken;
   if (!token) throw new Error('No hay Bot Token de Telegram configurado');
 
@@ -344,7 +344,7 @@ async function sendTelegram(db, convo, text) {
 // Telegram envía media como multipart al endpoint correspondiente
 // (sendPhoto/sendVideo/sendAudio/sendDocument). Soporta hasta 50MB.
 async function sendTelegramMedia(db, convo, { buffer, mimetype, filename, caption, mediaType }) {
-  const creds = getIntegrationCreds(db, convo.integrationId);
+  const creds = getIntegrationCreds(db, convo.integrationId, convo);
   const token = creds?.botToken;
   if (!token) throw new Error('No hay Bot Token de Telegram configurado');
   if (!buffer || !buffer.length) throw new Error('Archivo vacío');
@@ -371,7 +371,7 @@ async function sendTelegramMedia(db, convo, { buffer, mimetype, filename, captio
 }
 
 async function sendEmail(db, convo, text) {
-  const creds = getIntegrationCreds(db, convo.integrationId);
+  const creds = getIntegrationCreds(db, convo.integrationId, convo);
   if (!creds) throw new Error('No hay credenciales en la integración de email');
   const nodemailer = require('nodemailer');
   let transporter;
@@ -447,7 +447,23 @@ async function sendTikTokReply(db, convo, text) {
   return { externalId: data.data?.comment_id };
 }
 
-function getIntegrationCreds(db, integrationId) {
+function getIntegrationCreds(db, integrationId, convo = null) {
+  // Auto-heal: si la convo no tiene integration_id (huérfana), buscamos una
+  // integración activa del mismo provider+tenant y la vinculamos al vuelo.
+  // Solo se dispara cuando el código YA iba a fallar — sin convo o sin datos
+  // suficientes regresa null como antes (no introduce nuevos error paths).
+  if (!integrationId && convo?.id && convo?.provider && convo?.tenantId) {
+    const integration = db.prepare(
+      "SELECT id FROM integrations WHERE provider = ? AND tenant_id = ? AND status = 'connected' ORDER BY id DESC LIMIT 1"
+    ).get(convo.provider, convo.tenantId);
+    if (integration) {
+      db.prepare('UPDATE conversations SET integration_id = ? WHERE id = ? AND tenant_id = ?')
+        .run(integration.id, convo.id, convo.tenantId);
+      integrationId = integration.id;
+      convo.integrationId = integration.id; // mutate para callers
+      console.log(`[sender] auto-cured: convo ${convo.id} (${convo.provider}) → integration ${integration.id}`);
+    }
+  }
   if (!integrationId) return null;
   const row = db.prepare('SELECT credentials_enc FROM integrations WHERE id = ?').get(integrationId);
   if (!row?.credentials_enc) return null;

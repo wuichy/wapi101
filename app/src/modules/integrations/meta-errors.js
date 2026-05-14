@@ -84,4 +84,27 @@ function friendlyRejectedReason(reason) {
   return REJECTED_REASON_LABELS[reason] || `Razón Meta: ${reason}`;
 }
 
-module.exports = { friendlyMetaError, friendlyRejectedReason };
+// Detecta si un error (de Meta API o de error.message string) corresponde a un
+// token caducado / inválido. Aplica a WhatsApp Cloud, Messenger, Instagram —
+// cualquier llamada a graph.facebook.com con Bearer token.
+function isMetaAuthError(err) {
+  if (!err) return false;
+  const message = typeof err === 'string'
+    ? err
+    : (err.message || err.error_user_msg || err.error_data?.details || '');
+  const code    = err.code;
+  const subcode = err.error_subcode;
+  const txt = String(message).toLowerCase();
+
+  if (subcode === 463) return true;
+  if (code === 190 || code === 102 || code === 10 || code === 200) return true;
+  if (txt.includes('session has expired')) return true;
+  if (txt.includes('access token has expired')) return true;
+  if (txt.includes('invalid oauth')) return true;
+  if (txt.includes('error validating access token')) return true;
+  if (txt.includes('token has been invalidated')) return true;
+  if (txt.includes('not authorized')) return true;
+  return false;
+}
+
+module.exports = { friendlyMetaError, friendlyRejectedReason, isMetaAuthError };

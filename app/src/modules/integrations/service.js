@@ -281,6 +281,28 @@ async function connectRaw(db, tenantId, providerKey, creds, { displayName, exter
   return getById(db, t, r.lastInsertRowid);
 }
 
+// Marca una integración como desconectada por error de autenticación.
+// Llamado desde sender.js cuando una llamada a Graph API regresa auth error
+// (token caducado, revocado, sin permisos). NO toca credentials_enc — al
+// reconectar, el usuario sobrescribe; al testear, el flow normal lo restaura.
+function markAuthFailed(db, integrationId, errorMessage) {
+  if (!integrationId) return false;
+  try {
+    const r = db.prepare(`
+      UPDATE integrations
+      SET status = 'disconnected', last_error = ?, updated_at = unixepoch()
+      WHERE id = ? AND status != 'disconnected'
+    `).run(String(errorMessage || 'Auth error').slice(0, 500), integrationId);
+    if (r.changes > 0) {
+      console.warn(`[integrations] id=${integrationId} marcada disconnected por auth error: ${errorMessage}`);
+    }
+    return r.changes > 0;
+  } catch (e) {
+    console.error('[integrations.markAuthFailed]', e.message);
+    return false;
+  }
+}
+
 function updateRouting(db, tenantId, id, { pipelineId, stageId, pipelineName, stageName }) {
   const row = db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) throw new Error('Integración no encontrada');
@@ -291,4 +313,4 @@ function updateRouting(db, tenantId, id, { pipelineId, stageId, pipelineName, st
   return getById(db, tenantId, id);
 }
 
-module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting };
+module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting, markAuthFailed };

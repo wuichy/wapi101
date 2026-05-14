@@ -7,6 +7,40 @@
 
 const customerService = require('../customers/service');
 
+// Nombre amigable cuando un mensaje entrante no trae nombre (típico cuando
+// el token del provider está caducado y no podemos llamar a la Graph API
+// para el perfil). El backfill lo reemplaza con el nombre real al renovar.
+const PROVIDER_LABELS = {
+  messenger:      'Contacto Messenger',
+  instagram:      'Contacto Instagram',
+  whatsapp:       'Contacto WhatsApp',
+  'whatsapp-lite':'Contacto WhatsApp',
+  telegram:       'Contacto Telegram',
+  tiktok:         'Contacto TikTok',
+  gmail:          'Contacto Gmail',
+  outlook:        'Contacto Outlook',
+  icloud_mail:    'Contacto iCloud',
+  yahoo_mail:     'Contacto Yahoo',
+};
+function placeholderContactName(provider, externalId) {
+  const base = PROVIDER_LABELS[provider] || 'Contacto';
+  const suffix = externalId ? ` ${String(externalId).slice(-4)}` : '';
+  return `${base}${suffix}`;
+}
+// Reconoce placeholders viejos ("Usuario XXXX") y nuevos ("Contacto Messenger XXXX")
+// para que un mensaje entrante con nombre real pueda sobrescribirlos.
+function isPlaceholderName(name) {
+  if (!name) return true;
+  if (name.startsWith('Usuario ')) return true;
+  if (name.startsWith('Contacto Messenger')) return true;
+  if (name.startsWith('Contacto Instagram')) return true;
+  if (name.startsWith('Contacto WhatsApp')) return true;
+  if (name.startsWith('Contacto Telegram')) return true;
+  if (name.startsWith('Contacto TikTok')) return true;
+  if (name === 'Contacto' || name === 'Desconocido') return true;
+  return false;
+}
+
 function fmtTime(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
@@ -224,7 +258,7 @@ function findOrCreate(db, tenantId, { provider, externalId, integrationId, conta
     // Crear contacto básico con nombre o placeholder para no violar NOT NULL en conversations.
     const name  = (contactName || '').trim();
     const parts = name.split(/\s+/).filter(Boolean);
-    const first = parts[0] || `Usuario ${String(externalId || '').slice(0, 8)}`;
+    const first = parts[0] || placeholderContactName(provider, externalId);
     const last  = parts.slice(1).join(' ') || null;
     const result = db.prepare(
       'INSERT INTO contacts (tenant_id, first_name, last_name) VALUES (?, ?, ?)'
@@ -358,4 +392,4 @@ function markUnread(db, tenantId, conversationId) {
   db.prepare('UPDATE conversations SET unread_count = MAX(unread_count, 1) WHERE id = ? AND tenant_id = ?').run(conversationId, t);
 }
 
-module.exports = { list, getById, findOrCreate, addMessage, listMessages, markRead, markUnread, setBotPaused, setPinned, setArchived, setMutedUntil, fmtTime };
+module.exports = { list, getById, findOrCreate, addMessage, listMessages, markRead, markUnread, setBotPaused, setPinned, setArchived, setMutedUntil, fmtTime, placeholderContactName, isPlaceholderName };

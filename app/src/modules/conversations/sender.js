@@ -1,6 +1,16 @@
 // Shared send helpers used by both conversations/routes.js and bot/engine.js
 const { decryptJson } = require('../../security/crypto');
-const { friendlyMetaError } = require('../integrations/meta-errors');
+const { friendlyMetaError, isMetaAuthError } = require('../integrations/meta-errors');
+const integrationsSvc = require('../integrations/service');
+
+// Si el error es de auth (token caducado/inválido), marca la integración como
+// disconnected para que el frontend muestre el aviso de reconectar.
+// `errOrData` puede ser un Error (string en .message) o el objeto data.error de Meta.
+function _maybeMarkAuthFailed(db, integrationId, errOrData, friendly) {
+  if (!integrationId) return;
+  if (!isMetaAuthError(errOrData)) return;
+  try { integrationsSvc.markAuthFailed(db, integrationId, friendly || (errOrData?.message || String(errOrData))); } catch (_) {}
+}
 
 async function sendMessage(db, convo, text) {
   if (convo.provider === 'whatsapp')        return sendWhatsApp(db, convo, text);
@@ -57,7 +67,11 @@ async function sendWhatsApp(db, convo, text) {
     }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(friendlyMetaError(data.error) || `HTTP ${res.status}`);
+  if (!res.ok || data.error) {
+    const msg = friendlyMetaError(data.error) || `HTTP ${res.status}`;
+    _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
+    throw new Error(msg);
+  }
   return data.messages?.[0]?.id || null;
 }
 
@@ -84,7 +98,9 @@ async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, captio
   });
   const upJson = await upRes.json().catch(() => ({}));
   if (!upRes.ok || !upJson.id) {
-    throw new Error(`Subida de archivo: ${friendlyMetaError(upJson?.error) || `HTTP ${upRes.status}`}`);
+    const friendly = friendlyMetaError(upJson?.error) || `HTTP ${upRes.status}`;
+    _maybeMarkAuthFailed(db, convo.integrationId, upJson?.error, friendly);
+    throw new Error(`Subida de archivo: ${friendly}`);
   }
   const mediaId = upJson.id;
 
@@ -108,7 +124,9 @@ async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, captio
   });
   const sendJson = await sendRes.json().catch(() => ({}));
   if (!sendRes.ok || sendJson.error) {
-    throw new Error(friendlyMetaError(sendJson?.error) || `HTTP ${sendRes.status}`);
+    const msg = friendlyMetaError(sendJson?.error) || `HTTP ${sendRes.status}`;
+    _maybeMarkAuthFailed(db, convo.integrationId, sendJson?.error, msg);
+    throw new Error(msg);
   }
   return sendJson.messages?.[0]?.id || null;
 }
@@ -205,7 +223,9 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
   });
   const data = await res.json();
   if (!res.ok || data.error) {
-    throw new Error(friendlyMetaError(data.error) || `HTTP ${res.status}`);
+    const msg = friendlyMetaError(data.error) || `HTTP ${res.status}`;
+    _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
+    throw new Error(msg);
   }
   return { externalId: data.messages?.[0]?.id || null, renderedBody: bodyText.replace(/\{\{(\d+)\}\}/g, (_, n) => {
     const ph = tpl.bodyPlaceholders?.[Number(n) - 1];
@@ -225,7 +245,11 @@ async function sendMessenger(db, convo, text) {
     body: JSON.stringify({ recipient: { id: convo.externalId }, message: { text } }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  if (!res.ok || data.error) {
+    const msg = data.error?.message || `HTTP ${res.status}`;
+    _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
+    throw new Error(msg);
+  }
   return data.message_id || null;
 }
 
@@ -248,7 +272,11 @@ async function sendMessengerMedia(db, convo, { publicUrl, mediaType }) {
     }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  if (!res.ok || data.error) {
+    const msg = data.error?.message || `HTTP ${res.status}`;
+    _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
+    throw new Error(msg);
+  }
   return data.message_id || null;
 }
 
@@ -264,7 +292,11 @@ async function sendInstagram(db, convo, text) {
     body: JSON.stringify({ recipient: { id: convo.externalId }, message: { text } }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  if (!res.ok || data.error) {
+    const msg = data.error?.message || `HTTP ${res.status}`;
+    _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
+    throw new Error(msg);
+  }
   return data.message_id || null;
 }
 
@@ -286,7 +318,11 @@ async function sendInstagramMedia(db, convo, { publicUrl, mediaType }) {
     }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  if (!res.ok || data.error) {
+    const msg = data.error?.message || `HTTP ${res.status}`;
+    _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
+    throw new Error(msg);
+  }
   return data.message_id || null;
 }
 

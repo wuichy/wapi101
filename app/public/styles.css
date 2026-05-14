@@ -10902,7 +10902,11 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 /* ─── Vista Pedidos ─── */
 .view-pedidos { padding: 0; overflow: hidden; display: flex; flex-direction: column; height: 100%; }
 .pedidos-view { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.pedidos-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.pedidos-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+.pedidos-status-filters { display: flex; align-items: center; gap: 4px; }
+.pedidos-sf-chip { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all .15s; white-space: nowrap; }
+.pedidos-sf-chip:hover { border-color: var(--primary); color: var(--primary); }
+.pedidos-sf-chip.is-active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .pedidos-search-wrap { position: relative; display: flex; align-items: center; gap: 6px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; flex: 1; max-width: 340px; }
 .pedidos-search-wrap svg { flex-shrink: 0; color: var(--text-muted); }
 .pedidos-search-wrap input { border: none; background: transparent; outline: none; font-size: 13px; width: 100%; padding: 7px 0; color: var(--text); }

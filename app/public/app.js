@@ -20337,8 +20337,9 @@ let _wooOrderStatuses = [];   // estatus disponibles en WC para cambiar desde tr
 let _wooHasCredentials = false; // si hay consumer key/secret guardados
 let _wooOrdersPage  = 1;
 let _wooOrdersPages = 1;
-let _pedidosPage    = 1;
-let _pedidosPages   = 1;
+let _pedidosPage         = 1;
+let _pedidosPages        = 1;
+let _pedidosStatusFilter = ''; // '' = todos
 
 async function loadAppsSection() {
   try {
@@ -20487,7 +20488,14 @@ async function loadPedidosView(page = _pedidosPage) {
   if (!_pedidosEventsReady) {
     _pedidosEventsReady = true;
     document.getElementById('pedidosRefreshBtn')?.addEventListener('click', () => loadPedidosView(1));
-    document.getElementById('pedidosSearch')?.addEventListener('input', (e) => renderPedidosOrders(e.target.value));
+    document.getElementById('pedidosSearch')?.addEventListener('input', () => renderPedidosOrders());
+    document.getElementById('pedidosStatusFilters')?.addEventListener('click', (e) => {
+      const chip = e.target.closest('.pedidos-sf-chip');
+      if (!chip) return;
+      _pedidosStatusFilter = chip.dataset.status;
+      document.querySelectorAll('.pedidos-sf-chip').forEach(c => c.classList.toggle('is-active', c === chip));
+      renderPedidosOrders();
+    });
     document.getElementById('pedidosSyncBtn')?.addEventListener('click', async () => {
       const btn = document.getElementById('pedidosSyncBtn');
       btn.disabled = true; btn.textContent = '⏳ Importando...';
@@ -20516,21 +20524,45 @@ async function loadPedidosView(page = _pedidosPage) {
     _wooOrders      = ordersData.orders || [];
     _pedidosPage    = ordersData.page  || 1;
     _pedidosPages   = ordersData.pages || 1;
-    renderPedidosOrders(document.getElementById('pedidosSearch')?.value || '');
+    renderPedidosOrders();
   } catch (e) {
     if (listEl) listEl.innerHTML = '<p class="woo-empty">Error al cargar pedidos. Verifica la configuración de WooCommerce.</p>';
     console.error('loadPedidosView', e);
   }
 }
 
-function renderPedidosOrders(filter = '') {
+function renderPedidosOrders() {
   const el = document.getElementById('pedidosOrdersList');
   if (!el) return;
-  const orders = filter
-    ? _wooOrders.filter(o =>
-        String(o.wc_order_number).includes(filter) ||
-        (o.customer_name || '').toLowerCase().includes(filter.toLowerCase()))
-    : _wooOrders;
+  const q   = (document.getElementById('pedidosSearch')?.value || '').trim().toLowerCase();
+  const stf = _pedidosStatusFilter; // '' | 'completed' | 'on-hold' | 'facturado' | ...
+
+  const orders = _wooOrders.filter(o => {
+    // Filtro de estatus
+    if (stf) {
+      const slug = (o.status || '').replace(/^wc-/, '');
+      if (stf === 'facturado') {
+        if (!slug.includes('factura')) return false;
+      } else {
+        if (slug !== stf) return false;
+      }
+    }
+    // Búsqueda de texto
+    if (!q) return true;
+    const addr = (() => { try { return JSON.parse(o.shipping_address_json || '{}'); } catch { return {}; } })();
+    const addrStr = [addr.address1, addr.address2, addr.city, addr.state, addr.postcode].filter(Boolean).join(' ').toLowerCase();
+    const dateStr = o.wc_order_date
+      ? new Date(o.wc_order_date * 1000).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }).toLowerCase()
+      : '';
+    const slug = (o.status || '').replace(/^wc-/, '');
+    return String(o.wc_order_number).includes(q) ||
+           (o.customer_name  || '').toLowerCase().includes(q) ||
+           (o.customer_email || '').toLowerCase().includes(q) ||
+           (o.customer_phone || '').includes(q) ||
+           addrStr.includes(q) ||
+           dateStr.includes(q) ||
+           slug.includes(q);
+  });
 
   if (!orders.length) {
     el.innerHTML = '<p class="woo-empty">Sin pedidos. Importa desde WooCommerce o espera el próximo webhook.</p>';

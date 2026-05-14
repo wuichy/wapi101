@@ -13,8 +13,8 @@ function getWAConfig(db, tenantId) {
   try {
     const row = db && db.prepare(
       `SELECT credentials_enc FROM integrations
-        WHERE provider = 'whatsapp' AND status = 'connected' AND tenant_id = ?
-        ORDER BY id ASC LIMIT 1`
+        WHERE provider = 'whatsapp' AND tenant_id = ?
+        ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id ASC LIMIT 1`
     ).get(tenantId);
     if (row?.credentials_enc) {
       const creds = decryptJson(row.credentials_enc) || {};

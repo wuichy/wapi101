@@ -15485,7 +15485,9 @@ function _wa24Open(provider, lastIncomingAt) {
 function _tplAvailability(tpl, provider, lastIncomingAt) {
   const wa24 = _wa24Open(provider, lastIncomingAt);
   if (tpl.type === 'wa_api') {
-    if (provider !== 'whatsapp') return { ok: false, reason: 'Solo WhatsApp' };
+    // Sin conversación aún (provider=undefined) se permite igual — el modal
+    // creará la convo al enviar. Solo bloqueamos si hay convo de otro canal.
+    if (provider && provider !== 'whatsapp') return { ok: false, reason: 'Solo WhatsApp' };
     if (tpl.waStatus !== 'approved') return { ok: false, reason: `Plantilla ${tpl.waStatus === 'pending' ? 'pendiente de aprobación' : tpl.waStatus === 'rejected' ? 'rechazada por Meta' : 'no aprobada'}` };
     return { ok: true };
   }

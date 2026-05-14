@@ -3849,6 +3849,9 @@ function showView(viewName) {
   } else if (viewName === 'plantillas') {
     if (searchInput) { searchInput.placeholder = 'Buscar plantilla…'; searchInput.value = (typeof _tplFilter !== 'undefined' ? _tplFilter : '') || ''; }
     if (plExtras) plExtras.hidden = true;
+  } else if (viewName === 'pedidos') {
+    if (searchInput) { searchInput.placeholder = 'Buscar por #pedido, cliente, domicilio, fecha...'; searchInput.value = ''; }
+    if (plExtras) plExtras.hidden = true;
   } else {
     if (searchInput) { searchInput.placeholder = 'Buscar conversaciones...'; searchInput.value = ''; }
     if (plExtras) plExtras.hidden = true;
@@ -3869,6 +3872,8 @@ function showView(viewName) {
   if (tplExtras) tplExtras.hidden = (viewName !== 'plantillas');
   const botExtras = document.getElementById('topbarBotExtras');
   if (botExtras) botExtras.hidden = (viewName !== 'bot');
+  const pedidosExtras = document.getElementById('topbarPedidosExtras');
+  if (pedidosExtras) pedidosExtras.hidden = (viewName !== 'pedidos');
 
   if (viewName === 'calendario') {
     if (searchInput) { searchInput.placeholder = t('cal.search.placeholder'); searchInput.value = _tasksSearch; }
@@ -20488,12 +20493,15 @@ async function loadPedidosView(page = _pedidosPage) {
   if (!_pedidosEventsReady) {
     _pedidosEventsReady = true;
     document.getElementById('pedidosRefreshBtn')?.addEventListener('click', () => loadPedidosView(1));
-    document.getElementById('pedidosSearch')?.addEventListener('input', () => renderPedidosOrders());
-    document.getElementById('pedidosStatusFilters')?.addEventListener('click', (e) => {
+    document.getElementById('topbarSearchInput')?.addEventListener('input', () => {
+      if (document.body.dataset.viewActive !== 'pedidos') return;
+      renderPedidosOrders();
+    });
+    document.getElementById('topbarPedidosExtras')?.addEventListener('click', (e) => {
       const chip = e.target.closest('.pedidos-sf-chip');
       if (!chip) return;
       _pedidosStatusFilter = chip.dataset.status;
-      document.querySelectorAll('.pedidos-sf-chip').forEach(c => c.classList.toggle('is-active', c === chip));
+      document.querySelectorAll('#topbarPedidosExtras .pedidos-sf-chip').forEach(c => c.classList.toggle('is-active', c === chip));
       renderPedidosOrders();
     });
     document.getElementById('pedidosSyncBtn')?.addEventListener('click', async () => {
@@ -20534,7 +20542,7 @@ async function loadPedidosView(page = _pedidosPage) {
 function renderPedidosOrders() {
   const el = document.getElementById('pedidosOrdersList');
   if (!el) return;
-  const q   = (document.getElementById('pedidosSearch')?.value || '').trim().toLowerCase();
+  const q   = (document.getElementById('topbarSearchInput')?.value || '').trim().toLowerCase();
   const stf = _pedidosStatusFilter; // '' | 'completed' | 'on-hold' | 'facturado' | ...
 
   const orders = _wooOrders.filter(o => {

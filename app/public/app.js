@@ -12453,6 +12453,11 @@ function setupFilterButtons() {
     if (expPanel && !expPanel.hidden) {
       if (!expAnchor?.contains(e.target) && !expExtras?.contains(e.target) && !expBtn?.contains(e.target)) expPanel.hidden = true;
     }
+    // global cross-pipeline search panel
+    const gsPanel = document.getElementById('plGlobalSearchPanel');
+    if (gsPanel && !gsPanel.hidden) {
+      if (!document.getElementById('topbarSearchWrap')?.contains(e.target)) gsPanel.hidden = true;
+    }
   });
 
   // Pipeline filter button
@@ -12484,12 +12489,58 @@ function setupPipelines() {
   document.getElementById('topbarSearchInput')?.addEventListener('input', e => {
     if (document.body.dataset.viewActive !== 'pipelines') return;
     clearTimeout(_plSearchDebounce);
-    _plSearchDebounce = setTimeout(() => {
+    _plSearchDebounce = setTimeout(async () => {
       PL_FILTERS.q = e.target.value;
       PL_SEARCH = PL_FILTERS.q;
       updateFilterBadge('pl');
       renderPipelinesBoard();
-    }, 200);
+
+      // Búsqueda global cross-pipeline
+      const q = (e.target.value || '').trim();
+      const globalPanel = document.getElementById('plGlobalSearchPanel');
+      if (!globalPanel) return;
+      if (q.length < 2) { globalPanel.hidden = true; return; }
+      try {
+        const data = await api('GET', `/api/expedients?search=${encodeURIComponent(q)}&pageSize=8`);
+        const others = (data?.items || []).filter(x => x.pipelineId !== PL_ACTIVE_ID);
+        if (!others.length) { globalPanel.hidden = true; return; }
+        const groups = new Map();
+        for (const exp of others) {
+          if (!groups.has(exp.pipelineId)) groups.set(exp.pipelineId, { name: exp.pipelineName || `Pipeline ${exp.pipelineId}`, items: [] });
+          groups.get(exp.pipelineId).items.push(exp);
+        }
+        let html = `<div class="pl-gs-hint">No encontrado aquí — en otros pipelines:</div>`;
+        for (const [, g] of groups) {
+          html += `<div class="pl-gs-group"><div class="pl-gs-group-name">${escHtml(g.name)}</div>${
+            g.items.map(exp => `<button class="pl-gs-item" data-exp-id="${exp.id}" data-pl-id="${exp.pipelineId}">
+              <span class="pl-gs-item-name">${escHtml(exp.name || exp.contactName || 'Sin nombre')}</span>
+              <span class="pl-gs-item-stage">${exp.stageColor ? `<span class="pl-gs-item-dot" style="background:${escHtml(exp.stageColor)}"></span>` : ''}${escHtml(exp.stageName || '')}</span>
+            </button>`).join('')}</div>`;
+        }
+        globalPanel.innerHTML = html;
+        globalPanel.hidden = false;
+      } catch (_) { globalPanel.hidden = true; }
+    }, 300);
+  });
+
+  // Click en resultado del buscador global cross-pipeline
+  document.getElementById('plGlobalSearchPanel')?.addEventListener('click', async e => {
+    const item = e.target.closest('.pl-gs-item');
+    if (!item) return;
+    const plId  = Number(item.dataset.plId);
+    const expId = Number(item.dataset.expId);
+    document.getElementById('plGlobalSearchPanel').hidden = true;
+    PL_ACTIVE_ID = plId;
+    localStorage.setItem('lastPipelineId', String(PL_ACTIVE_ID));
+    await loadPipelinesKanban();
+    setTimeout(() => {
+      const card = document.querySelector(`.pl-card[data-exp-id="${expId}"]`);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('is-pl-highlighted');
+        setTimeout(() => card.classList.remove('is-pl-highlighted'), 2000);
+      }
+    }, 350);
   });
 
   // Board sort

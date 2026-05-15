@@ -2312,10 +2312,10 @@ async function loadCustomers() {
 
 // ─── Sort dropdown ───
 function updateSortLabel() {
-  const active = document.querySelector(`.sort-option[data-sort-by="${CUSTOMER_SORT_BY}"][data-sort-dir="${CUSTOMER_SORT_DIR}"]`);
+  const active = document.querySelector(`#sortDropdown .sort-option[data-sort-by="${CUSTOMER_SORT_BY}"][data-sort-dir="${CUSTOMER_SORT_DIR}"]`);
   const label = document.getElementById("sortLabel");
   if (active && label) label.textContent = active.dataset.label;
-  document.querySelectorAll(".sort-option").forEach((opt) => {
+  document.querySelectorAll("#sortDropdown .sort-option").forEach((opt) => {
     opt.classList.toggle("is-active",
       opt.dataset.sortBy === CUSTOMER_SORT_BY && opt.dataset.sortDir === CUSTOMER_SORT_DIR);
   });
@@ -2844,8 +2844,8 @@ function setupCustomers() {
     }
   });
 
-  // Selección de orden
-  document.querySelectorAll(".sort-option").forEach((opt) => {
+  // Selección de orden (scoped solo al dropdown de contactos)
+  document.querySelectorAll("#sortDropdown .sort-option").forEach((opt) => {
     opt.addEventListener("click", () => {
       CUSTOMER_SORT_BY = opt.dataset.sortBy;
       CUSTOMER_SORT_DIR = opt.dataset.sortDir;

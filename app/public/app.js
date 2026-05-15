@@ -12968,6 +12968,14 @@ function setupPipelines() {
         if (!stageName) { toast('El nombre de la etapa no puede estar vacío', 'error'); return; }
         await api('PATCH', `/api/pipelines/stages/${id}`, { name: stageName, color: stageColor, kind: stageKind });
       }
+      // Guardar cualquier asignación de bot que esté abierta
+      const openBotRows = document.querySelectorAll('.pl-stage-bot-row:not([hidden])');
+      for (const row of openBotRows) {
+        const id = row.id.replace('pl-bot-', '');
+        const sel = row.querySelector(`[data-bot-select-for="${id}"]`);
+        const botId = sel?.value ? Number(sel.value) : null;
+        await api('PATCH', `/api/pipelines/stages/${id}`, { bot_id: botId });
+      }
       if (PL_MANAGE_ID) {
         await api('PATCH', `/api/pipelines/${PL_MANAGE_ID}`, { name, color, icon });
         toast('Pipeline actualizado', 'success');

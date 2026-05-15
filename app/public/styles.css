@@ -8187,7 +8187,11 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   max-height: 60px; overflow: hidden;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
 }
-.tpl-card-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.tpl-card-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.tpl-card-actions .icon-btn { width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0; }
+.tpl-card-action-del:hover { color: var(--danger, #dc2626) !important; background: #fee2e2 !important; }
+.tpl-card-action-send { color: var(--accent, #2563eb); }
+.tpl-card-action-send:hover { background: var(--accent-light, #e0e7ff) !important; }
 
 /* Status badge */
 .tpl-status {

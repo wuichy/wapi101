@@ -15973,11 +15973,11 @@ function renderTemplates() {
         ${usedByBotsHtml}
       </div>
       <div class="tpl-card-actions">
-        ${isWa && (t.waStatus === 'draft' || t.waStatus === 'rejected') ? `<button class="btn btn--sm btn--primary tpl-submit-btn" data-id="${t.id}">${t.waStatus === 'rejected' ? 'Reenviar' : 'Enviar a Meta'}</button>` : ''}
-        ${isWa && t.waStatus === 'pending' ? `<button class="btn btn--sm btn--secondary tpl-sync-btn" data-id="${t.id}">↺ Sync</button>` : ''}
-        <button class="btn btn--sm btn--secondary tpl-edit-btn" data-id="${t.id}">Editar</button>
-        <button class="btn btn--sm btn--secondary tpl-clone-btn" data-id="${t.id}" title="Clonar como nueva plantilla">⧉ Clonar</button>
-        <button class="btn btn--sm btn--danger tpl-del-btn" data-id="${t.id}">✕</button>
+        ${isWa && (t.waStatus === 'draft' || t.waStatus === 'rejected') ? `<button class="icon-btn tpl-card-action-send tpl-submit-btn" data-id="${t.id}" title="${t.waStatus === 'rejected' ? 'Reenviar a Meta' : 'Enviar a Meta'}"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><line x1="17" y1="3" x2="9" y2="11"/><polygon points="17 3 11 18 9 11 2 8 17 3" fill="currentColor" stroke="none"/></svg></button>` : ''}
+        ${isWa && t.waStatus === 'pending' ? `<button class="icon-btn tpl-sync-btn" data-id="${t.id}" title="Sync con Meta"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M2 10a8 8 0 0 1 13.3-5.3L18 8"/><path d="M18 10a8 8 0 0 1-13.3 5.3L2 12"/><polyline points="18 2 18 8 12 8"/><polyline points="2 18 2 12 8 12"/></svg></button>` : ''}
+        <button class="icon-btn tpl-edit-btn" data-id="${t.id}" title="Editar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M14.5 2.5l3 3L5.5 17.5h-3v-3L14.5 2.5z"/></svg></button>
+        <button class="icon-btn tpl-clone-btn" data-id="${t.id}" title="Clonar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M3 13V5a2 2 0 0 1 2-2h8"/></svg></button>
+        <button class="icon-btn tpl-card-action-del tpl-del-btn" data-id="${t.id}" title="Eliminar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><polyline points="3 6 17 6"/><path d="M8 6V4h4v2"/><rect x="5" y="6" width="10" height="11" rx="1"/><line x1="8" y1="9" x2="8" y2="15"/><line x1="12" y1="9" x2="12" y2="15"/></svg></button>
       </div>`;
     list.appendChild(card);
   }

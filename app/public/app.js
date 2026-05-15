@@ -6720,6 +6720,8 @@ function setupExpedients() {
       EXP_STATE.sortDir = btn.dataset.expDir;
       EXP_STATE.page = 1;
       document.getElementById('expSortLabel').textContent = btn.dataset.label;
+      document.querySelectorAll('#expSortDropdown .sort-option').forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
       sortDrop.hidden = true;
       loadExpedients();
     });

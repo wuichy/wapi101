@@ -13,6 +13,7 @@ const VALID_SORT = {
   stage:      's.name COLLATE NOCASE',
   createdAt:  'e.created_at',
   updatedAt:  'e.updated_at',
+  botActive:  '(SELECT COUNT(*) FROM bot_run_waits brw WHERE brw.expedient_id = e.id AND brw.status = \'waiting\' AND brw.tenant_id = e.tenant_id)',
 };
 
 // Helpers de resolución de tenant para callers que pasan null.

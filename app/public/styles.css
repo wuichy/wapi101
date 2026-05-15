@@ -2380,6 +2380,7 @@ body.nav-collapsed .nav-notif-panel {
 
 /* ─── Sort dropdown ─── */
 .sort-menu { position: relative; }
+.sort-wrapper { position: relative; }
 .sort-menu .btn {
   display: inline-flex;
   align-items: center;

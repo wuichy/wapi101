@@ -173,19 +173,20 @@
               <span id="expSortLabel">Más reciente</span>
             </button>
             <div class="sort-dropdown" id="expSortDropdown" hidden>
-              <button class="sort-option" data-exp-sort="createdAt" data-exp-dir="desc" data-label="Más reciente">Más reciente</button>
-              <button class="sort-option" data-exp-sort="createdAt" data-exp-dir="asc"  data-label="Más antiguo">Más antiguo</button>
-              <button class="sort-option" data-exp-sort="name"      data-exp-dir="asc"  data-label="Nombre A→Z">Nombre A→Z</button>
-              <button class="sort-option" data-exp-sort="name"      data-exp-dir="desc" data-label="Nombre Z→A">Nombre Z→A</button>
-              <button class="sort-option" data-exp-sort="contact"   data-exp-dir="asc"  data-label="Contacto A→Z">Contacto A→Z</button>
-              <button class="sort-option" data-exp-sort="pipeline"  data-exp-dir="asc"  data-label="Pipeline A→Z">Pipeline A→Z</button>
+              <button class="sort-option" data-exp-sort="createdAt" data-exp-dir="desc" data-label="Más reciente">📅 Más recientes primero</button>
+              <button class="sort-option" data-exp-sort="createdAt" data-exp-dir="asc"  data-label="Más antiguo">🕰️ Más antiguos primero</button>
+              <div class="sort-separator"></div>
+              <button class="sort-option" data-exp-sort="name"      data-exp-dir="asc"  data-label="Nombre A→Z">🔤 Nombre A → Z</button>
+              <button class="sort-option" data-exp-sort="name"      data-exp-dir="desc" data-label="Nombre Z→A">🔤 Nombre Z → A</button>
+              <div class="sort-separator"></div>
+              <button class="sort-option" data-exp-sort="contact"   data-exp-dir="asc"  data-label="Contacto A→Z">👤 Contacto A → Z</button>
+              <button class="sort-option" data-exp-sort="pipeline"  data-exp-dir="asc"  data-label="Pipeline A→Z">🔄 Pipeline A → Z</button>
+              <div class="sort-separator"></div>
+              <button class="sort-option" data-exp-sort="botActive" data-exp-dir="desc" data-label="Con bot activo">🤖 Con bot activo primero</button>
             </div>
           </div>
           <button class="btn btn--ghost" id="expImportBtn" data-i18n="btn.import">Importar</button>
-          <button class="btn btn--ghost btn--icon-label" id="expFieldsBtn" title="Campos personalizados">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
-            <span data-i18n="btn.fields">Campos</span>
-          </button>
+          <button class="btn btn--ghost" id="expFieldsBtn" title="Campos personalizados">Campos</button>
           <button class="btn btn--primary" id="expAddBtn" data-i18n="exp.new">+ Nuevo lead</button>
         </div>
         <div class="topbar-customers-extras" id="topbarCustomersExtras" hidden>

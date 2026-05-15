@@ -15442,7 +15442,8 @@ let _bootVersion = null;
 let _versionToastShown = false;
 async function _fetchVersion() {
   try {
-    const r = await fetch('/api/version', { cache: 'no-store' });
+    // ?_= garantiza URL única en cada llamada → Cloudflare no puede servir caché
+    const r = await fetch(`/api/version?_=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) return null;
     const d = await r.json();
     return d.version || null;

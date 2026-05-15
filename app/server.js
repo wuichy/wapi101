@@ -161,7 +161,10 @@ console.log(`[boot] BUILD_VERSION=${BUILD_VERSION} (${Object.keys(_htmlCache).le
 // Endpoint público (no requiere auth) para que el cliente detecte si hay
 // versión nueva en el server y prompt al usuario para recargar.
 app.get('/api/version', (_req, res) => {
-  res.set('Cache-Control', 'no-store');
+  // Headers explícitos para Cloudflare — no-store + CDN bypass
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Surrogate-Control', 'no-store');
   res.json({ version: BUILD_VERSION });
 });
 

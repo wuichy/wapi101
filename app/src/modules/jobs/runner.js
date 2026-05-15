@@ -12,7 +12,7 @@
 //   re-marca jobs 'running' como 'queued' para que el worker los retome.
 
 const expService = require('../expedients/service');
-const activity   = require('../activity/service');
+const activity   = require('../expedients/activity');
 const botEngine  = require('../bot/engine');
 
 const WORKER_TICK_MS = 1000;     // chequeo cada 1s

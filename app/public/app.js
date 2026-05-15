@@ -11709,10 +11709,23 @@ function renderPipelinesBoard() {
         <div class="pl-col-footer">
           ${(() => {
             // Chip clickable que indica qué bot corre al entrar a esta etapa.
-            // Solo se muestra si la etapa tiene un bot_id configurado.
+            // Se muestra si:
+            //  a) La etapa tiene bot_id configurado explícitamente (asignación manual desde Editar pipeline), O
+            //  b) Existe un bot habilitado con trigger pipeline_stage apuntando a esta etapa (auto-detect)
             // Click → navega al bot builder con ese bot abierto.
-            if (!stage.bot_id) return '';
-            const bot = (sbBots || []).find(b => b.id === stage.bot_id);
+            let bot = null;
+            if (stage.bot_id) {
+              bot = (sbBots || []).find(b => b.id === stage.bot_id) || null;
+            }
+            // Auto-detect: si no hay asignación manual, buscar cualquier bot habilitado
+            // con trigger pipeline_stage = stage.id
+            if (!bot) {
+              bot = (sbBots || []).find(b =>
+                b.enabled &&
+                b.trigger_type === 'pipeline_stage' &&
+                Number(b.trigger_value) === stage.id
+              ) || null;
+            }
             if (!bot) return '';
             return `<button type="button" class="pl-col-bot-hint" data-go-to-bot="${bot.id}" title="Click para abrir el bot &quot;${escHtml(bot.name)}&quot;. Se ejecuta automáticamente cuando un lead entra a esta etapa.">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">

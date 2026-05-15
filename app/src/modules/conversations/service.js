@@ -228,7 +228,31 @@ function findOrCreate(db, tenantId, { provider, externalId, integrationId, conta
   const t = tenantId ?? _tenantFromIntegration(db, integrationId);
   if (!t) throw new Error('No se pudo determinar tenant para la conversación');
 
-  let row = db.prepare('SELECT * FROM conversations WHERE provider = ? AND external_id = ? AND tenant_id = ?').get(provider, String(externalId), t);
+  const extIdStr = String(externalId);
+  // 1. Exact match (más rápido y cubre el caso común)
+  let row = db.prepare('SELECT * FROM conversations WHERE provider = ? AND external_id = ? AND tenant_id = ?').get(provider, extIdStr, t);
+
+  // 2. Para WhatsApp: fuzzy match por últimos 10 dígitos del teléfono.
+  //    Cubre los casos donde el bot guardó "+5215512925373" y el webhook entrante
+  //    manda "5215512925373" (sin "+") — antes creaba duplicado.
+  if (!row && (provider === 'whatsapp' || provider === 'whatsapp-lite')) {
+    const last10 = extIdStr.replace(/\D/g, '').slice(-10);
+    if (last10.length === 10) {
+      row = db.prepare(`
+        SELECT * FROM conversations
+         WHERE provider = ?
+           AND tenant_id = ?
+           AND SUBSTR(REPLACE(REPLACE(external_id,'+',''),' ',''), -10) = ?
+         ORDER BY id ASC LIMIT 1
+      `).get(provider, t, last10);
+      // Si encontró por fuzzy, normalizar el external_id guardado para que la próxima sea exact
+      if (row && row.external_id !== extIdStr) {
+        db.prepare('UPDATE conversations SET external_id = ? WHERE id = ?').run(extIdStr, row.id);
+        row.external_id = extIdStr;
+      }
+    }
+  }
+
   if (row) {
     if (!row.integration_id && integrationId) {
       db.prepare('UPDATE conversations SET integration_id = ? WHERE id = ?').run(integrationId, row.id);

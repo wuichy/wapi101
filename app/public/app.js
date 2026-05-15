@@ -12272,8 +12272,7 @@ function renderStagesList(stages) {
         <option value="won" ${s.kind==='won'?'selected':''}>Ganado</option>
         <option value="lost" ${s.kind==='lost'?'selected':''}>Perdido</option>
       </select>
-      <button class="btn btn--primary btn--sm" data-save-stage="${s.id}">Guardar</button>
-      <button class="btn btn--ghost btn--sm" data-cancel-stage-edit="${s.id}">×</button>
+      <button class="btn btn--ghost btn--sm" data-cancel-stage-edit="${s.id}" title="Cancelar">×</button>
     </div>
     <div class="pl-stage-bot-row" id="pl-bot-${s.id}" hidden>
       <label style="font-size:12px;font-weight:600;white-space:nowrap">Bot en esta etapa:</label>
@@ -12802,6 +12801,17 @@ function setupPipelines() {
   });
 
   // Stage drag-to-reorder inside manage modal
+  // Enter en el input de nombre de etapa → cierra el row (el Guardar principal lo guardará)
+  document.getElementById('plStagesList')?.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const input = e.target.closest('.pl-stage-edit-name');
+    if (!input) return;
+    e.preventDefault();
+    const id = input.dataset.editNameFor;
+    const row = document.getElementById(`pl-edit-${id}`);
+    if (row) row.hidden = true;
+  });
+
   document.getElementById('plStagesList')?.addEventListener('dragstart', e => {
     const row = e.target.closest('.pl-stage-row[draggable]');
     if (!row) return;
@@ -12847,13 +12857,23 @@ function setupPipelines() {
     } catch (err) { toast(err.message, 'error'); }
   });
 
-  // Save pipeline (create or update)
+  // Save pipeline (create or update) — también guarda etapas con edición abierta
   document.getElementById('plSavePipelineBtn')?.addEventListener('click', async () => {
     const name = document.getElementById('plManageName').value.trim();
     const color = document.getElementById('plManageColor').value;
     const icon = document.getElementById('plManageIcon')?.value || null;
     if (!name) { toast('Escribe el nombre del pipeline', 'error'); return; }
     try {
+      // Guardar cualquier edición de etapa que esté abierta
+      const openEditRows = document.querySelectorAll('.pl-stage-edit-row:not([hidden])');
+      for (const row of openEditRows) {
+        const id = row.id.replace('pl-edit-', '');
+        const stageName  = row.querySelector(`[data-edit-name-for="${id}"]`)?.value.trim();
+        const stageColor = row.querySelector(`[data-edit-color-for="${id}"]`)?.value;
+        const stageKind  = row.querySelector(`[data-edit-kind-for="${id}"]`)?.value;
+        if (!stageName) { toast('El nombre de la etapa no puede estar vacío', 'error'); return; }
+        await api('PATCH', `/api/pipelines/stages/${id}`, { name: stageName, color: stageColor, kind: stageKind });
+      }
       if (PL_MANAGE_ID) {
         await api('PATCH', `/api/pipelines/${PL_MANAGE_ID}`, { name, color, icon });
         toast('Pipeline actualizado', 'success');

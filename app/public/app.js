@@ -11518,7 +11518,7 @@ let PL_MANAGE_ID = null;   // pipeline abierto en el modal de gestión
 let PL_EXP_CACHE = [];     // expedientes para el kanban
 let PL_SEARCH   = '';      // filtro texto del kanban (legacy, aliased below)
 let PL_SORT     = 'createdAt'; // orden del kanban
-let PL_FILTERS  = { q: '', searchIn: 'all', tags: [], fieldValues: {} };
+let PL_FILTERS  = { q: '', searchIn: 'all', tags: [], fieldValues: {}, stageId: null };
 
 // Estado drag-and-drop del kanban (módulo-level para que los listeners del board no se dupliquen)
 let _kdDragId           = null;
@@ -12297,7 +12297,7 @@ function renderStagesList(stages) {
 // ════════════════════════════════
 
 function applyExpFiltersClient(items, state) {
-  const { q, searchIn, tags, fieldValues } = state;
+  const { q, searchIn, tags, fieldValues, stageId } = state;
   const lq = (q || '').trim().toLowerCase();
   return items.filter(e => {
     if (lq) {
@@ -12309,6 +12309,7 @@ function applyExpFiltersClient(items, state) {
       if (!matches) return false;
     }
     if (tags.length && !tags.every(t => (e.tags || []).includes(t))) return false;
+    if (stageId && e.stageId !== stageId) return false;
     for (const [fid, fval] of Object.entries(fieldValues || {})) {
       if (!fval) continue;
       const saved = (e.fieldValues || []).find(fv => String(fv.fieldId) === String(fid));
@@ -12323,6 +12324,7 @@ function countActiveFilters(state) {
   if (state.searchIn !== 'all') n++;
   n += (state.tags || []).length;
   n += Object.values(state.fieldValues || {}).filter(v => v !== '').length;
+  if (state.stageId) n++;
   return n;
 }
 
@@ -12335,8 +12337,10 @@ function updateFilterBadge(prefix) {
   if (btn)   btn.classList.toggle('has-filters', n > 0);
 }
 
-function renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange }) {
+function renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange, prefix }) {
   if (!panelEl) return;
+  const isPipelineFilter = prefix === 'pl';
+  const activePl = isPipelineFilter ? (PIPELINES.find(p => p.id === PL_ACTIVE_ID) || PIPELINES[0]) : null;
 
   const fieldHtml = fieldDefs.map(def => {
     const val = state.fieldValues[def.id] ?? '';
@@ -12371,6 +12375,21 @@ function renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange }) {
         ).join('')}
       </div>
     </div>
+    ${isPipelineFilter && PIPELINES.length ? `
+    <div class="kf-section">
+      <div class="kf-section-title">Pipeline</div>
+      <div class="kf-pl-chips">
+        ${PIPELINES.map(p => `<button class="kf-pl-chip ${p.id===PL_ACTIVE_ID?'is-active':''}" data-pl-switch="${p.id}">${escapeHtml(p.name)}</button>`).join('')}
+      </div>
+    </div>` : ''}
+    ${isPipelineFilter && activePl?.stages?.length ? `
+    <div class="kf-section">
+      <div class="kf-section-title">Etapa <span class="kf-section-hint">(de ${escapeHtml(activePl.name)})</span></div>
+      <div class="kf-stage-chips">
+        <button class="kf-stage-chip ${!state.stageId?'is-active':''}" data-stage="">Todas</button>
+        ${activePl.stages.map(s => `<button class="kf-stage-chip ${state.stageId===s.id?'is-active':''}" data-stage="${s.id}"><span class="kf-stage-dot" style="background:${escapeHtml(s.color||'#94a3b8')}"></span>${escapeHtml(s.name)}</button>`).join('')}
+      </div>
+    </div>` : ''}
     ${tags.length ? `
     <div class="kf-section">
       <div class="kf-section-title">Etiquetas</div>
@@ -12388,13 +12407,37 @@ function renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange }) {
     </div>`;
 
   panelEl.querySelectorAll('[data-si]').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); state.searchIn = btn.dataset.si; onChange(state); renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange }); });
+    btn.addEventListener('click', (e) => { e.stopPropagation(); state.searchIn = btn.dataset.si; onChange(state); renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange, prefix }); });
   });
   panelEl.querySelectorAll('[data-tag]').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); const t = btn.dataset.tag; state.tags = (state.tags||[]).includes(t) ? state.tags.filter(x=>x!==t) : [...(state.tags||[]), t]; onChange(state); renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange }); });
+    btn.addEventListener('click', (e) => { e.stopPropagation(); const t = btn.dataset.tag; state.tags = (state.tags||[]).includes(t) ? state.tags.filter(x=>x!==t) : [...(state.tags||[]), t]; onChange(state); renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange, prefix }); });
+  });
+  // Pipeline switcher: cambia PL_ACTIVE_ID y recarga el kanban
+  panelEl.querySelectorAll('[data-pl-switch]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const newId = Number(btn.dataset.plSwitch);
+      if (newId === PL_ACTIVE_ID) return;
+      PL_ACTIVE_ID = newId;
+      localStorage.setItem('lastPipelineId', String(PL_ACTIVE_ID));
+      state.stageId = null; // reset stage al cambiar pipeline
+      await loadPipelinesKanban();
+      // Re-renderizar panel para reflejar nuevas etapas
+      renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange, prefix });
+    });
+  });
+  // Stage filter chips
+  panelEl.querySelectorAll('[data-stage]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sid = btn.dataset.stage;
+      state.stageId = sid ? Number(sid) : null;
+      onChange(state);
+      renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange, prefix });
+    });
   });
   panelEl.querySelectorAll('[data-fv-id]').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); state.fieldValues[btn.dataset.fvId] = btn.dataset.fvVal; onChange(state); renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange }); });
+    btn.addEventListener('click', (e) => { e.stopPropagation(); state.fieldValues[btn.dataset.fvId] = btn.dataset.fvVal; onChange(state); renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange, prefix }); });
   });
   let _fvDeb = {};
   panelEl.querySelectorAll('[data-fv-inp]').forEach(inp => {
@@ -12412,7 +12455,7 @@ function renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange }) {
   panelEl.querySelectorAll('[data-fv-sel]').forEach(sel => {
     sel.addEventListener('change', (e) => { e.stopPropagation(); state.fieldValues[sel.dataset.fvSel] = sel.value; onChange(state); });
   });
-  panelEl.querySelector('.kf-clear-btn')?.addEventListener('click', (e) => { e.stopPropagation(); state.searchIn='all'; state.tags=[]; state.fieldValues={}; onChange(state); renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange }); });
+  panelEl.querySelector('.kf-clear-btn')?.addEventListener('click', (e) => { e.stopPropagation(); state.searchIn='all'; state.tags=[]; state.fieldValues={}; state.stageId=null; onChange(state); renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange, prefix }); });
 }
 
 function openFilterPanel(prefix, tags) {
@@ -12425,7 +12468,7 @@ function openFilterPanel(prefix, tags) {
     if (prefix === 'pl') { PL_FILTERS = s; renderPipelinesBoard(); }
     else { EXP_FILTERS = s; EXP_STATE.page = 1; loadExpedients(); }
   };
-  renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange });
+  renderFilterPanel(panelEl, { tags, fieldDefs, state, onChange, prefix });
   panelEl.hidden = false;
 }
 

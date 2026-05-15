@@ -7860,6 +7860,24 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .kf-tag-chip:hover { background: rgba(255,255,255,.06); color: var(--text); }
 .kf-tag-chip.is-active { background: rgba(37,99,235,.18); border-color: var(--primary); color: #93c5fd; }
+
+/* Pipeline + Stage filter chips */
+.kf-pl-chips, .kf-stage-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.kf-pl-chip, .kf-stage-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .1s, color .1s;
+}
+.kf-pl-chip:hover, .kf-stage-chip:hover { background: rgba(255,255,255,.06); color: var(--text); }
+.kf-pl-chip.is-active, .kf-stage-chip.is-active { background: rgba(37,99,235,.18); border-color: var(--primary); color: #93c5fd; }
+.kf-stage-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.kf-section-hint { font-size: 10px; font-weight: 400; color: var(--text-muted); text-transform: none; letter-spacing: 0; margin-left: 4px; }
 .kf-field-row {
   display: flex;
   align-items: center;

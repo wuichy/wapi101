@@ -671,7 +671,43 @@ async function executeStep(db, step, ctx) {
       // desde el contacto. Los Manual usan los valores fijos guardados en c.manualValues.
       const templateId = Number(c.templateId);
       if (!templateId) { _log('warn', 'template: sin templateId'); return false; }
-      if (!ctx.convoId) { _log('warn', 'template: sin convoId'); return false; }
+      // Si el contacto no tiene conversación previa (ej. lead importado de Kommo),
+      // creamos una con la integración WhatsApp activa del tenant. Esto permite
+      // que el primer contacto sea por template marketing — caso clásico de outbound.
+      if (!ctx.convoId) {
+        if (!ctx.contactId) { _log('warn', 'template: sin convoId ni contactId'); return false; }
+        const contact = db.prepare(
+          'SELECT id, phone, first_name, last_name FROM contacts WHERE id = ? AND tenant_id = ?'
+        ).get(ctx.contactId, ctx.tenantId);
+        if (!contact?.phone) {
+          _log('warn', `template: contacto ${ctx.contactId} sin teléfono — no se puede crear convo`);
+          return false;
+        }
+        const integ = db.prepare(
+          "SELECT id FROM integrations WHERE tenant_id = ? AND provider = 'whatsapp' AND status = 'connected' ORDER BY id LIMIT 1"
+        ).get(ctx.tenantId);
+        if (!integ) {
+          _log('warn', `template: tenant ${ctx.tenantId} sin integración WhatsApp activa`);
+          return false;
+        }
+        try {
+          const newConvo = convoSvc.findOrCreate(db, ctx.tenantId, {
+            provider:      'whatsapp',
+            externalId:    contact.phone,
+            integrationId: integ.id,
+            contactId:     contact.id,
+            contactPhone:  contact.phone,
+            contactName:   [contact.first_name, contact.last_name].filter(Boolean).join(' '),
+          });
+          ctx.convoId       = newConvo.id;
+          ctx.provider      = 'whatsapp';
+          ctx.integrationId = integ.id;
+          _log('info', `template: convo creada auto id=${newConvo.id} para contacto ${contact.id} (${contact.phone})`);
+        } catch (err) {
+          _log('error', `template: no se pudo crear convo para contacto ${ctx.contactId}: ${err.message}`);
+          return false;
+        }
+      }
       try {
         const convo = convoSvc.getById(db, null, ctx.convoId);
         if (!convo) return false;

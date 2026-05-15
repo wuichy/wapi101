@@ -1785,6 +1785,75 @@ body.nav-collapsed .nav-notif-panel {
 .conn-banner.is-degraded  { background: #f59e0b; }
 .conn-banner.is-recovered { background: #10b981; }
 
+/* ─── Barra global de bulk jobs ─── */
+.bulk-job-bar {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9998;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18);
+  overflow: hidden;
+  animation: bulk-job-slide-in .25s ease-out;
+}
+@keyframes bulk-job-slide-in {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.bulk-job-bar-inner { padding: 12px 14px 10px; }
+.bulk-job-bar-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.bulk-job-bar-icon { font-size: 16px; flex-shrink: 0; }
+.bulk-job-bar-label {
+  flex: 1; min-width: 0;
+  font-size: 13px; font-weight: 600;
+  color: var(--text, #111);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bulk-job-bar-stats {
+  font-size: 11px; color: var(--text-muted, #6b7280);
+  font-weight: 500; flex-shrink: 0;
+}
+.bulk-job-bar-close {
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  background: none; border: none;
+  color: var(--text-muted, #9ca3af);
+  font-size: 18px; line-height: 1;
+  cursor: pointer; border-radius: 6px;
+  transition: background .1s, color .1s;
+}
+.bulk-job-bar-close:hover { background: #fee2e2; color: #dc2626; }
+.bulk-job-bar-progress {
+  height: 6px;
+  background: var(--bg-2, #f3f4f6);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.bulk-job-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #3b82f6);
+  border-radius: 99px;
+  transition: width .3s ease-out;
+}
+.bulk-job-bar.is-done .bulk-job-bar-fill {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+.bulk-job-bar.is-error .bulk-job-bar-fill {
+  background: linear-gradient(90deg, #dc2626, #ef4444);
+}
+.bulk-job-bar-hint {
+  font-size: 11px; color: var(--text-muted, #9ca3af);
+  margin-top: 6px;
+  font-style: italic;
+}
+
 /* ─── Pane Notificaciones ─── */
 .notif-card {
   margin-top: 12px;

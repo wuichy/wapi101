@@ -24,6 +24,21 @@
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
   <div id="connBanner" class="conn-banner" hidden></div>
+  <!-- Barra global de progreso de bulk jobs (corren en el server) -->
+  <div id="bulkJobBar" class="bulk-job-bar" hidden>
+    <div class="bulk-job-bar-inner">
+      <div class="bulk-job-bar-row">
+        <span class="bulk-job-bar-icon">⚡</span>
+        <span class="bulk-job-bar-label" id="bulkJobLabel">Procesando…</span>
+        <span class="bulk-job-bar-stats" id="bulkJobStats">0/0</span>
+        <button type="button" class="bulk-job-bar-close" id="bulkJobClose" aria-label="Cancelar">×</button>
+      </div>
+      <div class="bulk-job-bar-progress">
+        <div class="bulk-job-bar-fill" id="bulkJobFill" style="width:0%"></div>
+      </div>
+      <div class="bulk-job-bar-hint">Puedes seguir trabajando, esto corre en segundo plano.</div>
+    </div>
+  </div>
   <div class="app">
     <!-- ═════════ SIDEBAR ═════════ -->
     <aside class="sidebar">

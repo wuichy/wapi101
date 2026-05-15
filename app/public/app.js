@@ -11855,32 +11855,30 @@ function setupPipelinesListHandlers(filtered, pipeline) {
       return;
     }
     const ids = [...PL_LIST_SELECTED];
-    let ok = 0, fail = 0;
-    for (const id of ids) {
-      try {
-        await api('PATCH', `/api/expedients/${id}`, { stageId });
-        ok++;
-      } catch (_) { fail++; }
+    try {
+      const res = await api('POST', '/api/expedients/bulk-move', { ids, stageId });
+      PL_LIST_SELECTED.clear();
+      e.target.value = '';
+      // Empieza a trackear el job — la barra global aparece y se actualiza sola
+      startBulkJobTracking(res.item.id);
+      toast('Procesando en segundo plano — puedes seguir trabajando', 'info', 4000);
+    } catch (err) {
+      toast(`Error al encolar el job: ${err.message}`, 'error');
     }
-    PL_LIST_SELECTED.clear();
-    await loadPipelinesKanban();  // recarga datos y re-renderiza
-    toast(`${ok} movido${ok === 1 ? '' : 's'}${fail ? `, ${fail} fallaron` : ''}`, fail ? 'warning' : 'success');
   });
   // Eliminar
   document.getElementById('plListBulkDelete')?.addEventListener('click', async () => {
     if (!PL_LIST_SELECTED.size) return;
     if (!confirm(`¿Eliminar ${PL_LIST_SELECTED.size} lead(s)? Se mueven a la papelera (recuperables 30 días).`)) return;
     const ids = [...PL_LIST_SELECTED];
-    let ok = 0, fail = 0;
-    for (const id of ids) {
-      try {
-        await api('DELETE', `/api/expedients/${id}`);
-        ok++;
-      } catch (_) { fail++; }
+    try {
+      const res = await api('POST', '/api/expedients/bulk-delete', { ids });
+      PL_LIST_SELECTED.clear();
+      startBulkJobTracking(res.item.id);
+      toast('Eliminando en segundo plano — puedes seguir trabajando', 'info', 4000);
+    } catch (err) {
+      toast(`Error al encolar el job: ${err.message}`, 'error');
     }
-    PL_LIST_SELECTED.clear();
-    await loadPipelinesKanban();
-    toast(`${ok} eliminado${ok === 1 ? '' : 's'}${fail ? `, ${fail} fallaron` : ''}`, fail ? 'warning' : 'success');
   });
   // Click en el nombre → abre detalle del expediente
   document.querySelectorAll('[data-open-exp]').forEach(a => {
@@ -15473,6 +15471,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   startVersionCheck();
   startTasksDuePolling();
   startCommentsBadgePolling();
+  resumeBulkJobTracking();
   } catch (_bootErr) {
     const box = document.getElementById('_jsErrBox') || (() => {
       const el = document.createElement('div');
@@ -15551,6 +15550,115 @@ async function startTasksDuePolling() {
   // Primer tick inmediato (sin toast) + cada 60s
   await tick();
   setInterval(tick, 60 * 1000);
+}
+
+// ═════════════════════════════════════════════════════════════════
+// BULK JOB TRACKER — barra global de progreso para operaciones largas
+// (mover masivo de leads, eliminar masivo, etc.). El job corre en el
+// server, el frontend solo polea cada 1.5s y dibuja la barra.
+// Si el usuario cierra la pestaña, el server sigue. Al volver, lee
+// el jobId guardado en localStorage y reanuda la visualización.
+// ═════════════════════════════════════════════════════════════════
+let _bulkJobPollTimer = null;
+let _bulkJobCurrentId = null;
+const BULK_JOB_LS_KEY = 'wapi101.activeBulkJobId';
+
+function startBulkJobTracking(jobId) {
+  if (!jobId) return;
+  _bulkJobCurrentId = jobId;
+  try { localStorage.setItem(BULK_JOB_LS_KEY, String(jobId)); } catch (_) {}
+  _renderBulkJobBar({ id: jobId, total: 0, processed: 0, failed: 0, status: 'queued', label: 'Iniciando…' });
+  _pollBulkJobNow();
+}
+
+function _stopBulkJobTracking() {
+  _bulkJobCurrentId = null;
+  if (_bulkJobPollTimer) { clearTimeout(_bulkJobPollTimer); _bulkJobPollTimer = null; }
+  try { localStorage.removeItem(BULK_JOB_LS_KEY); } catch (_) {}
+  const bar = document.getElementById('bulkJobBar');
+  if (bar) bar.hidden = true;
+}
+
+async function _pollBulkJobNow() {
+  if (!_bulkJobCurrentId) return;
+  try {
+    const res = await api('GET', `/api/jobs/${_bulkJobCurrentId}`);
+    const job = res.item;
+    _renderBulkJobBar(job);
+    if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+      // Recargar el kanban si estamos en la vista pipelines
+      if (document.body.dataset.viewActive === 'pipelines') {
+        loadPipelinesKanban().catch(() => {});
+      }
+      // Dejar la barra visible 5s con el resultado final, luego ocultar
+      setTimeout(() => {
+        if (_bulkJobCurrentId === job.id) _stopBulkJobTracking();
+      }, 5000);
+      return;
+    }
+    _bulkJobPollTimer = setTimeout(_pollBulkJobNow, 1500);
+  } catch (e) {
+    // Si el job no existe (404), limpiamos el tracker
+    if (String(e.message || '').includes('Job no encontrado') || String(e.message || '').includes('404')) {
+      _stopBulkJobTracking();
+      return;
+    }
+    // Otros errores: reintentar en 3s
+    _bulkJobPollTimer = setTimeout(_pollBulkJobNow, 3000);
+  }
+}
+
+function _renderBulkJobBar(job) {
+  const bar = document.getElementById('bulkJobBar');
+  if (!bar) return;
+  bar.hidden = false;
+  bar.classList.toggle('is-done',  job.status === 'done');
+  bar.classList.toggle('is-error', job.status === 'error' || job.status === 'cancelled');
+
+  const labelEl = document.getElementById('bulkJobLabel');
+  const statsEl = document.getElementById('bulkJobStats');
+  const fillEl  = document.getElementById('bulkJobFill');
+
+  let labelText = job.label || 'Procesando…';
+  if (job.status === 'done')      labelText = `✅ ${job.label || 'Terminado'}`;
+  else if (job.status === 'error') labelText = `❌ ${job.label || 'Error'}`;
+  else if (job.status === 'cancelled') labelText = `⛔ ${job.label || 'Cancelado'}`;
+  if (labelEl) labelEl.textContent = labelText;
+
+  const done = (job.processed || 0) + (job.failed || 0);
+  const total = job.total || 0;
+  const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  if (statsEl) {
+    statsEl.textContent = total > 0
+      ? `${done}/${total} (${pct}%)${job.failed ? ` · ${job.failed} fallaron` : ''}`
+      : '';
+  }
+  if (fillEl) fillEl.style.width = `${job.status === 'done' ? 100 : pct}%`;
+}
+
+// Cancela el job — llama al backend y para el polling
+document.addEventListener('click', async (e) => {
+  if (e.target?.id !== 'bulkJobClose') return;
+  if (!_bulkJobCurrentId) { _stopBulkJobTracking(); return; }
+  if (!confirm('¿Cancelar la operación en curso? Los items ya procesados se quedan así.')) return;
+  try { await api('DELETE', `/api/jobs/${_bulkJobCurrentId}`); } catch (_) {}
+  _stopBulkJobTracking();
+});
+
+// Al cargar la app, reanudar tracking si había un job activo guardado.
+function resumeBulkJobTracking() {
+  let savedId = null;
+  try { savedId = localStorage.getItem(BULK_JOB_LS_KEY); } catch (_) {}
+  if (savedId) {
+    startBulkJobTracking(Number(savedId));
+  } else {
+    // Si no hay nada en localStorage, checa si hay jobs activos en el server
+    // (puede pasar si el user usa otra pestaña/dispositivo)
+    api('GET', '/api/jobs/active').then(res => {
+      const job = (res.items || [])[0];
+      if (job) startBulkJobTracking(job.id);
+    }).catch(() => {});
+  }
 }
 
 async function startVersionCheck() {

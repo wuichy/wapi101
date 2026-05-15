@@ -2,6 +2,7 @@ const express = require('express');
 const service  = require('./service');
 const activity = require('./activity');
 const botEngine = require('../bot/engine');
+const jobRunner = require('../jobs/runner');
 
 module.exports = function createExpedientsRouter(db) {
   const router = express.Router();
@@ -10,6 +11,39 @@ module.exports = function createExpedientsRouter(db) {
   router.get('/contacts-search', (req, res, next) => {
     try { res.json({ items: service.searchContacts(db, req.tenantId, req.query.q || '') }); }
     catch (e) { next(e); }
+  });
+
+  // Bulk move — encola un job en background y devuelve jobId.
+  // El worker procesa de a chunks, el frontend polea /api/jobs/:id.
+  router.post('/bulk-move', (req, res, next) => {
+    try {
+      const { ids, stageId } = req.body || {};
+      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids requerido' });
+      if (!stageId) return res.status(400).json({ error: 'stageId requerido' });
+      const stage = db.prepare('SELECT name FROM stages WHERE id = ? AND tenant_id = ?').get(Number(stageId), req.tenantId);
+      const label = `Moviendo ${ids.length} lead${ids.length === 1 ? '' : 's'} → ${stage?.name || 'etapa'}`;
+      const job = jobRunner.enqueue(db, req.tenantId, {
+        type: 'expedients_move',
+        payload: { ids: ids.map(Number), stageId: Number(stageId) },
+        label,
+      });
+      res.json({ item: job });
+    } catch (e) { next(e); }
+  });
+
+  // Bulk delete — encola un job en background
+  router.post('/bulk-delete', (req, res, next) => {
+    try {
+      const { ids } = req.body || {};
+      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids requerido' });
+      const label = `Eliminando ${ids.length} lead${ids.length === 1 ? '' : 's'}`;
+      const job = jobRunner.enqueue(db, req.tenantId, {
+        type: 'expedients_delete',
+        payload: { ids: ids.map(Number) },
+        label,
+      });
+      res.json({ item: job });
+    } catch (e) { next(e); }
   });
 
   // Definiciones de campos personalizados

@@ -718,8 +718,14 @@ mountSafe('/api/analytics',          require('./src/modules/analytics/routes'));
 mountSafe('/api/business',           require('./src/modules/business/routes'));
 mountSafe('/api/appointments',       require('./src/modules/appointments/routes'));
 mountSafe('/api/apps',               require('./src/modules/apps/routes'));
+mountSafe('/api/jobs',               require('./src/modules/jobs/routes'));
 const { authRouter: wooAuthRouter }  = require('./src/modules/woo/routes');
 app.use('/api/apps/woo', wooAuthRouter(db));
+
+// Arrancar el worker de bulk jobs (corre cada 1s en background).
+// Si el server se reinicia con jobs 'running', los re-encola al boot.
+try { require('./src/modules/jobs/runner').start(db); }
+catch (e) { console.error('[jobs-worker] start failed:', e.message); }
 
 // Manejador global de errores
 app.use((err, _req, res, _next) => {

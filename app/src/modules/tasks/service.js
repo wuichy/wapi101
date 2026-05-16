@@ -93,9 +93,9 @@ function create(db, tenantId, { title, description, dueAt, durationMinutes, assi
   const conflict = _checkConflict(db, tenantId, assignedAdvisorId, Number(dueAt), dur);
   if (conflict) {
     const t = new Date(conflict.due_at * 1000);
-    const fmt = t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const fmt = t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const end = new Date((conflict.due_at + conflict.duration_minutes * 60) * 1000);
-    const fmtEnd = end.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const fmtEnd = end.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const err = new Error(`Conflicto con "${conflict.title}" (${fmt}–${fmtEnd})`);
     err.statusCode = 409;
     throw err;
@@ -129,9 +129,9 @@ function update(db, tenantId, id, patch = {}) {
   const conflict = _checkConflict(db, tenantId, effectiveAdvisorId, effectiveDueAt, effectiveDuration, id);
   if (conflict) {
     const t = new Date(conflict.due_at * 1000);
-    const fmt = t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const fmt = t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const end = new Date((conflict.due_at + conflict.duration_minutes * 60) * 1000);
-    const fmtEnd = end.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const fmtEnd = end.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     const err = new Error(`Conflicto con "${conflict.title}" (${fmt}–${fmtEnd})`);
     err.statusCode = 409;
     throw err;

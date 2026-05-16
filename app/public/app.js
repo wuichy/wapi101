@@ -1325,7 +1325,7 @@ function fmtMsgTime(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
   const now = new Date();
-  const time = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const time = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   if (d.toDateString() === now.toDateString()) return time;
   const date = d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
   return `${date} · ${time}`;
@@ -5965,7 +5965,7 @@ function _matchesSearch(item, q) {
   if (item._kind === 'msg') {
     const body  = (item.body || '').toLowerCase();
     const tStr  = new Date(item.createdAt * 1000)
-      .toLocaleString('es-MX', { day:'2-digit', month:'long', hour:'2-digit', minute:'2-digit', hour12: false })
+      .toLocaleString('es-MX', { day:'2-digit', month:'long', hour:'2-digit', minute:'2-digit', hourCycle: 'h23' })
       .toLowerCase();
     return body.includes(lq) || tStr.includes(lq);
   }
@@ -6022,7 +6022,7 @@ function renderExpDetailMessages() {
   root.innerHTML = visible.map((item) => {
     if (item._kind === 'act') {
       const icon = ACT_ICON[item.type] || '·';
-      const time = item.created_at ? new Date(item.created_at * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+      const time = item.created_at ? new Date(item.created_at * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : '';
       const byLine = item.advisor_name ? `<span class="rh-act-by">${escapeHtml(item.advisor_name)}</span>` : '';
       return `<div class="rh-act-event" data-type="${item.type}">
         <span class="rh-act-icon">${icon}</span>
@@ -18228,7 +18228,7 @@ function fmtTaskDue(ts) {
   const today = new Date(); today.setHours(0,0,0,0);
   const dDate = new Date(d); dDate.setHours(0,0,0,0);
   const diffDays = Math.round((dDate - today) / (24*3600*1000));
-  const time = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const time = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   if (diffDays === 0)  return `Hoy ${time}`;
   if (diffDays === 1)  return `Mañana ${time}`;
   if (diffDays === -1) return `Ayer ${time}`;
@@ -19378,7 +19378,7 @@ function mailFmtDateTimeFull(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
   const date = d.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-  const time = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const time = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   return `${date} · ${time}`;
 }
 

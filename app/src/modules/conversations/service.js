@@ -47,7 +47,9 @@ function fmtTime(ts) {
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   if (sameDay) {
-    return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+    // hourCycle:'h23' fuerza 00-23 — sin esto, locale 'es-MX' renderiza
+    // medianoche como "24:XX" en vez de "00:XX" (quirk de Intl en Node).
+    return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   }
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);

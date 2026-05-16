@@ -183,6 +183,7 @@ const JOB_HANDLERS = {
   'expedients_move': async (db, tenantId, expedientId, payload) => {
     const stageId = Number(payload.stageId);
     if (!stageId) throw new Error('payload.stageId requerido');
+    const policy = payload.botCollisionPolicy === 'restart' ? 'restart' : 'skip';
     const prev = expService.getById(db, tenantId, Number(expedientId));
     if (!prev) throw new Error(`expedient ${expedientId} no encontrado`);
     const item = expService.update(db, tenantId, Number(expedientId), { stageId });
@@ -208,12 +209,14 @@ const JOB_HANDLERS = {
           contactId:   item.contactId,
           pipelineId:  prev.pipelineId,
           stageId:     prev.stageId,
+          botCollisionPolicy: policy,
         });
         botEngine.triggerPipelineStage(db, {
           expedientId: item.id,
           contactId:   item.contactId,
           pipelineId:  item.pipelineId,
           stageId:     item.stageId,
+          botCollisionPolicy: policy,
         });
       }
     } catch (e) { /* triggers no rompen el job */ }

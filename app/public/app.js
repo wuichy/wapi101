@@ -5766,6 +5766,17 @@ async function saveExpDetailEdits() {
     return;
   }
 
+  // Si cambió la etapa, preguntar qué hacer si hay un bot con run activo
+  if (patch.stageId && patch.stageId !== exp.stageId) {
+    try {
+      const targetPl = (PIPELINES || []).find(p => p.id === (patch.pipelineId || exp.pipelineId));
+      const targetStage = targetPl?.stages?.find(s => s.id === patch.stageId);
+      const decision = await checkBotCollision(exp.id, patch.stageId, exp.name || exp.contactName, targetStage?.name);
+      if (decision === 'cancel') return;
+      if (decision === 'restart') patch.botCollisionPolicy = 'restart';
+    } catch (_) {}
+  }
+
   try {
     const data = await api('PATCH', `/api/expedients/${exp.id}`, patch);
     EXP_DETAIL = data.item;
@@ -11863,13 +11874,12 @@ function setupPipelinesListHandlers(filtered, pipeline) {
     const stageId = Number(e.target.value);
     if (!stageId || !PL_LIST_SELECTED.size) return;
     const stage = pipeline.stages.find(s => s.id === stageId);
-    if (!confirm(`¿Mover ${PL_LIST_SELECTED.size} lead(s) a la etapa "${stage?.name}"?`)) {
-      e.target.value = '';
-      return;
-    }
+    // Diálogo personalizado con selector de policy para colisiones de bot
+    const policyChoice = await _askBulkMovePolicy(PL_LIST_SELECTED.size, stage?.name || '');
+    if (!policyChoice) { e.target.value = ''; return; }
     const ids = [...PL_LIST_SELECTED];
     try {
-      const res = await api('POST', '/api/expedients/bulk-move', { ids, stageId });
+      const res = await api('POST', '/api/expedients/bulk-move', { ids, stageId, botCollisionPolicy: policyChoice });
       PL_LIST_SELECTED.clear();
       e.target.value = '';
       // Empieza a trackear el job — la barra global aparece y se actualiza sola
@@ -11879,6 +11889,21 @@ function setupPipelinesListHandlers(filtered, pipeline) {
       toast(`Error al encolar el job: ${err.message}`, 'error');
     }
   });
+
+  // Diálogo para el bulk move con selector de policy.
+  // Devuelve 'skip' | 'restart' | null (canceló)
+  function _askBulkMovePolicy(count, stageName) {
+    return new Promise(resolve => {
+      const policy = window.confirm(
+        `¿Mover ${count} lead(s) a la etapa "${stageName}"?\n\n` +
+        `Si algún lead ya tiene un bot corriendo (con timer/wait activo):\n` +
+        `  • OK → No iniciar bot nuevo (deja los bots viejos como están — recomendado para campañas masivas)\n` +
+        `  • Cancelar → Aborta el movimiento\n\n` +
+        `(Para reiniciar bots viejos en bulk, mueve los leads de uno en uno)`
+      ) ? 'skip' : null;
+      resolve(policy);
+    });
+  }
   // Eliminar
   document.getElementById('plListBulkDelete')?.addEventListener('click', async () => {
     if (!PL_LIST_SELECTED.size) return;
@@ -12044,6 +12069,15 @@ function setupKanbanDragDrop() {
 
       const patch = { stageId };
       if (exp.pipelineId !== newPipelineId) patch.pipelineId = newPipelineId;
+
+      // Antes de mover, preguntar al user qué hacer si hay un bot con run activo
+      try {
+        const targetPl = PIPELINES.find(p => p.id === newPipelineId);
+        const targetStage = targetPl?.stages?.find(s => s.id === stageId);
+        const decision = await checkBotCollision(expId, stageId, exp.name || exp.contactName, targetStage?.name);
+        if (decision === 'cancel') { renderPipelinesBoard(); return; }
+        if (decision === 'restart') patch.botCollisionPolicy = 'restart';
+      } catch (_) {}
 
       try {
         await api('PATCH', `/api/expedients/${expId}`, patch);
@@ -15563,6 +15597,63 @@ async function startTasksDuePolling() {
   // Primer tick inmediato (sin toast) + cada 60s
   await tick();
   setInterval(tick, 60 * 1000);
+}
+
+// ═════════════════════════════════════════════════════════════════
+// BOT COLLISION MODAL — pregunta al usuario qué hacer si el bot del
+// stage destino ya tiene un wait activo para el lead.
+// Returns: 'cancel' | 'skip' | 'restart' | null (sin colisión)
+// ═════════════════════════════════════════════════════════════════
+async function checkBotCollision(expedientId, stageId, leadName, stageName) {
+  try {
+    const res = await api('POST', `/api/expedients/${expedientId}/preview-stage-move`, { stageId });
+    if (!res?.hasCollision) return null;
+    return await _showBotCollisionModal(res.wouldFireBots.filter(b => b.hasActiveWait), leadName, stageName);
+  } catch (_) { return null; }
+}
+
+function _showBotCollisionModal(collidingBots, leadName, stageName) {
+  return new Promise(resolve => {
+    const modal = document.getElementById('botCollisionModal');
+    const intro = document.getElementById('botCollisionIntro');
+    const list  = document.getElementById('botCollisionList');
+    if (!modal || !intro || !list) return resolve('skip');
+
+    intro.innerHTML = `Vas a mover a <strong>${escHtml(leadName || 'este lead')}</strong> a la etapa <strong>"${escHtml(stageName || '—')}"</strong>.<br>Pero ${collidingBots.length === 1 ? 'el siguiente bot' : 'los siguientes bots'} ya ${collidingBots.length === 1 ? 'tiene' : 'tienen'} un run activo para este lead:`;
+
+    list.innerHTML = collidingBots.map(b => {
+      const expiresStr = b.waitExpiresAt
+        ? `Expira ${relTime(b.waitExpiresAt)}`
+        : 'En ejecución';
+      return `<div class="bc-bot-item">
+        <span class="bc-bot-icon">🤖</span>
+        <div class="bc-bot-info">
+          <div class="bc-bot-name">${escHtml(b.name)}</div>
+          <div class="bc-bot-meta">⏱️ ${expiresStr}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const cleanup = () => {
+      modal.hidden = true;
+      modal.removeEventListener('click', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+    const onClick = (e) => {
+      const action = e.target.closest('[data-bc-action]')?.dataset?.bcAction;
+      if (action) { cleanup(); resolve(action); return; }
+      if (e.target.id === 'botCollisionClose' || e.target.id === 'botCollisionCancel' || e.target.id === 'botCollisionBackdrop') {
+        cleanup(); resolve('cancel');
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { cleanup(); resolve('cancel'); }
+      else if (e.key === 'Enter') { cleanup(); resolve('restart'); }
+    };
+    modal.addEventListener('click', onClick);
+    document.addEventListener('keydown', onKey);
+    modal.hidden = false;
+  });
 }
 
 // ═════════════════════════════════════════════════════════════════

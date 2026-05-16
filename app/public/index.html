@@ -24,6 +24,41 @@
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
   <div id="connBanner" class="conn-banner" hidden></div>
+  <!-- Modal: conflicto cuando un bot ya está corriendo para el lead -->
+  <div class="modal" id="botCollisionModal" hidden>
+    <div class="modal-backdrop" id="botCollisionBackdrop"></div>
+    <div class="modal-card modal-card--md">
+      <header class="modal-header">
+        <h3>⚠️ Bot ya está corriendo</h3>
+        <button class="modal-close" id="botCollisionClose" aria-label="Cerrar">×</button>
+      </header>
+      <div class="modal-body">
+        <p id="botCollisionIntro" style="font-size:14px;margin:0 0 12px">…</p>
+        <div id="botCollisionList" class="bc-list"><!-- JS render --></div>
+        <p style="font-size:13px;margin:16px 0 8px;font-weight:600">¿Qué quieres hacer?</p>
+        <div class="bc-options">
+          <button type="button" class="bc-option bc-option--primary" data-bc-action="restart">
+            <span class="bc-option-icon">🔄</span>
+            <div class="bc-option-text">
+              <strong>Reiniciar el bot</strong>
+              <small>Cancela el viejo y arranca uno nuevo desde el paso 1 — recomendado para testing</small>
+            </div>
+          </button>
+          <button type="button" class="bc-option" data-bc-action="skip">
+            <span class="bc-option-icon">⛔</span>
+            <div class="bc-option-text">
+              <strong>No iniciar bot nuevo</strong>
+              <small>El bot viejo sigue como está. El lead se mueve igual pero sin disparo extra</small>
+            </div>
+          </button>
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn--ghost" id="botCollisionCancel">Cancelar movimiento</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Barra global de progreso de bulk jobs (corren en el server) -->
   <div id="bulkJobBar" class="bulk-job-bar" hidden>
     <div class="bulk-job-bar-inner">

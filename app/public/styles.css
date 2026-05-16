@@ -1785,6 +1785,40 @@ body.nav-collapsed .nav-notif-panel {
 .conn-banner.is-degraded  { background: #f59e0b; }
 .conn-banner.is-recovered { background: #10b981; }
 
+/* ─── Modal: colisión de bot ─── */
+.bc-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.bc-bot-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-2, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+}
+.bc-bot-icon { font-size: 18px; flex-shrink: 0; }
+.bc-bot-info { flex: 1; min-width: 0; }
+.bc-bot-name { font-size: 13px; font-weight: 600; color: var(--text, #111); }
+.bc-bot-meta { font-size: 11px; color: var(--text-muted, #6b7280); margin-top: 2px; }
+.bc-options { display: flex; flex-direction: column; gap: 8px; }
+.bc-option {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: border-color .12s, background .12s, transform .08s;
+}
+.bc-option:hover { border-color: var(--primary, #2563eb); background: rgba(37,99,235,.04); }
+.bc-option:active { transform: scale(.99); }
+.bc-option--primary { border-color: var(--primary, #2563eb); background: rgba(37,99,235,.06); }
+.bc-option--primary:hover { background: rgba(37,99,235,.12); }
+.bc-option-icon { font-size: 20px; flex-shrink: 0; line-height: 1; }
+.bc-option-text { flex: 1; min-width: 0; }
+.bc-option-text strong { display: block; font-size: 13px; font-weight: 600; color: var(--text, #111); margin-bottom: 2px; }
+.bc-option-text small { display: block; font-size: 11px; color: var(--text-muted, #6b7280); line-height: 1.35; }
+
 /* ─── Barra global de bulk jobs ─── */
 .bulk-job-bar {
   position: fixed;

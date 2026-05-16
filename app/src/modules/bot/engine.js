@@ -144,8 +144,8 @@ function triggerMessage(db, { convoId, contactId, messageBody, provider, integra
 // triggers cíclicos hacen bucles infinitos.
 const MAX_BOT_CHAIN_DEPTH = 20;
 
-function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId, chainDepth = 0 }) {
-  _log('info', `triggerPipelineStage → expediente=${expedientId} contacto=${contactId} etapa=${stageId} (tipo=${typeof stageId}, chain=${chainDepth})`);
+function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId, chainDepth = 0, botCollisionPolicy = 'skip' }) {
+  _log('info', `triggerPipelineStage → expediente=${expedientId} contacto=${contactId} etapa=${stageId} (tipo=${typeof stageId}, chain=${chainDepth}, policy=${botCollisionPolicy})`);
 
   if (chainDepth > MAX_BOT_CHAIN_DEPTH) {
     _log('error', `chain depth ${chainDepth} excede el máximo (${MAX_BOT_CHAIN_DEPTH}). Posible bucle de bots — abortando.`);
@@ -184,6 +184,7 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId,
         stageId,
         chainDepth,
         tenantId,
+        botCollisionPolicy,
       });
     }
   }
@@ -208,8 +209,8 @@ function triggerNewContact(db, { contactId }) {
  * triggerPipelineStageLeave — fires when a lead LEAVES a stage (mirror of triggerPipelineStage).
  * trigger_value = the stageId being abandoned.
  */
-function triggerPipelineStageLeave(db, { expedientId, contactId, pipelineId, stageId, chainDepth = 0 }) {
-  _log('info', `triggerPipelineStageLeave → expediente=${expedientId} contacto=${contactId} etapa-saliente=${stageId} (chain=${chainDepth})`);
+function triggerPipelineStageLeave(db, { expedientId, contactId, pipelineId, stageId, chainDepth = 0, botCollisionPolicy = 'skip' }) {
+  _log('info', `triggerPipelineStageLeave → expediente=${expedientId} contacto=${contactId} etapa-saliente=${stageId} (chain=${chainDepth}, policy=${botCollisionPolicy})`);
   if (chainDepth > MAX_BOT_CHAIN_DEPTH) {
     _log('error', `chain depth ${chainDepth} excede el máximo. Posible bucle — abortando.`);
     return;
@@ -230,6 +231,7 @@ function triggerPipelineStageLeave(db, { expedientId, contactId, pipelineId, sta
       provider:      convoRow?.provider || null,
       integrationId: convoRow?.integration_id || null,
       expedientId, pipelineId, stageId, chainDepth, tenantId,
+      botCollisionPolicy,
     });
   }
 }
@@ -441,8 +443,11 @@ function runAsync(db, bot, ctx) {
       ).get(bot.id, ctx.contactId, ctx.tenantId);
       if (pendingWait) {
         const isReEntry = _messageMatchesFirstBranch(db, bot, ctx);
-        if (isReEntry) {
-          // Mensaje de re-entrada: cancelar wait + matar runs activos → arrancar fresco
+        // botCollisionPolicy=restart fuerza el reinicio aunque no sea re-entrada por mensaje
+        // (usado cuando el usuario mueve manualmente un lead a una etapa donde el bot ya corría).
+        const forceRestart = ctx.botCollisionPolicy === 'restart';
+        if (isReEntry || forceRestart) {
+          // Cancelar wait + matar runs activos → arrancar fresco
           db.prepare(
             "UPDATE bot_run_waits SET status='cancelled' WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status='waiting'"
           ).run(bot.id, ctx.contactId, ctx.tenantId);
@@ -450,7 +455,7 @@ function runAsync(db, bot, ctx) {
             "SELECT id FROM bot_runs WHERE bot_id=? AND contact_id=? AND tenant_id=? AND status IN ('running','paused')"
           ).all(bot.id, ctx.contactId, ctx.tenantId);
           for (const r of stale) killRun(db, r.id);
-          _log('info', `bot ${bot.id}: re-entrada detectada — wait cancelado, arrancando run fresco para contacto ${ctx.contactId}`);
+          _log('info', `bot ${bot.id}: ${forceRestart ? 'restart forzado por policy' : 're-entrada detectada'} — wait cancelado, arrancando run fresco para contacto ${ctx.contactId}`);
           // Continúa y arranca nuevo run abajo
         } else {
           _log('info', `bot ${bot.id} tiene wait suspendido para contacto ${ctx.contactId} — no se inicia nuevo run`);

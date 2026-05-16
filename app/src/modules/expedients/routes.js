@@ -17,17 +17,50 @@ module.exports = function createExpedientsRouter(db) {
   // El worker procesa de a chunks, el frontend polea /api/jobs/:id.
   router.post('/bulk-move', (req, res, next) => {
     try {
-      const { ids, stageId } = req.body || {};
+      const { ids, stageId, botCollisionPolicy } = req.body || {};
       if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids requerido' });
       if (!stageId) return res.status(400).json({ error: 'stageId requerido' });
+      const policy = botCollisionPolicy === 'restart' ? 'restart' : 'skip';
       const stage = db.prepare('SELECT name FROM stages WHERE id = ? AND tenant_id = ?').get(Number(stageId), req.tenantId);
       const label = `Moviendo ${ids.length} lead${ids.length === 1 ? '' : 's'} → ${stage?.name || 'etapa'}`;
       const job = jobRunner.enqueue(db, req.tenantId, {
         type: 'expedients_move',
-        payload: { ids: ids.map(Number), stageId: Number(stageId) },
+        payload: { ids: ids.map(Number), stageId: Number(stageId), botCollisionPolicy: policy },
         label,
       });
       res.json({ item: job });
+    } catch (e) { next(e); }
+  });
+
+  // Preview de un cambio de etapa — devuelve qué bots se dispararían y si tienen wait activo.
+  // El frontend lo usa para decidir si mostrar el modal de colisión.
+  router.post('/:id/preview-stage-move', (req, res, next) => {
+    try {
+      const expId = Number(req.params.id);
+      const { stageId } = req.body || {};
+      if (!stageId) return res.status(400).json({ error: 'stageId requerido' });
+      const exp = service.getById(db, req.tenantId, expId);
+      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (Number(exp.stageId) === Number(stageId)) {
+        return res.json({ sameStage: true, wouldFireBots: [] });
+      }
+      // Bots habilitados con trigger pipeline_stage = stageId destino
+      const bots = db.prepare(
+        "SELECT id, name FROM salsbots WHERE enabled = 1 AND trigger_type = 'pipeline_stage' AND trigger_value = ? AND tenant_id = ?"
+      ).all(String(stageId), req.tenantId);
+      const wouldFireBots = bots.map(b => {
+        const wait = db.prepare(
+          "SELECT id, expires_at FROM bot_run_waits WHERE bot_id = ? AND contact_id = ? AND tenant_id = ? AND status = 'waiting' LIMIT 1"
+        ).get(b.id, exp.contactId, req.tenantId);
+        return {
+          id: b.id,
+          name: b.name,
+          hasActiveWait: !!wait,
+          waitExpiresAt: wait?.expires_at || null,
+        };
+      });
+      const hasCollision = wouldFireBots.some(b => b.hasActiveWait);
+      res.json({ sameStage: false, hasCollision, wouldFireBots });
     } catch (e) { next(e); }
   });
 
@@ -225,6 +258,10 @@ module.exports = function createExpedientsRouter(db) {
     try {
       const newStageId = item.stageId;
       if (newStageId && prev && newStageId !== prev.stageId) {
+        // botCollisionPolicy decide qué pasa si el bot tiene wait activo:
+        //   'skip' (default) → no inicia nuevo run, deja el viejo
+        //   'restart' → cancela el wait viejo + mata runs activos + arranca fresco
+        const policy = (req.body || {}).botCollisionPolicy === 'restart' ? 'restart' : 'skip';
         // 1) Bot por SALIR de la etapa anterior
         if (prev.stageId) {
           botEngine.triggerPipelineStageLeave(db, {
@@ -232,6 +269,7 @@ module.exports = function createExpedientsRouter(db) {
             contactId:   item.contactId,
             pipelineId:  prev.pipelineId,
             stageId:     prev.stageId,
+            botCollisionPolicy: policy,
           });
         }
         // 2) Bot por ENTRAR a la nueva etapa (comportamiento existente)
@@ -240,6 +278,7 @@ module.exports = function createExpedientsRouter(db) {
           contactId:   item.contactId,
           pipelineId:  item.pipelineId,
           stageId:     newStageId,
+          botCollisionPolicy: policy,
         });
       }
     } catch (e) {

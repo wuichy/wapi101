@@ -3609,17 +3609,18 @@ const PERIOD_LABELS = {
 
 async function loadDashboard() {
   const subtitle = document.getElementById('dashSubtitle');
+  const me = getAdvisor();
   if (subtitle) {
     const now = new Date();
     const h = now.getHours();
     const greeting = h < 12 ? t('greeting.morning') : h < 19 ? t('greeting.afternoon') : t('greeting.evening');
-    const advisor = _profile?.firstName || _profile?.name || _advisor?.name || '';
+    const advisor = _profile?.firstName || _profile?.name || me?.name || '';
     subtitle.textContent = `${greeting}${advisor ? ', ' + advisor : ''} · Analíticas de ${PERIOD_LABELS[_dashPeriod] || _dashPeriod}`;
   }
 
   try {
     // Cargar advisors para selector (solo si admin y aún no cargados)
-    if (_advisor?.role === 'admin') {
+    if (me?.role === 'admin') {
       const filter = document.getElementById('dashAdvisorFilter');
       if (filter) filter.hidden = false;
       const select = document.getElementById('dashAdvisorSelect');

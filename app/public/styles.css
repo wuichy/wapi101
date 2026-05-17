@@ -11661,6 +11661,37 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   /* nav-bottom (profile/logout) — ocultar en mobile, accesible vía Ajustes */
   .nav-bottom, .sidebar-bottom { display: none; }
 
+  /* nav-advisor-bar (avatar + logout) → visible al final del bottom nav.
+     Aparece después del scroll de los items de navegación, anclada a la derecha. */
+  .nav-advisor-bar {
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px;
+    margin-left: auto;
+    background: transparent;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0;
+    flex-shrink: 0;
+    height: 100%;
+  }
+  .nav-advisor-info {
+    gap: 4px;
+    overflow: visible;
+  }
+  .nav-advisor-avatar {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+  }
+  .nav-advisor-name { display: none; } /* en mobile solo avatar */
+  .nav-cache-btn, .nav-logout-btn {
+    padding: 6px;
+    flex-shrink: 0;
+  }
+  .nav-logout-btn { color: #fca5a5; }
+
   /* Topbar: 2 filas en mobile (search arriba, extras abajo con scroll horizontal) */
   .topbar {
     padding: 8px 10px;

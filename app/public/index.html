@@ -743,6 +743,31 @@
             </div>
           </div>
 
+          <!-- Costo estimado de WhatsApp Business API — solo si hay integración conectada -->
+          <div class="dash-cost-card" id="dashCostCard" hidden>
+            <div class="dash-cost-header">
+              <div>
+                <h3>💰 Costo estimado de WhatsApp API</h3>
+                <p class="dash-cost-sub">Lo que Meta te cobra aproximadamente por las conversaciones iniciadas en este período.</p>
+              </div>
+              <div class="dash-cost-amount">
+                <span class="dash-cost-usd" id="dashCostUsd">$0.00</span>
+                <span class="dash-cost-mxn" id="dashCostMxn">≈ $0.00 MXN</span>
+              </div>
+            </div>
+            <div class="dash-cost-detail">
+              <div class="dash-cost-stat">
+                <span class="dash-cost-stat-label">Conversaciones facturables</span>
+                <span class="dash-cost-stat-value" id="dashCostConvos">0</span>
+              </div>
+              <div class="dash-cost-stat">
+                <span class="dash-cost-stat-label">Tarifa por conversación</span>
+                <span class="dash-cost-stat-value" id="dashCostRate">$0.0432 USD</span>
+              </div>
+            </div>
+            <p class="dash-cost-note" id="dashCostNote"></p>
+          </div>
+
           <!-- Calidad de entrega — solo si hubo envíos en el período -->
           <div class="dash-delivery-card" id="dashDeliveryCard" hidden>
             <div class="dash-delivery-header">

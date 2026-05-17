@@ -3685,6 +3685,23 @@ function renderDashboard(d) {
   set('dashConvos', fmt(m.leadsWon || 0));
   set('dashConvosUnread', `${fmt(m.leadsLost || 0)} perdidos · ${fmt(m.tasksCompleted || 0)} tareas hechas`);
 
+  // Costo estimado de Meta — solo si hay WhatsApp API conectada
+  const costCard = document.getElementById('dashCostCard');
+  if (costCard) {
+    if (d.metaCost) {
+      costCard.hidden = false;
+      const c = d.metaCost;
+      set('dashCostUsd', `$${c.totalUsd.toFixed(2)} USD`);
+      set('dashCostMxn', `≈ $${c.totalMxn.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`);
+      set('dashCostConvos', fmt(c.conversations));
+      set('dashCostRate', `$${c.ratePerConversationUsd.toFixed(4)} USD`);
+      set('dashCostNote', c.note || '');
+    } else {
+      // No hay integración WhatsApp API → ocultar card
+      costCard.hidden = true;
+    }
+  }
+
   // Calidad de entrega — solo si hubo envíos
   const status = d.deliveryStatus || {};
   const delivered = (status.delivered || 0) + (status.read || 0);

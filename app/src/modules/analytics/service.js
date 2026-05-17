@@ -158,6 +158,47 @@ function getDashboardData(db, tenantId, { period = 'today', advisorId = null, is
     `).all(start, end, start, end, start, end, start, end, tenantId);
   }
 
+  // Detectar si el tenant tiene integración WhatsApp API conectada.
+  // Si no, no calculamos costo (lo deja undefined → frontend oculta la card).
+  const waConnected = !!db.prepare(
+    "SELECT 1 FROM integrations WHERE tenant_id = ? AND provider = 'whatsapp' AND status = 'connected' LIMIT 1"
+  ).get(tenantId);
+
+  // ─── Costo estimado de WhatsApp Business API ─────────────────────────
+  // Meta cobra POR CONVERSACIÓN de 24h (no por mensaje). Tarifas LATAM ~MX 2026:
+  //   - Marketing:        $0.0432 USD / conversación
+  //   - Utility:          $0.0058 USD / conversación
+  //   - Authentication:   $0.0282 USD / conversación
+  //   - Service:          gratis primeras 1000/mes, luego ~$0.0058
+  // Como no rastreamos template categoría por mensaje (todavía), aproximamos:
+  //   Una conversación = un par (contact_id, día) con outgoing template.
+  //   Asumimos categoría "marketing" para outgoing iniciados por business
+  //   (sin incoming en las 24h previas). El resto es service/replies (gratis).
+  let metaCost = null;
+  if (waConnected) {
+    // Mensajes outgoing por (contact_id, día) — conversaciones distintas
+    const conversationsRow = db.prepare(`
+      SELECT COUNT(DISTINCT c.contact_id || '|' || date(m.created_at,'unixepoch','-6 hours')) AS n
+        FROM messages m
+        JOIN conversations c ON c.id = m.conversation_id
+       WHERE m.tenant_id = ? AND m.direction = 'outgoing'
+         AND m.created_at BETWEEN ? AND ?
+         AND m.status != 'failed'   -- los failed no cuentan para billing
+    `).get(tenantId, start, end);
+    const conversations = conversationsRow?.n || 0;
+    // Tarifa promedio aproximada — uso marketing rate como aproximación conservadora
+    const RATE_USD_PER_CONV = 0.0432;
+    const USD_TO_MXN = 18.5; // aproximado
+    const totalUsd = conversations * RATE_USD_PER_CONV;
+    metaCost = {
+      conversations,
+      totalUsd: Number(totalUsd.toFixed(2)),
+      totalMxn: Number((totalUsd * USD_TO_MXN).toFixed(2)),
+      ratePerConversationUsd: RATE_USD_PER_CONV,
+      note: 'Estimado simplificado. Meta cobra por conversación de 24h, no por mensaje. Tarifa: marketing MX (~$0.0432 USD).',
+    };
+  }
+
   // Status de mensajes salientes (delivered / read / sent / failed)
   // — útil para medir calidad de entrega y diagnóstico WABA.
   const sentByStatus = db.prepare(`
@@ -201,6 +242,7 @@ function getDashboardData(db, tenantId, { period = 'today', advisorId = null, is
     },
     deliveryStatus: statusCounts,
     deliveryFailures: failureReasons,
+    metaCost,
     byKind,
     byAdvisor,
   };

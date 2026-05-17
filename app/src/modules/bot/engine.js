@@ -434,6 +434,32 @@ function _messageMatchesFirstBranch(db, bot, ctx) {
 function runAsync(db, bot, ctx) {
   if (ctx.contactId && bot.id) {
     try {
+      // botCollisionPolicy='restart' es una decisión del usuario para "limpiar
+      // todo lo viejo y empezar fresco". Cancelamos TODOS los waits + runs del
+      // contacto (no solo del bot actual) para que bots viejos de otras etapas
+      // no interfieran con el flow nuevo (caso típico: lead pasó A→B→A y los
+      // timers de B siguen corriendo en background, listos para mover al lead
+      // a etapas inesperadas).
+      if (ctx.botCollisionPolicy === 'restart') {
+        const allWaits = db.prepare(
+          "SELECT DISTINCT bot_id FROM bot_run_waits WHERE contact_id=? AND tenant_id=? AND status='waiting'"
+        ).all(ctx.contactId, ctx.tenantId);
+        if (allWaits.length) {
+          db.prepare(
+            "UPDATE bot_run_waits SET status='cancelled' WHERE contact_id=? AND tenant_id=? AND status='waiting'"
+          ).run(ctx.contactId, ctx.tenantId);
+          const stale = db.prepare(
+            "SELECT id FROM bot_runs WHERE contact_id=? AND tenant_id=? AND status IN ('running','paused')"
+          ).all(ctx.contactId, ctx.tenantId);
+          for (const r of stale) killRun(db, r.id);
+          _log('info', `restart-all: ${allWaits.length} bot(s) cancelado(s) para contacto ${ctx.contactId}, arrancando bot ${bot.id} fresco`);
+        }
+        // Cae por debajo y arranca el run nuevo de este bot — sin ya validar pendingWait
+        execute(db, bot, ctx).catch(err => {
+          _log('error', `bot ${bot.id} "${bot.name}" error: ${err.message}\n${err.stack}`);
+        });
+        return;
+      }
       // Si hay un wait_response suspendido para este bot+contacto, verificar
       // si el mensaje es un "re-entry" (matchea el primer branch del bot).
       // Si sí → cancelar el wait viejo y arrancar run fresco.

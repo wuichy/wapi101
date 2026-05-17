@@ -15608,20 +15608,25 @@ async function checkBotCollision(expedientId, stageId, leadName, stageName) {
   try {
     const res = await api('POST', `/api/expedients/${expedientId}/preview-stage-move`, { stageId });
     if (!res?.hasCollision) return null;
-    return await _showBotCollisionModal(res.wouldFireBots.filter(b => b.hasActiveWait), leadName, stageName);
+    // Mostramos TODOS los bots con wait activo (no solo los que matchean el stage
+    // destino) porque "Reiniciar" los va a cancelar a todos para evitar
+    // interferencias de bots viejos de otras etapas.
+    return await _showBotCollisionModal(res.activeBots || [], leadName, stageName);
   } catch (_) { return null; }
 }
 
-function _showBotCollisionModal(collidingBots, leadName, stageName) {
+function _showBotCollisionModal(activeBots, leadName, stageName) {
   return new Promise(resolve => {
     const modal = document.getElementById('botCollisionModal');
     const intro = document.getElementById('botCollisionIntro');
     const list  = document.getElementById('botCollisionList');
+    const restartBtn = modal?.querySelector('[data-bc-action="restart"]');
     if (!modal || !intro || !list) return resolve('skip');
 
-    intro.innerHTML = `Vas a mover a <strong>${escHtml(leadName || 'este lead')}</strong> a la etapa <strong>"${escHtml(stageName || '—')}"</strong>.<br>Pero ${collidingBots.length === 1 ? 'el siguiente bot' : 'los siguientes bots'} ya ${collidingBots.length === 1 ? 'tiene' : 'tienen'} un run activo para este lead:`;
+    const count = activeBots.length;
+    intro.innerHTML = `Vas a mover a <strong>${escHtml(leadName || 'este lead')}</strong> a la etapa <strong>"${escHtml(stageName || '—')}"</strong>.<br>Este lead tiene <strong>${count} bot${count === 1 ? '' : 's'}</strong> corriendo:`;
 
-    list.innerHTML = collidingBots.map(b => {
+    list.innerHTML = activeBots.map(b => {
       const expiresStr = b.waitExpiresAt
         ? `Expira ${relTime(b.waitExpiresAt)}`
         : 'En ejecución';
@@ -15633,6 +15638,16 @@ function _showBotCollisionModal(collidingBots, leadName, stageName) {
         </div>
       </div>`;
     }).join('');
+
+    // Actualizar el texto del botón Reiniciar para que el user sepa que va a limpiar TODOS
+    if (restartBtn) {
+      const small = restartBtn.querySelector('small');
+      if (small) {
+        small.textContent = count > 1
+          ? `Cancela los ${count} bots viejos del lead y arranca el bot del stage destino fresco — evita interferencias futuras`
+          : 'Cancela el bot viejo y arranca uno fresco desde el paso 1 — recomendado para testing';
+      }
+    }
 
     const cleanup = () => {
       modal.hidden = true;

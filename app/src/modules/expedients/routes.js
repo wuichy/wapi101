@@ -34,6 +34,8 @@ module.exports = function createExpedientsRouter(db) {
 
   // Preview de un cambio de etapa — devuelve qué bots se dispararían y si tienen wait activo.
   // El frontend lo usa para decidir si mostrar el modal de colisión.
+  // Si hay colisión, también devolvemos TODOS los bots con wait activo para el contacto
+  // (no solo los del stage destino) — porque "Reiniciar" los va a cancelar a todos.
   router.post('/:id/preview-stage-move', (req, res, next) => {
     try {
       const expId = Number(req.params.id);
@@ -42,7 +44,7 @@ module.exports = function createExpedientsRouter(db) {
       const exp = service.getById(db, req.tenantId, expId);
       if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
       if (Number(exp.stageId) === Number(stageId)) {
-        return res.json({ sameStage: true, wouldFireBots: [] });
+        return res.json({ sameStage: true, wouldFireBots: [], activeBots: [] });
       }
       // Bots habilitados con trigger pipeline_stage = stageId destino
       const bots = db.prepare(
@@ -59,8 +61,20 @@ module.exports = function createExpedientsRouter(db) {
           waitExpiresAt: wait?.expires_at || null,
         };
       });
-      const hasCollision = wouldFireBots.some(b => b.hasActiveWait);
-      res.json({ sameStage: false, hasCollision, wouldFireBots });
+      // TODOS los bots con wait activo del contacto (incluyendo de otras etapas).
+      // Si el user elige Reiniciar, estos también se van a cancelar para evitar
+      // que un bot viejo de otra etapa interfiera con el flow nuevo.
+      const activeBots = db.prepare(`
+        SELECT DISTINCT b.id, b.name, w.expires_at
+          FROM bot_run_waits w
+          JOIN salsbots b ON b.id = w.bot_id
+         WHERE w.contact_id = ? AND w.tenant_id = ? AND w.status = 'waiting'
+         ORDER BY w.expires_at ASC
+      `).all(exp.contactId, req.tenantId).map(r => ({
+        id: r.id, name: r.name, waitExpiresAt: r.expires_at,
+      }));
+      const hasCollision = wouldFireBots.some(b => b.hasActiveWait) || activeBots.length > 0;
+      res.json({ sameStage: false, hasCollision, wouldFireBots, activeBots });
     } catch (e) { next(e); }
   });
 

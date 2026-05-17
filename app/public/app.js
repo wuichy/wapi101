@@ -4004,11 +4004,14 @@ function setupNav() {
 function setupSettingsTabs() {
   const tabs = document.querySelectorAll(".settings-tab");
   const panes = document.querySelectorAll(".settings-pane");
+  const shell = document.querySelector('.settings-shell');
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       const target = tab.dataset.settings;
       tabs.forEach((t) => t.classList.toggle("is-active", t === tab));
       panes.forEach((p) => p.classList.toggle("is-active", p.dataset.settings === target));
+      // En mobile: cambiar a vista de detalle (oculta lista, muestra contenido)
+      if (shell) shell.classList.add('is-detail-mode');
       if (target === 'papelera') loadTrash();
       if (target === 'tokens-maquina') loadMachineTokens();
       if (target === 'reportes') loadReports();
@@ -4018,6 +4021,12 @@ function setupSettingsTabs() {
       if (target === 'integraciones') loadIntegrations();
       if (target === 'aplicaciones') loadAppsSection();
     });
+  });
+  // Botón "Volver" para mobile — vuelve al listado de categorías
+  document.getElementById('settingsMobileBack')?.addEventListener('click', () => {
+    if (shell) shell.classList.remove('is-detail-mode');
+    tabs.forEach((t) => t.classList.remove('is-active'));
+    panes.forEach((p) => p.classList.remove('is-active'));
   });
 
   const AI_DEFAULT_MODELS = { anthropic: 'claude-opus-4-7', openai: 'gpt-4o-mini', google: 'gemini-1.5-flash', ollama: 'gemma2:9b' };

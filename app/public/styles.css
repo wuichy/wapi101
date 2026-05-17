@@ -11430,17 +11430,32 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
    Breakpoint: <= 768px (tablet portrait y smartphone)
    ═══════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* Layout: 1 columna, sidebar baja al bottom como navbar */
-  .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+  /* Layout: 1 columna, sidebar baja al bottom como navbar.
+     !important para vencer las reglas de body.nav-collapsed/expanded que
+     tienen más especificidad y aplicarían columnas de desktop. */
+  .app,
+  body.nav-collapsed .app,
+  body.nav-expanded .app,
+  body:not(.nav-collapsed) .app {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr auto !important;
     height: 100dvh; /* dynamic vh para iOS Safari (no se tapa con barra del navegador) */
   }
 
-  /* Sidebar → bottom nav horizontal */
+  /* La main se queda arriba (row 1), el sidebar se va al bottom (row 2).
+     Override del height:100vh global porque ya estamos en grid con 1fr auto. */
+  .main {
+    grid-row: 1 / 2;
+    min-height: 0;
+    height: auto !important;
+    overflow: hidden;
+  }
+  .sidebar { grid-row: 2 / 3; }
+
+  /* Sidebar → bottom nav horizontal — altura fija para no estirar items */
   .sidebar {
     flex-direction: row;
-    align-items: stretch;
+    align-items: center; /* IMPORTANTE: center, NO stretch — sino el item activo se estira a toda la altura */
     justify-content: flex-start;
     padding: 4px 6px;
     padding-bottom: calc(4px + env(safe-area-inset-bottom, 0));
@@ -11452,6 +11467,8 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
     scrollbar-width: none;
     -ms-overflow-style: none;
     gap: 0;
+    height: auto;
+    max-height: 76px;
   }
   .sidebar::-webkit-scrollbar { display: none; }
 
@@ -11460,13 +11477,16 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
      no leídos se ve en el icono Chats del bottom nav. */
   .sidebar-top { display: none; }
 
-  /* Nav items horizontales */
+  /* Nav items horizontales — el contenedor también debe ser center */
   .nav {
     flex-direction: row;
+    align-items: center;
     gap: 0;
     margin-top: 0;
     width: 100%;
     min-width: max-content; /* permite scroll horizontal cuando overflow */
+    flex: 1 1 auto;
+    height: auto;
   }
   .nav-item {
     flex-direction: column;

@@ -11424,3 +11424,130 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-pg-btn { background:var(--bg-alt); border:1px solid var(--border); border-radius:6px; padding:5px 12px; font-size:12px; cursor:pointer; color:var(--text); }
 .woo-pg-btn:hover { background:var(--bg-hover,#e2e8f0); }
 .woo-pg-info { font-size:12px; color:var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE — bottom navigation + responsive layout
+   Breakpoint: <= 768px (tablet portrait y smartphone)
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Layout: 1 columna, sidebar baja al bottom como navbar */
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    height: 100dvh; /* dynamic vh para iOS Safari (no se tapa con barra del navegador) */
+  }
+
+  /* Sidebar → bottom nav horizontal */
+  .sidebar {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 4px 6px;
+    padding-bottom: calc(4px + env(safe-area-inset-bottom, 0));
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 100;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    gap: 0;
+  }
+  .sidebar::-webkit-scrollbar { display: none; }
+
+  /* Sidebar-top (logo + campana) ocultos en mobile.
+     Las notificaciones siguen llegando por push; el badge de chats
+     no leídos se ve en el icono Chats del bottom nav. */
+  .sidebar-top { display: none; }
+
+  /* Nav items horizontales */
+  .nav {
+    flex-direction: row;
+    gap: 0;
+    margin-top: 0;
+    width: 100%;
+    min-width: max-content; /* permite scroll horizontal cuando overflow */
+  }
+  .nav-item {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 10px;
+    font-size: 9px;
+    min-width: 64px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    white-space: nowrap;
+    line-height: 1.1;
+  }
+  .nav-item svg { width: 22px; height: 22px; }
+  /* Override del display:none de la regla normal — en mobile sí mostramos texto bajo icono */
+  body .nav-item span:not(.nav-badge) {
+    display: inline !important;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  /* Badge ajustado para el layout columnar */
+  .nav-item .nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 8px;
+  }
+
+  /* Ocultar collapse button (no aplica en mobile) */
+  #navCollapseBtn { display: none; }
+
+  /* nav-bottom (profile/logout) — ocultar en mobile, accesible vía Ajustes */
+  .nav-bottom, .sidebar-bottom { display: none; }
+
+  /* Topbar más compacto */
+  .topbar {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .topbar-title {
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .topbar-search {
+    min-width: 0;
+    flex: 1;
+  }
+  .topbar-search input {
+    font-size: 14px;
+    padding: 6px 8px;
+  }
+  /* Botones de los extras del topbar — un poco más compactos */
+  .topbar-actions, .topbar-pl-extras, .topbar-exp-extras,
+  .topbar-customers-extras, .topbar-cal-extras, .topbar-tpl-extras,
+  .topbar-bot-extras, .topbar-pedidos-extras {
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  /* Barra flotante de jobs — un poco más arriba para no chocar con bottom nav */
+  .bulk-job-bar {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0));
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-width: none;
+  }
+
+  /* Toasts también suben para no chocar con bottom nav */
+  .toast-container {
+    bottom: calc(80px + env(safe-area-inset-bottom, 0)) !important;
+  }
+}
+
+/* Smartphone chico (<=420px) — apretar todavía más */
+@media (max-width: 420px) {
+  .nav-item {
+    min-width: 56px;
+    padding: 6px 8px;
+  }
+  .nav-item svg { width: 20px; height: 20px; }
+  body .nav-item span:not(.nav-badge) { font-size: 9px; }
+  .topbar-title { font-size: 14px; }
+}

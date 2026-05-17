@@ -3765,6 +3765,44 @@ body[data-view-active="chats"] .main { background: #f2f2f7; }
   to   { transform: translate(-50%, 0);    opacity: 1; }
 }
 
+/* Mobile: toast como barra arriba del bottom nav, no pill flotante */
+@media (max-width: 768px) {
+  .app-update-toast {
+    left: 12px;
+    right: 12px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0)); /* arriba del bottom nav */
+    transform: none;
+    max-width: none;
+    width: auto;
+    border-radius: 12px;
+    padding: 10px 12px;
+    gap: 8px;
+    font-size: 12px;
+    box-shadow: 0 4px 16px rgba(30, 64, 175, 0.4);
+  }
+  .app-update-toast > span {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.3;
+  }
+  .app-update-toast button {
+    padding: 6px 10px;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .app-update-toast button[aria-label="Cerrar"] {
+    padding: 4px 6px;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+  }
+  @keyframes appUpdateSlide {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+}
+
 /* Empty state cuando no hay conversación seleccionada */
 .rh-empty-state {
   display: flex;

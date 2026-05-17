@@ -3811,6 +3811,77 @@ function filterAppsList(q) {
     }
   });
 }
+// ═════════════════════════════════════════════════════════════════
+// ROUTER — historial del navegador (back/forward funcionan dentro de la app)
+// Hash-based: #/pipelines, #/lead/123, #/bot/45
+// ═════════════════════════════════════════════════════════════════
+const ROUTER = {
+  _suppress: false,  // mientras restauramos desde popstate, no queremos hacer push otra vez
+
+  // parsea location.hash → { type, ...props }
+  parse(hash) {
+    const h = String(hash || '').replace(/^#\/?/, '');
+    if (!h) return null;
+    const parts = h.split('/').filter(Boolean);
+    if (!parts.length) return null;
+    if (parts[0] === 'lead' && parts[1]) return { type: 'lead', id: Number(parts[1]) };
+    if (parts[0] === 'bot' && parts[1])  return { type: 'bot',  id: Number(parts[1]) };
+    return { type: 'view', view: parts[0] };
+  },
+
+  // construye un hash desde el state
+  build(state) {
+    if (!state) return '';
+    if (state.type === 'lead') return `#/lead/${state.id}`;
+    if (state.type === 'bot')  return `#/bot/${state.id}`;
+    if (state.type === 'view') return `#/${state.view}`;
+    return '';
+  },
+
+  push(state) {
+    if (this._suppress) return;
+    const url = this.build(state);
+    if (!url) return;
+    // Evitar duplicados (ej. clicks repetidos en la misma vista)
+    if (history.state && history.state.type === state.type && history.state.view === state.view && history.state.id === state.id) return;
+    try { history.pushState(state, '', url); } catch (_) {}
+  },
+
+  replace(state) {
+    if (this._suppress) return;
+    const url = this.build(state);
+    if (!url) return;
+    try { history.replaceState(state, '', url); } catch (_) {}
+  },
+
+  // Llamado en popstate o en boot inicial — restaura la vista sin re-pushear
+  async restore(state) {
+    if (!state) return false;
+    this._suppress = true;
+    try {
+      if (state.type === 'view') {
+        showView(state.view || 'chats');
+      } else if (state.type === 'lead') {
+        await openExpDetail(state.id, state.from || 'pipelines');
+      } else if (state.type === 'bot' && typeof openBotBuilder === 'function') {
+        openBotBuilder(state.id);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      this._suppress = false;
+    }
+  },
+};
+
+// Listener global de back/forward — restaura la vista guardada en el state.
+window.addEventListener('popstate', (e) => {
+  const state = e.state || ROUTER.parse(location.hash);
+  if (state) ROUTER.restore(state);
+  // Si no hay state ni hash, dejamos que el navegador maneje (probablemente sale de la app)
+});
+
 function showView(viewName) {
   // 'recordatorios' es alias legacy — redirige a calendario en sub-vista lista
   if (viewName === 'recordatorios') {
@@ -3899,6 +3970,12 @@ function showView(viewName) {
   else stopPedidosPoller();
   if (viewName === 'pipelines') startKanbanWooPoller();
   else stopKanbanWooPoller();
+
+  // Empujar al historial del navegador (no si estamos restaurando vía popstate).
+  // 'exp-detail' lo maneja openExpDetail con su propio state (incluye id).
+  if (viewName !== 'exp-detail') {
+    ROUTER.push({ type: 'view', view: viewName });
+  }
 }
 
 function setupNav() {
@@ -5185,6 +5262,9 @@ async function openExpDetail(id, from = 'expedientes') {
   renderExpDetailBots();
   renderExpLeadTagsBar();
   await loadExpDetailConvos();
+
+  // Empujar al historial con el id del lead (para que back/forward funcionen)
+  ROUTER.push({ type: 'lead', id: Number(id), from });
 }
 
 function renderExpDetailInfo() {
@@ -6063,12 +6143,19 @@ function renderExpDetailMessages() {
 }
 
 function setupExpDetail() {
-  // Back button uses origin view; clear saved exp-detail so refresh doesn't re-open it
+  // Back button: usa history.back() para que back/forward del navegador
+  // queden sincronizados. Si no hay historial previo (deep link), fallback a EXP_DETAIL_FROM.
   document.getElementById('expDetailBack')?.addEventListener('click', () => {
     _stopBotRunsPolling();
     localStorage.removeItem('lastExpDetailId');
     localStorage.setItem('lastView', EXP_DETAIL_FROM);
-    showView(EXP_DETAIL_FROM);
+    // Si el history.state previo es de wapi101 → history.back() funciona.
+    // Si llegamos por deep link directo → no hay back interno, hacemos showView manual.
+    if (history.length > 1 && history.state && history.state.type) {
+      history.back();
+    } else {
+      showView(EXP_DETAIL_FROM);
+    }
   });
 
   // Delete button (lives in the static HTML, wired once)
@@ -15488,10 +15575,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   const _savedExpId  = localStorage.getItem('lastExpDetailId');
   const _savedExpFrom = localStorage.getItem('lastExpDetailFrom') || 'pipelines';
 
-  if (_savedView === 'exp-detail' && _savedExpId) {
-    // openExpDetail calls showView('exp-detail') internally
+  // 1ro: si la URL trae hash (deep link compartido o reload), respetar ese
+  const urlState = ROUTER.parse(location.hash);
+  if (urlState) {
+    ROUTER.restore(urlState);
+  } else if (_savedView === 'exp-detail' && _savedExpId) {
+    // 2do: si localStorage tiene un lead abierto, restaurarlo
     openExpDetail(Number(_savedExpId), _savedExpFrom);
   } else {
+    // 3ro: caer en la última vista
     showView(_savedView);
   }
 

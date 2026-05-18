@@ -21,6 +21,12 @@ const I18N_TRANSLATIONS = {
     'nav.ajustes': 'Configuración',
     'nav.collapse': 'Colapsar menú',
     'nav.expand': 'Expandir menú',
+    'nav.copiloto': 'Copiloto',
+    'nav.comentarios': 'Comentarios',
+    'nav.pedidos': 'Pedidos',
+    'nav.calendario': 'Calendario',
+    'nav.mail': 'Mail',
+    'nav.respaldos': 'Respaldos',
     // Ajustes — tabs
     'settings.tab.usuarios': 'Asesores',
     'settings.tab.ia': 'IA',
@@ -505,6 +511,19 @@ const I18N_TRANSLATIONS = {
     'greeting.morning': 'Buenos días',
     'greeting.afternoon': 'Buenas tardes',
     'greeting.evening': 'Buenas noches',
+    // Dashboard subtitle: "Buenos días, Luis · Analíticas de hoy"
+    'dash.subtitle.prefix': 'Analíticas de',
+    // Tiempo relativo (lista de chats, leads, etc.)
+    'reltime.now': 'Ahora',
+    'reltime.min_ago': 'Hace {n} min',
+    'reltime.today': 'Hoy',
+    'reltime.yesterday': 'Ayer',
+    'reltime.days_ago_one': 'Hace 1 día',
+    'reltime.days_ago_other': 'Hace {n} días',
+    // Idioma section (settings)
+    'config.lang.section': 'Idioma',
+    // Apps desc (settings)
+    'settings.aplicaciones.desc': 'Instala apps del marketplace para extender Wapi101.',
     // Connection status
     'conn.offline': 'Sin conexión con el servidor — reintentando…',
     'conn.degraded': 'Conexión inestable — verificando…',
@@ -565,6 +584,12 @@ const I18N_TRANSLATIONS = {
     'nav.ajustes': 'Settings',
     'nav.collapse': 'Collapse menu',
     'nav.expand': 'Expand menu',
+    'nav.copiloto': 'Copilot',
+    'nav.comentarios': 'Comments',
+    'nav.pedidos': 'Orders',
+    'nav.calendario': 'Calendar',
+    'nav.mail': 'Mail',
+    'nav.respaldos': 'Backups',
     // Settings — tabs
     'settings.tab.usuarios': 'Agents',
     'settings.tab.ia': 'AI',
@@ -1049,6 +1074,19 @@ const I18N_TRANSLATIONS = {
     'greeting.morning': 'Good morning',
     'greeting.afternoon': 'Good afternoon',
     'greeting.evening': 'Good evening',
+    // Dashboard subtitle: "Good morning, Luis · Analytics for today"
+    'dash.subtitle.prefix': 'Analytics for',
+    // Relative time
+    'reltime.now': 'Now',
+    'reltime.min_ago': '{n} min ago',
+    'reltime.today': 'Today',
+    'reltime.yesterday': 'Yesterday',
+    'reltime.days_ago_one': '1 day ago',
+    'reltime.days_ago_other': '{n} days ago',
+    // Language section (settings)
+    'config.lang.section': 'Language',
+    // Apps desc (settings)
+    'settings.aplicaciones.desc': 'Install marketplace apps to extend Wapi101.',
     // Connection status
     'conn.offline': 'No server connection — retrying…',
     'conn.degraded': 'Unstable connection — checking…',
@@ -2322,7 +2360,7 @@ function updateSortLabel() {
 }
 function renderSortHeaders() { updateSortLabel(); }
 
-// ─── Formateo de fecha amigable ───
+// ─── Formateo de fecha amigable (respeta locale activo) ───
 function formatDate(unixSeconds) {
   if (!unixSeconds) return "—";
   const d = new Date(unixSeconds * 1000);
@@ -2332,21 +2370,21 @@ function formatDate(unixSeconds) {
   const diffH = Math.floor(diffMs / 3600000);
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfYesterday = startOfToday - 86400000;
-  const t = d.getTime();
+  const dTime = d.getTime();
+  // Locale dinámico — usa el locale activo del usuario para fecha/hora
+  const locale = (typeof getLocale === 'function' ? getLocale() : 'es-MX');
+  const time = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
-  const time = d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
-
-  if (diffMin < 1) return "Ahora";
-  if (diffMin < 60) return `Hace ${diffMin} min`;
-  if (t >= startOfToday) return `Hoy ${time}`;
-  if (t >= startOfYesterday) return `Ayer ${time}`;
+  if (diffMin < 1) return t('reltime.now');
+  if (diffMin < 60) return t('reltime.min_ago').replace('{n}', String(diffMin));
+  if (dTime >= startOfToday) return `${t('reltime.today')} ${time}`;
+  if (dTime >= startOfYesterday) return `${t('reltime.yesterday')} ${time}`;
   if (diffH < 24 * 7) {
     const days = Math.floor(diffH / 24);
-    return `Hace ${days} día${days === 1 ? "" : "s"}`;
+    return days === 1 ? t('reltime.days_ago_one') : t('reltime.days_ago_other').replace('{n}', String(days));
   }
-  // Misma año → "12 mar"; año anterior → "12 mar 2025"
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString("es-MX", sameYear
+  return d.toLocaleDateString(locale, sameYear
     ? { day: "numeric", month: "short" }
     : { day: "numeric", month: "short", year: "numeric" });
 }
@@ -3708,7 +3746,8 @@ async function loadDashboard() {
     const h = now.getHours();
     const greeting = h < 12 ? t('greeting.morning') : h < 19 ? t('greeting.afternoon') : t('greeting.evening');
     const advisor = _profile?.firstName || _profile?.name || me?.name || '';
-    subtitle.textContent = `${greeting}${advisor ? ', ' + advisor : ''} · Analíticas de ${PERIOD_LABELS[_dashPeriod] || _dashPeriod}`;
+    const periodLbl = (PERIOD_LABELS[_dashPeriod] || _dashPeriod).toLowerCase();
+    subtitle.textContent = `${greeting}${advisor ? ', ' + advisor : ''} · ${t('dash.subtitle.prefix')} ${periodLbl}`;
   }
 
   try {

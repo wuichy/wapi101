@@ -193,6 +193,17 @@ app.get('/api/public/plans', (_req, res) => {
 // flujo de auth con tokens sa_*. NO usa req.tenantId ni filtros multi-tenant.
 mountSafe('/super', require('./src/modules/super/routes'));
 
+// ─── Headers de seguridad globales (helmet) ───
+// Protege contra clickjacking, MIME sniffing, downgrade HTTP, etc.
+// CSP relajada porque la SPA usa scripts inline y eval para algunas operaciones —
+// si en el futuro removemos eso, se puede tightening.
+const helmet = require('helmet');
+app.use(helmet({
+  contentSecurityPolicy: false, // Desactivado: la SPA usa scripts inline/eval. Reactivar tras refactor.
+  crossOriginEmbedderPolicy: false, // Permite cargar recursos de Meta/Stripe/etc.
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permite que webhook URLs reciban POSTs externos
+}));
+
 // JSON parser global para el resto.
 // 150mb para soportar adjuntos de chat (PDFs hasta 100MB → ~133MB en base64).
 // Imágenes y videos pequeños caben holgadamente. La expansión base64 es 4/3.
@@ -206,7 +217,24 @@ app.get('/api/push/vapid-public-key', (_req, res) => {
 // ─── Login endpoints (públicos, no requieren sesión) ───
 const { authMiddleware, loadTenant } = require('./src/middleware/auth');
 
-app.post('/api/auth/login', (req, res) => {
+// Rate limiting para login: 10 intentos por IP cada 15 min.
+// Si el atacante usa rotación de IPs hay menos prevención (necesitaríamos fail2ban
+// o capto de captcha tras N fallos por usuario), pero esto bloquea el brute force
+// trivial desde una sola IP.
+const rateLimit = require('express-rate-limit');
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Trust proxy (Cloudflare) → usa X-Forwarded-For
+  keyGenerator: (req) => req.ip || req.connection?.remoteAddress || 'unknown',
+  message: { error: 'Demasiados intentos. Espera 15 minutos.', code: 'RATE_LIMITED' },
+});
+// Habilitar trust proxy para que req.ip sea la IP real del cliente vía Cloudflare
+app.set('trust proxy', 1);
+
+app.post('/api/auth/login', loginLimiter, (req, res) => {
   const { username, password, tenantSlug, remember } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
   const result = advisorSvc.login(db, username.trim(), password, tenantSlug ? String(tenantSlug).trim() : null);
@@ -517,17 +545,18 @@ app.patch('/api/settings/split', (req, res) => {
 //   - Server vivo + DB accesible → 200
 //   - Alguna integración marcada como 'connected' en DB pero el manager dice
 //     'disconnected' o 'error' → 503 (alerta UptimeRobot)
+// SEGURIDAD: respuesta NO expone IDs ni nombres de integraciones de tenants
+// (sólo conteo agregado) para no dar info útil a atacantes haciendo recon.
+// Detalles completos requieren token (HEALTHZ_TOKEN env var).
 const healthzStats = { hits: 0, last: null };
-app.get('/healthz', (_req, res) => {
+app.get('/healthz', (req, res) => {
   healthzStats.hits++;
   healthzStats.last = Date.now();
   try {
     db.prepare('SELECT 1').get();
   } catch (err) {
-    return res.status(503).json({ ok: false, reason: 'db_error', message: err.message });
+    return res.status(503).json({ ok: false, reason: 'db_error' });
   }
-  // Estado de integraciones whatsapp-lite (Baileys) — todas las del sistema,
-  // monitoreo cross-tenant para alertas operacionales (UptimeRobot).
   const issues = [];
   try {
     const waMgr = require('./src/modules/integrations/whatsapp-web/manager');
@@ -541,10 +570,16 @@ app.get('/healthz', (_req, res) => {
       }
     }
   } catch (_) {}
+  // Permite detalles completos si se pasa el HEALTHZ_TOKEN configurado en .env.
+  // Sin token → respuesta mínima sin info sensible (solo ok/issues count).
+  const token = req.headers['x-healthz-token'] || req.query.token;
+  const showDetails = process.env.HEALTHZ_TOKEN && token === process.env.HEALTHZ_TOKEN;
   if (issues.length) {
-    return res.status(503).json({ ok: false, reason: 'integration_unhealthy', issues, env: config.env, ts: Date.now() });
+    return res.status(503).json(showDetails
+      ? { ok: false, reason: 'integration_unhealthy', issues, ts: Date.now() }
+      : { ok: false, issueCount: issues.length });
   }
-  res.json({ ok: true, env: config.env, ts: Date.now() });
+  res.json(showDetails ? { ok: true, env: config.env, ts: Date.now() } : { ok: true });
 });
 app.get('/api/ai/info', (_req, res) => {
   const p = config.ai.provider;

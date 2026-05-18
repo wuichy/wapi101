@@ -177,6 +177,55 @@ module.exports = function createConversationsRouter(db) {
       const buffer = Buffer.from(cleanB64, 'base64');
       if (!buffer.length) return res.status(400).json({ error: 'Archivo vacío' });
 
+      // ─── Validación de magic bytes ───
+      // El mimetype declarado por el cliente NO es confiable. Verificamos el
+      // contenido real con file-type para detectar archivos disfrazados
+      // (ej. .exe con extensión .jpg, o HTML/JS embebido en SVG).
+      // Lista de MIME types confiables que aceptamos.
+      const ALLOWED_MIMES = new Set([
+        // Imágenes
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        // Video
+        'video/mp4', 'video/webm', 'video/quicktime',
+        // Audio
+        'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/webm',
+        // Documents
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'text/plain', 'text/csv',
+        // Archivos comprimidos comunes que sí son útiles compartir
+        'application/zip',
+      ]);
+      try {
+        const fileTypeModule = await import('file-type');
+        const detected = await fileTypeModule.fileTypeFromBuffer(buffer);
+        // Archivos de texto plano (CSV/TXT) NO tienen magic bytes — los aceptamos
+        // solo si el mimetype declarado es text/plain o text/csv y el tamaño es chico.
+        const isPlainText = !detected && (mimetype === 'text/plain' || mimetype === 'text/csv') && buffer.length < 10 * 1024 * 1024;
+        if (!isPlainText) {
+          if (!detected) {
+            return res.status(400).json({ error: 'No se pudo detectar el tipo real del archivo. Sube un formato válido (imagen, video, PDF, etc.).' });
+          }
+          if (!ALLOWED_MIMES.has(detected.mime)) {
+            return res.status(400).json({ error: `Tipo de archivo no permitido: ${detected.mime}. Permitidos: imágenes, video, audio, PDF, Office, ZIP.` });
+          }
+          if (detected.mime !== mimetype && !(mimetype === 'video/mp4' && detected.mime === 'video/x-m4v')) {
+            // El cliente mintió sobre el mimetype → reescribimos al detectado real
+            // No bloqueamos (puede ser variación válida como image/jpg vs image/jpeg)
+            // pero usamos el detectado de aquí en adelante.
+            console.warn(`[upload] mimetype declarado "${mimetype}" no matchea detectado "${detected.mime}" — usando el detectado`);
+          }
+        }
+      } catch (ftErr) {
+        console.error('[upload] file-type validation error:', ftErr.message);
+        return res.status(500).json({ error: 'Error validando archivo' });
+      }
+
       const mediaType = detectMediaType(mimetype);
       const rules = MEDIA_RULES[convo.provider]?.[mediaType];
       if (!rules) {

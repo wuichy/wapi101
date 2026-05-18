@@ -5,9 +5,9 @@ function list(db, tenantId) {
 }
 
 function getById(db, tenantId, id) {
-  const row = tenantId == null
-    ? db.prepare('SELECT * FROM outgoing_webhooks WHERE id = ?').get(id)
-    : db.prepare('SELECT * FROM outgoing_webhooks WHERE id = ? AND tenant_id = ?').get(id, tenantId);
+  // SEGURIDAD: tenantId requerido (antes permitía null que bypassed multi-tenant isolation)
+  if (tenantId == null) throw new Error('getById: tenantId requerido (no se permite bypass de tenant isolation)');
+  const row = db.prepare('SELECT * FROM outgoing_webhooks WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   return row ? hydrate(row) : null;
 }
 

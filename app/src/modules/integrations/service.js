@@ -52,16 +52,25 @@ function listAll(db, tenantId) {
   });
 }
 
-// tenantId puede ser null para callers internos (sender, webhooks) que ya
-// validaron la pertenencia por otro lado.
-function getById(db, tenantId, id) {
+// tenantId puede ser null SOLO para callers internos (sender, webhooks) que ya
+// validaron la pertenencia por otro lado. Cualquier ruta que llegue del usuario
+// DEBE pasar el tenantId del request — NUNCA null.
+// Para mitigar potencial uso indebido, requerimos que el caller marque
+// explícitamente con _INTERNAL_BYPASS_ que sabe lo que hace.
+function getById(db, tenantId, id, _internalBypass) {
+  if (tenantId == null && _internalBypass !== '_INTERNAL_BYPASS_') {
+    throw new Error('getById: tenantId requerido (usa _INTERNAL_BYPASS_ solo desde código interno trusted)');
+  }
   const row = tenantId == null
     ? db.prepare('SELECT * FROM integrations WHERE id = ?').get(id)
     : db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   return hydrate(row);
 }
 
-function getCredentialsPlain(db, tenantId, id) {
+function getCredentialsPlain(db, tenantId, id, _internalBypass) {
+  if (tenantId == null && _internalBypass !== '_INTERNAL_BYPASS_') {
+    throw new Error('getCredentialsPlain: tenantId requerido (usa _INTERNAL_BYPASS_ solo desde código interno trusted)');
+  }
   const row = tenantId == null
     ? db.prepare('SELECT credentials_enc FROM integrations WHERE id = ?').get(id)
     : db.prepare('SELECT credentials_enc FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);

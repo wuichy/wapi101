@@ -55,11 +55,22 @@ function _resolveCfg(overrideCfg) {
   };
 }
 
+// Sanitiza un header de email — bloquea CRLF injection.
+// Si el valor contiene \r o \n, lo eliminamos (un atacante podría inyectar
+// "Reply-To: a@b.com\r\nBcc: spy@evil.com" para mandar copias a terceros).
+function _sanitizeHeaderValue(v) {
+  if (!v) return v;
+  return String(v).replace(/[\r\n]+/g, ' ').trim();
+}
+
 // ─── Core sender ─────────────────────────────────────────────────────────────
 async function sendTransactional({ from, to, subject, html, text, replyTo }, overrideCfg) {
   const cfg = _resolveCfg(overrideCfg);
   const fromAddr = from || `${cfg.fromName} <${cfg.fromEmail}>`;
   const recipients = Array.isArray(to) ? to : [to];
+  // Sanitizar headers que pueden venir de user input — bloqueo CRLF injection
+  replyTo = _sanitizeHeaderValue(replyTo);
+  subject = _sanitizeHeaderValue(subject);
 
   if (cfg.provider === 'smtp') {
     return _sendViaSMTP({ from: fromAddr, to: recipients, subject, html, text, replyTo }, cfg);

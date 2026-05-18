@@ -47,7 +47,8 @@ function oauthSuccess(res, integrationId, displayName) {
 <p>${displayName}</p><p style="font-size:13px">Cerrando...</p></div>
 <script>
 try {
-  window.opener && window.opener.postMessage({ type:'oauth_success', integrationId: ${integrationId} }, '*');
+  // SEGURIDAD: target origin = location.origin para evitar CSRF/leak a páginas externas
+  window.opener && window.opener.postMessage({ type:'oauth_success', integrationId: ${integrationId} }, window.location.origin);
 } catch(e){}
 setTimeout(() => window.close(), 1200);
 </script></body></html>`);
@@ -74,11 +75,11 @@ module.exports = function createAuthRouter(db) {
       state = stateRow.state;
       provider = stateRow.provider;
     } else {
-      // Fallback legacy: sin state pre-creado, asume tenant 1
-      provider = req.query.provider || 'messenger';
-      state = makeState();
-      db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
-      db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, ?, 1)").run(state, provider);
+      // SEGURIDAD: ya no aceptamos fallback sin state — habría que crear state con
+      // tenant_id=1, lo que permite a un atacante asociar integración al tenant
+      // primario. Forzamos que el flow pase por /api/auth/oauth/prepare (que
+      // requiere auth y crea el state con el tenant_id del usuario logueado).
+      return oauthError(res, 'Sesión OAuth requerida. Inicia el flow desde el CRM (no abras esta URL directamente).');
     }
 
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -113,7 +114,7 @@ module.exports = function createAuthRouter(db) {
     db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
     const provider = stateRow.provider;
-    const tenantId = stateRow.tenant_id || 1;
+    const tenantId = stateRow.tenant_id; if (!tenantId) return oauthError(res, 'OAuth state corrupto (sin tenant). Reinicia el flow desde el CRM.');
     const appId = process.env.META_APP_ID;
     const appSecret = process.env.META_APP_SECRET;
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -224,10 +225,7 @@ module.exports = function createAuthRouter(db) {
       if (!stateRow) return oauthError(res, 'Sesión OAuth inválida o expirada. Inténtalo de nuevo desde el CRM.');
       state = stateRow.state;
     } else {
-      // Fallback legacy: tenant 1
-      state = makeState();
-      db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
-      db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, 'tiktok', 1)").run(state);
+      return oauthError(res, 'Sesión OAuth requerida. Inicia el flow desde el CRM.');
     }
 
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -246,7 +244,7 @@ module.exports = function createAuthRouter(db) {
     if (!stateRow) return oauthError(res, 'Estado OAuth inválido o expirado.');
     db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
-    const tenantId = stateRow.tenant_id || 1;
+    const tenantId = stateRow.tenant_id; if (!tenantId) return oauthError(res, 'OAuth state corrupto (sin tenant). Reinicia el flow desde el CRM.');
     const clientKey = process.env.TIKTOK_CLIENT_KEY;
     const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -299,9 +297,7 @@ module.exports = function createAuthRouter(db) {
       if (!stateRow) return oauthError(res, 'Sesión OAuth inválida o expirada. Inténtalo de nuevo desde el CRM.');
       state = stateRow.state;
     } else {
-      state = makeState();
-      db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
-      db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, 'threads', 1)").run(state);
+      return oauthError(res, 'Sesión OAuth requerida. Inicia el flow desde el CRM.');
     }
 
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -320,7 +316,7 @@ module.exports = function createAuthRouter(db) {
     if (!stateRow) return oauthError(res, 'Estado OAuth inválido o expirado.');
     db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
-    const tenantId = stateRow.tenant_id || 1;
+    const tenantId = stateRow.tenant_id; if (!tenantId) return oauthError(res, 'OAuth state corrupto (sin tenant). Reinicia el flow desde el CRM.');
     const appId = process.env.META_THREADS_APP_ID;
     const appSecret = process.env.META_THREADS_APP_SECRET;
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -372,9 +368,7 @@ module.exports = function createAuthRouter(db) {
       if (!stateRow) return oauthError(res, 'Sesión OAuth inválida o expirada. Inténtalo de nuevo desde el CRM.');
       state = stateRow.state;
     } else {
-      state = makeState();
-      db.prepare("DELETE FROM oauth_states WHERE created_at < unixepoch() - 3600").run();
-      db.prepare("INSERT INTO oauth_states (state, provider, tenant_id) VALUES (?, 'gmail', 1)").run(state);
+      return oauthError(res, 'Sesión OAuth requerida. Inicia el flow desde el CRM.');
     }
 
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');
@@ -408,7 +402,7 @@ module.exports = function createAuthRouter(db) {
     if (!stateRow) return oauthError(res, 'Estado OAuth inválido o expirado. Inténtalo de nuevo.');
     db.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
-    const tenantId = stateRow.tenant_id || 1;
+    const tenantId = stateRow.tenant_id; if (!tenantId) return oauthError(res, 'OAuth state corrupto (sin tenant). Reinicia el flow desde el CRM.');
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const baseUrl = (process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3001}`).replace(/\/$/, '');

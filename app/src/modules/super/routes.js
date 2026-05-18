@@ -38,8 +38,20 @@ module.exports = function createSuperRouter(db) {
   const router = express.Router();
   router.use(express.json({ limit: '1mb' }));
 
+  // Rate limit estricto en super-admin login — 5 intentos por IP cada 15 min.
+  // Más estricto que el login normal porque super-admin tiene acceso TOTAL.
+  const rateLimit = require('express-rate-limit');
+  const superLoginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => clientIp(req) || 'unknown',
+    message: { error: 'Demasiados intentos. Espera 15 minutos.', code: 'RATE_LIMITED' },
+  });
+
   // ─── Login (público) ───
-  router.post('/login', (req, res) => {
+  router.post('/login', superLoginLimiter, (req, res) => {
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
     const sa = service.login(db, username.trim(), password);

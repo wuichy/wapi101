@@ -87,7 +87,8 @@ async function createTenantBackup(db, tenantId, { type = 'manual', advisorId = n
   try {
     // 1. Backup atómico de la DB completa (sqlite3 .backup vía CLI — más confiable que db.backup() en builds antiguos)
     const cp = spawnSync('sqlite3', [SOURCE_DB_PATH, `.backup '${tmpSqlite}'`], { stdio: 'pipe' });
-    if (cp.status !== 0) throw new Error(`sqlite backup falló: ${cp.stderr?.toString() || 'unknown'}`);
+    if (cp.error) throw new Error(`sqlite3 no se pudo ejecutar: ${cp.error.message} (¿está instalado?)`);
+    if (cp.status !== 0) throw new Error(`sqlite backup falló (exit ${cp.status}): ${cp.stderr?.toString().trim() || 'sin stderr'}`);
 
     // Restringimos permisos del .sqlite plaintext ANTES de tocarlo — contiene
     // datos sensibles de TODOS los tenants hasta el paso 2.
@@ -152,10 +153,14 @@ async function createTenantBackup(db, tenantId, { type = 'manual', advisorId = n
       '--symmetric', '--cipher-algo', 'AES256', '--compress-algo', 'zip',
       '-o', encryptedPath, tmpSqlite,
     ], { stdio: 'pipe' });
+    if (gpg.error) {
+      try { if (fs.existsSync(encryptedPath)) fs.unlinkSync(encryptedPath); } catch (_) {}
+      throw new Error(`gpg no se pudo ejecutar: ${gpg.error.message} (¿está instalado?)`);
+    }
     if (gpg.status !== 0) {
       // Si gpg falla, asegúrate de NO dejar un .gpg parcial encriptado en el dir
       try { if (fs.existsSync(encryptedPath)) fs.unlinkSync(encryptedPath); } catch (_) {}
-      throw new Error(`gpg encrypt falló: ${gpg.stderr?.toString() || 'unknown'}`);
+      throw new Error(`gpg encrypt falló (exit ${gpg.status}): ${gpg.stderr?.toString().trim() || 'sin stderr'}`);
     }
 
     // Permisos restrictivos del archivo cifrado

@@ -18,8 +18,8 @@ module.exports = function createExpedientsRouter(db) {
   router.post('/bulk-move', (req, res, next) => {
     try {
       const { ids, stageId, botCollisionPolicy } = req.body || {};
-      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids requerido' });
-      if (!stageId) return res.status(400).json({ error: 'stageId requerido' });
+      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids requerido', errorCode: 'IDS_REQUIRED' });
+      if (!stageId) return res.status(400).json({ error: 'stageId requerido', errorCode: 'STAGE_ID_REQUIRED' });
       const policy = botCollisionPolicy === 'restart' ? 'restart' : 'skip';
       const stage = db.prepare('SELECT name FROM stages WHERE id = ? AND tenant_id = ?').get(Number(stageId), req.tenantId);
       const label = `Moviendo ${ids.length} lead${ids.length === 1 ? '' : 's'} → ${stage?.name || 'etapa'}`;
@@ -40,9 +40,9 @@ module.exports = function createExpedientsRouter(db) {
     try {
       const expId = Number(req.params.id);
       const { stageId } = req.body || {};
-      if (!stageId) return res.status(400).json({ error: 'stageId requerido' });
+      if (!stageId) return res.status(400).json({ error: 'stageId requerido', errorCode: 'STAGE_ID_REQUIRED' });
       const exp = service.getById(db, req.tenantId, expId);
-      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
       if (Number(exp.stageId) === Number(stageId)) {
         return res.json({ sameStage: true, wouldFireBots: [], activeBots: [] });
       }
@@ -82,7 +82,7 @@ module.exports = function createExpedientsRouter(db) {
   router.post('/bulk-delete', (req, res, next) => {
     try {
       const { ids } = req.body || {};
-      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids requerido' });
+      if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids requerido', errorCode: 'IDS_REQUIRED' });
       const label = `Eliminando ${ids.length} lead${ids.length === 1 ? '' : 's'}`;
       const job = jobRunner.enqueue(db, req.tenantId, {
         type: 'expedients_delete',
@@ -100,16 +100,16 @@ module.exports = function createExpedientsRouter(db) {
   });
   router.post('/field-defs', (req, res, next) => {
     try { res.status(201).json({ item: service.createFieldDef(db, req.tenantId, req.body || {}) }); }
-    catch (e) { res.status(400).json({ error: e.message }); }
+    catch (e) { res.status(400).json({ error: e.message, errorCode: 'FIELD_DEF_INVALID' }); }
   });
   router.patch('/field-defs/:id', (req, res, next) => {
     try { res.json({ item: service.updateFieldDef(db, req.tenantId, Number(req.params.id), req.body || {}) }); }
-    catch (e) { res.status(400).json({ error: e.message }); }
+    catch (e) { res.status(400).json({ error: e.message, errorCode: 'FIELD_DEF_INVALID' }); }
   });
   router.delete('/field-defs/:id', (req, res, next) => {
     try {
       const ok = service.removeFieldDef(db, req.tenantId, Number(req.params.id));
-      if (!ok) return res.status(404).json({ error: 'Campo no encontrado' });
+      if (!ok) return res.status(404).json({ error: 'Campo no encontrado', errorCode: 'FIELD_NOT_FOUND' });
       res.status(204).end();
     } catch (e) { next(e); }
   });
@@ -137,7 +137,7 @@ module.exports = function createExpedientsRouter(db) {
   router.get('/:id', (req, res, next) => {
     try {
       const item = service.getById(db, req.tenantId, Number(req.params.id));
-      if (!item) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (!item) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
       res.json({ item });
     } catch (e) { next(e); }
   });
@@ -151,7 +151,7 @@ module.exports = function createExpedientsRouter(db) {
       // quieren auto-asignar.
       const body = req.body || {};
       const limitErr = require('../billing/limits').checkLimit(db, req.tenantId, req.tenant?.plan, 'leads', req.tenant?.extra_users);
-      if (limitErr) return res.status(402).json({ error: limitErr, limitExceeded: 'leads' });
+      if (limitErr) return res.status(402).json({ error: limitErr, errorCode: 'LEAD_LIMIT_EXCEEDED', limitExceeded: 'leads' });
       if (body.assignedAdvisorId === undefined && req.advisor?.id) {
         body.assignedAdvisorId = req.advisor.id;
       }
@@ -176,7 +176,7 @@ module.exports = function createExpedientsRouter(db) {
       } catch (_) {}
       res.status(201).json({ item });
     }
-    catch (e) { return res.status(400).json({ error: e.message }); }
+    catch (e) { return res.status(400).json({ error: e.message, errorCode: 'EXPEDIENT_VALIDATION_FAILED' }); }
 
     // Disparar bot 'pipeline_stage' al crear el expediente. Antes solo se
     // disparaba en el PATCH (cuando ya existía y se cambiaba la etapa);
@@ -200,9 +200,9 @@ module.exports = function createExpedientsRouter(db) {
     try {
       prev = service.getById(db, req.tenantId, Number(req.params.id));
       item = service.update(db, req.tenantId, Number(req.params.id), req.body || {});
-      if (!item) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (!item) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
       res.json({ item });
-    } catch (e) { return res.status(400).json({ error: e.message }); }
+    } catch (e) { return res.status(400).json({ error: e.message, errorCode: 'EXPEDIENT_VALIDATION_FAILED' }); }
 
     // Registrar cambios como actividad
     try {
@@ -344,7 +344,7 @@ module.exports = function createExpedientsRouter(db) {
   router.get('/:id/activity', (req, res, next) => {
     try {
       const exp = service.getById(db, req.tenantId, Number(req.params.id));
-      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
       const items = activity.list(db, req.tenantId, exp.id);
       res.json({ items });
     } catch (e) { next(e); }
@@ -354,7 +354,7 @@ module.exports = function createExpedientsRouter(db) {
   router.get('/:id/bots', (req, res, next) => {
     try {
       const exp = service.getById(db, req.tenantId, Number(req.params.id));
-      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
 
       const bots = db.prepare('SELECT * FROM salsbots WHERE enabled = 1 AND tenant_id = ? ORDER BY name').all(req.tenantId)
         .map(b => {
@@ -380,7 +380,7 @@ module.exports = function createExpedientsRouter(db) {
   router.get('/:id/bot-runs', (req, res, next) => {
     try {
       const exp = service.getById(db, req.tenantId, Number(req.params.id));
-      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
       const runs = db.prepare(`
         SELECT * FROM bot_runs WHERE contact_id = ? AND tenant_id = ?
         ORDER BY started_at DESC LIMIT 30
@@ -419,7 +419,7 @@ module.exports = function createExpedientsRouter(db) {
   router.patch('/:id/bots/:botId', (req, res, next) => {
     try {
       const exp = service.getById(db, req.tenantId, Number(req.params.id));
-      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
       const botId  = Number(req.params.botId);
       const paused = req.body.paused ? 1 : 0;
       db.prepare(`

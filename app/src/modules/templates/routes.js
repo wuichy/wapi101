@@ -19,14 +19,14 @@ module.exports = function templatesRoutes(db) {
 
   r.get('/:id', (req, res) => {
     const tmpl = svc.getById(db, req.tenantId, Number(req.params.id));
-    if (!tmpl) return res.status(404).json({ error: 'No encontrada' });
+    if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada', errorCode: 'TEMPLATE_NOT_FOUND' });
     res.json(tmpl);
   });
 
   r.post('/reorder', (req, res) => {
     try {
       const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : null;
-      if (!orderedIds) return res.status(400).json({ error: 'orderedIds requerido (array)' });
+      if (!orderedIds) return res.status(400).json({ error: 'orderedIds requerido (array)', errorCode: 'ORDERED_IDS_REQUIRED' });
       svc.reorder(db, req.tenantId, orderedIds);
       res.json({ ok: true });
     } catch (e) { res.status(400).json({ error: e.message }); }
@@ -42,7 +42,7 @@ module.exports = function templatesRoutes(db) {
   r.put('/:id', (req, res) => {
     try {
       const tmpl = svc.update(db, req.tenantId, Number(req.params.id), req.body);
-      if (!tmpl) return res.status(404).json({ error: 'No encontrada' });
+      if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada', errorCode: 'TEMPLATE_NOT_FOUND' });
       res.json(tmpl);
     } catch (e) { res.status(400).json({ error: e.message }); }
   });
@@ -65,15 +65,16 @@ module.exports = function templatesRoutes(db) {
     try {
       const id = Number(req.params.id);
       const tmpl = svc.getById(db, req.tenantId, id);
-      if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada' });
+      if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada', errorCode: 'TEMPLATE_NOT_FOUND' });
 
       const { data, mimetype } = req.body || {};
-      if (!data || !mimetype) return res.status(400).json({ error: 'data y mimetype requeridos' });
+      if (!data || !mimetype) return res.status(400).json({ error: 'data y mimetype requeridos', errorCode: 'MEDIA_DATA_REQUIRED' });
 
       const rule = TPL_MEDIA_RULES[mimetype];
       if (!rule) {
         return res.status(400).json({
           error: `Formato no aceptado por Meta: ${mimetype}. Usa JPEG/PNG (imagen), MP4/3GPP (video) o PDF (documento).`,
+          errorCode: 'TEMPLATE_MEDIA_FORMAT_INVALID',
         });
       }
 
@@ -127,7 +128,7 @@ module.exports = function templatesRoutes(db) {
   r.put('/:id/tags', (req, res) => {
     const id = Number(req.params.id);
     const tmpl = svc.getById(db, req.tenantId, id);
-    if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    if (!tmpl) return res.status(404).json({ error: 'Plantilla no encontrada', errorCode: 'TEMPLATE_NOT_FOUND' });
     const tagIds = Array.isArray(req.body?.tagIds) ? req.body.tagIds : [];
     svc.setTags(db, req.tenantId, id, tagIds);
     res.json(svc.getById(db, req.tenantId, id));

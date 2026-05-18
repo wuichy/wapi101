@@ -22,7 +22,7 @@ module.exports = function createCustomersRouter(db) {
   router.get('/:id', (req, res, next) => {
     try {
       const item = service.getById(db, req.tenantId, Number(req.params.id));
-      if (!item) return res.status(404).json({ error: 'No encontrado' });
+      if (!item) return res.status(404).json({ error: 'Contacto no encontrado', errorCode: 'CONTACT_NOT_FOUND' });
       res.json({ item });
     } catch (err) { next(err); }
   });
@@ -30,7 +30,7 @@ module.exports = function createCustomersRouter(db) {
   router.post('/', (req, res, next) => {
     try {
       const limitErr = require('../billing/limits').checkLimit(db, req.tenantId, req.tenant?.plan, 'contacts', req.tenant?.extra_users);
-      if (limitErr) return res.status(402).json({ error: limitErr, limitExceeded: 'contacts' });
+      if (limitErr) return res.status(402).json({ error: limitErr, errorCode: 'CONTACT_LIMIT_EXCEEDED', limitExceeded: 'contacts' });
       const item = service.create(db, req.tenantId, req.body || {});
       // Track activity
       try {
@@ -44,7 +44,7 @@ module.exports = function createCustomersRouter(db) {
       } catch (_) {}
       res.status(201).json({ item });
     } catch (err) {
-      if (/obligatorio/i.test(err.message)) return res.status(400).json({ error: err.message });
+      if (/obligatorio/i.test(err.message)) return res.status(400).json({ error: err.message, errorCode: 'CONTACT_REQUIRED_FIELD' });
       next(err);
     }
   });
@@ -52,7 +52,7 @@ module.exports = function createCustomersRouter(db) {
   router.patch('/:id', (req, res, next) => {
     try {
       const item = service.update(db, req.tenantId, Number(req.params.id), req.body || {});
-      if (!item) return res.status(404).json({ error: 'No encontrado' });
+      if (!item) return res.status(404).json({ error: 'Contacto no encontrado', errorCode: 'CONTACT_NOT_FOUND' });
       res.json({ item });
     } catch (err) { next(err); }
   });
@@ -60,7 +60,7 @@ module.exports = function createCustomersRouter(db) {
   router.delete('/:id', (req, res, next) => {
     try {
       const ok = service.remove(db, req.tenantId, Number(req.params.id), req.advisor);
-      if (!ok) return res.status(404).json({ error: 'No encontrado' });
+      if (!ok) return res.status(404).json({ error: 'Contacto no encontrado', errorCode: 'CONTACT_NOT_FOUND' });
       res.status(204).end();
     } catch (err) { next(err); }
   });
@@ -90,7 +90,7 @@ module.exports = function createCustomersRouter(db) {
       const paused = req.body.paused ? 1 : 0;
       const r = db.prepare('UPDATE contacts SET bot_paused = ? WHERE id = ? AND tenant_id = ?')
         .run(paused, Number(req.params.id), req.tenantId);
-      if (!r.changes) return res.status(404).json({ error: 'No encontrado' });
+      if (!r.changes) return res.status(404).json({ error: 'Contacto no encontrado', errorCode: 'CONTACT_NOT_FOUND' });
       res.json({ id: Number(req.params.id), bot_paused: paused });
     } catch (err) { next(err); }
   });

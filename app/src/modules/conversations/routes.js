@@ -91,7 +91,7 @@ module.exports = function createConversationsRouter(db) {
   // GET /api/conversations/:id
   router.get('/:id', (req, res) => {
     const convo = svc.getById(db, req.tenantId, Number(req.params.id));
-    if (!convo) return res.status(404).json({ error: 'No encontrado' });
+    if (!convo) return res.status(404).json({ error: 'Conversación no encontrada', errorCode: 'CONVERSATION_NOT_FOUND' });
     res.json(convo);
   });
 
@@ -140,12 +140,12 @@ module.exports = function createConversationsRouter(db) {
   router.post('/:id/send-template', async (req, res) => {
     const convoId = Number(req.params.id);
     const convo = svc.getById(db, req.tenantId, convoId);
-    if (!convo) return res.status(404).json({ error: 'Conversación no encontrada' });
+    if (!convo) return res.status(404).json({ error: 'Conversación no encontrada', errorCode: 'CONVERSATION_NOT_FOUND' });
 
     const { templateId, manualValues = [] } = req.body || {};
-    if (!templateId) return res.status(400).json({ error: 'templateId requerido' });
+    if (!templateId) return res.status(400).json({ error: 'templateId requerido', errorCode: 'TEMPLATE_ID_REQUIRED' });
     if (convo.provider !== 'whatsapp') {
-      return res.status(400).json({ error: 'Solo se pueden enviar templates wa_api en conversaciones whatsapp' });
+      return res.status(400).json({ error: 'Solo se pueden enviar templates wa_api en conversaciones whatsapp', errorCode: 'TEMPLATE_PROVIDER_MISMATCH' });
     }
 
     try {
@@ -167,15 +167,15 @@ module.exports = function createConversationsRouter(db) {
   router.post('/:id/media', async (req, res) => {
     const convoId = Number(req.params.id);
     const convo = svc.getById(db, req.tenantId, convoId);
-    if (!convo) return res.status(404).json({ error: 'Conversación no encontrada' });
+    if (!convo) return res.status(404).json({ error: 'Conversación no encontrada', errorCode: 'CONVERSATION_NOT_FOUND' });
 
     try {
       const { data, mimetype, filename, caption } = req.body || {};
-      if (!data || !mimetype) return res.status(400).json({ error: 'data y mimetype son requeridos' });
+      if (!data || !mimetype) return res.status(400).json({ error: 'data y mimetype son requeridos', errorCode: 'MEDIA_DATA_REQUIRED' });
 
       const cleanB64 = String(data).replace(/^data:[^;]+;base64,/, '');
       const buffer = Buffer.from(cleanB64, 'base64');
-      if (!buffer.length) return res.status(400).json({ error: 'Archivo vacío' });
+      if (!buffer.length) return res.status(400).json({ error: 'Archivo vacío', errorCode: 'FILE_EMPTY' });
 
       // ─── Validación de magic bytes ───
       // El mimetype declarado por el cliente NO es confiable. Verificamos el
@@ -209,10 +209,10 @@ module.exports = function createConversationsRouter(db) {
         const isPlainText = !detected && (mimetype === 'text/plain' || mimetype === 'text/csv') && buffer.length < 10 * 1024 * 1024;
         if (!isPlainText) {
           if (!detected) {
-            return res.status(400).json({ error: 'No se pudo detectar el tipo real del archivo. Sube un formato válido (imagen, video, PDF, etc.).' });
+            return res.status(400).json({ error: 'No se pudo detectar el tipo real del archivo. Sube un formato válido (imagen, video, PDF, etc.).', errorCode: 'FILE_TYPE_UNKNOWN' });
           }
           if (!ALLOWED_MIMES.has(detected.mime)) {
-            return res.status(400).json({ error: `Tipo de archivo no permitido: ${detected.mime}. Permitidos: imágenes, video, audio, PDF, Office, ZIP.` });
+            return res.status(400).json({ error: `Tipo de archivo no permitido: ${detected.mime}. Permitidos: imágenes, video, audio, PDF, Office, ZIP.`, errorCode: 'FILE_TYPE_NOT_ALLOWED' });
           }
           if (detected.mime !== mimetype && !(mimetype === 'video/mp4' && detected.mime === 'video/x-m4v')) {
             // El cliente mintió sobre el mimetype → reescribimos al detectado real
@@ -223,21 +223,21 @@ module.exports = function createConversationsRouter(db) {
         }
       } catch (ftErr) {
         console.error('[upload] file-type validation error:', ftErr.message);
-        return res.status(500).json({ error: 'Error validando archivo' });
+        return res.status(500).json({ error: 'Error validando archivo', errorCode: 'FILE_VALIDATION_ERROR' });
       }
 
       const mediaType = detectMediaType(mimetype);
       const rules = MEDIA_RULES[convo.provider]?.[mediaType];
       if (!rules) {
-        return res.status(400).json({ error: `${convo.provider} no soporta enviar archivos de tipo ${mediaType}` });
+        return res.status(400).json({ error: `${convo.provider} no soporta enviar archivos de tipo ${mediaType}`, errorCode: 'MEDIA_TYPE_UNSUPPORTED' });
       }
       if (rules.mimes && !rules.mimes.includes(mimetype)) {
-        return res.status(400).json({ error: `Formato ${mimetype} no aceptado por ${convo.provider}. Permitidos: ${rules.mimes.join(', ')}` });
+        return res.status(400).json({ error: `Formato ${mimetype} no aceptado por ${convo.provider}. Permitidos: ${rules.mimes.join(', ')}`, errorCode: 'MEDIA_MIME_NOT_ACCEPTED' });
       }
       if (buffer.length > rules.maxBytes) {
         const maxMb = (rules.maxBytes / 1024 / 1024).toFixed(0);
         const myMb  = (buffer.length / 1024 / 1024).toFixed(1);
-        return res.status(400).json({ error: `Archivo de ${myMb}MB excede el máximo (${maxMb}MB) para ${mediaType} en ${convo.provider}` });
+        return res.status(400).json({ error: `Archivo de ${myMb}MB excede el máximo (${maxMb}MB) para ${mediaType} en ${convo.provider}`, errorCode: 'MEDIA_SIZE_EXCEEDED' });
       }
 
       // Guardar copia local para mostrar en el chat propio
@@ -294,10 +294,10 @@ module.exports = function createConversationsRouter(db) {
   router.post('/:id/messages', async (req, res) => {
     const convoId = Number(req.params.id);
     const convo = svc.getById(db, req.tenantId, convoId);
-    if (!convo) return res.status(404).json({ error: 'Conversación no encontrada' });
+    if (!convo) return res.status(404).json({ error: 'Conversación no encontrada', errorCode: 'CONVERSATION_NOT_FOUND' });
 
     const { body } = req.body;
-    if (!body || !body.trim()) return res.status(400).json({ error: 'El mensaje no puede estar vacío' });
+    if (!body || !body.trim()) return res.status(400).json({ error: 'El mensaje no puede estar vacío', errorCode: 'MESSAGE_EMPTY' });
 
     try {
       const externalMsgId = await sendMessage(db, convo, body.trim());

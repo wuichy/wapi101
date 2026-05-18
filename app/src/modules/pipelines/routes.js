@@ -11,52 +11,52 @@ module.exports = function createPipelinesRouter(db) {
 
   router.post('/', (req, res, next) => {
     try { res.status(201).json({ item: service.create(db, req.tenantId, req.body) }); }
-    catch (err) { res.status(400).json({ error: err.message }); }
+    catch (err) { res.status(400).json({ error: err.message, errorCode: 'PIPELINE_VALIDATION_FAILED' }); }
   });
 
   router.patch('/:id', (req, res, next) => {
     try { res.json({ item: service.update(db, req.tenantId, Number(req.params.id), req.body) }); }
-    catch (err) { res.status(400).json({ error: err.message }); }
+    catch (err) { res.status(400).json({ error: err.message, errorCode: 'PIPELINE_VALIDATION_FAILED' }); }
   });
 
   router.delete('/:id', (req, res, next) => {
     try { service.remove(db, req.tenantId, Number(req.params.id), req.advisor); res.json({ ok: true }); }
-    catch (err) { res.status(400).json({ error: err.message }); }
+    catch (err) { res.status(400).json({ error: err.message, errorCode: 'PIPELINE_DELETE_FAILED' }); }
   });
 
   // ── Pipeline reorder ──
   router.post('/reorder', (req, res, next) => {
     try {
       const { order } = req.body;
-      if (!Array.isArray(order)) return res.status(400).json({ error: 'order debe ser un array' });
+      if (!Array.isArray(order)) return res.status(400).json({ error: 'order debe ser un array', errorCode: 'ORDER_INVALID' });
       service.reorderPipelines(db, req.tenantId, order.map(Number));
       res.json({ ok: true });
-    } catch (err) { res.status(400).json({ error: err.message }); }
+    } catch (err) { res.status(400).json({ error: err.message, errorCode: 'PIPELINE_REORDER_FAILED' }); }
   });
 
   // ── Stages ──
   router.post('/:id/stages/reorder', (req, res, next) => {
     try {
       const { order } = req.body;
-      if (!Array.isArray(order)) return res.status(400).json({ error: 'order debe ser un array' });
+      if (!Array.isArray(order)) return res.status(400).json({ error: 'order debe ser un array', errorCode: 'ORDER_INVALID' });
       service.reorderStages(db, req.tenantId, Number(req.params.id), order.map(Number));
       res.json({ ok: true });
-    } catch (err) { res.status(400).json({ error: err.message }); }
+    } catch (err) { res.status(400).json({ error: err.message, errorCode: 'STAGE_REORDER_FAILED' }); }
   });
 
   router.post('/:id/stages', (req, res, next) => {
     try { res.status(201).json({ item: service.createStage(db, req.tenantId, Number(req.params.id), req.body) }); }
-    catch (err) { res.status(400).json({ error: err.message }); }
+    catch (err) { res.status(400).json({ error: err.message, errorCode: 'STAGE_VALIDATION_FAILED' }); }
   });
 
   router.patch('/stages/:stageId', (req, res, next) => {
     try { res.json({ item: service.updateStage(db, req.tenantId, Number(req.params.stageId), req.body) }); }
-    catch (err) { res.status(400).json({ error: err.message }); }
+    catch (err) { res.status(400).json({ error: err.message, errorCode: 'STAGE_VALIDATION_FAILED' }); }
   });
 
   router.delete('/stages/:stageId', (req, res, next) => {
     try { service.removeStage(db, req.tenantId, Number(req.params.stageId), req.advisor); res.json({ ok: true }); }
-    catch (err) { res.status(400).json({ error: err.message }); }
+    catch (err) { res.status(400).json({ error: err.message, errorCode: 'STAGE_DELETE_FAILED' }); }
   });
 
   return router;

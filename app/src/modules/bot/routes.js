@@ -88,7 +88,7 @@ module.exports = function createBotRouter(db) {
   router.post('/test-trigger', (req, res) => {
     try {
       const { expedientId } = req.body || {};
-      if (!expedientId) return res.status(400).json({ error: 'expedientId requerido' });
+      if (!expedientId) return res.status(400).json({ error: 'expedientId requerido', errorCode: 'EXPEDIENT_ID_REQUIRED' });
 
       engine.clearLogs();
 
@@ -98,7 +98,7 @@ module.exports = function createBotRouter(db) {
         WHERE e.id = ? AND e.tenant_id = ?
       `).get(Number(expedientId), req.tenantId);
 
-      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado' });
+      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
 
       engine.triggerPipelineStage(db, {
         expedientId: exp.id,
@@ -126,7 +126,7 @@ module.exports = function createBotRouter(db) {
     try {
       const runId = Number(req.params.runId);
       const run = db.prepare('SELECT * FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, req.tenantId);
-      if (!run) return res.status(404).json({ error: 'Run no encontrado' });
+      if (!run) return res.status(404).json({ error: 'Run no encontrado', errorCode: 'BOT_RUN_NOT_FOUND' });
       engine.killRun(db, runId);
       if (run.expedient_id) {
         activity.log(db, {
@@ -146,7 +146,7 @@ module.exports = function createBotRouter(db) {
     try {
       const runId = Number(req.params.runId);
       const run = db.prepare('SELECT * FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, req.tenantId);
-      if (!run) return res.status(404).json({ error: 'Run no encontrado' });
+      if (!run) return res.status(404).json({ error: 'Run no encontrado', errorCode: 'BOT_RUN_NOT_FOUND' });
       engine.pauseRun(db, runId);
       if (run.expedient_id) {
         activity.log(db, {
@@ -168,16 +168,16 @@ module.exports = function createBotRouter(db) {
     try {
       const runId   = Number(req.params.runId);
       const seconds = Number(req.body?.seconds);
-      if (!Number.isFinite(seconds) || seconds < 0) return res.status(400).json({ error: 'seconds inválido' });
+      if (!Number.isFinite(seconds) || seconds < 0) return res.status(400).json({ error: 'seconds inválido', errorCode: 'SECONDS_INVALID' });
       const run = db.prepare('SELECT * FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, req.tenantId);
-      if (!run) return res.status(404).json({ error: 'Run no encontrado' });
+      if (!run) return res.status(404).json({ error: 'Run no encontrado', errorCode: 'BOT_RUN_NOT_FOUND' });
       const now    = Math.floor(Date.now() / 1000);
       const expires = now + seconds;
       // Si el run está manualmente pausado, ajustar paused_remaining; sino ajustar expires_at
       const result = db.prepare(
         "UPDATE bot_run_waits SET expires_at = ?, paused_remaining = CASE WHEN paused_remaining IS NULL THEN NULL ELSE ? END WHERE run_id = ? AND status = 'waiting'"
       ).run(expires, seconds, runId);
-      if (result.changes === 0) return res.status(400).json({ error: 'No hay wait activo para este run' });
+      if (result.changes === 0) return res.status(400).json({ error: 'No hay wait activo para este run', errorCode: 'NO_ACTIVE_WAIT' });
       if (run.expedient_id) {
         const mins = Math.round(seconds / 60);
         const label = mins < 60 ? `${mins} min` : (mins < 1440 ? `${Math.round(mins/60)}h` : `${Math.round(mins/1440)}d`);
@@ -198,7 +198,7 @@ module.exports = function createBotRouter(db) {
     try {
       const runId = Number(req.params.runId);
       const run = db.prepare('SELECT * FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, req.tenantId);
-      if (!run) return res.status(404).json({ error: 'Run no encontrado' });
+      if (!run) return res.status(404).json({ error: 'Run no encontrado', errorCode: 'BOT_RUN_NOT_FOUND' });
       engine.resumeRun(db, runId);
       if (run.expedient_id) {
         activity.log(db, {
@@ -220,7 +220,7 @@ module.exports = function createBotRouter(db) {
   router.post('/reorder', (req, res) => {
     try {
       const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : null;
-      if (!orderedIds) return res.status(400).json({ error: 'orderedIds requerido (array)' });
+      if (!orderedIds) return res.status(400).json({ error: 'orderedIds requerido (array)', errorCode: 'ORDERED_IDS_REQUIRED' });
       service.reorder(db, req.tenantId, orderedIds);
       res.json({ ok: true });
     } catch (err) { res.status(400).json({ error: err.message }); }
@@ -242,7 +242,7 @@ module.exports = function createBotRouter(db) {
     try {
       const botId = Number(req.params.id);
       const bot = db.prepare('SELECT id, name, trigger_type, trigger_value FROM salsbots WHERE id = ? AND tenant_id = ?').get(botId, req.tenantId);
-      if (!bot) return res.status(404).json({ error: 'Bot no encontrado' });
+      if (!bot) return res.status(404).json({ error: 'Bot no encontrado', errorCode: 'BOT_NOT_FOUND' });
 
       const counts = db.prepare(`
         SELECT

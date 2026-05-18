@@ -46,11 +46,23 @@ module.exports = function createBackupsRouter(db) {
       if (req.advisor?.role !== 'admin') {
         return res.status(403).json({ error: 'Solo administradores pueden descargar respaldos' });
       }
-      const found = service.getBackupPath(db, req.tenantId, Number(req.params.id));
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID inválido' });
+      }
+      const found = service.getBackupPath(db, req.tenantId, id);
       if (!found) return res.status(404).json({ error: 'Respaldo no encontrado' });
       res.setHeader('Content-Type', 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${found.filename}"`);
-      fs.createReadStream(found.path).pipe(res);
+      // Sanitiza filename para Content-Disposition (no comillas dobles, no \r\n)
+      const safeName = String(found.filename).replace(/["\r\n\\]/g, '_');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+      const stream = fs.createReadStream(found.path);
+      stream.on('error', (err) => {
+        console.error('[backups] download stream error:', err.message);
+        if (!res.headersSent) res.status(500).json({ error: 'Error leyendo archivo' });
+        else res.destroy(err);
+      });
+      stream.pipe(res);
     } catch (e) { next(e); }
   });
 
@@ -60,7 +72,11 @@ module.exports = function createBackupsRouter(db) {
       if (req.advisor?.role !== 'admin') {
         return res.status(403).json({ error: 'Solo administradores pueden eliminar respaldos' });
       }
-      const ok = service.deleteTenantBackup(db, req.tenantId, Number(req.params.id));
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID inválido' });
+      }
+      const ok = service.deleteTenantBackup(db, req.tenantId, id);
       if (!ok) return res.status(404).json({ error: 'Respaldo no encontrado' });
       res.json({ ok: true });
     } catch (e) { next(e); }

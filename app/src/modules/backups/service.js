@@ -60,17 +60,21 @@ async function createTenantBackup(db, tenantId, { type = 'manual', advisorId = n
          WHERE m.type='table' AND p.name='tenant_id'
       `).all().map(r => r.name);
 
+      // Desactivar FKs durante la limpieza — vamos a borrar filas en orden
+      // arbitrario y no necesitamos consistencia entre tenants (estamos
+      // aislando los datos de UN tenant; las FKs internas del tenant se mantienen
+      // porque todo lo que queda referencia entre sí dentro de ese tenant).
+      copy.pragma('foreign_keys = OFF');
       copy.transaction(() => {
         for (const tbl of tablesWithTenantId) {
-          // Quoteo del nombre por si acaso (debería ser identifier limpio igual)
           copy.prepare(`DELETE FROM "${tbl}" WHERE tenant_id != ?`).run(tenantId);
         }
-        // Borrar también la tabla tenant_backups (no queremos meta-info de otros)
         try { copy.prepare("DELETE FROM tenant_backups WHERE tenant_id != ?").run(tenantId); } catch (_) {}
       })();
 
       // VACUUM para reducir el tamaño del archivo (libera páginas borradas)
       copy.exec('VACUUM');
+      copy.pragma('foreign_keys = ON');
     } finally {
       copy.close();
     }

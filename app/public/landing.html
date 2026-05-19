@@ -344,8 +344,21 @@
     .feature {
       padding: 28px 24px; background: #fff;
       border: 1px solid var(--border); border-radius: 12px; transition: all 0.15s;
+      cursor: pointer; text-align: left; width: 100%; font-family: inherit;
+      font-size: inherit; color: inherit;
+      position: relative;
     }
+    .feature:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
     .feature:hover { border-color: var(--primary); box-shadow: 0 8px 16px rgba(37,99,235,0.06); transform: translateY(-2px); }
+    .feature::after {
+      content: '→'; position: absolute; right: 20px; top: 32px;
+      color: var(--text-soft); font-size: 18px; opacity: 0; transition: all 0.15s;
+    }
+    .feature:hover::after { opacity: 1; color: var(--primary); transform: translateX(4px); }
+    .feature-more {
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-top: 12px; font-size: 12.5px; font-weight: 600; color: var(--primary);
+    }
     .feature-icon {
       width: 44px; height: 44px; border-radius: 10px;
       background: rgba(37,99,235,0.08); color: var(--primary);
@@ -362,6 +375,81 @@
     .feature p { color: var(--text-soft); font-size: 14px; line-height: 1.55; }
     @media (max-width: 960px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 640px) { .features-grid { grid-template-columns: 1fr; } }
+
+    /* Feature detail modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.65);
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center; z-index: 999;
+      padding: 24px; overflow-y: auto;
+    }
+    .modal-overlay.is-open { display: flex; }
+    .modal-card {
+      background: #fff; border-radius: 16px; max-width: 720px; width: 100%;
+      max-height: calc(100vh - 48px); overflow-y: auto; position: relative;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+      animation: modal-in 0.18s ease-out;
+    }
+    @keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+    .modal-close {
+      position: absolute; top: 14px; right: 14px; width: 36px; height: 36px;
+      border-radius: 50%; background: #f1f5f9; border: 0; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text); z-index: 2;
+    }
+    .modal-close:hover { background: #e2e8f0; }
+    .modal-close svg { width: 18px; height: 18px; }
+    .modal-head {
+      padding: 32px 32px 24px; border-bottom: 1px solid var(--border);
+      display: grid; grid-template-columns: 56px 1fr; gap: 18px; align-items: flex-start;
+    }
+    .modal-icon {
+      width: 56px; height: 56px; border-radius: 14px;
+      background: rgba(37,99,235,0.10); color: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-icon svg { width: 28px; height: 28px; }
+    .modal-icon.is-success { background: rgba(16,185,129,0.10); color: #059669; }
+    .modal-icon.is-warning { background: rgba(245,158,11,0.10); color: #d97706; }
+    .modal-icon.is-purple  { background: rgba(139,92,246,0.10); color: #7c3aed; }
+    .modal-icon.is-pink    { background: rgba(236,72,153,0.10); color: #db2777; }
+    .modal-icon.is-cyan    { background: rgba(6,182,212,0.10);  color: #0891b2; }
+    .modal-title { font-size: 22px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.01em; }
+    .modal-tagline { color: var(--text-soft); font-size: 14px; line-height: 1.5; }
+    .modal-body { padding: 24px 32px 32px; }
+    .modal-section { margin-bottom: 24px; }
+    .modal-section:last-child { margin-bottom: 0; }
+    .modal-section-title {
+      font-size: 11px; font-weight: 700; color: var(--text-soft);
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px;
+    }
+    .modal-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .modal-list li {
+      display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: flex-start;
+      font-size: 14.5px; color: var(--text); line-height: 1.5;
+    }
+    .modal-list li svg { width: 18px; height: 18px; color: #10b981; margin-top: 2px; }
+    .modal-list li strong { font-weight: 600; }
+    .modal-media {
+      background: #f8fafc; border: 1px dashed var(--border); border-radius: 12px;
+      aspect-ratio: 16 / 9; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--text-soft); text-align: center; padding: 20px; gap: 8px;
+    }
+    .modal-media svg { width: 32px; height: 32px; opacity: 0.5; }
+    .modal-media .ph-label { font-size: 13px; font-weight: 600; }
+    .modal-media .ph-sub { font-size: 12px; }
+    .modal-media img { width: 100%; height: 100%; object-fit: cover; border-radius: 11px; }
+    .modal-cta {
+      margin-top: 8px; display: flex; gap: 10px; flex-wrap: wrap;
+    }
+    @media (max-width: 600px) {
+      .modal-card { border-radius: 12px; }
+      .modal-head { padding: 24px 20px 18px; grid-template-columns: 48px 1fr; gap: 14px; }
+      .modal-icon { width: 48px; height: 48px; }
+      .modal-icon svg { width: 24px; height: 24px; }
+      .modal-title { font-size: 19px; }
+      .modal-body { padding: 18px 20px 24px; }
+    }
 
     /* Problems → Solutions */
     .problems-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; max-width: 1080px; margin: 0 auto; }
@@ -679,101 +767,101 @@
     <p class="section-sub" id="featuresSub">Wapi101 reemplaza WhatsApp Web + un CRM clásico + tu hoja de Excel + tus mil chats. Todo en una sola pantalla.</p>
     <div class="features-grid">
 
-      <div class="feature">
+      <button class="feature" data-feature="channels" type="button">
         <div class="feature-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
         </div>
         <h3 id="feat1Title">Multi-canal real</h3>
         <p  id="feat1Desc">WhatsApp Cloud API, WhatsApp Web, Messenger, Instagram, Telegram y email. Una sola bandeja.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="bots" type="button">
         <div class="feature-icon is-purple">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2" ry="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
         </div>
         <h3 id="feat2Title">Bot builder visual</h3>
         <p  id="feat2Desc">Diseña flujos con condiciones, esperas y ramas. Sin código. 8+ tipos de disparador y 12+ pasos.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="pipelines" type="button">
         <div class="feature-icon is-success">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="12" rx="1"/></svg>
         </div>
         <h3 id="feat3Title">Pipelines kanban</h3>
         <p  id="feat3Desc">Ilimitados. Drag-and-drop entre etapas. Bots por etapa, valor monetario, asignación, color y orden propio.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="templates" type="button">
         <div class="feature-icon is-cyan">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/></svg>
         </div>
         <h3 id="feat4Title">Plantillas aprobadas</h3>
         <p  id="feat4Desc">Manda plantillas HSM aprobadas por Meta con imágenes, botones y variables. Sin spam ni baneos.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="alarms" type="button">
         <div class="feature-icon is-warning">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         </div>
         <h3 id="feat5Title">Alarmas y recordatorios</h3>
         <p  id="feat5Desc">Te avisa cuando un lead lleva días estancado o cuando hay una cita próxima. Configura múltiples por etapa.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="comments" type="button">
         <div class="feature-icon is-pink">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><line x1="9" y1="10" x2="9.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="15" y1="10" x2="15.01" y2="10"/></svg>
         </div>
         <h3 id="feat6Title">Comentarios FB e Instagram</h3>
         <p  id="feat6Desc">Auto-responde comentarios en publicaciones y reels. Dirige al usuario al DM con un bot ya armado.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="reports" type="button">
         <div class="feature-icon is-success">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="5" y="10" width="3" height="8"/><rect x="10.5" y="6" width="3" height="12"/><rect x="16" y="13" width="3" height="5"/></svg>
         </div>
         <h3 id="feat7Title">Reportes y analítica</h3>
         <p  id="feat7Desc">Dashboard con conversión por etapa, productividad por asesor, costo de Meta Ads y ROI por campaña.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="team" type="button">
         <div class="feature-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </div>
         <h3 id="feat8Title">Equipo y permisos</h3>
         <p  id="feat8Desc">Roles admin/asesor, permisos granulares, asignación de leads y bandejas privadas por colaborador.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="ai" type="button">
         <div class="feature-icon is-purple">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
         </div>
         <h3 id="feat9Title">Copiloto con IA</h3>
         <p  id="feat9Desc">Sugiere respuestas, resume conversaciones largas y aprende de tu catálogo y políticas de la empresa.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="woo" type="button">
         <div class="feature-icon is-warning">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
         </div>
         <h3 id="feat10Title">WooCommerce y carritos</h3>
         <p  id="feat10Desc">Recupera carritos abandonados de WooCommerce por WhatsApp con bots de seguimiento automático.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="mobile" type="button">
         <div class="feature-icon is-cyan">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
         </div>
         <h3 id="feat11Title">App móvil PWA</h3>
         <p  id="feat11Desc">Funciona como app nativa en iPhone y Android. Notificaciones push cuando llega un mensaje nuevo.</p>
-      </div>
+      </button>
 
-      <div class="feature">
+      <button class="feature" data-feature="security" type="button">
         <div class="feature-icon is-success">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         </div>
         <h3 id="feat12Title">Seguridad de banco</h3>
         <p  id="feat12Desc">Aislamiento por workspace, credenciales cifradas AES-256-GCM, backups diarios encriptados con copia offsite.</p>
-      </div>
+      </button>
 
     </div>
   </div>
@@ -870,6 +958,36 @@
     <a href="/signup" class="btn btn-primary btn-lg" id="ctaBtn">Crear cuenta gratis →</a>
   </div>
 </section>
+
+<!-- Feature detail modal -->
+<div class="modal-overlay" id="featureModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-card">
+    <button class="modal-close" id="modalCloseBtn" aria-label="Cerrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="modal-head">
+      <div class="modal-icon" id="modalIcon"></div>
+      <div>
+        <h2 class="modal-title" id="modalTitle"></h2>
+        <p class="modal-tagline" id="modalTagline"></p>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="modal-section-title" id="modalCapsLabel">Qué puedes hacer</div>
+        <ul class="modal-list" id="modalCaps"></ul>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title" id="modalMediaLabel">Vista previa</div>
+        <div class="modal-media" id="modalMedia"></div>
+      </div>
+      <div class="modal-cta">
+        <a href="/signup" class="btn btn-primary" id="modalCtaPrimary">Probar gratis 14 días</a>
+        <a href="#pricingSection" class="btn btn-ghost" id="modalCtaSecondary">Ver precios</a>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Footer -->
 <footer>
@@ -1309,6 +1427,291 @@ document.querySelectorAll('.pt-opt').forEach(b => {
 });
 
 loadPlans();
+
+// ─── Feature detail modal ────────────────────────────────────────────────────
+// Cada feature de la grid abre un modal con info extendida + slot para imagen/GIF.
+// Para agregar un GIF de la plataforma: pon /landing-shots/<feature>.gif en el
+// servidor y rellena la propiedad `image` en FEATURE_DETAILS.
+const ICON_DOT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+const FEATURE_DETAILS = {
+  es: {
+    channels: {
+      iconClass: '',
+      title: 'Multi-canal real',
+      tagline: 'Todos tus mensajes en una sola bandeja. Sin saltar entre apps.',
+      caps: [
+        '<strong>WhatsApp Cloud API</strong> oficial — verificación con tu marca y volumen ilimitado.',
+        '<strong>WhatsApp Web</strong> sin verificación (modo Lite) — para empezar sin trámites.',
+        '<strong>Messenger</strong> e <strong>Instagram DMs</strong> conectados con tu Página de Facebook.',
+        '<strong>Telegram</strong> oficial vía Bot API.',
+        '<strong>Email IMAP/SMTP</strong> — tus correos también se vuelven leads.',
+        'Bandeja unificada con avatar, último mensaje y estado por canal.',
+      ],
+      image: null,
+    },
+    bots: {
+      iconClass: 'is-purple',
+      title: 'Bot builder visual',
+      tagline: 'Diseña conversaciones automáticas como si dibujaras un flujograma.',
+      caps: [
+        '<strong>8 disparadores</strong>: palabra clave, nuevo contacto, entrar a etapa, sin respuesta, programado, comentario FB/IG, carrito abandonado, manual.',
+        '<strong>12+ tipos de paso</strong>: enviar mensaje, esperar, ramas con condiciones, asignar etiqueta, cambiar etapa, llamar API, asignar asesor…',
+        '<strong>Ramas anidadas</strong> con condiciones por texto, hora del día, día de semana, etiqueta o variable del contacto.',
+        'Pausa de bot por contacto cuando el asesor toma el chat — automático.',
+        'Política <strong>"colisión"</strong>: si entran 2 bots al mismo lead, define si se reemplaza o se ignora.',
+        'Test directo desde el editor — sin esperar a un mensaje real.',
+      ],
+      image: null,
+    },
+    pipelines: {
+      iconClass: 'is-success',
+      title: 'Pipelines kanban',
+      tagline: 'Como Trello para ventas. Arrastra leads entre etapas y mira tu embudo en vivo.',
+      caps: [
+        '<strong>Pipelines ilimitados</strong> con etapas personalizadas (color, ícono, orden).',
+        'Cada etapa puede tener <strong>un bot asignado</strong> que se ejecuta al entrar.',
+        'Etapas marcadas como <strong>Ganada</strong> o <strong>Perdida</strong> para reportes de conversión.',
+        '<strong>Valor monetario</strong> por lead — calcula tu pipeline en pesos.',
+        '<strong>Filtros</strong> por asesor, etiqueta, canal, fecha de entrada y más.',
+        'Vista lista o kanban. Drag-and-drop en desktop, swipe en móvil.',
+      ],
+      image: null,
+    },
+    templates: {
+      iconClass: 'is-cyan',
+      title: 'Plantillas aprobadas',
+      tagline: 'Manda mensajes en frío sin spam ni baneos. Como exige Meta.',
+      caps: [
+        'Editor visual de <strong>plantillas HSM</strong> con preview en tiempo real.',
+        'Variables dinámicas: <code>{{nombre}}</code>, <code>{{producto}}</code>, <code>{{cita}}</code>, custom fields.',
+        '<strong>Imágenes, video, documentos</strong> en el header.',
+        'Botones de <strong>respuesta rápida</strong> y de <strong>URL/llamada</strong>.',
+        'Flujo de aprobación: envías → Meta revisa → status visible en el CRM.',
+        'Categorías marketing / utility / authentication según uso.',
+        'Mandado masivo respetando rate limits de Meta.',
+      ],
+      image: null,
+    },
+    alarms: {
+      iconClass: 'is-warning',
+      title: 'Alarmas y recordatorios',
+      tagline: 'Que ningún lead se quede olvidado. Wapi101 te avisa.',
+      caps: [
+        'Alarma por <strong>tiempo en etapa</strong>: "avisame si llevan 3 días sin mover este lead".',
+        'Múltiples alarmas por etapa con diferentes thresholds (24h, 3d, 7d).',
+        '<strong>Recordatorios de citas</strong> automáticos al cliente (24h antes, día del evento).',
+        'Notificaciones push en navegador y móvil PWA.',
+        'Alarmas de <strong>sin respuesta</strong> que disparan un bot de re-engagement.',
+        'Configura por pipeline, por etapa o globalmente.',
+      ],
+      image: null,
+    },
+    comments: {
+      iconClass: 'is-pink',
+      title: 'Comentarios FB e Instagram',
+      tagline: 'Convierte cada comentario en una conversación privada — y un lead.',
+      caps: [
+        'Auto-responde comentarios en <strong>publicaciones y reels</strong> de FB e IG.',
+        'Filtra por palabra clave en el comentario para responder distinto a "precio" vs "info".',
+        '<strong>Manda al DM</strong>: respondes en público "te escribimos por privado" y disparas un bot en el DM.',
+        'Avatar y nombre del comentarista quedan ligados al contacto.',
+        'Hide / delete del comentario si es spam, también vía bot.',
+        'Funciona con posts orgánicos y con ads de Meta.',
+      ],
+      image: null,
+    },
+    reports: {
+      iconClass: 'is-success',
+      title: 'Reportes y analítica',
+      tagline: 'Mide qué funciona y qué no. Sin abrir Excel.',
+      caps: [
+        '<strong>Dashboard ejecutivo</strong> con métricas del día, semana y mes.',
+        '<strong>Embudo de conversión</strong> por etapa de pipeline.',
+        'Productividad por <strong>asesor</strong>: mensajes enviados, leads cerrados, tiempo de respuesta.',
+        '<strong>Costo de Meta Ads</strong> integrado — sabes cuánto gastas en cada canal.',
+        'Reporte de bots: cuántas veces se disparan, conversión por bot.',
+        'Exportación a CSV de cualquier vista.',
+      ],
+      image: null,
+    },
+    team: {
+      iconClass: '',
+      title: 'Equipo y permisos',
+      tagline: 'Tu equipo, ordenado. Cada quien con lo que le toca.',
+      caps: [
+        'Roles <strong>Admin</strong> y <strong>Asesor</strong> con permisos granulares.',
+        'Asignación de <strong>leads</strong> a un asesor específico.',
+        'Bandeja privada — el asesor solo ve sus leads/chats.',
+        'Permisos: ver reportes, borrar, gestionar asesores, gestionar plantillas, etc.',
+        '<strong>Horarios de atención</strong> por asesor — fuera de horario actúan los bots.',
+        '<strong>Auditoría</strong>: cada acción importante queda registrada (quién, cuándo, IP).',
+      ],
+      image: null,
+    },
+    ai: {
+      iconClass: 'is-purple',
+      title: 'Copiloto con IA',
+      tagline: 'Tu asistente que sabe de tu negocio y te ahorra horas de escritura.',
+      caps: [
+        '<strong>Sugiere respuestas</strong> en el chat basadas en el contexto.',
+        '<strong>Resume conversaciones largas</strong> de un solo click.',
+        'Base de conocimiento <strong>cargable</strong>: subes tu catálogo, FAQ, políticas y el copiloto las usa.',
+        '<strong>Traducción</strong> automática entre español e inglés en el chat.',
+        'Análisis de <strong>intención</strong> del cliente: lead caliente, queja, duda técnica.',
+        'Generador de plantillas: describes el caso y te propone el texto.',
+      ],
+      image: null,
+    },
+    woo: {
+      iconClass: 'is-warning',
+      title: 'WooCommerce y carritos',
+      tagline: 'Recupera ventas que se iban a perder. WhatsApp + Woo es magia.',
+      caps: [
+        'Conexión directa con tu tienda WooCommerce vía plugin oficial.',
+        '<strong>Carritos abandonados</strong> → bot de WhatsApp dispara seguimiento a las N horas.',
+        'Sincroniza <strong>órdenes</strong>: cada venta se vuelve un lead con todo su detalle.',
+        'Notificación al cliente cuando cambia el <strong>estado</strong> de su pedido.',
+        '<strong>Re-engagement</strong> de clientes que no compran hace meses.',
+        'Catálogo importable: tus productos disponibles para enviar por chat.',
+      ],
+      image: null,
+    },
+    mobile: {
+      iconClass: 'is-cyan',
+      title: 'App móvil PWA',
+      tagline: 'Atiende clientes desde tu celular como si fuera una app nativa.',
+      caps: [
+        '<strong>PWA</strong> instalable en iPhone, Android, Mac, Windows — un click desde el navegador.',
+        '<strong>Notificaciones push</strong> nativas cuando llega un mensaje nuevo.',
+        'Funciona offline con sincronización al volver online.',
+        'Interfaz adaptada para móvil: navegación inferior, swipe en chats, vista compacta.',
+        '<strong>Compartir</strong>: comparte imágenes desde otra app directo a un chat de Wapi101.',
+        'Sin Play Store ni App Store — se actualiza solo, siempre la última versión.',
+      ],
+      image: null,
+    },
+    security: {
+      iconClass: 'is-success',
+      title: 'Seguridad de banco',
+      tagline: 'Tus datos no son nuestro negocio. La seguridad sí.',
+      caps: [
+        '<strong>Aislamiento total por workspace</strong>: ningún otro cliente puede ver tus datos.',
+        'Credenciales sensibles cifradas con <strong>AES-256-GCM</strong>.',
+        'Contraseñas con <strong>PBKDF2</strong> + salt único + 100,000 iteraciones.',
+        '<strong>Backups diarios encriptados</strong> con GPG, copia offsite en Cloudflare R2.',
+        '<strong>Audit log</strong> de toda acción crítica: quién, cuándo, qué IP.',
+        'Hosting en infraestructura con compliance SOC 2 (DigitalOcean / Cloudflare).',
+        '<strong>HTTPS forzado</strong> + headers de seguridad estrictos (CSP, HSTS, XFO).',
+      ],
+      image: null,
+    },
+  },
+  en: {
+    channels:  { iconClass: '',           title: 'Real multi-channel',          tagline: 'All your messages in one inbox. No app jumping.',
+      caps: ['<strong>Official WhatsApp Cloud API</strong> — branded verification and unlimited volume.','<strong>WhatsApp Web</strong> without verification (Lite mode) — to start with no paperwork.','<strong>Messenger</strong> and <strong>Instagram DMs</strong> connected to your Facebook Page.','Official <strong>Telegram</strong> via Bot API.','<strong>Email IMAP/SMTP</strong> — emails also become leads.','Unified inbox with avatar, last message and channel status.'],
+      image: null },
+    bots:      { iconClass: 'is-purple',  title: 'Visual bot builder',          tagline: 'Design automated conversations as if you were drawing a flowchart.',
+      caps: ['<strong>8 triggers</strong>: keyword, new contact, stage entry, no response, scheduled, FB/IG comment, abandoned cart, manual.','<strong>12+ step types</strong>: send message, wait, branches with conditions, set tag, change stage, call API, assign agent…','<strong>Nested branches</strong> with conditions by text, time of day, weekday, tag or contact variable.','Bot pause per contact when the agent takes over — automatic.','<strong>Collision policy</strong>: if 2 bots enter the same lead, define if it replaces or skips.','Test directly from the editor — no need to wait for a real message.'],
+      image: null },
+    pipelines: { iconClass: 'is-success', title: 'Kanban pipelines',            tagline: 'Like Trello for sales. Drag leads between stages and watch your funnel live.',
+      caps: ['<strong>Unlimited pipelines</strong> with custom stages (color, icon, order).','Each stage can have <strong>an assigned bot</strong> that runs on entry.','Stages marked as <strong>Won</strong> or <strong>Lost</strong> for conversion reports.','<strong>Monetary value</strong> per lead — calculate your pipeline in your currency.','<strong>Filters</strong> by agent, tag, channel, entry date and more.','List or kanban view. Drag-and-drop on desktop, swipe on mobile.'],
+      image: null },
+    templates: { iconClass: 'is-cyan',    title: 'Approved templates',          tagline: 'Send cold messages without spam or bans. The Meta way.',
+      caps: ['Visual editor for <strong>HSM templates</strong> with real-time preview.','Dynamic variables: <code>{{name}}</code>, <code>{{product}}</code>, <code>{{appointment}}</code>, custom fields.','<strong>Images, video, documents</strong> in the header.','<strong>Quick reply</strong> and <strong>URL/call</strong> buttons.','Approval flow: you send → Meta reviews → status visible in CRM.','Marketing / utility / authentication categories per use case.','Bulk sending respecting Meta rate limits.'],
+      image: null },
+    alarms:    { iconClass: 'is-warning', title: 'Alarms and reminders',        tagline: "No lead left behind. Wapi101 alerts you.",
+      caps: ['<strong>Time-in-stage</strong> alarm: "tell me if this lead has been here 3 days".','Multiple alarms per stage with different thresholds (24h, 3d, 7d).','<strong>Automatic appointment reminders</strong> to the customer (24h prior, day-of).','Push notifications on web and mobile PWA.','<strong>No-response</strong> alarms that fire a re-engagement bot.','Configure per pipeline, per stage or globally.'],
+      image: null },
+    comments:  { iconClass: 'is-pink',    title: 'FB & Instagram comments',     tagline: 'Turn every comment into a private conversation — and a lead.',
+      caps: ['Auto-reply comments on FB and IG <strong>posts and reels</strong>.','Filter by keyword in the comment to reply differently to "price" vs "info".','<strong>Move to DM</strong>: reply publicly "we just DM\'d you" and fire a bot in the DM.','Commenter avatar and name linked to the contact.','Hide / delete the comment if spam, also via bot.','Works with organic posts and Meta ads.'],
+      image: null },
+    reports:   { iconClass: 'is-success', title: 'Reports & analytics',         tagline: 'Measure what works and what doesn’t. Without opening Excel.',
+      caps: ['<strong>Executive dashboard</strong> with day, week and month metrics.','<strong>Conversion funnel</strong> per pipeline stage.','Productivity per <strong>agent</strong>: messages sent, leads closed, response time.','Integrated <strong>Meta Ads cost</strong> — know what you spend per channel.','Bot report: how many times each fires, conversion per bot.','CSV export from any view.'],
+      image: null },
+    team:      { iconClass: '',           title: 'Team and permissions',        tagline: 'Your team, organized. Everyone with their lane.',
+      caps: ['<strong>Admin</strong> and <strong>Agent</strong> roles with granular permissions.','<strong>Lead assignment</strong> to a specific agent.','Private inbox — the agent only sees their leads/chats.','Permissions: view reports, delete, manage agents, manage templates, etc.','<strong>Office hours</strong> per agent — outside hours, bots take over.','<strong>Audit log</strong>: every important action recorded (who, when, IP).'],
+      image: null },
+    ai:        { iconClass: 'is-purple',  title: 'AI Copilot',                  tagline: 'Your assistant that knows your business and saves hours of typing.',
+      caps: ['<strong>Suggests replies</strong> in chat based on context.','<strong>Summarizes long conversations</strong> in one click.','<strong>Loadable</strong> knowledge base: upload catalog, FAQ, policies and copilot uses them.','Automatic <strong>translation</strong> between Spanish and English in chat.','Customer <strong>intent</strong> analysis: hot lead, complaint, technical question.','Template generator: describe the case and it proposes the text.'],
+      image: null },
+    woo:       { iconClass: 'is-warning', title: 'WooCommerce & carts',         tagline: 'Recover sales that were slipping away. WhatsApp + Woo is magic.',
+      caps: ['Direct connection to your WooCommerce store via official plugin.','<strong>Abandoned carts</strong> → WhatsApp bot fires follow-up after N hours.','<strong>Order sync</strong>: every sale becomes a lead with all details.','Customer notification when order <strong>status</strong> changes.','<strong>Re-engagement</strong> of customers who haven\'t bought in months.','Importable catalog: your products available to send via chat.'],
+      image: null },
+    mobile:    { iconClass: 'is-cyan',    title: 'Mobile PWA app',              tagline: 'Serve customers from your phone like a native app.',
+      caps: ['<strong>PWA</strong> installable on iPhone, Android, Mac, Windows — one click from the browser.','Native <strong>push notifications</strong> when a new message arrives.','Works offline with sync when back online.','Mobile-adapted UI: bottom nav, chat swipe, compact view.','<strong>Share</strong>: share images from another app straight into a Wapi101 chat.','No Play Store or App Store — auto-updates, always the latest version.'],
+      image: null },
+    security:  { iconClass: 'is-success', title: 'Bank-grade security',         tagline: 'Your data is not our business. Security is.',
+      caps: ['<strong>Total workspace isolation</strong>: no other customer can see your data.','Sensitive credentials encrypted with <strong>AES-256-GCM</strong>.','Passwords with <strong>PBKDF2</strong> + unique salt + 100,000 iterations.','<strong>Daily encrypted backups</strong> with GPG, offsite copy on Cloudflare R2.','<strong>Audit log</strong> of every critical action: who, when, what IP.','Hosting on SOC 2 compliant infrastructure (DigitalOcean / Cloudflare).','<strong>Forced HTTPS</strong> + strict security headers (CSP, HSTS, XFO).'],
+      image: null },
+  },
+};
+
+const _ICON_CLONES = {}; // map of feature → SVG markup, copiado de la card al modal
+document.querySelectorAll('.feature[data-feature]').forEach(btn => {
+  const key = btn.dataset.feature;
+  const svg = btn.querySelector('.feature-icon svg');
+  if (svg) _ICON_CLONES[key] = svg.outerHTML;
+});
+
+const modal       = document.getElementById('featureModal');
+const modalIcon   = document.getElementById('modalIcon');
+const modalTitle  = document.getElementById('modalTitle');
+const modalTag    = document.getElementById('modalTagline');
+const modalCaps   = document.getElementById('modalCaps');
+const modalMedia  = document.getElementById('modalMedia');
+const modalCapsLabel  = document.getElementById('modalCapsLabel');
+const modalMediaLabel = document.getElementById('modalMediaLabel');
+const modalCtaA   = document.getElementById('modalCtaPrimary');
+const modalCtaB   = document.getElementById('modalCtaSecondary');
+const modalClose  = document.getElementById('modalCloseBtn');
+
+function _modalLabels() {
+  return _isEn
+    ? { caps: 'What you can do', media: 'Preview', cta1: 'Try free for 14 days', cta2: 'See pricing',
+        soon: 'Demo video coming soon', soonSub: 'Sign up for a real preview.' }
+    : { caps: 'Qué puedes hacer',  media: 'Vista previa', cta1: 'Probar gratis 14 días', cta2: 'Ver precios',
+        soon: 'Video demo en camino', soonSub: 'Crea tu cuenta y ve la versión real.' };
+}
+
+function openFeatureModal(key) {
+  const lang = _isEn ? 'en' : 'es';
+  const data = (FEATURE_DETAILS[lang] || FEATURE_DETAILS.es)[key];
+  if (!data) return;
+  const labels = _modalLabels();
+  modalIcon.className = 'modal-icon ' + (data.iconClass || '');
+  modalIcon.innerHTML = _ICON_CLONES[key] || '';
+  modalTitle.textContent   = data.title;
+  modalTag.textContent     = data.tagline;
+  modalCapsLabel.textContent  = labels.caps;
+  modalMediaLabel.textContent = labels.media;
+  modalCtaA.textContent = labels.cta1;
+  modalCtaB.textContent = labels.cta2;
+  modalCaps.innerHTML = data.caps.map(c => `<li>${ICON_DOT}<span>${c}</span></li>`).join('');
+  if (data.image) {
+    modalMedia.innerHTML = `<img src="${data.image}" alt="${data.title}"/>`;
+  } else {
+    modalMedia.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      <div class="ph-label">${labels.soon}</div>
+      <div class="ph-sub">${labels.soonSub}</div>`;
+  }
+  modal.classList.add('is-open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => modalClose.focus(), 50);
+}
+
+function closeFeatureModal() {
+  modal.classList.remove('is-open');
+  document.body.style.overflow = '';
+}
+
+document.querySelectorAll('.feature[data-feature]').forEach(btn => {
+  btn.addEventListener('click', () => openFeatureModal(btn.dataset.feature));
+});
+modalClose.addEventListener('click', closeFeatureModal);
+modal.addEventListener('click', (e) => { if (e.target === modal) closeFeatureModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('is-open')) closeFeatureModal(); });
 </script>
 
 </body>

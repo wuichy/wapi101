@@ -182,6 +182,73 @@ app.get('/super', (_req, res) => {
 app.get('/privacy', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'privacy.html')));
 app.get('/terms',   (_req, res) => res.sendFile(path.join(__dirname, 'public', 'terms.html')));
 
+// ─── Data Deletion Request Callback (requerido por Meta para apps de WhatsApp) ─
+// Meta llama POST /data-deletion cuando un usuario en Facebook pide "eliminar
+// mis datos de esta app". Verificamos signed_request HMAC con APP_SECRET y
+// respondemos con URL de confirmación + código.
+//
+// Doc: https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback
+app.post('/data-deletion', express.urlencoded({ extended: false }), async (req, res) => {
+  const crypto = require('crypto');
+  const signedRequest = req.body?.signed_request;
+  let fbUserId = null;
+
+  // 1) Verificar firma del signed_request (si viene)
+  if (signedRequest && process.env.META_APP_SECRET) {
+    try {
+      const [encodedSig, payload] = String(signedRequest).split('.');
+      const sig = Buffer.from(encodedSig.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+      const expectedSig = crypto.createHmac('sha256', process.env.META_APP_SECRET)
+        .update(payload).digest();
+      const valid = sig.length === expectedSig.length && crypto.timingSafeEqual(sig, expectedSig);
+      if (valid) {
+        const json = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
+        fbUserId = JSON.parse(json)?.user_id || null;
+      }
+    } catch (_) { /* firma inválida o malformada — seguimos con fbUserId=null */ }
+  }
+
+  // 2) Generar código de confirmación único (idempotente por fb_user_id)
+  const confirmationCode = `wapi-del-${crypto.randomBytes(8).toString('hex')}`;
+
+  // 3) Registrar la solicitud para auditoría (no bloqueante)
+  try {
+    const config = require('./src/config');
+    const { getDb } = require('./src/db');
+    const db = getDb(config.db.path);
+    db.prepare(`INSERT INTO activity_log (tenant_id, kind, target_type, target_id, meta) VALUES (1, 'meta_data_deletion_request', 'meta_user', NULL, ?)`)
+      .run(JSON.stringify({ fbUserId, confirmationCode, receivedAt: new Date().toISOString() }));
+  } catch (e) { console.error('[data-deletion] no se pudo loguear:', e.message); }
+
+  // 4) Responder con URL de status y código (Meta lo guarda y se lo da al usuario)
+  res.json({
+    url: `${process.env.APP_BASE_URL || 'https://wapi101.com'}/data-deletion-status?code=${encodeURIComponent(confirmationCode)}`,
+    confirmation_code: confirmationCode,
+  });
+});
+
+// Página de status humana para que el usuario consulte su solicitud
+app.get('/data-deletion-status', (req, res) => {
+  const code = String(req.query.code || '').slice(0, 80);
+  res.send(`<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Solicitud de eliminación · Wapi101</title>
+<style>body{font-family:-apple-system,sans-serif;max-width:600px;margin:60px auto;padding:24px;color:#0f172a;line-height:1.6}h1{color:#2563eb}code{background:#f1f5f9;padding:3px 8px;border-radius:4px;font-size:14px}.box{background:#f0fdf4;border-left:4px solid #16a34a;padding:14px 18px;border-radius:8px;margin:20px 0}</style></head>
+<body>
+<h1>Solicitud de eliminación recibida</h1>
+<p>Hemos recibido tu solicitud para eliminar los datos asociados a tu cuenta de Meta en Wapi101.</p>
+<div class="box">
+<strong>Código de confirmación:</strong> <code>${code || 'no-code'}</code>
+</div>
+<p><strong>¿Qué sigue?</strong></p>
+<ul>
+<li>Ejecutaremos la eliminación de tus datos en máximo <strong>30 días</strong></li>
+<li>Si necesitas confirmación inmediata o tienes preguntas, escríbenos a <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a> con tu código arriba</li>
+<li>Conservamos únicamente datos exigidos por ley fiscal (5 años) si aplicara</li>
+</ul>
+<p><a href="/">← Volver a Wapi101</a></p>
+</body></html>`);
+});
+
 // Catálogo público de planes (lo necesita la landing y la página /pricing).
 // Se monta ANTES del authMiddleware. Delega a billing/routes para mantener una sola fuente de verdad.
 app.get('/api/public/plans', (_req, res) => {

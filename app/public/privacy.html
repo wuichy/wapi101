@@ -153,12 +153,46 @@
       Wapi101 es una herramienta empresarial y NO está dirigida a menores de 18 años. No recabamos datos de menores conscientemente. Si crees que un menor ha proporcionado datos, contáctanos para eliminarlos.
     </p>
 
-    <h2>10. Cambios al aviso</h2>
+    <h2>10. WhatsApp Business Platform</h2>
+    <p>
+      Wapi101 utiliza la API oficial de <strong>WhatsApp Business Platform</strong> de Meta (también llamada WhatsApp Cloud API) para enviar y recibir mensajes en nombre del usuario tenant.
+    </p>
+    <h3>10.1 Datos procesados a través de WhatsApp</h3>
+    <ul>
+      <li>Números de teléfono y nombres de los contactos del tenant que reciben/envían mensajes</li>
+      <li>Contenido de los mensajes (texto, imágenes, audio, video, documentos, ubicaciones)</li>
+      <li>Estados de los mensajes (enviado, entregado, leído, fallido)</li>
+      <li>Metadatos provistos por Meta (timestamps, identificadores de conversación, identificadores de plantilla)</li>
+    </ul>
+    <h3>10.2 Compartición de datos con Meta</h3>
+    <p>
+      Cuando un tenant conecta su número de WhatsApp Business, los datos se intercambian directamente entre wapi101 y los servidores de Meta. Meta procesa estos datos conforme a su propia <a href="https://www.whatsapp.com/legal/privacy-policy" target="_blank" rel="noopener">Política de Privacidad de WhatsApp Business</a>. Wapi101 no controla el tratamiento que Meta realiza de estos datos.
+    </p>
+    <h3>10.3 Eliminación de datos</h3>
+    <p>
+      El usuario puede solicitar la eliminación de sus datos de WhatsApp en cualquier momento:
+    </p>
+    <ul>
+      <li>Desde el panel de Wapi101 (Configuración → Cuenta → Eliminar datos)</li>
+      <li>Enviando solicitud a <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a></li>
+      <li>A través del endpoint público: <code>POST https://wapi101.com/data-deletion</code> (también disponible para que Meta dispare solicitudes automáticas)</li>
+    </ul>
+    <p>
+      La eliminación se ejecuta en máximo <strong>30 días</strong>, incluyendo backups offsite. Se conservan únicamente los datos que exige la legislación mexicana (registros contables 5 años).
+    </p>
+    <h3>10.4 Retención específica de WhatsApp</h3>
+    <ul>
+      <li>Mensajes entrantes y salientes: conservados mientras la cuenta del tenant esté activa</li>
+      <li>Sesiones de WhatsApp Web (Lite): persistencia mínima necesaria para mantener el socket activo, eliminadas al desconectar la integración</li>
+      <li>Tokens de acceso de Meta: cifrados AES-256-GCM, eliminados al desconectar la integración</li>
+    </ul>
+
+    <h2>11. Cambios al aviso</h2>
     <p>
       Podemos actualizar este aviso para reflejar cambios en la legislación o en nuestros servicios. Las modificaciones se publicarán en esta misma página con la fecha de "Última actualización". Para cambios sustanciales, te notificaremos por correo a la cuenta registrada al menos 15 días antes de que entren en vigor.
     </p>
 
-    <h2>11. Aceptación</h2>
+    <h2>12. Aceptación</h2>
     <p>
       Al usar Wapi101 manifiestas que has leído, comprendido y aceptado este Aviso de Privacidad y los <a href="/terms">Términos del Servicio</a>.
     </p>

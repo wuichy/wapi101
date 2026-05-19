@@ -384,10 +384,19 @@ function formatDate(d) {
 // ── Procesar carrito abandonado de CartBounty ────────────────────────────────
 // Llamado desde el webhook cuando event === 'cart.abandoned'.
 // payload.cart: {cb_cart_id, name, phone, email, products[], total, currency, cart_url}
+//
+// IMPORTANTE: este handler YA NO envía la plantilla. Solo:
+//   • crea/encuentra el contacto y el lead
+//   • registra el carrito en woo_abandoned_carts con status='pending' y
+//     send_at = now + abandoned_cart_min_minutes
+//
+// El envío real lo hace processAbandonedCartQueue() en un poller (cada 60s).
+// Eso permite:
+//   • respetar el delay configurado (antes ignorado)
+//   • cancelar el envío si el cliente compra antes (lo más importante)
+//   • reintentar si Meta tuvo un 503/timeout transitorio
 async function processCartAbandoned(db, tenantId, cart, cfg) {
   const convoSvc = require('../conversations/service');
-  const tplSvc   = require('../templates/service');
-  const sender   = require('../conversations/sender');
 
   if (!cfg.abandoned_cart_enabled) return { skipped: true, reason: 'disabled' };
   if (!cart.phone) return { skipped: true, reason: 'no_phone' };
@@ -399,7 +408,7 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
   if (existing) return { skipped: true, reason: 'already_processed' };
 
   // 2) Dedup por contacto: si el mismo teléfono recibió un cart abandonment
-  //    en las últimas N horas, NO mandar otro.
+  //    en las últimas N horas, NO encolar otro.
   const phone = normalizePhoneForWA(cart.phone);
   if (!phone) return { skipped: true, reason: 'invalid_phone' };
 
@@ -408,7 +417,7 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
     SELECT wac.id FROM woo_abandoned_carts wac
     JOIN contacts c ON c.id = wac.contact_id
     WHERE c.phone = ? AND wac.tenant_id = ?
-      AND wac.message_sent = 1
+      AND wac.status = 'sent'
       AND wac.created_at > unixepoch() - (? * 3600)
     LIMIT 1
   `).get(phone, tenantId, dedupHours);
@@ -420,8 +429,6 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
   const lastName  = (cart.surname || '').trim() || fullName.split(/\s+/).slice(1).join(' ') || null;
   const email     = (cart.email || '').trim().toLowerCase() || null;
 
-  // Usar last-10-digits (igual que findContact / processOrderProcessing) para no
-  // crear duplicados cuando el formato varía (+52... vs +521...).
   let contact = findContact(db, tenantId, phone, email);
   let isNewContact = false;
   if (!contact) {
@@ -432,7 +439,6 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
     contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(r.lastInsertRowid);
     isNewContact = true;
   } else if (firstName || lastName) {
-    // Actualizar nombre si lo nuevo tiene más info
     db.prepare(`
       UPDATE contacts SET
         first_name = COALESCE(NULLIF(?, ''), first_name),
@@ -444,7 +450,6 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
   }
 
   // 4) Lead: si es contacto nuevo, crear en el pipeline configurado.
-  //    Si ya existía, NO mover su lead — solo respetamos donde esté.
   let expId = null;
   const existingExp = db.prepare(
     'SELECT id FROM expedients WHERE contact_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
@@ -461,7 +466,7 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
     expId = r.lastInsertRowid;
   }
 
-  // 5) Agregar tag al lead si está configurado
+  // 5) Agregar tag al lead
   const tag = cfg.abandoned_cart_tag || 'Carrito abandonado';
   if (expId && tag) {
     try {
@@ -470,80 +475,181 @@ async function processCartAbandoned(db, tenantId, cart, cfg) {
     } catch (_) {}
   }
 
-  // 6) Encontrar/crear conversación WA Business API
-  let convo = null;
-  let sendError = null;
-  let messageSent = 0;
-  const externalId = phone.replace(/\D/g, ''); // sin "+" para WA
+  // 6) ENCOLAR el envío — el poller se encargará después del delay
+  const minMinutes = Math.max(0, Number(cfg.abandoned_cart_min_minutes) || 0);
+  const sendAt = Math.floor(Date.now() / 1000) + (minMinutes * 60);
 
-  // Detectar si la conversación ya existía: si no, y el envío falla, la borramos
-  // para no dejar chats fantasma en el inbox.
-  const preExistedConvo = db.prepare(
-    'SELECT id FROM conversations WHERE provider = ? AND external_id = ? AND tenant_id = ?'
-  ).get('whatsapp', externalId, tenantId);
+  db.prepare(`
+    INSERT OR IGNORE INTO woo_abandoned_carts (
+      tenant_id, cb_cart_id, contact_id, expedient_id, customer_name, customer_phone,
+      customer_email, cart_total, currency, products_json, cart_url, template_id,
+      message_sent, send_error, status, send_at, retry_count
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'pending', ?, 0)
+  `).run(
+    tenantId, cart.cb_cart_id, contact.id, expId, fullName, phone, email,
+    cart.total || 0, cart.currency || 'MXN',
+    JSON.stringify(cart.products || []), cart.cart_url || null,
+    cfg.abandoned_cart_template_id || null,
+    sendAt
+  );
 
-  // Buscar integración WA activa para que la convo NO quede con integration_id=NULL
-  // (sin esto _getWAClientCreds cae en ENV y usa phone_number_id incorrecto).
-  // Buscar integración WA — preferir 'connected', caer en cualquier otra si no hay.
-  const waIntegration = db.prepare(
-    "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
-  ).get(tenantId);
+  console.log(`[woo abandoned cart] encolado cb_cart_id=${cart.cb_cart_id} contact=${contact.id} send_at=${new Date(sendAt * 1000).toISOString()} (delay=${minMinutes}min)`);
 
-  try {
-    convo = convoSvc.findOrCreate(db, tenantId, {
-      provider:      'whatsapp',
-      externalId,
-      contactPhone:  phone,
-      contactName:   fullName,
-      contactId:     contact.id,
-      integrationId: waIntegration?.id || null,
-    });
+  return { contactId: contact.id, expId, isNewContact, queued: true, sendAt };
+}
 
-    // 7) Enviar plantilla — los placeholders se rellenan desde cart_url + nombre
-    if (cfg.abandoned_cart_template_id && convo) {
+// ─── Poller de la cola de carritos abandonados ────────────────────────────────
+// Corre cada N segundos (configurado en server.js). Para cada carrito 'pending'
+// con send_at vencido:
+//   • verifica si el cliente YA compró después del carrito → cancelled_purchased
+//   • si no, intenta enviar la plantilla
+//   • si Meta da error transitorio (5xx / timeout) → retry con backoff
+//   • si Meta da error permanente (template no aprobada, número inválido) → failed
+//
+// Llamarlo idempotente: si dos pollers compiten por el mismo carrito, una
+// transacción `UPDATE ... WHERE status='pending'` se asegura de no duplicar.
+const MAX_RETRIES = 3;
+const RETRY_BACKOFF_MIN = [5, 15, 60]; // 5min, 15min, 1h
+const TRANSIENT_RE = /(service unavailable|timeout|ECONN|ETIMEDOUT|fetch failed|HTTP 5\d\d|too many requests|HTTP 429|service is temporar|please try again)/i;
+
+async function processAbandonedCartQueue(db) {
+  const convoSvc = require('../conversations/service');
+  const sender   = require('../conversations/sender');
+
+  // Tomar hasta 20 carritos pendientes con send_at vencido. Procesar de a uno.
+  const now = Math.floor(Date.now() / 1000);
+  const pending = db.prepare(`
+    SELECT * FROM woo_abandoned_carts
+    WHERE status = 'pending' AND send_at <= ?
+    ORDER BY send_at ASC
+    LIMIT 20
+  `).all(now);
+
+  if (!pending.length) return { processed: 0 };
+
+  let sent = 0, cancelled = 0, retried = 0, failed = 0;
+
+  for (const wac of pending) {
+    // Cargar config del tenant
+    const cfg = db.prepare('SELECT * FROM woo_config WHERE tenant_id = ?').get(wac.tenant_id);
+    if (!cfg || !cfg.abandoned_cart_enabled || !cfg.abandoned_cart_template_id) {
+      // Config deshabilitada o sin plantilla → no podemos enviar, marcar failed
+      db.prepare("UPDATE woo_abandoned_carts SET status='failed', send_error='config disabled or no template' WHERE id=?").run(wac.id);
+      failed++;
+      continue;
+    }
+
+    // 1) ¿El cliente ya compró después de abandonar?
+    //    Buscamos woo_orders con el mismo phone (last-10-digits) cuya
+    //    wc_order_date >= created_at del carrito.
+    const last10 = (wac.customer_phone || '').replace(/\D/g, '').slice(-10);
+    const purchased = last10 && db.prepare(`
+      SELECT id FROM woo_orders
+      WHERE tenant_id = ?
+        AND replace(replace(customer_phone, '+', ''), ' ', '') LIKE '%' || ? || '%'
+        AND wc_order_date >= ?
+      LIMIT 1
+    `).get(String(wac.tenant_id), last10, wac.created_at);
+
+    if (purchased) {
+      db.prepare("UPDATE woo_abandoned_carts SET status='cancelled_purchased', last_attempt_at=unixepoch() WHERE id=?").run(wac.id);
+      console.log(`[woo abandoned cart poller] cancelado #${wac.id} (${wac.customer_name}): ya compró (orden ${purchased.id})`);
+      cancelled++;
+      continue;
+    }
+
+    // 2) Intentar enviar
+    try {
+      const externalId = (wac.customer_phone || '').replace(/\D/g, '');
+      const waIntegration = db.prepare(
+        "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
+      ).get(wac.tenant_id);
+
+      const convo = convoSvc.findOrCreate(db, wac.tenant_id, {
+        provider:      'whatsapp',
+        externalId,
+        contactPhone:  wac.customer_phone,
+        contactName:   wac.customer_name,
+        contactId:     wac.contact_id,
+        integrationId: waIntegration?.id || null,
+      });
+
+      const firstName = (wac.customer_name || '').split(/\s+/)[0] || 'Cliente';
       const manualValues = [
         firstName,
-        cart.cart_url || '',
-        cart.total ? String(cart.total) : '',
+        wac.cart_url || '',
+        wac.cart_total ? String(wac.cart_total) : '',
       ];
-      const result = await sender.sendWhatsAppTemplate(db, convo, cfg.abandoned_cart_template_id, manualValues, { autoFallback: true });
-      convoSvc.addMessage(db, tenantId, convo.id, {
+
+      const result = await sender.sendWhatsAppTemplate(db, convo, wac.template_id, manualValues, { autoFallback: true });
+      convoSvc.addMessage(db, wac.tenant_id, convo.id, {
         externalId: result.externalId,
         direction:  'outgoing',
         provider:   'whatsapp',
         body:       result.renderedBody,
         status:     'sent',
       });
-      messageSent = 1;
-    }
-  } catch (err) {
-    sendError = err.message || String(err);
-    console.error('[woo abandoned cart] error enviando plantilla:', sendError);
 
-    if (convo && !preExistedConvo && messageSent === 0) {
-      try {
-        db.prepare('DELETE FROM conversations WHERE id = ?').run(convo.id);
-        convo = null;
-      } catch (delErr) {
-        console.error('[woo abandoned cart] no se pudo borrar convo huérfana:', delErr.message);
+      db.prepare("UPDATE woo_abandoned_carts SET status='sent', message_sent=1, send_error=NULL, last_attempt_at=unixepoch() WHERE id=?").run(wac.id);
+      console.log(`[woo abandoned cart poller] enviado #${wac.id} a ${wac.customer_name}`);
+      sent++;
+    } catch (err) {
+      const msg = (err.message || String(err)).slice(0, 500);
+      const isTransient = TRANSIENT_RE.test(msg);
+      const newRetryCount = (wac.retry_count || 0) + 1;
+
+      if (isTransient && newRetryCount <= MAX_RETRIES) {
+        // Reprogramar con backoff
+        const delayMin = RETRY_BACKOFF_MIN[newRetryCount - 1] || 60;
+        const newSendAt = Math.floor(Date.now() / 1000) + (delayMin * 60);
+        db.prepare(`
+          UPDATE woo_abandoned_carts
+          SET retry_count = ?, send_at = ?, last_attempt_at = unixepoch(), send_error = ?
+          WHERE id = ?
+        `).run(newRetryCount, newSendAt, msg, wac.id);
+        console.warn(`[woo abandoned cart poller] retry ${newRetryCount}/${MAX_RETRIES} para #${wac.id} en ${delayMin}min: ${msg}`);
+        retried++;
+      } else {
+        // Error permanente o agotados los reintentos
+        db.prepare(`
+          UPDATE woo_abandoned_carts
+          SET status='failed', send_error=?, last_attempt_at=unixepoch(), retry_count=?
+          WHERE id=?
+        `).run(msg, newRetryCount, wac.id);
+        console.error(`[woo abandoned cart poller] FAIL #${wac.id} (${wac.customer_name}): ${msg}`);
+        failed++;
       }
     }
   }
 
-  // 8) Guardar histórico
-  db.prepare(`
-    INSERT OR IGNORE INTO woo_abandoned_carts (
-      tenant_id, cb_cart_id, contact_id, expedient_id, customer_name, customer_phone,
-      customer_email, cart_total, currency, products_json, cart_url, template_id, message_sent, send_error
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    tenantId, cart.cb_cart_id, contact.id, expId, fullName, phone, email,
-    cart.total || 0, cart.currency || 'MXN',
-    JSON.stringify(cart.products || []), cart.cart_url || null,
-    cfg.abandoned_cart_template_id || null, messageSent, sendError
-  );
-
-  return { contactId: contact.id, expId, isNewContact, messageSent: !!messageSent, sendError };
+  return { processed: pending.length, sent, cancelled, retried, failed };
 }
 
-module.exports = { generateToken, processOrderProcessing, processOrderCompleted, processCartAbandoned, normalizePhoneForWA, fillCustomField };
+// Arranca el poller; el caller debe llamarlo una sola vez al boot del servidor.
+function startAbandonedCartPoller(db, intervalMs = 60_000) {
+  const tick = async () => {
+    try {
+      const r = await processAbandonedCartQueue(db);
+      if (r.processed > 0) {
+        console.log(`[woo abandoned cart poller] tick: enviados=${r.sent} cancelados=${r.cancelled} reintentos=${r.retried} fallos=${r.failed}`);
+      }
+    } catch (e) {
+      console.error('[woo abandoned cart poller] error general:', e.message);
+    } finally {
+      setTimeout(tick, intervalMs);
+    }
+  };
+  setTimeout(tick, intervalMs);
+  console.log(`[woo abandoned cart poller] iniciado (cada ${intervalMs/1000}s)`);
+}
+
+module.exports = {
+  generateToken,
+  processOrderProcessing,
+  processOrderCompleted,
+  processCartAbandoned,
+  processAbandonedCartQueue,
+  startAbandonedCartPoller,
+  normalizePhoneForWA,
+  fillCustomField,
+};

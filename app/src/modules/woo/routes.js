@@ -77,7 +77,7 @@ function authRouter(db) {
       stageId    || null,
       templateId || null,
       Math.max(1, Math.min(168, Number(dedupHours) || 24)),
-      Math.max(5, Math.min(1440, Number(minMinutes) || 60)),
+      Math.max(0, Math.min(1440, Number(minMinutes) || 60)),
       (tag || 'Carrito abandonado').slice(0, 60),
       req.tenantId,
     );

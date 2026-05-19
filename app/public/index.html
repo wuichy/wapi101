@@ -2263,8 +2263,14 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 </div>
 
                 <div>
-                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">⏱ Ventana de deduplicación (horas)</p>
-                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Si el mismo contacto deja otro carrito dentro de este tiempo, no se le manda otro mensaje. Default: 24h.</p>
+                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">⏳ Esperar antes de enviar (minutos)</p>
+                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Cuánto tiempo dejar pasar entre que abandonan el carrito y que les mandas el mensaje. Si compran antes de que pase este tiempo, NO se envía. Default: 60 min (1 hora).</p>
+                  <input type="number" id="acMinMinutes" class="int-input" min="0" max="1440" value="60" style="width:120px" />
+                </div>
+
+                <div>
+                  <p style="font-size:12px;font-weight:600;margin:0 0 4px">🚫 Ventana anti-spam (horas)</p>
+                  <p class="woo-desc" style="margin:0 0 6px;font-size:11px">Si al mismo contacto YA se le mandó un mensaje de carrito abandonado dentro de este tiempo, no se le manda otro aunque deje un nuevo carrito. Default: 24h.</p>
                   <input type="number" id="acDedupHours" class="int-input" min="1" max="168" value="24" style="width:120px" />
                 </div>
 

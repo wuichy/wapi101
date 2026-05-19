@@ -27,6 +27,22 @@ function _maybeMarkAuthFailed(db, integrationId, errOrData, friendly) {
   try { integrationsSvc.markAuthFailed(db, integrationId, friendly || (errOrData?.message || String(errOrData))); } catch (_) {}
 }
 
+// Parser tolerante: Meta 5xx/CDN devuelven HTML o texto plano ("Service Unavailable")
+// que rompía `await res.json()` con "Unexpected token 'S'...". Esta versión
+// intenta JSON; si falla, devuelve { error: { message: <texto leído>, code: -res.status } }
+// para que el resto del flujo siga ramificando por `data.error`.
+async function _safeJson(res) {
+  let text;
+  try { text = await res.text(); }
+  catch { return { error: { message: `HTTP ${res.status} (sin cuerpo)`, code: -res.status } }; }
+  if (!text) return { error: res.ok ? null : { message: `HTTP ${res.status}`, code: -res.status } };
+  try { return JSON.parse(text); }
+  catch {
+    const snippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    return { error: { message: snippet || `HTTP ${res.status}`, code: -res.status, type: 'NonJsonResponse' } };
+  }
+}
+
 async function sendMessage(db, convo, text) {
   convo = _normalizeConvo(convo);
   if (convo.provider === 'whatsapp')        return sendWhatsApp(db, convo, text);
@@ -102,7 +118,7 @@ async function sendWhatsApp(db, convo, text) {
       text: { body: text },
     }),
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (!res.ok || data.error) {
     const msg = friendlyMetaError(data.error) || `HTTP ${res.status}`;
     _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
@@ -259,7 +275,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(payload),
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (!res.ok || data.error) {
     const msg = friendlyMetaError(data.error) || `HTTP ${res.status}`;
     _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
@@ -282,7 +298,7 @@ async function sendMessenger(db, convo, text) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ recipient: { id: convo.externalId }, message: { text } }),
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (!res.ok || data.error) {
     const msg = data.error?.message || `HTTP ${res.status}`;
     _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
@@ -309,7 +325,7 @@ async function sendMessengerMedia(db, convo, { publicUrl, mediaType }) {
       message: { attachment: { type: fbType, payload: { url: publicUrl, is_reusable: false } } },
     }),
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (!res.ok || data.error) {
     const msg = data.error?.message || `HTTP ${res.status}`;
     _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
@@ -329,7 +345,7 @@ async function sendInstagram(db, convo, text) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ recipient: { id: convo.externalId }, message: { text } }),
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (!res.ok || data.error) {
     const msg = data.error?.message || `HTTP ${res.status}`;
     _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
@@ -355,7 +371,7 @@ async function sendInstagramMedia(db, convo, { publicUrl, mediaType }) {
       message: { attachment: { type: mediaType, payload: { url: publicUrl } } },
     }),
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (!res.ok || data.error) {
     const msg = data.error?.message || `HTTP ${res.status}`;
     _maybeMarkAuthFailed(db, convo.integrationId, data.error, msg);
@@ -374,7 +390,7 @@ async function sendTelegram(db, convo, text) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: convo.externalId, text }),
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (!data.ok) throw new Error(data.description || `HTTP ${res.status}`);
   return String(data.result?.message_id || '') || null;
 }
@@ -403,7 +419,7 @@ async function sendTelegramMedia(db, convo, { buffer, mimetype, filename, captio
     method: 'POST',
     body: fd,
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (!data.ok) throw new Error(data.description || `HTTP ${res.status}`);
   return String(data.result?.message_id || '') || null;
 }
@@ -480,7 +496,7 @@ async function sendTikTokReply(db, convo, text) {
     },
     body: JSON.stringify({ video_id: videoId, parent_comment_id: commentId, text }),
   });
-  const data = await res.json();
+  const data = await _safeJson(res);
   if (data.error?.code) throw new Error(`TikTok reply error: ${data.error.message}`);
   return { externalId: data.data?.comment_id };
 }

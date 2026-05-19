@@ -22107,6 +22107,8 @@ async function loadAbandonedCartConfig(cfg) {
   document.getElementById('acEnabledToggle').checked = !!ac.enabled;
   document.getElementById('acTagInput').value         = ac.tag || 'Carrito abandonado';
   document.getElementById('acDedupHours').value       = ac.dedupHours || 24;
+  const minMinutesInput = document.getElementById('acMinMinutes');
+  if (minMinutesInput) minMinutesInput.value = ac.minMinutes != null ? ac.minMinutes : 60;
 
   // Pipelines
   const pipelineSel = document.getElementById('acPipelineSel');
@@ -22156,6 +22158,7 @@ async function saveAbandonedCartConfig() {
     templateId: Number(document.getElementById('acTemplateSel').value) || null,
     tag:        document.getElementById('acTagInput').value.trim() || 'Carrito abandonado',
     dedupHours: Number(document.getElementById('acDedupHours').value) || 24,
+    minMinutes: Math.max(0, Number(document.getElementById('acMinMinutes')?.value) || 60),
   };
   if (body.enabled && !body.templateId) return toast('Selecciona una plantilla aprobada para activar', 'error');
   if (body.enabled && (!body.pipelineId || !body.stageId)) return toast('Configura el pipeline y la etapa', 'error');

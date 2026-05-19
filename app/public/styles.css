@@ -12172,3 +12172,100 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
     font-size: 12px;
   }
 }
+
+/* ═══════ PWA iOS — feels-like-native fixes ═══════
+   Soluciona issues reportados con la app instalada en iPhone:
+     1) Header se sale por encima de la status bar (safe-area-inset-top)
+     2) Se puede deslizar horizontalmente (overscroll-behavior-x)
+     3) Doble-tap o pinch hace zoom (touch-action + user-scalable=no)
+     4) Aparece el teclado y el layout queda roto (visualViewport + dvh)
+     5) El modal de plantillas pierde su posición fija con el teclado
+   Combinado con meta viewport "maximum-scale=1, user-scalable=no,
+   interactive-widget=resizes-content" + JS visualViewport handler. */
+
+/* — Bloquear gestos no deseados a nivel root — */
+html, body {
+  overscroll-behavior: none;                    /* bloquea pull-to-refresh y bounce */
+  overscroll-behavior-x: none;                  /* refuerza horizontal */
+  overflow-x: hidden;                            /* corta cualquier desbordamiento */
+  -webkit-text-size-adjust: 100%;               /* iOS no auto-zoom en rotación */
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;     /* sin flash gris al tocar */
+  touch-action: pan-y;                           /* solo permite scroll vertical, no pinch ni horizontal */
+  -webkit-user-select: none;                    /* sin selección accidental al hacer long-press */
+  user-select: none;
+}
+/* Inputs y textareas SÍ permiten selección y escritura */
+input, textarea, [contenteditable="true"], .selectable, .rh-message-body {
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: auto;
+}
+/* Botones / links: eliminar 300ms delay y double-tap zoom */
+button, a, [role="button"], .btn, [data-action] {
+  touch-action: manipulation;
+}
+
+/* — Bloquear zoom de iOS Safari por <input> con font-size < 16px —
+   iOS auto-zoomea al hacer focus si el input es <16px. Lo prevenimos. */
+@supports (-webkit-touch-callout: none) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select, textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* — En modo standalone PWA, el body es una superficie fija (no scroll) —
+   El scroll vive dentro de cada vista. Eso evita que el header se mueva
+   cuando el teclado abre/cierra. */
+@media (display-mode: standalone) {
+  html, body { height: 100dvh; height: 100vh; }
+  body { position: fixed; inset: 0; width: 100%; }
+
+  /* Chat header móvil (rh-conversation-header) baja debajo de la barra de
+     estado (Dynamic Island / notch). Aplica solo en mobile chat. */
+  body[data-chat-mobile-view="conversation"] .rh-conversation-header {
+    padding-top: calc(10px + env(safe-area-inset-top));
+  }
+
+  /* Topbar normal en otras vistas (analíticas, leads, plantillas, etc.) */
+  .topbar {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Input area del chat móvil se queda pegada al fondo respetando home indicator */
+  body[data-chat-mobile-view="conversation"] .rh-reply-form,
+  body[data-chat-mobile-view="conversation"] .rh-composer {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+}
+
+/* — Cuando aparece el teclado iOS, visualViewport.height baja. Usamos una
+   custom property que el JS actualiza (--keyboard-offset) para reposicionar
+   modals y composer. Ver inicialización en app.js startKeyboardTracker(). */
+:root { --keyboard-offset: 0px; }
+
+/* Modals que se abren con teclado: que su contenido NO se vaya fuera de la
+   zona visible. Aplicamos un translate negativo equivalente al keyboard. */
+@media (display-mode: standalone), (max-width: 720px) {
+  .modal,
+  .modal-backdrop {
+    /* En lugar de mover el modal, achicamos su altura útil */
+    height: calc(100dvh - var(--keyboard-offset, 0px));
+    height: calc(100vh - var(--keyboard-offset, 0px));
+  }
+  /* Cuando el modal está abierto, el body NO debe hacer scroll detrás */
+  body.modal-open {
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+  }
+}
+
+/* — Refuerzo de safe-area-inset-bottom en cualquier elemento sticky-bottom — */
+.app-bottom-bar,
+.bottom-fab,
+.mobile-bottom-nav {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}

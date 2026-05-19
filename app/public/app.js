@@ -22937,3 +22937,54 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// ─── PWA iOS: keyboard tracker + gesture guards ─────────────────────────────
+// Soluciona issues de la app instalada en iPhone:
+//  • Cuando el teclado abre, expone su altura como --keyboard-offset (CSS la usa
+//    para reposicionar modals y composer sin que se vayan fuera de pantalla).
+//  • Previene zoom por gesture (pinch / double-tap) en safari iOS standalone.
+//  • Previene scroll horizontal accidental con touchmove guard.
+(function setupIosPwaGuards () {
+  // 1) Keyboard tracker via VisualViewport
+  if (window.visualViewport) {
+    const root = document.documentElement;
+    const update = () => {
+      const vv = window.visualViewport;
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--keyboard-offset', `${offset}px`);
+    };
+    window.visualViewport.addEventListener('resize', update);
+    window.visualViewport.addEventListener('scroll', update);
+    update();
+  }
+
+  // 2) Bloquear pinch zoom (iOS gestures)
+  document.addEventListener('gesturestart',  (e) => e.preventDefault());
+  document.addEventListener('gesturechange', (e) => e.preventDefault());
+  document.addEventListener('gestureend',    (e) => e.preventDefault());
+
+  // 3) Bloquear double-tap zoom — iOS lo dispara si dos taps están < 350ms aparte
+  let _lastTap = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - _lastTap < 350) {
+      // Si el target ya consumió el primer tap (botón, input), igual prevenimos zoom
+      const t = e.target;
+      const isFormControl = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+      if (!isFormControl) e.preventDefault();
+    }
+    _lastTap = now;
+  }, { passive: false });
+
+  // 4) Body modal-open: cualquiera que abra .modal o .modal-backdrop debe agregar
+  //    class 'modal-open' al body. Vigilamos con MutationObserver para detectar
+  //    cuando aparece un modal y aplicarlo automáticamente.
+  const sync = () => {
+    const anyOpen = document.querySelector('.modal:not([hidden]), .modal-backdrop:not([hidden])');
+    document.body.classList.toggle('modal-open', !!anyOpen);
+  };
+  // observar cambios de [hidden] en .modal / .modal-backdrop
+  const mo = new MutationObserver(sync);
+  mo.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class', 'style'] });
+  sync();
+})();

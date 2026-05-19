@@ -2504,6 +2504,7 @@ function _msgsSignature(arr) {
   return `${arr.length}:${last.id}:${last.status || ''}:${last.body?.length || 0}`;
 }
 let _lastMsgsSignature = null;
+let _pendingChatRestore = false;  // se activa al abrir chat, baja después del 1er render
 
 async function loadMessages(convoId) {
   try {
@@ -2625,9 +2626,17 @@ async function handlePersonalChatAction(convoId, kind) {
 }
 
 async function openConversation(convoId) {
+  // Antes de cambiar de chat, guarda scroll actual del chat saliente
+  if (ACTIVE_CONVO_ID && ACTIVE_CONVO_ID !== convoId) {
+    const root = document.getElementById('rhMessages');
+    if (root) _chatScrollMemory[ACTIVE_CONVO_ID] = root.scrollTop;
+  }
   ACTIVE_CONVO_ID = convoId;
   _lastMsgsSignature = null; // forzar render al cambiar de chat
+  _pendingChatRestore = true; // primer renderMessages debe usar memoria, no wasAtBottom
   const convo = CONVERSATIONS.find((c) => c.id === convoId);
+  // Activar tracker para el nuevo chat
+  _trackChatScroll(convoId);
 
   // Salir del empty state
   document.getElementById('rhConvPanel')?.classList.remove('rh-empty');
@@ -2969,6 +2978,10 @@ function renderMessages() {
   const root = document.getElementById("rhMessages");
   if (!root) return;
 
+  // Flag: este es el primer render después de abrir/cambiar de chat?
+  const restoringChat = _pendingChatRestore;
+  _pendingChatRestore = false;
+
   // Capturar posición de scroll antes de renderizar.
   const wasAtBottom = _isChatAtBottom(root);
   const prevTop     = root.scrollTop;
@@ -3036,6 +3049,22 @@ function renderMessages() {
       </article>`;
   }).join("");
 
+  // Caso especial: primer render después de abrir un chat.
+  // Si hay scroll guardado de visita previa → restaurar ahí.
+  // Si no → ir al fondo (último mensaje, comportamiento WhatsApp estándar).
+  if (restoringChat) {
+    const restored = _restoreChatScroll(ACTIVE_CONVO_ID);
+    if (!restored) {
+      root.scrollTop = root.scrollHeight;
+      // Re-anclar cuando las imágenes carguen (solo el primer render)
+      root.querySelectorAll('img').forEach(img => {
+        if (img.complete) return;
+        img.addEventListener('load', () => { if (_isChatAtBottom(root)) root.scrollTop = root.scrollHeight; }, { once: true });
+      });
+    }
+    return;
+  }
+
   if (wasAtBottom) {
     // Si estaba al fondo, mantenerlo al fondo. Re-anclar también cuando cada
     // imagen termine de cargar (su altura cambia el scrollHeight).
@@ -3046,11 +3075,61 @@ function renderMessages() {
       img.addEventListener('error', () => { /* no-op */ }, { once: true });
     });
   } else {
-    // Preservar la posición visual del usuario: ajustar scroll por la diferencia
-    // de altura del contenido (mensajes nuevos arriba o adjuntos cargados).
-    const newHeight = root.scrollHeight;
-    root.scrollTop = prevTop + (newHeight - prevHeight);
+    // Preservar EXACTAMENTE la posición del usuario. Los re-renders del polling
+    // (cada 5s) o de updates de status (sent→delivered→read) NO deben mover
+    // su scroll un solo pixel mientras está leyendo mensajes viejos.
+    //
+    // Como la app NO pagina mensajes hacia atrás (todos vienen en una sola
+    // llamada), el contenido viejo nunca cambia de posición — los mensajes
+    // nuevos siempre se agregan al final. Por eso preservar prevTop sin
+    // ajustes funciona perfectamente.
+    root.scrollTop = prevTop;
+    // Si una imagen carga en mid-render, NO re-anclar (eso sí lo movería).
+    // El user va a verla cuando scrolle por ahí.
   }
+}
+
+// ─── Memoria de scroll por chat ─────────────────────────────────────────────
+// Recuerda la posición de scroll de cada chat al cambiar de uno a otro.
+// Al volver al chat, restaura donde lo dejaste (como pidió wuichy 2026-05-19).
+const _chatScrollMemory = {};  // { [convoId]: scrollTop }
+let   _chatScrollTracker = null;
+
+function _trackChatScroll(convoId) {
+  const root = document.getElementById('rhMessages');
+  if (!root || !convoId) return;
+  // Quitar listener anterior si lo había
+  if (_chatScrollTracker) {
+    _chatScrollTracker.el?.removeEventListener('scroll', _chatScrollTracker.fn);
+  }
+  const fn = () => {
+    // Guardar inmediato; debounce no es necesario (es solo escritura a objeto)
+    _chatScrollMemory[convoId] = root.scrollTop;
+  };
+  root.addEventListener('scroll', fn, { passive: true });
+  _chatScrollTracker = { el: root, fn };
+}
+
+function _restoreChatScroll(convoId) {
+  const root = document.getElementById('rhMessages');
+  if (!root) return false;
+  const saved = _chatScrollMemory[convoId];
+  if (typeof saved === 'number' && saved > 0) {
+    // Restaurar después del próximo paint para que el scrollHeight ya esté calculado
+    requestAnimationFrame(() => {
+      root.scrollTop = saved;
+      // Si hay imágenes cargando, re-aplicar al terminar de cargar para que no se mueva
+      root.querySelectorAll('img').forEach(img => {
+        if (img.complete) return;
+        img.addEventListener('load', () => {
+          // Solo si el user no ha scrolleado mientras tanto (toleramos ±60px)
+          if (Math.abs(root.scrollTop - saved) < 60) root.scrollTop = saved;
+        }, { once: true });
+      });
+    });
+    return true;
+  }
+  return false;
 }
 
 // ═══════ Contactos (conectado al backend) ═══════

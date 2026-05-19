@@ -11622,6 +11622,14 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-addr-modal-x { background:none; border:none; cursor:pointer; font-size:16px; color:var(--text-muted); padding:2px 6px; border-radius:4px; line-height:1; }
 .woo-addr-modal-x:hover { background:var(--bg-alt); }
 .woo-addr-modal-body { padding:16px 18px; display:flex; flex-direction:column; gap:11px; }
+/* Permitir copiar nombre, teléfono, email, dirección, nota — ningún botón
+   long-press ni evento touch debe bloquear la selección de texto aquí. */
+.woo-addr-modal-body,
+.woo-addr-modal-body * {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 .woo-addr-row { display:flex; gap:12px; align-items:flex-start; font-size:13px; }
 .woo-addr-lbl { color:var(--text-muted); min-width:76px; flex-shrink:0; font-size:12px; padding-top:1px; }
 .woo-addr-link { color:var(--primary,#2563eb); text-decoration:none; }
@@ -12192,13 +12200,11 @@ html, body {
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;     /* sin flash gris al tocar */
   touch-action: pan-y;                           /* solo permite scroll vertical, no pinch ni horizontal */
-  -webkit-user-select: none;                    /* sin selección accidental al hacer long-press */
-  user-select: none;
 }
-/* Inputs y textareas SÍ permiten selección y escritura */
-input, textarea, [contenteditable="true"], .selectable, .rh-message-body {
-  -webkit-user-select: text;
-  user-select: text;
+/* NOTA: removido user-select:none global — bloqueaba copiar texto en modals
+   (direcciones de pedidos, IDs, etc.). Los botones y elementos no-textuales
+   ya tienen su propia regla user-select:none en clases específicas. */
+input, textarea, [contenteditable="true"] {
   touch-action: auto;
 }
 /* Botones / links: eliminar 300ms delay y double-tap zoom */

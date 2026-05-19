@@ -1638,6 +1638,28 @@ Ana, , ana@hotmail.com, 5551112222</pre>
         </div>
       </div>
 
+      <!-- ─── MODAL: Manual paso a paso de WhatsApp Business API ─── -->
+      <div class="modal" id="waGuideModal" hidden>
+        <div class="modal-backdrop" data-close-wa-guide></div>
+        <div class="modal-card modal-card--lg wa-guide-card">
+          <header class="modal-header">
+            <h3>📖 Cómo conectar WhatsApp Business API a Wapi101</h3>
+            <button class="icon-btn" data-close-wa-guide aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </header>
+          <div class="modal-body wa-guide-body" id="waGuideContent">
+            <!-- contenido inyectado por openWhatsAppGuide() -->
+          </div>
+          <footer class="modal-footer" style="display:flex;justify-content:space-between;gap:12px">
+            <a href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started" target="_blank" rel="noopener" class="btn btn--ghost">
+              📘 Docs oficiales de Meta
+            </a>
+            <button class="btn btn--primary" data-close-wa-guide>Cerrar guía</button>
+          </footer>
+        </div>
+      </div>
+
       <!-- ─── MODAL: Pipeline / Etapa de enrutamiento ─── -->
       <div class="modal" id="routingModal" hidden>
         <div class="modal-backdrop" data-close-routing></div>

@@ -11622,6 +11622,34 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .woo-addr-modal-x { background:none; border:none; cursor:pointer; font-size:16px; color:var(--text-muted); padding:2px 6px; border-radius:4px; line-height:1; }
 .woo-addr-modal-x:hover { background:var(--bg-alt); }
 .woo-addr-modal-body { padding:16px 18px; display:flex; flex-direction:column; gap:11px; }
+
+/* ───────── Manual WhatsApp Business API — guía paso a paso ───────── */
+.wa-guide-card { max-width: 720px; width: 100%; max-height: calc(100vh - 40px); }
+.wa-guide-body { padding: 24px 28px; overflow-y: auto; max-height: 70vh; line-height: 1.55; font-size: 14px; }
+.wa-guide-body h2 { font-size: 18px; font-weight: 700; color: var(--text); margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #25d366; }
+.wa-guide-body h2:first-child { margin-top: 0; }
+.wa-guide-body h3 { font-size: 15px; font-weight: 600; color: var(--text); margin: 16px 0 6px; }
+.wa-guide-body p { margin: 0 0 10px; color: var(--text); }
+.wa-guide-body ol, .wa-guide-body ul { margin: 6px 0 12px; padding-left: 24px; }
+.wa-guide-body li { margin-bottom: 6px; }
+.wa-guide-body code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 12.5px; font-family: ui-monospace, Menlo, monospace; color: #0f172a; word-break: break-all; }
+.wa-guide-body a { color: #2563eb; text-decoration: none; font-weight: 500; }
+.wa-guide-body a:hover { text-decoration: underline; }
+.wa-guide-step { background: #f8fafc; border-left: 4px solid #25d366; border-radius: 8px; padding: 14px 18px; margin: 14px 0; }
+.wa-guide-step h2 { margin-top: 0; border-bottom: none; padding-bottom: 0; color: #075e54; }
+.wa-guide-warn { background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 13px; color: #78350f; }
+.wa-guide-tip { background: #dcfce7; border-left: 4px solid #16a34a; border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 13px; color: #14532d; }
+.wa-guide-danger { background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 13px; color: #7f1d1d; }
+.wa-guide-toc { background: #eff6ff; border-radius: 8px; padding: 14px 18px; margin-bottom: 24px; }
+.wa-guide-toc h3 { margin-top: 0; color: #1e40af; }
+.wa-guide-toc ol { columns: 2; column-gap: 24px; margin-bottom: 0; padding-left: 20px; }
+.wa-guide-toc li { margin-bottom: 4px; font-size: 13px; }
+.wa-guide-toc a { color: #1d4ed8; }
+@media (max-width: 600px) {
+  .wa-guide-body { padding: 16px 18px; font-size: 13.5px; }
+  .wa-guide-toc ol { columns: 1; }
+}
+.modal-card--lg { max-width: 720px; }
 /* Permitir copiar nombre, teléfono, email, dirección, nota — ningún botón
    long-press ni evento touch debe bloquear la selección de texto aquí. */
 .woo-addr-modal-body,

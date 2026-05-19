@@ -5411,6 +5411,11 @@ function renderIntegrations() {
       ? `<button class="btn btn--ghost" data-action="oauth" data-provider="${p.key}" data-auth="${p.authType}">${connected.length ? '+ Conectar otra' : 'Conectar'}</button>`
       : `<button class="btn btn--ghost" data-action="manual" data-provider="${p.key}">${connected.length ? '+ Conectar otra' : 'Conectar'}</button>`;
 
+    // Botón "Guía paso a paso" solo en WhatsApp Cloud (provider='whatsapp')
+    const guideBtn = p.key === 'whatsapp'
+      ? `<button class="btn btn--ghost" data-action="wa-guide" title="Manual paso a paso para conectar WhatsApp Business API">📖 Guía paso a paso</button>`
+      : '';
+
     let badgeHtml;
     if (connected.length) badgeHtml = '<span class="int-badge-connected">Conectado</span>';
     else if (connecting.length) badgeHtml = '<span class="int-badge-connecting">Esperando QR…</span>';
@@ -5429,6 +5434,7 @@ function renderIntegrations() {
         ${accountsHtml ? `<div class="int-accounts">${accountsHtml}</div>` : ''}
         <div class="int-card-actions">
           ${connectBtn}
+          ${guideBtn}
         </div>
       </div>`;
   });
@@ -5451,6 +5457,9 @@ function bindIntegrationListeners(root) {
   root.querySelectorAll('[data-action="routing"]').forEach((btn) => {
     btn.addEventListener("click", () => openRoutingModal(Number(btn.dataset.id)));
   });
+  root.querySelectorAll('[data-action="wa-guide"]').forEach((btn) => {
+    btn.addEventListener("click", () => openWhatsAppGuide());
+  });
   root.querySelectorAll('[data-action="disconnect"]').forEach((btn) => {
     btn.addEventListener("click", async () => {
       if (!confirm(`¿Desconectar "${btn.dataset.name}"?`)) return;
@@ -5466,6 +5475,304 @@ function bindIntegrationListeners(root) {
       }
     });
   });
+}
+
+// ─── Manual paso a paso para conectar WhatsApp Business API ─────────────────
+function openWhatsAppGuide() {
+  const modal = document.getElementById('waGuideModal');
+  const content = document.getElementById('waGuideContent');
+  if (!modal || !content) return;
+
+  // Tu webhook URL real (se construye con el host actual del browser)
+  const webhookUrl = `${window.location.origin}/api/webhooks/whatsapp`;
+
+  content.innerHTML = `
+    <div class="wa-guide-toc">
+      <h3>📋 Lo que vamos a hacer (10 pasos)</h3>
+      <ol>
+        <li><a href="#wag-p1">Crear cuenta en Meta for Developers</a></li>
+        <li><a href="#wag-p2">Crear una App en Meta</a></li>
+        <li><a href="#wag-p3">Agregar el producto WhatsApp</a></li>
+        <li><a href="#wag-p4">Crear/conectar tu WhatsApp Business Account</a></li>
+        <li><a href="#wag-p5">Agregar tu número de teléfono</a></li>
+        <li><a href="#wag-p6">Anotar tus IDs importantes</a></li>
+        <li><a href="#wag-p7">Generar token PERMANENTE (system user)</a></li>
+        <li><a href="#wag-p8">Configurar el webhook a Wapi101</a></li>
+        <li><a href="#wag-p9">Verificación de empresa (Meta Business Verification)</a></li>
+        <li><a href="#wag-p10">Pegar todo en Wapi101 y conectar</a></li>
+      </ol>
+    </div>
+
+    <h2>🎯 Antes de empezar</h2>
+    <p>Para conectar WhatsApp Business API a Wapi101 vas a necesitar:</p>
+    <ul>
+      <li>Una cuenta de <strong>Facebook personal</strong> (donde tengas administración)</li>
+      <li>Una <strong>página de Facebook</strong> de tu negocio (para crear el Business Manager)</li>
+      <li>Un <strong>número de teléfono</strong> que NO esté en uso en WhatsApp normal ni WhatsApp Business app</li>
+      <li>Documentos de tu empresa por si Meta pide verificación (CIF/RFC, factura de servicios, etc.)</li>
+      <li>Aproximadamente <strong>30-45 minutos</strong> para configurar todo</li>
+    </ul>
+    <div class="wa-guide-danger">
+      🚫 <strong>IMPORTANTE</strong>: el número que vayas a usar tiene que ser <u>nuevo en WhatsApp Cloud</u>. Si ya lo usas en tu celular con WhatsApp normal o Business, primero tienes que <strong>borrar la cuenta</strong> de WhatsApp en el teléfono (Ajustes → Cuenta → Borrar mi cuenta). Si no, Meta no te lo deja agregar.
+    </div>
+
+    <div class="wa-guide-step" id="wag-p1">
+      <h2>1. Crear cuenta en Meta for Developers</h2>
+      <ol>
+        <li>Abre <a href="https://developers.facebook.com/" target="_blank" rel="noopener">developers.facebook.com</a></li>
+        <li>Click en <strong>"Get Started"</strong> arriba a la derecha</li>
+        <li>Loguéate con tu Facebook personal</li>
+        <li>Te pedirá confirmar tu email + verificar tu identidad</li>
+        <li>Listo, ya tienes cuenta de developer</li>
+      </ol>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p2">
+      <h2>2. Crear una App</h2>
+      <ol>
+        <li>En <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a> click en <strong>"Create App"</strong></li>
+        <li>Use case: selecciona <strong>"Other"</strong></li>
+        <li>App type: <strong>"Business"</strong></li>
+        <li>Display name: ej. <code>Wapi Connect [tu negocio]</code></li>
+        <li>Contact email: tu correo</li>
+        <li>Business portfolio: deja el default (lo enlazaremos después)</li>
+        <li>Create App → te pide tu password de Facebook → confirmar</li>
+      </ol>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p3">
+      <h2>3. Agregar el producto WhatsApp</h2>
+      <ol>
+        <li>Ya en el dashboard de la app, baja hasta ver <strong>"Add a product"</strong></li>
+        <li>Busca <strong>"WhatsApp"</strong> → click en <strong>"Set up"</strong></li>
+        <li>Te lleva al panel de WhatsApp Business Platform</li>
+      </ol>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p4">
+      <h2>4. Crear/conectar tu WhatsApp Business Account (WABA)</h2>
+      <ol>
+        <li>Meta te pide vincular un <strong>Business Manager</strong> (también llamado <em>Portafolio de negocios</em>):
+          <ul>
+            <li>Si ya tienes uno (creado para Facebook Ads, etc.), selecciónalo</li>
+            <li>Si no, click en <strong>"Create a Business Portfolio"</strong>. Pon nombre comercial + email + país</li>
+          </ul>
+        </li>
+        <li>Después te pide crear tu <strong>WhatsApp Business Account (WABA)</strong>. Es la "cuenta de WhatsApp" del negocio dentro del Business Manager.</li>
+        <li>Acepta los términos de la plataforma de WhatsApp Business</li>
+      </ol>
+      <div class="wa-guide-tip">
+        💡 El WABA puede tener varios números asociados. Por ahora vas a agregar uno.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p5">
+      <h2>5. Agregar tu número de teléfono</h2>
+      <ol>
+        <li>En la sección <strong>"Phone Numbers"</strong> click en <strong>"Add phone number"</strong></li>
+        <li>Datos del negocio:
+          <ul>
+            <li><strong>Display name</strong>: el nombre que verá el cliente en su WhatsApp (puede ser "Tu Negocio" o tu marca). Cuidado: no puede contener palabras prohibidas tipo "WhatsApp", "FB", etc.</li>
+            <li><strong>Categoría</strong>: la que mejor describa tu negocio</li>
+            <li><strong>Descripción</strong>: opcional</li>
+          </ul>
+        </li>
+        <li>Selecciona país y escribe tu número (sin el +)</li>
+        <li>Elige cómo verificar:
+          <ul>
+            <li><strong>SMS</strong>: te llega código por mensaje (recomendado)</li>
+            <li><strong>Voz</strong>: te llaman y dictan código</li>
+          </ul>
+        </li>
+        <li>Ingresa el código → tu número queda agregado</li>
+      </ol>
+      <div class="wa-guide-warn">
+        ⚠️ Si te sale "este número ya está registrado en WhatsApp": cierra esta ventana, abre WhatsApp en tu celular (Normal o Business), ve a <em>Ajustes → Cuenta → Borrar mi cuenta</em>. Espera 10 minutos. Vuelve a intentar acá.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p6">
+      <h2>6. Anotar IDs importantes</h2>
+      <p>En el dashboard de WhatsApp ahora ves 3 IDs (anótalos en un block de notas):</p>
+      <ul>
+        <li><strong>Phone Number ID</strong>: número largo arriba del cuadro del número (ej. <code>123456789012345</code>)</li>
+        <li><strong>WhatsApp Business Account ID</strong> (WABA ID): otro número largo, generalmente debajo (ej. <code>987654321098765</code>)</li>
+        <li><strong>App ID</strong>: lo ves arriba en el header de la app (ej. <code>1122334455667788</code>)</li>
+      </ul>
+      <div class="wa-guide-tip">
+        💡 Estos 3 IDs son los que vamos a pegar en Wapi101 al final. Guárdalos.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p7">
+      <h2>7. Generar token PERMANENTE (system user)</h2>
+      <p>Meta te da por default un token <strong>temporal de 24 horas</strong>. Para producción necesitas uno permanente. Esto es lo que MÁS confunde a la gente, pero es lo más importante:</p>
+      <ol>
+        <li>Abre <a href="https://business.facebook.com/" target="_blank" rel="noopener">business.facebook.com</a> (Business Manager)</li>
+        <li>Selecciona tu negocio arriba a la izquierda</li>
+        <li>Click en el ⚙️ engrane abajo a la izquierda → <strong>"Business settings"</strong> / <strong>"Configuración del negocio"</strong></li>
+        <li>En el menú izquierdo: <strong>Users → System Users</strong> (Usuarios → Usuarios del sistema)</li>
+        <li>Click <strong>"Add"</strong> → crea uno:
+          <ul>
+            <li>Name: <code>wapi-integration</code> (o el que quieras)</li>
+            <li>Role: <strong>Admin</strong></li>
+          </ul>
+        </li>
+        <li>Una vez creado, click sobre él → <strong>"Add Assets"</strong>:
+          <ul>
+            <li>Asset type: <strong>Apps</strong> → selecciona la app que creaste en paso 2 → permisos: marcar <strong>"Full control"</strong></li>
+            <li>Asset type: <strong>WhatsApp Accounts</strong> → selecciona tu WABA → permisos: <strong>"Full control"</strong></li>
+          </ul>
+        </li>
+        <li>Click en <strong>"Generate New Token"</strong> arriba:
+          <ul>
+            <li>App: la tuya</li>
+            <li>Token expiration: <strong>"Never"</strong> ← ¡CLAVE! Si pones 60 días vas a tener que regenerar cada 2 meses</li>
+            <li>Permissions: marca <code>whatsapp_business_messaging</code> y <code>whatsapp_business_management</code></li>
+          </ul>
+        </li>
+        <li><strong>COPIA el token</strong> (empieza con <code>EAA...</code>). Meta NO te lo vuelve a mostrar. Guárdalo en un lugar seguro (Notas, 1Password, etc.)</li>
+      </ol>
+      <div class="wa-guide-danger">
+        🚨 Si pierdes el token, tienes que regenerar otro. No hay forma de recuperarlo.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p8">
+      <h2>8. Configurar el webhook a Wapi101</h2>
+      <p>Para que Wapi101 reciba los mensajes entrantes, hay que decirle a Meta dónde enviarlos:</p>
+      <ol>
+        <li>Vuelve a <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a> → tu app</li>
+        <li>En el menú izquierdo: <strong>WhatsApp → Configuration</strong></li>
+        <li>Sección <strong>"Webhook"</strong>: click en <strong>"Edit"</strong></li>
+        <li>Callback URL: <code>${webhookUrl}</code></li>
+        <li>Verify token: pídelo a quien te ayude con Wapi101 (o si eres admin, está en el <code>.env</code> como <code>META_WEBHOOK_VERIFY_TOKEN</code>). Es un string secreto que Meta y Wapi usan para verificar la conexión.</li>
+        <li>Click <strong>"Verify and save"</strong> → debe mostrar ✅ verde</li>
+        <li>Después, click <strong>"Manage"</strong> en la lista de eventos:
+          <ul>
+            <li>Suscribirse a: <strong>messages</strong> (recibir mensajes)</li>
+            <li>Suscribirse a: <strong>message_template_status_update</strong> (cuando Meta aprueba/rechaza plantillas)</li>
+          </ul>
+        </li>
+      </ol>
+      <div class="wa-guide-tip">
+        💡 Una vez configurado el webhook, prueba mandando un WhatsApp a tu número desde otro celular. Debería aparecer en Wapi101 → Chats en máximo 5 segundos.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p9">
+      <h2>9. Verificación de empresa (Meta Business Verification)</h2>
+      <p>Mientras estás en modo "Sandbox" (sin verificar), solo puedes mandar mensajes a hasta 5 números de prueba que TÚ agregues. Para mandar a clientes reales sin límite, necesitas <strong>verificar tu empresa</strong>:</p>
+      <ol>
+        <li>En Business Manager → ⚙️ Business settings → <strong>"Security Center"</strong></li>
+        <li>Click en <strong>"Start Verification"</strong></li>
+        <li>Sube documentos requeridos:
+          <ul>
+            <li>Acta constitutiva o CIF/RFC del negocio</li>
+            <li>Factura de servicios reciente con el domicilio del negocio</li>
+            <li>Algunas veces te piden estado de cuenta bancario empresarial</li>
+          </ul>
+        </li>
+        <li>Acepta los términos y envía</li>
+        <li>Meta revisa en <strong>1-5 días hábiles</strong>. Te llega email con el resultado</li>
+      </ol>
+      <div class="wa-guide-warn">
+        ⚠️ Mientras esperas la verificación, ya puedes usar Wapi101 enviando mensajes solo a los 5 números de prueba. Agrega los tuyos en WhatsApp → API Setup → Recipient phone number.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-p10">
+      <h2>10. Pegar todo en Wapi101 y conectar</h2>
+      <ol>
+        <li>Cierra esta guía</li>
+        <li>En la card de <strong>WhatsApp Business API</strong> → click <strong>"Conectar"</strong></li>
+        <li>Pega los datos que copiaste:
+          <ul>
+            <li><strong>Phone Number ID</strong> (paso 6)</li>
+            <li><strong>WhatsApp Business Account ID</strong> (paso 6)</li>
+            <li><strong>Access Token</strong> (paso 7, el que empieza con <code>EAA...</code>)</li>
+            <li><strong>App ID</strong> (paso 6) — opcional pero recomendado</li>
+            <li><strong>Display name</strong>: tu nombre comercial (cómo se ve en WhatsApp)</li>
+          </ul>
+        </li>
+        <li>Click <strong>"Conectar"</strong> → Wapi101 valida la conexión con Meta</li>
+        <li>Configura el <strong>pipeline destino</strong>: en qué etapa caen los mensajes nuevos (botón Pipeline en la card)</li>
+        <li>¡LISTO! Manda un mensaje de prueba al número desde otro celular y verifica que llegue a Wapi101</li>
+      </ol>
+    </div>
+
+    <h2>💰 Costos (te cobra Meta directo, no Wapi101)</h2>
+    <p>Meta cobra por conversación iniciada. Una "conversación" dura 24h una vez abierta.</p>
+    <ul>
+      <li><strong>Marketing</strong>: $0.04 - $0.10 USD (varía por país)</li>
+      <li><strong>Utility</strong> (confirmaciones, alertas): $0.02 - $0.05 USD</li>
+      <li><strong>Authentication</strong> (OTPs, códigos): $0.005 - $0.02 USD</li>
+      <li><strong>Service</strong> (responder dentro de ventana 24h): <strong>GRATIS</strong></li>
+    </ul>
+    <p>Las primeras 1,000 conversaciones del mes (utility) suelen ser gratis. Después se cobra a tu tarjeta vinculada en Business Manager.</p>
+
+    <h2>🆘 Problemas comunes</h2>
+    <h3>"Este número ya está en uso"</h3>
+    <p>El número ya tiene cuenta en WhatsApp normal o Business app. Borra la cuenta desde el teléfono (Ajustes → Cuenta → Borrar mi cuenta). Espera 10 min y reintenta.</p>
+
+    <h3>"Mi token expiró"</h3>
+    <p>Si generaste el token con "60 days" en vez de "Never", caducó. Vuelve al paso 7 y genera otro con "Never". Después pégalo en Wapi101 → Integraciones → editar la integración WhatsApp.</p>
+
+    <h3>"Mi plantilla fue rechazada"</h3>
+    <p>Meta rechaza si la plantilla:</p>
+    <ul>
+      <li>Tiene lenguaje promocional muy agresivo ("¡COMPRA YA!", "OFERTA ÚNICA")</li>
+      <li>Pide datos sensibles (tarjetas, contraseñas)</li>
+      <li>Tiene errores ortográficos o mayúsculas excesivas</li>
+      <li>El nombre interno tiene mayúsculas o caracteres especiales (usa solo a-z 0-9 _)</li>
+    </ul>
+    <p>Edita y reenvía. Suele aprobarse en pocos minutos.</p>
+
+    <h3>"El webhook deja de recibir mensajes"</h3>
+    <p>Verifica:</p>
+    <ul>
+      <li>En Meta → tu app → WhatsApp → Configuration: la Callback URL sigue siendo <code>${webhookUrl}</code></li>
+      <li>La suscripción a "messages" sigue activa</li>
+      <li>El token NO ha caducado (revisar en Business Manager → System Users)</li>
+      <li>El número NO fue suspendido por Meta (te llega email si pasa)</li>
+    </ul>
+
+    <h3>"Mi número fue baneado / suspendido"</h3>
+    <p>Pasa si recibes muchos reportes de spam. Para revertirlo:</p>
+    <ol>
+      <li>En Business Manager → tu WABA → "Quality rating" verifica el estado</li>
+      <li>Si dice "Restricted" o "Flagged", contacta soporte de Meta (botón "Contact Support" en la app)</li>
+      <li>Reduce el volumen de mensajes outbound y enfócate en respuestas a clientes</li>
+    </ol>
+
+    <h2>📞 Si te trabas</h2>
+    <p>Escríbenos a <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a> con:</p>
+    <ul>
+      <li>En qué paso estás</li>
+      <li>Screenshot del error (si hay)</li>
+      <li>Tu Phone Number ID o WABA ID</li>
+    </ul>
+    <p>Te ayudamos a destrabarte gratis durante onboarding.</p>
+  `;
+
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+  // Cerrar handlers
+  modal.querySelectorAll('[data-close-wa-guide]').forEach(el => {
+    el.addEventListener('click', closeWhatsAppGuide, { once: true });
+  });
+  document.addEventListener('keydown', _waGuideEscHandler);
+}
+
+function _waGuideEscHandler(e) {
+  if (e.key === 'Escape') closeWhatsAppGuide();
+}
+
+function closeWhatsAppGuide() {
+  const modal = document.getElementById('waGuideModal');
+  if (modal) modal.hidden = true;
+  document.body.classList.remove('modal-open');
+  document.removeEventListener('keydown', _waGuideEscHandler);
 }
 
 // ─── Solicitar integración (votación) ───

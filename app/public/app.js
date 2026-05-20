@@ -6210,7 +6210,6 @@ async function launchWhatsAppEmbeddedSignup() {
     // 1) Obtener config desde backend
     const cfg = await api('GET', '/api/integrations/whatsapp/embedded-signup-config');
     if (!cfg.appId) throw new Error('El servidor no tiene META_APP_ID configurado');
-    if (!cfg.configId) throw new Error('Falta META_WHATSAPP_CONFIG_ID — pídelo al admin (se crea en Meta → Login Configurations)');
 
     // 2) Cargar Facebook SDK
     const FB = await _loadFacebookSdk(cfg.appId, cfg.version);
@@ -6218,14 +6217,23 @@ async function launchWhatsAppEmbeddedSignup() {
     // 3) Empezar listener de session info
     const stopListener = _esStartListener();
 
-    // 4) Lanzar FB.login con config_id de Embedded Signup
+    // 4) Lanzar FB.login — preferir config_id si está disponible (más rápido + UX
+    //    nativa de Embedded Signup), si no usar scope estándar.
+    const loginOpts = cfg.configId
+      ? {
+          config_id: cfg.configId,
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: { sessionInfoVersion: 3, featureType: '', setup: {} },
+        }
+      : {
+          scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management',
+          response_type: 'code',
+          extras: { feature: 'whatsapp_embedded_signup', sessionInfoVersion: 3 },
+        };
+
     const response = await new Promise((resolve) => {
-      FB.login(resolve, {
-        config_id: cfg.configId,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: { sessionInfoVersion: 3, featureType: '', setup: {} },
-      });
+      FB.login(resolve, loginOpts);
     });
 
     stopListener();

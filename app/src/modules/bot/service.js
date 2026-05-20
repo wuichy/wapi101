@@ -17,6 +17,29 @@ function setTags(db, tenantId, botId, tagIds) {
   txn(ids);
 }
 
+// ¿La lista de pasos termina con un paso terminal explícito?
+// Para 'branch' como último: cada case + default deben terminar bien y debe
+// existir un default (si no, el flujo cae al vacío cuando no matchea ningún case).
+function _lastStepIsTerminal(steps) {
+  if (!Array.isArray(steps) || steps.length === 0) return false;
+  const last = steps[steps.length - 1];
+  if (!last) return false;
+  if (last.type === 'stop_bot' || last.type === 'stop_and_start') return true;
+  if (last.type === 'branch') {
+    const cfg = last.config || {};
+    const cases = Array.isArray(cfg.cases) ? cfg.cases : [];
+    for (const cs of cases) {
+      const cSteps = Array.isArray(cs.steps) ? cs.steps
+        : (Array.isArray(cs.branch) ? cs.branch : []);
+      if (!_lastStepIsTerminal(cSteps)) return false;
+    }
+    const defSteps = Array.isArray(cfg.default) ? cfg.default : null;
+    if (!defSteps) return false;
+    return _lastStepIsTerminal(defSteps);
+  }
+  return false;
+}
+
 // Detecta referencias rotas en un bot (steps + trigger). Filtra todas las
 // validaciones de templates/stages/pipelines/integrations/salsbots por tenant
 // para que un bot del tenant A no "valide OK" porque haya un template con el
@@ -173,6 +196,23 @@ function _validateBot(db, tenantId, bot) {
       }
     }
   }
+
+  // Aviso: el bot no termina con un paso terminal (stop_bot / stop_and_start).
+  // No aplica a bots sin pasos (esos ya se marcan por otras vías o son trigger-only).
+  if (steps.length > 0 && !_lastStepIsTerminal(steps)) {
+    const last = steps[steps.length - 1];
+    const msg = last?.type === 'branch'
+      ? 'La condición final no cierra el flujo: alguna rama o el default no terminan con "Parar bot".'
+      : 'El bot no termina con "Parar bot" — su flujo queda abierto.';
+    issues.push({
+      stepId: null,
+      kind: 'missing_terminal_step',
+      severity: 'warn',
+      message: msg,
+      hint: 'Agrega un paso "Parar bot" al final (y dentro de cada rama si usas condiciones) para cerrar el flujo explícitamente.',
+    });
+  }
+
   return issues;
 }
 

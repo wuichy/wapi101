@@ -139,6 +139,102 @@ module.exports = function createIntegrationsRouter(db) {
     }
   });
 
+  // ─── WhatsApp Embedded Signup ─────────────────────────────────────────────
+  // Recibe el `code` del flow de Facebook Login for Business (Embedded Signup)
+  // junto con `phone_number_id` y `waba_id` capturados del sessionInfoVersion=3
+  // postMessage del SDK. Intercambia code → access_token, suscribe la app al
+  // WABA, registra el número con Cloud API, y crea la integración en wapi.
+  //
+  // Docs: https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation
+  router.post('/whatsapp/embedded-signup', async (req, res) => {
+    try {
+      const { code, phoneNumberId, wabaId, displayName } = req.body || {};
+      if (!code) return res.status(400).json({ error: 'Falta code' });
+      if (!phoneNumberId) return res.status(400).json({ error: 'Falta phoneNumberId' });
+      if (!wabaId) return res.status(400).json({ error: 'Falta wabaId' });
+
+      const appId     = process.env.META_APP_ID;
+      const appSecret = process.env.META_APP_SECRET;
+      const version   = process.env.META_GRAPH_VERSION || 'v22.0';
+      if (!appId || !appSecret) {
+        return res.status(500).json({ error: 'Server: META_APP_ID / META_APP_SECRET no configurados' });
+      }
+
+      // 1) Intercambiar code por access_token (Business token, no de user)
+      const exchangeUrl = `https://graph.facebook.com/${version}/oauth/access_token`
+        + `?client_id=${encodeURIComponent(appId)}`
+        + `&client_secret=${encodeURIComponent(appSecret)}`
+        + `&code=${encodeURIComponent(code)}`;
+      const tokenRes  = await fetch(exchangeUrl);
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || !tokenData.access_token) {
+        return res.status(400).json({ error: 'Meta exchange falló', meta: tokenData });
+      }
+      const accessToken = tokenData.access_token;
+
+      // 2) Suscribir nuestra app a webhooks del WABA del cliente
+      const subRes = await fetch(`https://graph.facebook.com/${version}/${wabaId}/subscribed_apps`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!subRes.ok) {
+        const errData = await subRes.json().catch(() => ({}));
+        console.warn('[embedded-signup] subscribed_apps falló:', errData);
+        // No abortamos — algunos casos ya están suscritos
+      }
+
+      // 3) Registrar el número con Cloud API (PIN 000000 por default)
+      const regRes = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/register`, {
+        method:  'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ messaging_product: 'whatsapp', pin: '000000' }),
+      });
+      const regData = await regRes.json().catch(() => ({}));
+      if (!regRes.ok && regData?.error?.code !== 133015 /* already registered */) {
+        console.warn('[embedded-signup] register falló:', regData);
+        // No abortamos si ya está registrado, sí abortamos por otros errores
+        if (regData?.error?.code !== 133015) {
+          // Continúa de todos modos — algunos clientes ya tienen el número registrado
+        }
+      }
+
+      // 4) Obtener display info del número
+      let phoneInfo = {};
+      try {
+        const infoRes = await fetch(
+          `https://graph.facebook.com/${version}/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        phoneInfo = await infoRes.json();
+      } catch (_) { /* no crítico */ }
+
+      // 5) Crear integración en wapi (cifrado AES-256-GCM lo hace service.connect)
+      const finalDisplayName = displayName
+        || phoneInfo.verified_name
+        || (phoneInfo.display_phone_number ? `WhatsApp ${phoneInfo.display_phone_number}` : 'WhatsApp Business');
+
+      const item = await service.connect(db, req.tenantId, 'whatsapp', {
+        credentials: { phoneNumberId, wabaId, accessToken },
+        displayName: finalDisplayName,
+        externalId:  phoneNumberId,
+      });
+
+      res.status(201).json({ item, phoneInfo });
+    } catch (err) {
+      console.error('[embedded-signup] error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Expone el App ID y Configuration ID al frontend (públicos por diseño)
+  router.get('/whatsapp/embedded-signup-config', (_req, res) => {
+    res.json({
+      appId:    process.env.META_APP_ID || null,
+      configId: process.env.META_WHATSAPP_CONFIG_ID || null,
+      version:  process.env.META_GRAPH_VERSION || 'v22.0',
+    });
+  });
+
   router.patch('/:id', async (req, res, next) => {
     try {
       const item = await service.update(db, req.tenantId, Number(req.params.id), req.body || {});

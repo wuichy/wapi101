@@ -6054,7 +6054,18 @@ function openIntegrationModal(providerKey, instanceId = null) {
       return `<div class="int-field"><label>${escapeHtml(f.label)}${req}</label><input type="${inputType}" name="${f.key}" value="${escapeHtml(val)}" autocomplete="off" />${help}</div>`;
     };
 
-    fields.innerHTML = normalFields.map(renderField).join("") + (hasAdvanced ? `
+    // Si es WhatsApp Cloud y NO hay instance (primera conexión): ofrecer
+    // Embedded Signup como opción rápida arriba del form manual.
+    const embeddedSignupBlock = (provider.key === 'whatsapp' && !instance) ? `
+      <div class="int-embedded-signup-block">
+        <button type="button" class="btn btn--primary int-fb-login-btn" id="intFbLoginBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-3px;margin-right:6px"><path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.51 1.49-3.89 3.77-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.77l-.44 2.91h-2.33V22c4.78-.76 8.44-4.92 8.44-9.94z"/></svg>
+          Conectar con Facebook (rápido — 5 min)
+        </button>
+        <div class="int-or-divider">— o llena los datos manualmente —</div>
+      </div>` : '';
+
+    fields.innerHTML = embeddedSignupBlock + normalFields.map(renderField).join("") + (hasAdvanced ? `
       <div class="int-advanced-toggle" id="intAdvancedToggle">
         <span>⚙ Configuración avanzada</span>
       </div>
@@ -6074,6 +6085,14 @@ function openIntegrationModal(providerKey, instanceId = null) {
           });
           if (advancedHasValues) toggle.classList.add('int-advanced-open');
         }
+      }, 0);
+    }
+
+    // Embedded Signup handler — solo para WhatsApp primera conexión
+    if (provider.key === 'whatsapp' && !instance) {
+      setTimeout(() => {
+        const btn = document.getElementById('intFbLoginBtn');
+        if (btn) btn.addEventListener('click', launchWhatsAppEmbeddedSignup);
       }, 0);
     }
   }
@@ -6136,6 +6155,106 @@ function openIntegrationModal(providerKey, instanceId = null) {
   }
 
   document.getElementById("integrationModal").hidden = false;
+}
+
+// ─── WhatsApp Embedded Signup ─────────────────────────────────────────────
+// Flow: 1) cargar Facebook SDK, 2) FB.login() con config_id, 3) capturar
+// phone_number_id y waba_id del postMessage sessionInfoVersion=3, 4) mandar
+// code + ids al backend para canjear y crear integración.
+//
+// Doc: https://developers.facebook.com/docs/whatsapp/embedded-signup/implementation
+
+let _fbSdkPromise = null;
+function _loadFacebookSdk(appId, version = 'v22.0') {
+  if (_fbSdkPromise) return _fbSdkPromise;
+  _fbSdkPromise = new Promise((resolve, reject) => {
+    if (window.FB) return resolve(window.FB);
+    window.fbAsyncInit = function () {
+      window.FB.init({ appId, autoLogAppEvents: true, xfbml: true, version });
+      resolve(window.FB);
+    };
+    const s = document.createElement('script');
+    s.src = 'https://connect.facebook.net/en_US/sdk.js';
+    s.async = true; s.defer = true; s.crossOrigin = 'anonymous';
+    s.onerror = () => { _fbSdkPromise = null; reject(new Error('No se pudo cargar Facebook SDK')); };
+    document.head.appendChild(s);
+  });
+  return _fbSdkPromise;
+}
+
+// Captura sessionInfoVersion=3 — la app de Meta envía postMessage con
+// el phone_number_id y waba_id ANTES de devolver el code en FB.login.
+let _esCapturedSession = null;
+function _esStartListener() {
+  _esCapturedSession = null;
+  const handler = (event) => {
+    if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://web.facebook.com') return;
+    try {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+        if (data.event === 'FINISH' && data.data) {
+          _esCapturedSession = { phoneNumberId: data.data.phone_number_id, wabaId: data.data.waba_id };
+        }
+      }
+    } catch (_) {}
+  };
+  window.addEventListener('message', handler);
+  return () => window.removeEventListener('message', handler);
+}
+
+async function launchWhatsAppEmbeddedSignup() {
+  const btn = document.getElementById('intFbLoginBtn');
+  if (btn) { btn.disabled = true; btn.dataset._lbl = btn.textContent; btn.textContent = 'Conectando...'; }
+
+  try {
+    // 1) Obtener config desde backend
+    const cfg = await api('GET', '/api/integrations/whatsapp/embedded-signup-config');
+    if (!cfg.appId) throw new Error('El servidor no tiene META_APP_ID configurado');
+    if (!cfg.configId) throw new Error('Falta META_WHATSAPP_CONFIG_ID — pídelo al admin (se crea en Meta → Login Configurations)');
+
+    // 2) Cargar Facebook SDK
+    const FB = await _loadFacebookSdk(cfg.appId, cfg.version);
+
+    // 3) Empezar listener de session info
+    const stopListener = _esStartListener();
+
+    // 4) Lanzar FB.login con config_id de Embedded Signup
+    const response = await new Promise((resolve) => {
+      FB.login(resolve, {
+        config_id: cfg.configId,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: { sessionInfoVersion: 3, featureType: '', setup: {} },
+      });
+    });
+
+    stopListener();
+
+    if (!response.authResponse) {
+      throw new Error('Cancelaste el flow de Facebook o no autorizaste');
+    }
+    const code = response.authResponse.code;
+    const session = _esCapturedSession;
+    if (!session?.phoneNumberId || !session?.wabaId) {
+      throw new Error('No recibimos phone_number_id ni waba_id de Meta. Asegúrate de completar el flujo hasta el final.');
+    }
+
+    // 5) Backend canjea code y crea integración
+    toast('Procesando conexión con Meta...', 'info');
+    const result = await api('POST', '/api/integrations/whatsapp/embedded-signup', {
+      code,
+      phoneNumberId: session.phoneNumberId,
+      wabaId: session.wabaId,
+    });
+
+    toast('✓ WhatsApp conectado correctamente', 'success');
+    closeIntegrationModal();
+    await loadIntegrations();
+  } catch (err) {
+    console.error('[embedded-signup] error:', err);
+    toast(`Error: ${err.message}`, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset._lbl || 'Conectar con Facebook'; }
+  }
 }
 
 function closeIntegrationModal() {

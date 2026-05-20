@@ -5478,15 +5478,153 @@ function bindIntegrationListeners(root) {
 }
 
 // ─── Manual paso a paso para conectar WhatsApp Business API ─────────────────
-function openWhatsAppGuide() {
+function openWhatsAppGuide(initialTab = 'quick') {
   const modal = document.getElementById('waGuideModal');
   const content = document.getElementById('waGuideContent');
   if (!modal || !content) return;
 
+  // Inyectar tabs + dos secciones (rápida + técnica)
+  content.innerHTML = `
+    <div class="wa-guide-tabs" role="tablist">
+      <button class="wa-guide-tab is-active" data-tab="quick" role="tab">
+        ⚡ Conexión rápida — 5 min
+      </button>
+      <button class="wa-guide-tab" data-tab="manual" role="tab">
+        🔧 Conexión manual — avanzada
+      </button>
+    </div>
+    <div class="wa-guide-tab-panel" id="waGuidePanelQuick" data-panel="quick">
+      ${_waGuideQuickHtml()}
+    </div>
+    <div class="wa-guide-tab-panel" id="waGuidePanelManual" data-panel="manual" hidden>
+      ${_waGuideManualHtml()}
+    </div>
+  `;
+
+  // Bind tabs
+  content.querySelectorAll('.wa-guide-tab').forEach(t => {
+    t.addEventListener('click', () => {
+      const tab = t.dataset.tab;
+      content.querySelectorAll('.wa-guide-tab').forEach(x => x.classList.toggle('is-active', x === t));
+      content.querySelectorAll('.wa-guide-tab-panel').forEach(p => {
+        p.hidden = p.dataset.panel !== tab;
+      });
+    });
+  });
+  // Activar el tab inicial
+  const initial = content.querySelector(`.wa-guide-tab[data-tab="${initialTab}"]`);
+  if (initial) initial.click();
+
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+  modal.querySelectorAll('[data-close-wa-guide]').forEach(el => {
+    el.addEventListener('click', closeWhatsAppGuide, { once: true });
+  });
+  document.addEventListener('keydown', _waGuideEscHandler);
+}
+
+// ─── Contenido del tab "Conexión rápida" (Embedded Signup) ─────────────────
+function _waGuideQuickHtml() {
+  return `
+    <div class="wa-guide-hero">
+      <h2 style="margin-top:0">⚡ Conecta WhatsApp en 5 minutos</h2>
+      <p>Si tu negocio ya tiene cuenta de Facebook (la mayoría de las marcas), solo tienes que dar click en un botón y autorizar a Wapi101 desde el mismo popup de Facebook. No necesitas crear apps, generar tokens, ni copiar IDs.</p>
+    </div>
+
+    <div class="wa-guide-step">
+      <h2>📋 Antes de empezar (lo que necesitas)</h2>
+      <ul>
+        <li>Una cuenta de <strong>Facebook personal</strong> donde tengas administración</li>
+        <li>Una <strong>página de Facebook</strong> de tu negocio (para crear el Business Manager si no tienes)</li>
+        <li>Un <strong>número de teléfono</strong> que NO esté activo en WhatsApp normal ni en WhatsApp Business app del celular (si lo está, bórralo desde Ajustes → Cuenta → Borrar mi cuenta antes de empezar)</li>
+      </ul>
+      <div class="wa-guide-tip">
+        💡 Si nunca has usado Facebook Business Manager, no te preocupes — el wizard de Meta te ayuda a crearlo en el mismo flujo.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-q1">
+      <h2>1. Cierra esta guía y haz click en "Conectar"</h2>
+      <p>En la card de <strong>WhatsApp Business API</strong> verás un botón azul:</p>
+      <div style="background:#1877f2;color:#fff;padding:10px 16px;border-radius:8px;display:inline-block;font-weight:600;margin:8px 0">
+        Conectar con Facebook (rápido — 5 min)
+      </div>
+      <p style="margin-top:8px">Click ahí.</p>
+    </div>
+
+    <div class="wa-guide-step" id="wag-q2">
+      <h2>2. Loguéate en Facebook</h2>
+      <p>Se abre un popup de Facebook. Loguéate con tu cuenta personal de FB (la que administra tu negocio).</p>
+      <div class="wa-guide-tip">
+        💡 Si ya estás logueado en otra pestaña, Facebook reconoce y salta este paso.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-q3">
+      <h2>3. El wizard de Meta te guía</h2>
+      <p>Meta te muestra pantallas para:</p>
+      <ol>
+        <li><strong>Selecciona o crea tu Business Portfolio</strong> — si ya tienes uno (para Ads, etc.) lo eliges. Si no, click "Crear" y pones nombre del negocio.</li>
+        <li><strong>Selecciona o crea WhatsApp Business Account</strong> — agrupa todos los números de tu negocio. Si no tienes, click "Crear".</li>
+        <li><strong>Agrega tu número de teléfono</strong>:
+          <ul>
+            <li>Pais + número (sin el +)</li>
+            <li>Verifica por SMS o llamada</li>
+            <li>Define el "display name" — cómo verán los clientes tu negocio en su WhatsApp</li>
+          </ul>
+        </li>
+        <li><strong>Categoría del negocio</strong> — selecciona la que mejor te describa</li>
+      </ol>
+      <div class="wa-guide-warn">
+        ⚠️ Si te sale "este número ya está en uso", abre WhatsApp en tu celular, Ajustes → Cuenta → <strong>Borrar mi cuenta</strong>, espera 10 min y vuelve a intentar.
+      </div>
+    </div>
+
+    <div class="wa-guide-step" id="wag-q4">
+      <h2>4. Autoriza a Wapi101</h2>
+      <p>Meta te pregunta si autorizas que Wapi101 acceda a:</p>
+      <ul>
+        <li>Enviar y recibir mensajes en tu nombre</li>
+        <li>Crear plantillas en tu cuenta</li>
+        <li>Suscribirse a webhooks de mensajes entrantes</li>
+      </ul>
+      <p>Click <strong>"Continuar"</strong> / <strong>"Autorizar"</strong>.</p>
+    </div>
+
+    <div class="wa-guide-step" id="wag-q5">
+      <h2>5. ¡Listo!</h2>
+      <p>El popup se cierra solo y Wapi101 muestra "✓ WhatsApp conectado correctamente". La integración aparece en la lista con bolita verde.</p>
+      <div class="wa-guide-tip">
+        💡 <strong>Manda un mensaje de prueba</strong> a tu número desde otro celular para confirmar que llega a Wapi101 → Chats en menos de 5 segundos.
+      </div>
+    </div>
+
+    <h2>📌 Configurar el pipeline destino</h2>
+    <p>Después de conectar, dale click al botón <strong>"Pipeline"</strong> de la integración para decirle a Wapi en qué etapa de qué pipeline caen los leads nuevos. Si no lo configuras, los nuevos contactos no entrarán a ningún pipeline automáticamente (pero los mensajes sí llegan al chat).</p>
+
+    <h2>💰 Costos</h2>
+    <p>Meta cobra por conversación. La tarjeta de crédito se configura aparte en Business Manager → Configuración del negocio → Pagos. No nos pagas a nosotros por el WhatsApp — solo por el plan de Wapi101.</p>
+    <ul>
+      <li><strong>Marketing</strong>: $0.04 - $0.10 USD por conversación</li>
+      <li><strong>Utility</strong> (confirmaciones, alertas): $0.02 - $0.05 USD</li>
+      <li><strong>Service</strong> (responder en ventana 24h): <strong>GRATIS</strong></li>
+    </ul>
+
+    <h2>🆘 Si te trabas en cualquier paso</h2>
+    <p>Escríbenos a <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a> con un screenshot del paso donde te quedaste. Te ayudamos sin costo durante el onboarding.</p>
+  `;
+}
+
+// ─── Contenido del tab "Conexión manual / técnica" ─────────────────────────
+function _waGuideManualHtml() {
   // Tu webhook URL real (se construye con el host actual del browser)
   const webhookUrl = `${window.location.origin}/api/webhooks/whatsapp`;
+  return `
+    <div class="wa-guide-hero" style="background:#fffbeb;border-color:#fde68a">
+      <h2 style="margin-top:0">🔧 Conexión manual (avanzada)</h2>
+      <p>Esta guía es solo si <strong>no puedes/no quieres usar el botón "Conectar con Facebook"</strong> — por ejemplo, si tu negocio ya tiene una app propia de Meta para WhatsApp y prefieres mantener todo bajo tu control. Para la mayoría de los clientes, la conexión rápida es lo recomendado.</p>
+    </div>
 
-  content.innerHTML = `
     <div class="wa-guide-toc">
       <h3>📋 Lo que vamos a hacer (10 pasos)</h3>
       <ol>
@@ -5754,14 +5892,6 @@ function openWhatsAppGuide() {
     </ul>
     <p>Te ayudamos a destrabarte gratis durante onboarding.</p>
   `;
-
-  modal.hidden = false;
-  document.body.classList.add('modal-open');
-  // Cerrar handlers
-  modal.querySelectorAll('[data-close-wa-guide]').forEach(el => {
-    el.addEventListener('click', closeWhatsAppGuide, { once: true });
-  });
-  document.addEventListener('keydown', _waGuideEscHandler);
 }
 
 function _waGuideEscHandler(e) {

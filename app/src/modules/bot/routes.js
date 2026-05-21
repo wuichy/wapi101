@@ -234,9 +234,18 @@ module.exports = function createBotRouter(db) {
         WHERE w.tenant_id = ? AND w.status = 'waiting'
         GROUP BY br.bot_id
       `).all(req.tenantId);
+      // Reminder jobs pendientes (no fired, no skipped) — el run ya terminó
+      // pero hay una acción futura programada para este lead/contacto.
+      const rows3 = db.prepare(`
+        SELECT bot_id, COUNT(DISTINCT COALESCE(expedient_id, contact_id, run_id)) AS n
+        FROM appointment_reminder_jobs
+        WHERE tenant_id = ? AND fired = 0 AND skipped = 0
+        GROUP BY bot_id
+      `).all(req.tenantId);
       const counts = {};
       for (const r of rows1) counts[r.bot_id] = (counts[r.bot_id] || 0) + r.n;
       for (const r of rows2) counts[r.bot_id] = (counts[r.bot_id] || 0) + r.n;
+      for (const r of rows3) counts[r.bot_id] = (counts[r.bot_id] || 0) + r.n;
       res.json({ counts });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -275,6 +284,10 @@ module.exports = function createBotRouter(db) {
             OR EXISTS (
               SELECT 1 FROM bot_run_waits w
               WHERE w.run_id = br.id AND w.status = 'waiting'
+            )
+            OR EXISTS (
+              SELECT 1 FROM appointment_reminder_jobs j
+              WHERE j.run_id = br.id AND j.fired = 0 AND j.skipped = 0
             )
           )
         ORDER BY br.started_at DESC

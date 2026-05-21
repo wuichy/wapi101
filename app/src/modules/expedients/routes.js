@@ -388,14 +388,53 @@ module.exports = function createExpedientsRouter(db) {
         ORDER BY started_at DESC LIMIT 30
       `).all(exp.contactId, req.tenantId);
 
+      // Pre-cargar reminder jobs pendientes (no fired, no skipped) por run_id
+      // para considerarlos como "bot activo" aunque el run esté status=done.
+      const pendingReminders = db.prepare(`
+        SELECT run_id, MIN(fire_at) AS fire_at, COUNT(*) AS pending_count
+          FROM appointment_reminder_jobs
+         WHERE tenant_id = ? AND contact_id = ?
+           AND fired = 0 AND skipped = 0
+         GROUP BY run_id
+      `).all(req.tenantId, exp.contactId);
+      const reminderByRun = {};
+      for (const p of pendingReminders) reminderByRun[p.run_id] = p;
+
       // Enriquecer con info del wait actual para distinguir pausa natural vs manual
-      // y poder mostrar timer/respuesta restante en la UI.
+      // y poder mostrar timer/respuesta restante en la UI. También marcar runs
+      // que aunque estén 'done' tienen reminders pendientes (cita futura).
       const enriched = runs.map(r => {
-        if (r.status !== 'running' && r.status !== 'paused') return r;
+        const pendingRem = reminderByRun[r.id];
+
+        if (r.status !== 'running' && r.status !== 'paused') {
+          // Run terminado pero con reminder pendiente → tratar como "activo"
+          if (pendingRem) {
+            return {
+              ...r,
+              has_pending_reminder: 1,
+              wait_step_type:       'reminder',
+              wait_expires_at:      pendingRem.fire_at,
+              pending_reminder_count: pendingRem.pending_count,
+            };
+          }
+          return r;
+        }
         const wait = db.prepare(
           "SELECT wait_step_id, wait_step_index, expires_at, paused_remaining FROM bot_run_waits WHERE run_id = ? AND status = 'waiting' ORDER BY id DESC LIMIT 1"
         ).get(r.id);
-        if (!wait) return r;
+        if (!wait) {
+          // Run "running"/"paused" sin wait, pero con reminder pendiente
+          if (pendingRem) {
+            return {
+              ...r,
+              has_pending_reminder: 1,
+              wait_step_type:       'reminder',
+              wait_expires_at:      pendingRem.fire_at,
+              pending_reminder_count: pendingRem.pending_count,
+            };
+          }
+          return r;
+        }
         // Tipo del step (timer / wait_response / no_response) — lo sacamos del bot
         let stepType = null;
         try {
@@ -411,9 +450,17 @@ module.exports = function createExpedientsRouter(db) {
           wait_step_type:   stepType,
           wait_expires_at:  wait.expires_at,
           wait_paused_remaining: wait.paused_remaining,
+          ...(pendingRem ? {
+            has_pending_reminder: 1,
+            pending_reminder_count: pendingRem.pending_count,
+            pending_reminder_fire_at: pendingRem.fire_at,
+          } : {}),
         };
       });
-      res.json({ items: enriched, hasRunning: enriched.some(r => r.status === 'running' || r.status === 'paused') });
+      const hasRunning = enriched.some(r =>
+        r.status === 'running' || r.status === 'paused' || r.has_pending_reminder === 1
+      );
+      res.json({ items: enriched, hasRunning });
     } catch (e) { next(e); }
   });
 

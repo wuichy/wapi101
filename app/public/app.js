@@ -7340,7 +7340,9 @@ async function renderExpDetailBots() {
     try {
       const runsData = await api('GET', `/api/expedients/${expId}/bot-runs`);
       const runs = runsData.items || [];
-      const activeRuns = runs.filter(r => r.status === 'running' || r.status === 'paused');
+      const activeRuns = runs.filter(r =>
+        r.status === 'running' || r.status === 'paused' || r.has_pending_reminder === 1
+      );
       const hasRunning  = activeRuns.length > 0;
 
       // Auto-poll mientras haya bots activos; detener cuando terminen
@@ -7380,6 +7382,7 @@ async function renderExpDetailBots() {
           if (r.wait_step_type === 'timer')         return { color: 'running', showPlay: false, label: remTxt ? `⏱ Espera ${remTxt}`         : '⏱ Esperando timer' };
           if (r.wait_step_type === 'wait_response') return { color: 'running', showPlay: false, label: remTxt ? `💬 Espera respuesta · ${remTxt}` : '💬 Esperando respuesta' };
           if (r.wait_step_type === 'no_response')   return { color: 'running', showPlay: false, label: remTxt ? `⏳ ${remTxt}`               : '⏳ Esperando' };
+          if (r.wait_step_type === 'reminder')      return { color: 'running', showPlay: false, label: remTxt ? `📅 Recordatorio en ${remTxt}` : '📅 Recordatorio programado' };
           return { color: 'running', showPlay: false, label: '⏳ Esperando' };
         }
         return { color: 'running', showPlay: false, label: '' };

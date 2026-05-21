@@ -217,6 +217,75 @@ module.exports = function createBotRouter(db) {
   // ── CRUD ─────────────────────────────────────────────────────────────────────
   router.get('/', (req, res) => res.json({ items: service.list(db, req.tenantId) }));
 
+  // ── Conteo de leads activos (running + waiting) por bot ────────────────────
+  // GET /api/bots/active-counts → { counts: { [bot_id]: number } }
+  router.get('/active-counts', (req, res) => {
+    try {
+      const rows1 = db.prepare(`
+        SELECT bot_id, COUNT(DISTINCT COALESCE(expedient_id, contact_id, id)) AS n
+        FROM bot_runs
+        WHERE tenant_id = ? AND status IN ('running','paused')
+        GROUP BY bot_id
+      `).all(req.tenantId);
+      const rows2 = db.prepare(`
+        SELECT br.bot_id, COUNT(DISTINCT COALESCE(br.expedient_id, br.contact_id, br.id)) AS n
+        FROM bot_run_waits w
+        JOIN bot_runs br ON br.id = w.run_id
+        WHERE w.tenant_id = ? AND w.status = 'waiting'
+        GROUP BY br.bot_id
+      `).all(req.tenantId);
+      const counts = {};
+      for (const r of rows1) counts[r.bot_id] = (counts[r.bot_id] || 0) + r.n;
+      for (const r of rows2) counts[r.bot_id] = (counts[r.bot_id] || 0) + r.n;
+      res.json({ counts });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Leads que tienen un bot específico corriendo o esperando ──────────────
+  // GET /api/bots/:id/active-leads → { items: [{ run_id, status, lead_id, contact_id, lead_title, contact_name, started_at, current_step, total_steps, waiting_until }] }
+  router.get('/:id/active-leads', (req, res) => {
+    try {
+      const botId = Number(req.params.id);
+      const tenantId = req.tenantId;
+      const rows = db.prepare(`
+        SELECT
+          br.id            AS run_id,
+          br.status        AS run_status,
+          br.expedient_id  AS lead_id,
+          br.contact_id    AS contact_id,
+          br.current_step  AS current_step,
+          br.total_steps   AS total_steps,
+          br.started_at    AS started_at,
+          br.paused_manually AS paused_manually,
+          e.title          AS lead_title,
+          c.name           AS contact_name,
+          c.phone          AS contact_phone,
+          (
+            SELECT MIN(w.expires_at) FROM bot_run_waits w
+            WHERE w.run_id = br.id AND w.status = 'waiting'
+          ) AS waiting_until
+        FROM bot_runs br
+        LEFT JOIN expedients e ON e.id = br.expedient_id
+        LEFT JOIN contacts   c ON c.id = br.contact_id
+        WHERE br.tenant_id = ? AND br.bot_id = ?
+          AND (
+            br.status IN ('running','paused')
+            OR EXISTS (
+              SELECT 1 FROM bot_run_waits w
+              WHERE w.run_id = br.id AND w.status = 'waiting'
+            )
+          )
+        ORDER BY br.started_at DESC
+        LIMIT 500
+      `).all(tenantId, botId);
+      res.json({ items: rows });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   router.post('/reorder', (req, res) => {
     try {
       const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds : null;

@@ -179,6 +179,7 @@ const I18N_TRANSLATIONS = {
     'pl.new': '+ Pipeline',
     'pl.create': '+ Crear pipeline',
     'pl.delete': 'Eliminar pipeline',
+    'pl.add_stage': 'Agregar',
     'pl.manage.title': 'Gestionar pipeline',
     'pl.field.name': 'Nombre del pipeline',
     'pl.field.color': 'Color',
@@ -362,6 +363,15 @@ const I18N_TRANSLATIONS = {
     'bot.builder.labels': 'ETIQUETAS',
     'bot.builder.trigger': 'DISPARADOR',
     'bot.builder.active': 'Activo',
+    'bot.th.active_leads': 'Leads activos',
+    'bot.active.tooltip': 'Ver leads con este bot corriendo',
+    'bot.active.title': 'Leads con este bot activo',
+    'bot.active.loading': 'Cargando…',
+    'bot.active.empty': 'Ningún lead tiene este bot corriendo o esperando.',
+    'bot.active.running': 'Corriendo',
+    'bot.active.waiting': 'Esperando',
+    'bot.active.paused': 'Pausado',
+    'bot.active.step': 'Paso',
     'bot.add_step': 'Agregar paso',
     'bot.trigger.keyword': 'Palabra clave en mensaje',
     'bot.trigger.new_contact': 'Nuevo contacto creado',
@@ -1124,6 +1134,7 @@ const I18N_TRANSLATIONS = {
     'pl.new': '+ Pipeline',
     'pl.create': '+ Create pipeline',
     'pl.delete': 'Delete pipeline',
+    'pl.add_stage': 'Add',
     'pl.manage.title': 'Manage pipeline',
     'pl.field.name': 'Pipeline name',
     'pl.field.color': 'Color',
@@ -1307,6 +1318,15 @@ const I18N_TRANSLATIONS = {
     'bot.builder.labels': 'TAGS',
     'bot.builder.trigger': 'TRIGGER',
     'bot.builder.active': 'Active',
+    'bot.th.active_leads': 'Active leads',
+    'bot.active.tooltip': 'See leads with this bot running',
+    'bot.active.title': 'Leads with this bot active',
+    'bot.active.loading': 'Loading…',
+    'bot.active.empty': 'No leads have this bot running or waiting.',
+    'bot.active.running': 'Running',
+    'bot.active.waiting': 'Waiting',
+    'bot.active.paused': 'Paused',
+    'bot.active.step': 'Step',
     'bot.add_step': 'Add step',
     'bot.trigger.keyword': 'Keyword in message',
     'bot.trigger.new_contact': 'New contact created',
@@ -9530,10 +9550,24 @@ const SB_TRIGGER_LABELS = new Proxy({}, {
   },
 });
 
+let _botActiveCounts = {};
+async function loadBotActiveCounts() {
+  try {
+    const data = await api('GET', '/api/bot/active-counts');
+    _botActiveCounts = data.counts || {};
+  } catch (e) {
+    console.error('loadBotActiveCounts', e);
+    _botActiveCounts = {};
+  }
+}
+
 async function loadSalsbots() {
   try {
     await loadBotTags();
-    const data = await api('GET', '/api/bot');
+    const [data] = await Promise.all([
+      api('GET', '/api/bot'),
+      loadBotActiveCounts(),
+    ]);
     sbBots = data.items || [];
     renderBotList();
   } catch (e) { console.error('loadSalsbots', e); }
@@ -9710,10 +9744,13 @@ function renderBotList() {
         <div>${t('th.name')}</div>
         <div>${t('bot.builder.trigger')}</div>
         <div>${t('bot.th.steps')}</div>
+        <div>${t('bot.th.active_leads')}</div>
         <div>${t('bot.builder.active')}</div>
         <div></div>
       </div>
-      ${visibleBots.map(b => `
+      ${visibleBots.map(b => {
+        const activeN = Number(_botActiveCounts[b.id] || 0);
+        return `
         <div class="bot-list-row" data-bot-id="${b.id}" ${_botSort === 'manual' ? 'draggable="true"' : ''}>
           ${_botSort === 'manual' ? `
             <span class="bot-row-drag-handle" title="${t('bot.drag.title')}">
@@ -9725,6 +9762,11 @@ function renderBotList() {
           </div>
           <div class="bot-row-trigger">${botTriggerHtml(b)}</div>
           <div class="bot-row-steps">${b.steps.length} ${t(b.steps.length !== 1 ? 'bot.row.steps' : 'bot.row.step')}</div>
+          <div class="bot-row-active">
+            ${activeN > 0
+              ? `<button class="bot-active-pill is-on sb-active-leads-btn" data-id="${b.id}" data-name="${escHtml(b.name)}" title="${t('bot.active.tooltip')}" onclick="event.stopPropagation()">${activeN}</button>`
+              : `<span class="bot-active-pill is-zero">0</span>`}
+          </div>
           <div>
             <label class="sb-toggle" onclick="event.stopPropagation()">
               <input type="checkbox" class="sb-enabled-toggle" data-id="${b.id}" ${b.enabled ? 'checked' : ''} />
@@ -9743,7 +9785,8 @@ function renderBotList() {
             </button>
           </div>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>`;
 }
 
@@ -11196,6 +11239,7 @@ function setupBot() {
     if (e.target.closest('.sb-del-btn')) return;
     if (e.target.closest('.sb-clone-btn')) return;
     if (e.target.closest('.sb-stats-btn')) return;
+    if (e.target.closest('.sb-active-leads-btn')) return;
     if (e.target.closest('.sb-toggle')) return;
     const row = e.target.closest('.bot-list-row');
     if (!row) return;
@@ -11210,6 +11254,14 @@ function setupBot() {
     if (!btn) return;
     e.stopPropagation();
     openBotStatsModal(Number(btn.dataset.id));
+  });
+
+  // Active leads pill click → abrir modal con leads que tienen este bot activo
+  document.getElementById('botList')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.sb-active-leads-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    openBotActiveLeadsModal(Number(btn.dataset.id), btn.dataset.name || '');
   });
 
   // Clone bot (list)
@@ -15227,6 +15279,76 @@ function setupPipelines() {
 }
 
 // ════════ Estadísticas de bot ════════
+async function openBotActiveLeadsModal(botId, botName) {
+  const modal = document.getElementById('botActiveLeadsModal');
+  const content = document.getElementById('botActiveLeadsContent');
+  const title = document.getElementById('botActiveLeadsTitle');
+  if (!modal || !content) return;
+  if (title) {
+    title.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align:-3px;margin-right:6px;color:#15803d"><circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>
+      <span>${t('bot.active.title')}: ${escHtml(botName)}</span>`;
+  }
+  content.innerHTML = `<div class="bot-active-leads-loading">${t('bot.active.loading')}</div>`;
+  modal.hidden = false;
+  try {
+    const data = await api('GET', `/api/bot/${botId}/active-leads`);
+    const items = data.items || [];
+    if (!items.length) {
+      content.innerHTML = `<div class="bot-active-leads-empty">${t('bot.active.empty')}</div>`;
+      return;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    content.innerHTML = items.map(it => {
+      const subject = it.lead_title || it.contact_name || it.contact_phone || `Run #${it.run_id}`;
+      const subtitle = it.lead_title && it.contact_name ? it.contact_name : '';
+      const progress = (it.total_steps > 0)
+        ? `${it.current_step + 1}/${it.total_steps}`
+        : `${it.current_step + 1}`;
+      const isPaused = !!it.paused_manually;
+      const statusLabel = isPaused
+        ? `<span class="bot-active-status is-paused">${t('bot.active.paused')}</span>`
+        : (it.waiting_until
+            ? `<span class="bot-active-status is-waiting">${t('bot.active.waiting')}</span>`
+            : `<span class="bot-active-status is-running">${t('bot.active.running')}</span>`);
+      const waitInfo = it.waiting_until && it.waiting_until > now
+        ? `<span class="bot-active-meta-item">⏳ ${_formatBotWaitRemaining(it.waiting_until - now)}</span>`
+        : '';
+      const startInfo = it.started_at
+        ? `<span class="bot-active-meta-item">${formatBotDate(it.started_at)}</span>`
+        : '';
+      const target = it.lead_id
+        ? `data-lead-id="${it.lead_id}"`
+        : (it.contact_id ? `data-contact-id="${it.contact_id}"` : '');
+      const clickable = target ? 'is-clickable' : '';
+      return `
+        <div class="bot-active-lead-row ${clickable}" ${target}>
+          <div class="bot-active-lead-main">
+            <div class="bot-active-lead-name">${escHtml(subject)}</div>
+            ${subtitle ? `<div class="bot-active-lead-sub">${escHtml(subtitle)}</div>` : ''}
+          </div>
+          <div class="bot-active-lead-meta">
+            ${statusLabel}
+            <span class="bot-active-meta-item">${t('bot.active.step')} ${progress}</span>
+            ${waitInfo}
+            ${startInfo}
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    content.innerHTML = `<div class="bot-active-leads-error">${escHtml(String(err.message || err))}</div>`;
+  }
+}
+
+function _formatBotWaitRemaining(secs) {
+  if (secs < 60) return `${secs}s`;
+  const m = Math.floor(secs / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  return `${Math.floor(h / 24)}d`;
+}
+
 async function openBotStatsModal(botId) {
   const modal = document.getElementById('botStatsModal');
   if (!modal) return;
@@ -15359,6 +15481,30 @@ function renderBotStatsHistory(history) {
     </div>
     ${rows}
   `;
+}
+
+function setupBotActiveLeadsModal() {
+  const modal = document.getElementById('botActiveLeadsModal');
+  if (!modal) return;
+  document.querySelectorAll('[data-close-bot-active-leads]').forEach(el => {
+    el.addEventListener('click', () => { modal.hidden = true; });
+  });
+  modal.addEventListener('click', (e) => {
+    if (e.target.id === 'botActiveLeadsModal') modal.hidden = true;
+  });
+  // Click en una fila → abrir lead/contacto
+  document.getElementById('botActiveLeadsContent')?.addEventListener('click', (e) => {
+    const row = e.target.closest('.bot-active-lead-row.is-clickable');
+    if (!row) return;
+    const leadId = row.dataset.leadId ? Number(row.dataset.leadId) : null;
+    const contactId = row.dataset.contactId ? Number(row.dataset.contactId) : null;
+    modal.hidden = true;
+    if (leadId && typeof openExpedientDetail === 'function') {
+      openExpedientDetail(leadId);
+    } else if (contactId && typeof openCustomerDetail === 'function') {
+      openCustomerDetail(contactId);
+    }
+  });
 }
 
 function setupBotStatsModal() {
@@ -19242,6 +19388,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupPipelines();
   setupAlarmModal();
   setupBotStatsModal();
+  setupBotActiveLeadsModal();
   setupAccount();
   setupChatSearch();
   setupChatFilters();

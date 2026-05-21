@@ -2,6 +2,142 @@
 
 const TZ = process.env.TZ || 'America/Mexico_City';
 
+// ── Auto-programar recordatorios desde un bot run reciente ──────────────────
+// El bot ya terminó cuando el asesor crea la cita (porque "Agendar Cita" solo
+// notifica). Esta función reconstruye lo que el step `reminder_timer` habría
+// hecho: busca el bot run más reciente del contacto que tenga ese step en su
+// flujo y programa los jobs en appointment_reminder_jobs.
+//
+// Ventana: 60 minutos (configurable). Si el asesor tarda más, no se programa.
+function scheduleRemindersFromRecentBotRun(db, tenantId, ctx) {
+  const { contactId, expedientId, convoId, appointmentId, startsAt } = ctx;
+  if (!contactId || !startsAt) return { scheduled: 0, skipped: 0 };
+  const WINDOW_SECS = 60 * 60; // 60 min hacia atrás
+  const now = Math.floor(Date.now() / 1000);
+
+  try {
+    // Bot runs recientes del contacto, ordenados por más reciente
+    const recentRuns = db.prepare(`
+      SELECT br.id AS run_id, br.bot_id, sb.steps AS steps_json
+        FROM bot_runs br
+        JOIN salsbots sb ON sb.id = br.bot_id
+       WHERE br.tenant_id = ?
+         AND br.contact_id = ?
+         AND br.started_at >= ?
+       ORDER BY br.started_at DESC
+       LIMIT 5
+    `).all(tenantId, contactId, now - WINDOW_SECS);
+
+    if (!recentRuns.length) return { scheduled: 0, skipped: 0 };
+
+    let totalScheduled = 0, totalSkipped = 0;
+    const seenBotIds = new Set();
+
+    for (const run of recentRuns) {
+      // Evitar programar 2 veces si el mismo bot corrió varias veces
+      if (seenBotIds.has(run.bot_id)) continue;
+      seenBotIds.add(run.bot_id);
+
+      let steps;
+      try { steps = JSON.parse(run.steps_json || '[]'); } catch { continue; }
+
+      // Encontrar todos los steps reminder_timer en el flujo (recursivo por si
+      // están dentro de ramas de wait_response)
+      const reminderSteps = [];
+      _collectReminderSteps(steps, reminderSteps);
+      if (!reminderSteps.length) continue;
+
+      // Confirmar que este bot también tiene un step book_appointment (para
+      // no programar reminders de bots que no tienen nada que ver con citas)
+      if (!_hasStepType(steps, 'book_appointment')) continue;
+
+      for (const remStep of reminderSteps) {
+        const reminders = Array.isArray(remStep.reminders) ? remStep.reminders : [];
+        for (const rem of reminders) {
+          if (!rem.steps?.length) continue;
+          let fireAt;
+          if (rem.mode === 'before') {
+            const units = { min: 60, hour: 3600, day: 86400 };
+            const secs  = Number(rem.value || 0) * (units[rem.unit] || 60);
+            fireAt = startsAt - secs;
+          } else if (rem.mode === 'day_before_at') {
+            const days = Number(rem.value || 1);
+            const [hh, mm] = (rem.time || '20:00').split(':').map(Number);
+            const apptDate = new Date(startsAt * 1000);
+            const fireDate = new Date(apptDate);
+            fireDate.setDate(fireDate.getDate() - days);
+            fireDate.setHours(hh, mm, 0, 0);
+            fireAt = Math.floor(fireDate.getTime() / 1000);
+          } else {
+            continue;
+          }
+
+          if (fireAt <= now) {
+            db.prepare(`
+              INSERT INTO appointment_reminder_jobs
+                (tenant_id, bot_id, run_id, contact_id, expedient_id, convo_id,
+                 reminder_id, steps_json, ctx_json, fire_at, skipped, skip_reason)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'fire_time_already_passed')
+            `).run(tenantId, run.bot_id, run.run_id, contactId,
+                   expedientId || null, convoId || null,
+                   rem.id || 'auto', JSON.stringify(rem.steps),
+                   JSON.stringify({ tenantId, contactId, expedientId, convoId, appointmentId, source: 'auto_from_appt' }),
+                   fireAt);
+            totalSkipped++;
+          } else {
+            db.prepare(`
+              INSERT INTO appointment_reminder_jobs
+                (tenant_id, bot_id, run_id, contact_id, expedient_id, convo_id,
+                 reminder_id, steps_json, ctx_json, fire_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(tenantId, run.bot_id, run.run_id, contactId,
+                   expedientId || null, convoId || null,
+                   rem.id || 'auto', JSON.stringify(rem.steps),
+                   JSON.stringify({ tenantId, contactId, expedientId, convoId, appointmentId, source: 'auto_from_appt' }),
+                   fireAt);
+            totalScheduled++;
+          }
+        }
+      }
+      // Solo procesamos el primer bot que matchea (el más reciente)
+      break;
+    }
+    return { scheduled: totalScheduled, skipped: totalSkipped };
+  } catch (err) {
+    // No bloquear la creación de la cita por fallar el reminder
+    console.error('scheduleRemindersFromRecentBotRun error:', err.message);
+    return { scheduled: 0, skipped: 0, error: err.message };
+  }
+}
+
+function _collectReminderSteps(steps, out) {
+  if (!Array.isArray(steps)) return;
+  for (const s of steps) {
+    if (s && s.type === 'reminder_timer') out.push(s);
+    // Recursión por ramas (wait_response y similares)
+    if (s && s.branches) {
+      for (const k of Object.keys(s.branches)) {
+        _collectReminderSteps(s.branches[k]?.steps, out);
+      }
+    }
+    if (s && Array.isArray(s.steps)) _collectReminderSteps(s.steps, out);
+  }
+}
+
+function _hasStepType(steps, type) {
+  if (!Array.isArray(steps)) return false;
+  for (const s of steps) {
+    if (s && s.type === type) return true;
+    if (s && s.branches) {
+      for (const k of Object.keys(s.branches)) {
+        if (_hasStepType(s.branches[k]?.steps, type)) return true;
+      }
+    }
+    if (s && Array.isArray(s.steps) && _hasStepType(s.steps, type)) return true;
+  }
+  return false;
+}
+
 function _fmtDate(unixTs) {
   const d = new Date(unixTs * 1000);
   return d.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TZ });
@@ -36,8 +172,13 @@ function book(db, tenantId, { contactId, expedientId, convoId, advisorId, offset
   `).run(tenantId, contactId || null, expedientId || null, convoId || null,
          advisorId || null, startsAt, endsAt, dur, notes || null, createdVia || 'bot');
 
+  const appointmentId = res.lastInsertRowid;
+  scheduleRemindersFromRecentBotRun(db, tenantId, {
+    contactId, expedientId, convoId, appointmentId, startsAt,
+  });
+
   return {
-    id: res.lastInsertRowid,
+    id: appointmentId,
     startsAt,
     endsAt,
     fecha: _fmtDate(startsAt),
@@ -98,8 +239,13 @@ function reschedule(db, tenantId, { contactId, expedientId, convoId, advisorId, 
   `).run(tenantId, contactId || null, expedientId || null, convoId || null,
          advisorId || null, startsAt, endsAt, dur, existing?.id || null);
 
+  const appointmentId = res.lastInsertRowid;
+  scheduleRemindersFromRecentBotRun(db, tenantId, {
+    contactId, expedientId, convoId, appointmentId, startsAt,
+  });
+
   return {
-    id: res.lastInsertRowid,
+    id: appointmentId,
     startsAt,
     endsAt,
     fecha: _fmtDate(startsAt),
@@ -218,8 +364,13 @@ function bookManual(db, tenantId, { contactId, expedientId, convoId, advisorId, 
   `).run(tenantId, contactId || null, expedientId || null, convoId || null,
          advisorId || null, startsAt, endsAt, dur, notes || null);
 
+  const appointmentId = res.lastInsertRowid;
+  scheduleRemindersFromRecentBotRun(db, tenantId, {
+    contactId, expedientId, convoId, appointmentId, startsAt,
+  });
+
   return {
-    id:       res.lastInsertRowid,
+    id:       appointmentId,
     startsAt,
     endsAt,
     fecha:    _fmtDate(startsAt),

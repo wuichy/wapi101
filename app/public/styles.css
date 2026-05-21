@@ -2538,6 +2538,14 @@ body.nav-collapsed .nav-notif-panel {
   gap: 8px;
 }
 .sort-option:hover { background: var(--bg-bubble-in); }
+.sort-option-ico {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.sort-option.is-active .sort-option-ico,
+.sort-option:hover .sort-option-ico { color: var(--accent); }
 .sort-option.is-active {
   background: rgba(37, 99, 235, 0.08);
   color: var(--accent);
@@ -5010,7 +5018,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .bot-list-head {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 90px 70px 40px;
+  grid-template-columns: 1.4fr 1fr 90px 90px 70px 40px;
   column-gap: 16px;
   padding: 10px 16px;
   font-size: 11px;
@@ -5023,7 +5031,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .bot-list-row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 90px 70px 76px;
+  grid-template-columns: 1.4fr 1fr 90px 90px 70px 76px;
   column-gap: 16px;
   padding: 14px 16px;
   align-items: center;
@@ -5033,7 +5041,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 /* Cuando está en modo manual (draggable) añadimos una columna inicial para el handle */
 .bot-list-row[draggable="true"] {
-  grid-template-columns: 20px 1.4fr 1fr 90px 70px 76px;
+  grid-template-columns: 20px 1.4fr 1fr 90px 90px 70px 76px;
   cursor: grab;
 }
 .bot-list-row[draggable="true"]:active { cursor: grabbing; }
@@ -5061,6 +5069,114 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .bot-row-trigger { font-size: 12px; color: var(--text-muted); }
 .bot-row-steps { font-size: 12px; }
 .bot-row-actions { display: inline-flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.bot-row-active { font-size: 13px; display: flex; align-items: center; }
+.bot-active-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-family: inherit;
+  line-height: 1;
+}
+.bot-active-pill.is-on {
+  background: rgba(34,197,94,.12);
+  border-color: rgba(34,197,94,.35);
+  color: #15803d;
+  cursor: pointer;
+  transition: background 120ms, transform 120ms;
+}
+.bot-active-pill.is-on:hover {
+  background: rgba(34,197,94,.22);
+  transform: translateY(-1px);
+}
+.bot-active-pill.is-zero { opacity: .5; }
+
+/* Modal: leads activos por bot */
+.bot-active-leads-list { display: flex; flex-direction: column; gap: 8px; }
+.bot-active-leads-loading,
+.bot-active-leads-empty,
+.bot-active-leads-error {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.bot-active-leads-error { color: #b91c1c; }
+.bot-active-lead-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  transition: background 120ms, border-color 120ms, transform 120ms;
+}
+.bot-active-lead-row.is-clickable { cursor: pointer; }
+.bot-active-lead-row.is-clickable:hover {
+  background: var(--bg);
+  border-color: var(--accent, #2563eb);
+  transform: translateY(-1px);
+}
+.bot-active-lead-main { min-width: 0; flex: 1; }
+.bot-active-lead-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bot-active-lead-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.bot-active-lead-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.bot-active-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.bot-active-status.is-running {
+  background: rgba(34,197,94,.15);
+  color: #15803d;
+}
+.bot-active-status.is-waiting {
+  background: rgba(245,158,11,.18);
+  color: #b45309;
+}
+.bot-active-status.is-paused {
+  background: rgba(148,163,184,.2);
+  color: #475569;
+}
+.bot-active-meta-item {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+@media (max-width: 560px) {
+  .bot-active-lead-row { flex-direction: column; align-items: flex-start; }
+  .bot-active-lead-meta { justify-content: flex-start; }
+}
 .sb-clone-btn:hover { color: var(--accent); }
 
 /* ── Inline toggle ── */
@@ -12174,8 +12290,9 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   .bot-list-row > :nth-child(1) { grid-area: name; }
   .bot-list-row > :nth-child(2) { grid-area: trigger; }
   .bot-list-row > :nth-child(3) { display: none; }  /* steps count */
-  .bot-list-row > :nth-child(4) { grid-area: actions; justify-self: end; }
-  .bot-list-row > :nth-child(5) { grid-area: actions; justify-self: end; }
+  .bot-list-row > :nth-child(4) { grid-area: trigger; justify-self: end; }  /* active leads pill */
+  .bot-list-row > :nth-child(5) { grid-area: actions; justify-self: end; }  /* enabled toggle */
+  .bot-list-row > :nth-child(6) { grid-area: actions; justify-self: end; }  /* actions */
   .bot-list-head { display: none; }
 }
 

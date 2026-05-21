@@ -5087,6 +5087,7 @@ function setupSettingsTabs() {
       if (target === 'ia') loadAISettings();
       if (target === 'integraciones') loadIntegrations();
       if (target === 'aplicaciones') loadAppsSection();
+      if (target === 'datos') loadDataCenter();
     });
   });
   // Botón "Volver" para mobile — vuelve al listado de categorías
@@ -17414,7 +17415,131 @@ async function triggerCatalogSync() {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(_bindCatalogControlsOnce, 100);
   setTimeout(_bindProductComposerOnce, 100);
+  setTimeout(_bindDataCenterOnce, 100);
 });
+
+// ─── Centro de Datos (Configuración → Datos) ─────────────────────────
+const DC_ENTITY_META = {
+  contacts:  { icon: '👥', label: 'Contactos',     desc: 'CSV/Excel desde Kommo, HubSpot, Pipedrive o tu propio CRM',
+               importDesc: 'Importa contactos con dedup automático y opción de crear leads' },
+  leads:     { icon: '📋', label: 'Leads',         desc: 'Oportunidades vinculadas a contactos',
+               importDesc: 'Importa leads asignándolos a pipelines y etapas' },
+  templates: { icon: '💬', label: 'Plantillas',    desc: 'Mensajes pre-redactados',
+               importDesc: 'Importa plantillas de WhatsApp, email, etc.' },
+  tags:      { icon: '🏷',  label: 'Etiquetas',     desc: 'Tags para contactos, leads y bots',
+               importDesc: 'Importa etiquetas con sus colores' },
+  pipelines: { icon: '📊', label: 'Pipelines',     desc: 'Estructura de etapas',
+               importDesc: 'Importa pipelines completos con sus etapas' },
+  bots:      { icon: '🤖', label: 'Bots',          desc: 'Flujos automatizados',
+               importDesc: 'Importa configuración de bots (JSON)' },
+  catalog:   { icon: '📦', label: 'Productos',     desc: 'Catálogo de WhatsApp',
+               importDesc: 'Sincroniza desde Meta Commerce Manager' },
+  orders:    { icon: '🛒', label: 'Pedidos',       desc: 'Órdenes de WooCommerce',
+               importDesc: 'Sincroniza desde tu tienda WooCommerce' },
+  chats:     { icon: '💭', label: 'Chats',         desc: 'Conversaciones e historial',
+               importDesc: 'Importa como histórico o para entrenar tu copiloto IA' },
+  email:     { icon: '📧', label: 'Email',         desc: 'Conversaciones de correo',
+               importDesc: 'Importa mailbox de Gmail, Outlook, etc.' },
+  comments:  { icon: '💭', label: 'Comentarios',   desc: 'Comentarios de FB e Instagram',
+               importDesc: 'Importa historial de comentarios de tus redes' },
+};
+
+let _dcState = { available: null };
+
+async function loadDataCenter() {
+  try {
+    const av = await api('GET', '/api/data-center/available');
+    _dcState.available = av;
+    _renderDataCenterCards();
+  } catch (e) {
+    console.warn('data-center load:', e.message);
+    const grid = document.getElementById('dcImportGrid');
+    if (grid) grid.innerHTML = `<p class="dc-loading" style="color:#b91c1c">Error: ${e.message}</p>`;
+  }
+}
+
+function _renderDataCenterCards() {
+  const av = _dcState.available || {};
+  const importGrid = document.getElementById('dcImportGrid');
+  const exportGrid = document.getElementById('dcExportGrid');
+  if (!importGrid || !exportGrid) return;
+
+  const importEntities = ['contacts','leads','templates','tags','pipelines','bots','chats','catalog','orders','email','comments'];
+  const exportEntities = ['contacts','leads','templates','tags','pipelines','bots','chats'];
+
+  const renderCard = (entity, type) => {
+    const meta = DC_ENTITY_META[entity];
+    if (!meta) return '';
+    const info = av[entity];
+    if (!info?.available) {
+      // Si no está disponible, mostrar card "deshabilitado" con la razón
+      if (!info?.reason) return ''; // si ni reason hay, ocultar del todo
+      return `
+        <div class="dc-card dc-card--disabled">
+          <div class="dc-card-icon">${meta.icon}</div>
+          <div class="dc-card-body">
+            <div class="dc-card-title">${meta.label}</div>
+            <div class="dc-card-desc dc-card-desc--muted">⚙️ ${escHtml(info.reason)}</div>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="dc-card" data-dc-entity="${entity}" data-dc-action="${type}">
+        <div class="dc-card-icon">${meta.icon}</div>
+        <div class="dc-card-body">
+          <div class="dc-card-title">${meta.label}</div>
+          <div class="dc-card-desc">${escHtml(type === 'import' ? meta.importDesc : meta.desc)}</div>
+          <div class="dc-card-count">${info.count != null ? info.count + ' actualmente' : ''}</div>
+        </div>
+        <div class="dc-card-arrow">→</div>
+      </div>
+    `;
+  };
+
+  importGrid.innerHTML = importEntities.map(e => renderCard(e, 'import')).join('') || '<p class="dc-loading">Nada disponible</p>';
+  exportGrid.innerHTML = exportEntities.map(e => renderCard(e, 'export')).join('') || '<p class="dc-loading">Nada para exportar</p>';
+
+  // Bind clicks en cards
+  document.querySelectorAll('.dc-card[data-dc-entity]').forEach(card => {
+    if (card.dataset.bound) return;
+    card.dataset.bound = '1';
+    card.addEventListener('click', () => {
+      const entity = card.dataset.dcEntity;
+      const action = card.dataset.dcAction;
+      if (action === 'import') openDcImportWizard(entity);
+      else openDcExportPanel(entity);
+    });
+  });
+}
+
+function _bindDataCenterOnce() {
+  // Tabs Import/Export/Backup dentro del pane Datos
+  document.querySelectorAll('.dc-tab').forEach(tab => {
+    if (tab.dataset.bound) return;
+    tab.dataset.bound = '1';
+    tab.addEventListener('click', () => {
+      const key = tab.dataset.dcTab;
+      document.querySelectorAll('.dc-tab').forEach(t => t.classList.toggle('is-active', t === tab));
+      document.querySelectorAll('.dc-panel').forEach(p => p.classList.toggle('is-active', p.dataset.dcPanel === key));
+    });
+  });
+
+  // Botón backup completo (todavía no implementado — placeholder)
+  document.getElementById('btnDcBackupFull')?.addEventListener('click', async () => {
+    toast('Generando backup completo… (esta función llega en la próxima fase)', 'info');
+  });
+}
+
+// Stubs — los wizards reales vienen en el siguiente commit
+function openDcImportWizard(entity) {
+  toast(`Wizard de import para "${entity}" — viene en el próximo deploy`, 'info');
+}
+function openDcExportPanel(entity) {
+  // Por ahora: descarga directa CSV (sin filtros). El panel con filtros viene después.
+  const url = `/api/data-center/export/${entity}?format=csv`;
+  window.location.href = url;
+}
 
 // ─── Composer del chat: botón "Enviar producto" + modal ──────────────
 function _bindProductComposerOnce() {

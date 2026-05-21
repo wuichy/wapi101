@@ -12643,3 +12643,89 @@ button, a, [role="button"], .btn, [data-action] {
 .catalog-suggest-actions {
   display: flex; gap: 8px; flex-shrink: 0;
 }
+
+/* ─── Centro de Datos ──────────────────────────────────────────────── */
+.dc-tabs {
+  display: flex; gap: 4px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  margin: 20px 0 24px 0;
+}
+.dc-tab {
+  padding: 10px 16px; background: none; border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer; font-size: 14px; font-weight: 500;
+  color: var(--text-muted, #6b7280); margin-bottom: -1px;
+}
+.dc-tab:hover { color: var(--text-primary, #111); }
+.dc-tab.is-active {
+  color: var(--accent, #2563eb); border-bottom-color: var(--accent, #2563eb);
+}
+.dc-panel { display: none; }
+.dc-panel.is-active { display: block; }
+
+.dc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.dc-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.dc-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  border-color: var(--accent, #2563eb);
+}
+.dc-card-icon {
+  font-size: 32px; flex-shrink: 0; line-height: 1;
+}
+.dc-card-body { flex: 1; min-width: 0; }
+.dc-card-title {
+  font-size: 15px; font-weight: 600; color: var(--text-primary, #111);
+}
+.dc-card-desc {
+  margin-top: 3px; font-size: 12.5px; color: var(--text-muted, #6b7280); line-height: 1.4;
+}
+.dc-card-desc--muted { font-style: italic; }
+.dc-card-count {
+  margin-top: 6px; font-size: 11.5px; color: var(--accent, #2563eb); font-weight: 600;
+}
+.dc-card-arrow {
+  font-size: 20px; color: var(--text-muted, #6b7280); flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.dc-card:hover .dc-card-arrow { transform: translateX(3px); color: var(--accent, #2563eb); }
+.dc-card--disabled {
+  opacity: 0.55; cursor: not-allowed;
+  background: #fafbfc;
+}
+.dc-card--disabled:hover {
+  transform: none; box-shadow: none; border-color: var(--border-color, #e5e7eb);
+}
+.dc-loading {
+  padding: 40px; text-align: center; color: var(--text-muted, #6b7280);
+  grid-column: 1 / -1;
+}
+
+.dc-backup-hero {
+  text-align: center; padding: 48px 32px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-radius: 16px;
+}
+.dc-backup-icon { font-size: 64px; margin-bottom: 16px; }
+.dc-backup-hero h3 {
+  margin: 0 0 12px 0; font-size: 22px; color: #1e3a8a;
+}
+.dc-backup-hero p {
+  font-size: 14px; color: #1e40af; max-width: 560px; margin: 0 auto 24px auto;
+  line-height: 1.6;
+}
+.dc-backup-hint {
+  font-size: 12.5px; color: #6b7280; margin-top: 18px;
+}

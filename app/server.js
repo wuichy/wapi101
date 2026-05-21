@@ -824,6 +824,7 @@ mountSafe('/api/jobs',               require('./src/modules/jobs/routes'));
 mountSafe('/api/backups',            require('./src/modules/backups/routes'));
 mountSafe('/api/mcp',                require('./src/modules/mcp/routes'));
 mountSafe('/api/catalog',            require('./src/modules/whatsapp-catalog/routes'));
+mountSafe('/api/data-center',        require('./src/modules/data-center/routes'));
 const { authRouter: wooAuthRouter }  = require('./src/modules/woo/routes');
 app.use('/api/apps/woo', wooAuthRouter(db));
 

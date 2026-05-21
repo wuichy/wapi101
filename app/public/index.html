@@ -2409,6 +2409,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3"/><polyline points="21 4 21 10 15 10"/></svg>
               <span>Respaldos</span>
             </button>
+            <button class="settings-tab" data-settings="datos">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <span>Datos</span>
+            </button>
             <button class="settings-tab" data-settings="configuraciones" data-i18n="settings.tab.configuraciones">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="13" y2="6"/><line x1="17" y1="6" x2="20" y2="6"/><circle cx="15" cy="6" r="2"/><line x1="4" y1="12" x2="7" y2="12"/><line x1="11" y1="12" x2="20" y2="12"/><circle cx="9" cy="12" r="2"/><line x1="4" y1="18" x2="15" y2="18"/><line x1="19" y1="18" x2="20" y2="18"/><circle cx="17" cy="18" r="2"/></svg>
               <span>Ajustes</span>
@@ -3049,6 +3053,49 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
               <div class="bk-list" id="backupsList">
                 <p class="bk-empty">Cargando respaldos…</p>
+              </div>
+            </div>
+
+            <!-- ─── Datos (Centro de Datos: import/export unificado) ─── -->
+            <div class="settings-pane" data-settings="datos">
+              <div class="settings-head">
+                <div>
+                  <h2>Centro de Datos</h2>
+                  <p>Importa información desde otros sistemas o exporta la tuya. Todo lo que está en wapi101 es <strong>tuyo</strong> — puedes llevártelo cuando quieras.</p>
+                </div>
+              </div>
+
+              <div class="dc-tabs">
+                <button class="dc-tab is-active" data-dc-tab="import" type="button">📥 Importar</button>
+                <button class="dc-tab" data-dc-tab="export" type="button">📤 Exportar</button>
+                <button class="dc-tab" data-dc-tab="backup" type="button">💾 Backup completo</button>
+              </div>
+
+              <!-- IMPORT panel -->
+              <div class="dc-panel is-active" data-dc-panel="import">
+                <div id="dcImportGrid" class="dc-card-grid">
+                  <p class="dc-loading">Cargando opciones disponibles…</p>
+                </div>
+              </div>
+
+              <!-- EXPORT panel -->
+              <div class="dc-panel" data-dc-panel="export">
+                <div id="dcExportGrid" class="dc-card-grid"></div>
+              </div>
+
+              <!-- BACKUP panel -->
+              <div class="dc-panel" data-dc-panel="backup">
+                <div class="dc-backup-hero">
+                  <div class="dc-backup-icon">💾</div>
+                  <h3>Backup completo de tu CRM</h3>
+                  <p>
+                    Genera un archivo ZIP con <strong>toda tu información</strong>:
+                    contactos, leads, plantillas, bots, mensajes históricos, productos, etiquetas y pipelines.
+                    Formato neutro para que puedas migrar a otro sistema, hacer un respaldo personal, o solo tener la tranquilidad de que tu data no está secuestrada.
+                  </p>
+                  <button class="btn btn--primary btn--lg" id="btnDcBackupFull" type="button">🚀 Generar backup completo</button>
+                  <p class="dc-backup-hint">Para configurar respaldos automáticos mensuales, ve a <a href="#" data-go-tab="respaldos">Respaldos</a>.</p>
+                </div>
               </div>
             </div>
 

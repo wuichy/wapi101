@@ -34,6 +34,19 @@ function getAvailableEntities(db, tenantId) {
   // Conteos para mostrar "X actualmente" en las cards
   const counts = _countsForTenant(db, tenantId, { hasWoo, hasMail });
 
+  // Conteos adicionales para las nuevas entidades
+  const q = (sql) => { try { return db.prepare(sql).get(tenantId)?.n || 0; } catch { return 0; } };
+  const moreCounts = {
+    advisors:       q('SELECT COUNT(*) AS n FROM advisors WHERE tenant_id=? AND active=1'),
+    business_hours: q('SELECT COUNT(*) AS n FROM business_hours WHERE tenant_id=?'),
+    appointments:   q('SELECT COUNT(*) AS n FROM appointments WHERE tenant_id=?'),
+    tasks:          q('SELECT COUNT(*) AS n FROM tasks WHERE tenant_id=? AND completed=0'),
+    custom_fields:  q('SELECT COUNT(*) AS n FROM custom_field_defs WHERE tenant_id=?'),
+    webhooks:       q('SELECT COUNT(*) AS n FROM outgoing_webhooks WHERE tenant_id=?'),
+    reports:        q('SELECT COUNT(*) AS n FROM reports WHERE tenant_id=?'),
+    ai_knowledge:   q('SELECT COUNT(*) AS n FROM ai_knowledge_sources WHERE tenant_id=?'),
+  };
+
   return {
     // Siempre disponibles (datos core del CRM)
     contacts:   { available: true,  count: counts.contacts },
@@ -43,17 +56,25 @@ function getAvailableEntities(db, tenantId) {
     pipelines:  { available: true,  count: counts.pipelines },
     bots:       { available: true,  count: counts.bots },
     chats:      { available: true,  count: counts.conversations },
+    advisors:   { available: true,  count: moreCounts.advisors },
+    business_hours: { available: true, count: moreCounts.business_hours },
+    appointments:   { available: true, count: moreCounts.appointments },
+    tasks:          { available: true, count: moreCounts.tasks },
+    custom_fields:  { available: true, count: moreCounts.custom_fields },
+    webhooks:       { available: true, count: moreCounts.webhooks },
+    reports:        { available: true, count: moreCounts.reports },
+    ai_knowledge:   { available: true, count: moreCounts.ai_knowledge },
     // Condicionales (dependen del setup del tenant)
     catalog:    { available: catalogOn, count: catalogOn ? counts.products : 0,
                   reason: catalogOn ? null : 'Activa el catálogo en Configuración → Ajustes' },
     orders:     { available: hasWoo,    count: hasWoo ? counts.orders : 0,
                   reason: hasWoo ? null : 'Conecta WooCommerce en Integraciones' },
+    woo_config: { available: hasWoo,    count: hasWoo ? 1 : 0,
+                  reason: hasWoo ? null : 'Requiere WooCommerce conectado' },
     email:      { available: hasMail,   count: hasMail ? counts.emailConvos : 0,
                   reason: hasMail ? null : 'Conecta un proveedor de email' },
     comments:   { available: hasFb || hasIg, count: 0,
                   reason: (hasFb || hasIg) ? null : 'Conecta Facebook o Instagram' },
-    // Appointments por localStorage (no hay forma backend de saberlo). Se
-    // resuelve en el frontend con isAppointmentsEnabled().
   };
 }
 

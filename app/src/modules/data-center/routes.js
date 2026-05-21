@@ -42,13 +42,23 @@ module.exports = (db) => {
       if (!entity) return res.status(400).json({ error: 'entity requerida' });
 
       switch (entity) {
-        case 'contacts':  return res.json(await _importContacts(db, req.tenantId, req.advisor, req.body));
-        case 'leads':     return res.json(await _importLeads(db, req.tenantId, req.advisor, req.body));
-        case 'templates': return res.json(await _importTemplates(db, req.tenantId, req.body));
-        case 'tags':      return res.json(await _importTags(db, req.tenantId, req.body));
-        case 'pipelines': return res.json(await _importPipelines(db, req.tenantId, req.body));
-        case 'bots':      return res.json(await _importBots(db, req.tenantId, req.body));
-        case 'chats':     return res.json(await _importChats(db, req.tenantId, req.body));
+        case 'contacts':      return res.json(await _importContacts(db, req.tenantId, req.advisor, req.body));
+        case 'leads':         return res.json(await _importLeads(db, req.tenantId, req.advisor, req.body));
+        case 'templates':     return res.json(await _importTemplates(db, req.tenantId, req.body));
+        case 'tags':          return res.json(await _importTags(db, req.tenantId, req.body));
+        case 'pipelines':     return res.json(await _importPipelines(db, req.tenantId, req.body));
+        case 'bots':          return res.json(await _importBots(db, req.tenantId, req.body));
+        case 'chats':         return res.json(await _importChats(db, req.tenantId, req.body));
+        case 'advisors':      return res.json(await _importAdvisors(db, req.tenantId, req.body));
+        case 'business_hours':return res.json(await _importBusinessHours(db, req.tenantId, req.body));
+        case 'appointments':  return res.json(await _importAppointments(db, req.tenantId, req.body));
+        case 'tasks':         return res.json(await _importTasks(db, req.tenantId, req.body));
+        case 'custom_fields': return res.json(await _importCustomFields(db, req.tenantId, req.body));
+        case 'webhooks':      return res.json(await _importWebhooks(db, req.tenantId, req.body));
+        case 'reports':       return res.json(await _importReports(db, req.tenantId, req.body));
+        case 'woo_config':    return res.json(await _importWooConfig(db, req.tenantId, req.body));
+        case 'ai_knowledge':  return res.json(await _importAiKnowledge(db, req.tenantId, req.body));
+        case 'comments':      return res.json(await _importSocialComments(db, req.tenantId, req.body));
         default:
           return res.status(501).json({ error: `Import de "${entity}" pendiente de implementar` });
       }
@@ -69,8 +79,83 @@ module.exports = (db) => {
     }
   });
 
+  // GET /backup/full — Backup completo del tenant en un JSON gigante
+  // Incluye todas las entidades exportables. NO incluye media ni mensajes
+  // (los mensajes pueden agregarse con ?includeMessages=1).
+  router.get('/backup/full', (req, res) => {
+    try {
+      const includeMessages = req.query.includeMessages === '1';
+      const backup = _buildFullBackup(db, req.tenantId, { includeMessages });
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="wapi101-backup-${req.tenant.slug || req.tenantId}-${Date.now()}.json"`);
+      res.end(JSON.stringify(backup, null, 2));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   return router;
 };
+
+// ─── Backup completo ──────────────────────────────────────────────────
+
+function _buildFullBackup(db, tenantId, { includeMessages = false } = {}) {
+  const q = (sql, ...args) => { try { return db.prepare(sql).all(tenantId, ...args); } catch { return []; } };
+  const qOne = (sql, ...args) => { try { return db.prepare(sql).get(tenantId, ...args); } catch { return null; } };
+
+  // Pipelines + stages
+  const pipelines = q('SELECT id, name, sort_order, color, icon FROM pipelines WHERE tenant_id=? ORDER BY sort_order');
+  for (const p of pipelines) {
+    p.stages = q('SELECT id, name, sort_order, color, kind FROM stages WHERE pipeline_id=? AND tenant_id=? ORDER BY sort_order', p.id);
+  }
+
+  // Bots con steps parseados
+  const bots = q('SELECT id, name, enabled, trigger_type, trigger_value, steps, sort_order FROM salsbots WHERE tenant_id=?')
+    .map(b => ({ ...b, steps: (() => { try { return JSON.parse(b.steps); } catch { return []; } })() }));
+
+  // Custom fields
+  const customFields = q('SELECT id, entity, label, field_type, options, sort_order FROM custom_field_defs WHERE tenant_id=?')
+    .map(f => ({ ...f, options: f.options ? (() => { try { return JSON.parse(f.options); } catch { return null; } })() : null }));
+
+  const out = {
+    version: '1.0',
+    generated_at: new Date().toISOString(),
+    tenant: qOne('SELECT id, slug, display_name, plan, status FROM tenants WHERE id=?'),
+    counts: {},
+    data: {
+      contacts:       q('SELECT id, first_name, last_name, phone, email, datetime(created_at,"unixepoch") AS created_at FROM contacts WHERE tenant_id=?'),
+      leads:          q('SELECT e.id, e.name, e.value, e.pipeline_id, e.stage_id, e.contact_id, datetime(e.created_at,"unixepoch") AS created_at FROM expedients e WHERE e.tenant_id=?'),
+      pipelines,
+      bots,
+      templates:      q('SELECT id, name, type, wa_status, body FROM message_templates WHERE tenant_id=?'),
+      tags:           q('SELECT id, name, color FROM bot_tags WHERE tenant_id=?'),
+      advisors:       q('SELECT id, name, username, email, role, active FROM advisors WHERE tenant_id=?'),
+      business_hours: q('SELECT day_of_week, opens_at, closes_at, is_open FROM business_hours WHERE tenant_id=?'),
+      appointments:   q('SELECT id, contact_id, starts_at, duration_min, status, notes FROM appointments WHERE tenant_id=?'),
+      tasks:          q('SELECT id, title, description, due_at, completed FROM tasks WHERE tenant_id=?'),
+      custom_fields:  customFields,
+      webhooks:       q('SELECT id, name, url, events, active FROM outgoing_webhooks WHERE tenant_id=?'),
+      reports:        q('SELECT id, name, config, datetime(created_at,"unixepoch") AS created_at FROM reports WHERE tenant_id=?'),
+      ai_knowledge:   q('SELECT id, title, content, source_type FROM ai_knowledge_sources WHERE tenant_id=?'),
+      products:       q('SELECT id, retailer_id, name, description, price_amount, price_currency, image_url, availability FROM whatsapp_products WHERE tenant_id=? AND is_active=1'),
+      orders:         q('SELECT id, woo_id, status, total, currency, customer_phone FROM woo_orders WHERE tenant_id=? ORDER BY id DESC LIMIT 10000'),
+    },
+  };
+
+  for (const k of Object.keys(out.data)) {
+    out.counts[k] = (out.data[k] || []).length;
+  }
+
+  if (includeMessages) {
+    // CUIDADO: puede pesar mucho. Solo metadata + body (sin media URLs descargadas)
+    out.data.conversations = q(`SELECT id, contact_id, provider, external_id, last_message_at FROM conversations WHERE tenant_id=? ORDER BY last_message_at DESC LIMIT 10000`);
+    out.data.messages      = q(`SELECT id, conversation_id, direction, body, status, created_at, imported_from FROM messages WHERE tenant_id=? ORDER BY created_at DESC LIMIT 100000`);
+    out.counts.conversations = out.data.conversations.length;
+    out.counts.messages = out.data.messages.length;
+  }
+
+  return out;
+}
 
 // ─── Importers específicos ────────────────────────────────────────────
 
@@ -617,53 +702,386 @@ function _parseTimestamp(raw) {
   return isNaN(d) ? Math.floor(Date.now() / 1000) : Math.floor(d.getTime() / 1000);
 }
 
+// ─── Importers: equipo (advisors, business_hours, appointments, tasks) ──
+
+async function _importAdvisors(db, tenantId, body) {
+  const { content, options = {} } = body;
+  const crypto = require('crypto');
+  const arr = JSON.parse(content);
+  const items = Array.isArray(arr) ? arr : (arr.advisors || arr.items || []);
+  const sendInvites = options.sendInvites !== false;
+
+  const result = { created: 0, skipped: 0, invitesSent: 0, errors: 0 };
+  for (const a of items) {
+    if (!a.username || !a.email) { result.skipped++; continue; }
+    try {
+      const existing = db.prepare('SELECT id FROM advisors WHERE (username=? OR email=?) AND tenant_id=?')
+        .get(a.username, a.email, tenantId);
+      if (existing) { result.skipped++; continue; }
+      // Password aleatorio — el user reseteará al primer login
+      const tempPass = crypto.randomBytes(16).toString('hex');
+      const passHash = crypto.scryptSync(tempPass, 'wapi101-salt', 64).toString('hex');
+      db.prepare(`INSERT INTO advisors (tenant_id, name, username, email, password_hash, role, permissions, active, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, 1, unixepoch())`)
+        .run(tenantId, a.name || a.username, a.username, a.email, passHash,
+             a.role || 'asesor', JSON.stringify(a.permissions || { write: true, delete: false, manage_advisors: false }));
+      result.created++;
+      if (sendInvites) {
+        try {
+          // Crear reset_token y enviar email — el sistema ya tiene este flujo
+          // Reutilizamos password_reset_tokens
+          const token = crypto.randomBytes(32).toString('hex');
+          db.prepare('INSERT INTO password_reset_tokens (email, token, expires_at, created_at) VALUES (?, ?, ?, unixepoch())')
+            .run(a.email, token, Math.floor(Date.now() / 1000) + 7 * 24 * 3600);
+          // Mailer puede no estar configurado — intentar suave
+          try {
+            const mailer = require('../mailer');
+            if (mailer && mailer.send) {
+              await mailer.send({
+                to: a.email,
+                subject: 'Te invitaron a Wapi101',
+                text: `Te dieron acceso a Wapi101. Crea tu contraseña aquí:\nhttps://wapi101.com/reset-password?token=${token}`,
+              });
+              result.invitesSent++;
+            }
+          } catch (_) { /* mailer opcional */ }
+        } catch (e) { console.warn('[dc] invite error:', e.message); }
+      }
+    } catch (e) {
+      result.errors++;
+      console.warn('[dc] advisor import:', e.message);
+    }
+  }
+  return { ok: true, ...result };
+}
+
+async function _importBusinessHours(db, tenantId, body) {
+  const { content } = body;
+  const data = JSON.parse(content);
+  const hours = Array.isArray(data) ? data : (data.hours || data.items || []);
+  let inserted = 0;
+  const txn = db.transaction(() => {
+    // Limpiamos las del tenant (solo hay business_hours por tenant, no por user)
+    db.prepare('DELETE FROM business_hours WHERE tenant_id=?').run(tenantId);
+    const ins = db.prepare(`INSERT INTO business_hours (tenant_id, day_of_week, opens_at, closes_at, is_open)
+                            VALUES (?, ?, ?, ?, ?)`);
+    for (const h of hours) {
+      if (h.day_of_week == null) continue;
+      ins.run(tenantId, h.day_of_week, h.opens_at || '09:00', h.closes_at || '18:00', h.is_open != null ? (h.is_open ? 1 : 0) : 1);
+      inserted++;
+    }
+  });
+  try { txn(); } catch (e) { return { ok: false, error: e.message }; }
+  return { ok: true, inserted };
+}
+
+async function _importAppointments(db, tenantId, body) {
+  const { content, filename } = body;
+  const isJSON = (filename || '').toLowerCase().endsWith('.json');
+  let items = [];
+  if (isJSON) {
+    const data = JSON.parse(content);
+    items = Array.isArray(data) ? data : (data.appointments || data.items || []);
+  } else {
+    const { headers, rows } = svc.parseFile({ filename, content });
+    items = rows.map(row => {
+      const o = {};
+      headers.forEach((h, i) => {
+        const key = h.toLowerCase();
+        if (/phone|tel/.test(key)) o.contact_phone = row[i];
+        else if (/name|nombre/.test(key)) o.contact_name = row[i];
+        else if (/start|fecha/.test(key)) o.starts_at = _parseTimestamp(row[i]);
+        else if (/dur/.test(key)) o.duration_min = Number(row[i]) || 30;
+        else if (/note|nota/.test(key)) o.notes = row[i];
+        else if (/status|estado/.test(key)) o.status = row[i];
+      });
+      return o;
+    });
+  }
+  const customers = require('../customers/service');
+  const result = { created: 0, skipped: 0, errors: 0 };
+  const txn = db.transaction(() => {
+    for (const a of items) {
+      if (!a.starts_at) { result.skipped++; continue; }
+      let contactId = null;
+      if (a.contact_phone) {
+        const phone = customers.normalizePhone(a.contact_phone);
+        const ex = phone ? db.prepare('SELECT id FROM contacts WHERE phone=? AND tenant_id=?').get(phone, tenantId) : null;
+        if (ex) contactId = ex.id;
+        else if (phone) {
+          const c = customers.create(db, tenantId, { firstName: a.contact_name || phone, lastName: '', phone, email: null, tags: [] });
+          contactId = c.id;
+        }
+      }
+      const dur = Number(a.duration_min) || 30;
+      const endsAt = a.ends_at || (a.starts_at + dur * 60);
+      try {
+        db.prepare(`INSERT INTO appointments
+          (tenant_id, contact_id, starts_at, ends_at, duration_min, status, notes, created_via, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'import', unixepoch())`)
+          .run(tenantId, contactId, a.starts_at, endsAt, dur, a.status || 'scheduled', a.notes || null);
+        result.created++;
+      } catch (e) { result.errors++; }
+    }
+  });
+  txn();
+  return { ok: true, ...result };
+}
+
+async function _importTasks(db, tenantId, body) {
+  const { content, filename } = body;
+  const isJSON = (filename || '').toLowerCase().endsWith('.json');
+  let items = [];
+  if (isJSON) {
+    const data = JSON.parse(content);
+    items = Array.isArray(data) ? data : (data.tasks || data.items || []);
+  } else {
+    const { headers, rows } = svc.parseFile({ filename, content });
+    items = rows.map(row => {
+      const o = {};
+      headers.forEach((h, i) => {
+        const key = h.toLowerCase();
+        if (/title|titulo|task|tarea/.test(key)) o.title = row[i];
+        else if (/desc/.test(key)) o.description = row[i];
+        else if (/due|vencimiento|fecha/.test(key)) o.due_at = _parseTimestamp(row[i]);
+        else if (/complet/.test(key)) o.completed = /si|yes|1|true/i.test(row[i]) ? 1 : 0;
+      });
+      return o;
+    });
+  }
+  const result = { created: 0, skipped: 0 };
+  const txn = db.transaction(() => {
+    for (const t of items) {
+      if (!t.title || !t.due_at) { result.skipped++; continue; }
+      db.prepare(`INSERT INTO tasks (tenant_id, title, description, due_at, completed, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())`)
+        .run(tenantId, t.title, t.description || null, t.due_at, t.completed ? 1 : 0);
+      result.created++;
+    }
+  });
+  txn();
+  return { ok: true, ...result };
+}
+
+// ─── Importers: configuración estructural ────────────────────────────
+
+async function _importCustomFields(db, tenantId, body) {
+  const data = JSON.parse(body.content);
+  const items = Array.isArray(data) ? data : (data.fields || data.items || []);
+  const result = { created: 0, skipped: 0 };
+  const txn = db.transaction(() => {
+    for (const f of items) {
+      if (!f.label?.trim()) { result.skipped++; continue; }
+      const existing = db.prepare('SELECT id FROM custom_field_defs WHERE label=? AND entity=? AND tenant_id=?')
+        .get(f.label, f.entity || 'expedient', tenantId);
+      if (existing) { result.skipped++; continue; }
+      db.prepare(`INSERT INTO custom_field_defs (tenant_id, entity, label, field_type, options, sort_order, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, unixepoch())`)
+        .run(tenantId, f.entity || 'expedient', f.label, f.field_type || 'text',
+             f.options ? JSON.stringify(f.options) : null, f.sort_order || 0);
+      result.created++;
+    }
+  });
+  txn();
+  return { ok: true, ...result };
+}
+
+async function _importWebhooks(db, tenantId, body) {
+  const data = JSON.parse(body.content);
+  const items = Array.isArray(data) ? data : (data.webhooks || data.items || []);
+  const result = { created: 0, skipped: 0 };
+  for (const w of items) {
+    if (!w.url) { result.skipped++; continue; }
+    try {
+      db.prepare(`INSERT INTO outgoing_webhooks (tenant_id, name, url, events, active, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())`)
+        .run(tenantId, w.name || 'Webhook', w.url,
+             JSON.stringify(w.events || ['message.received']), w.active !== false ? 1 : 0);
+      result.created++;
+    } catch (e) { result.skipped++; }
+  }
+  return { ok: true, ...result };
+}
+
+async function _importReports(db, tenantId, body) {
+  const data = JSON.parse(body.content);
+  const items = Array.isArray(data) ? data : (data.reports || data.items || []);
+  let created = 0;
+  for (const r of items) {
+    if (!r.name) continue;
+    try {
+      db.prepare(`INSERT INTO reports (tenant_id, name, config, created_at)
+                  VALUES (?, ?, ?, unixepoch())`)
+        .run(tenantId, r.name, JSON.stringify(r.config || {}));
+      created++;
+    } catch (_) {}
+  }
+  return { ok: true, created };
+}
+
+async function _importWooConfig(db, tenantId, body) {
+  const data = JSON.parse(body.content);
+  try {
+    db.prepare(`INSERT INTO woo_config (tenant_id, config_json, updated_at)
+                VALUES (?, ?, unixepoch())
+                ON CONFLICT(tenant_id) DO UPDATE SET config_json=excluded.config_json, updated_at=unixepoch()`)
+      .run(tenantId, JSON.stringify(data));
+  } catch (e) { return { ok: false, error: e.message }; }
+  return { ok: true };
+}
+
+// ─── Importers: auxiliares (ai_knowledge, comments, email) ───────────
+
+async function _importAiKnowledge(db, tenantId, body) {
+  const data = JSON.parse(body.content);
+  const items = Array.isArray(data) ? data : (data.sources || data.items || []);
+  let created = 0;
+  for (const s of items) {
+    if (!s.title || !s.content) continue;
+    try {
+      db.prepare(`INSERT INTO ai_knowledge_sources (tenant_id, title, content, source_type, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, unixepoch(), unixepoch())`)
+        .run(tenantId, s.title, s.content, s.source_type || 'text');
+      created++;
+    } catch (_) {}
+  }
+  return { ok: true, created };
+}
+
+async function _importSocialComments(db, tenantId, body) {
+  // Similar a chats Modo A — solo histórico
+  const data = JSON.parse(body.content);
+  const items = Array.isArray(data) ? data : (data.comments || data.items || []);
+  let created = 0;
+  for (const c of items) {
+    if (!c.body && !c.text) continue;
+    try {
+      db.prepare(`INSERT OR IGNORE INTO social_comments
+        (tenant_id, provider, post_id, comment_id, parent_id, author_name, body, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'imported', ?)`)
+        .run(tenantId, c.provider || 'imported',
+             c.post_id || null, c.comment_id || `imp-${Date.now()}-${created}`,
+             c.parent_id || null, c.author_name || null,
+             c.body || c.text, _parseTimestamp(c.created_at));
+      created++;
+    } catch (_) {}
+  }
+  return { ok: true, created };
+}
+
 // ─── Exporters ────────────────────────────────────────────────────────
 
 function _exportEntity(db, tenantId, entity, format, query, res) {
-  let rows, filename;
+  let rows, filename, isNested = false;
   switch (entity) {
     case 'contacts':
-      rows = db.prepare(`
-        SELECT id, first_name AS firstName, last_name AS lastName, phone, email,
-               datetime(created_at,'unixepoch') AS created_at,
-               datetime(updated_at,'unixepoch') AS updated_at
-        FROM contacts WHERE tenant_id = ? ORDER BY id
-      `).all(tenantId);
+      rows = db.prepare(`SELECT id, first_name AS firstName, last_name AS lastName, phone, email,
+        datetime(created_at,'unixepoch') AS created_at FROM contacts WHERE tenant_id=? ORDER BY id`).all(tenantId);
       filename = `contactos-${Date.now()}`;
       break;
     case 'leads':
-      rows = db.prepare(`
-        SELECT e.id, e.name, e.value, p.name AS pipeline, s.name AS stage,
-               c.first_name || ' ' || COALESCE(c.last_name,'') AS contact_name,
-               c.phone AS contact_phone,
-               datetime(e.created_at,'unixepoch') AS created_at,
-               datetime(e.updated_at,'unixepoch') AS updated_at
-        FROM expedients e
-        JOIN pipelines p ON p.id = e.pipeline_id
-        JOIN stages s ON s.id = e.stage_id
-        JOIN contacts c ON c.id = e.contact_id
-        WHERE e.tenant_id = ? ORDER BY e.id
-      `).all(tenantId);
+      rows = db.prepare(`SELECT e.id, e.name, e.value, p.name AS pipeline, s.name AS stage,
+        c.first_name || ' ' || COALESCE(c.last_name,'') AS contact_name, c.phone AS contact_phone,
+        datetime(e.created_at,'unixepoch') AS created_at FROM expedients e
+        JOIN pipelines p ON p.id=e.pipeline_id JOIN stages s ON s.id=e.stage_id
+        JOIN contacts c ON c.id=e.contact_id WHERE e.tenant_id=? ORDER BY e.id`).all(tenantId);
       filename = `leads-${Date.now()}`;
       break;
     case 'templates':
-      rows = db.prepare(`
-        SELECT id, name, type, wa_status, body
-        FROM message_templates WHERE tenant_id = ? ORDER BY id
-      `).all(tenantId);
+      rows = db.prepare(`SELECT id, name, type, wa_status, body FROM message_templates WHERE tenant_id=? ORDER BY id`).all(tenantId);
       filename = `plantillas-${Date.now()}`;
       break;
+    case 'tags':
+      rows = db.prepare(`SELECT id, name, color FROM bot_tags WHERE tenant_id=? ORDER BY name`).all(tenantId);
+      filename = `etiquetas-${Date.now()}`;
+      break;
     case 'pipelines':
-      // Pipelines + stages como JSON anidado (CSV sería plano y feo)
-      const pipes = db.prepare(`SELECT id, name, sort_order, color, icon FROM pipelines WHERE tenant_id = ? ORDER BY sort_order`).all(tenantId);
+      isNested = true;
+      const pipes = db.prepare(`SELECT id, name, sort_order, color, icon FROM pipelines WHERE tenant_id=? ORDER BY sort_order`).all(tenantId);
       for (const p of pipes) {
-        p.stages = db.prepare(`SELECT id, name, sort_order, color, kind FROM stages WHERE pipeline_id = ? AND tenant_id = ? ORDER BY sort_order`).all(p.id, tenantId);
+        p.stages = db.prepare(`SELECT id, name, sort_order, color, kind FROM stages WHERE pipeline_id=? AND tenant_id=? ORDER BY sort_order`).all(p.id, tenantId);
       }
       rows = pipes;
       filename = `pipelines-${Date.now()}`;
       break;
+    case 'bots':
+      isNested = true;
+      rows = db.prepare(`SELECT id, name, enabled, trigger_type, trigger_value, steps, sort_order FROM salsbots WHERE tenant_id=? ORDER BY id`).all(tenantId)
+        .map(b => ({ ...b, steps: (() => { try { return JSON.parse(b.steps); } catch { return []; } })() }));
+      filename = `bots-${Date.now()}`;
+      break;
+    case 'chats':
+      // Export chats como JSON anidado conversación + mensajes (de los últimos N o todos)
+      isNested = true;
+      const limit = Math.min(Number(query.limit) || 1000, 10000);
+      const convos = db.prepare(`SELECT c.id, c.external_id, c.provider, ct.phone AS contact_phone,
+        ct.first_name || ' ' || COALESCE(ct.last_name,'') AS contact_name
+        FROM conversations c JOIN contacts ct ON ct.id=c.contact_id
+        WHERE c.tenant_id=? ORDER BY c.last_message_at DESC LIMIT ?`).all(tenantId, limit);
+      for (const cv of convos) {
+        cv.messages = db.prepare(`SELECT direction, body, created_at, provider FROM messages WHERE conversation_id=? AND tenant_id=? ORDER BY created_at`).all(cv.id, tenantId);
+      }
+      rows = convos;
+      filename = `chats-${Date.now()}`;
+      break;
+    case 'advisors':
+      rows = db.prepare(`SELECT id, name, username, email, role, active,
+        datetime(created_at,'unixepoch') AS created_at FROM advisors WHERE tenant_id=? ORDER BY id`).all(tenantId);
+      filename = `asesores-${Date.now()}`;
+      break;
+    case 'business_hours':
+      rows = db.prepare(`SELECT day_of_week, opens_at, closes_at, is_open FROM business_hours WHERE tenant_id=? ORDER BY day_of_week`).all(tenantId);
+      filename = `horarios-${Date.now()}`;
+      break;
+    case 'appointments':
+      rows = db.prepare(`SELECT a.id, c.phone AS contact_phone, c.first_name AS contact_name,
+        datetime(a.starts_at,'unixepoch') AS starts_at, a.duration_min, a.status, a.notes
+        FROM appointments a LEFT JOIN contacts c ON c.id=a.contact_id WHERE a.tenant_id=? ORDER BY a.starts_at DESC`).all(tenantId);
+      filename = `citas-${Date.now()}`;
+      break;
+    case 'tasks':
+      rows = db.prepare(`SELECT id, title, description, datetime(due_at,'unixepoch') AS due_at, completed
+        FROM tasks WHERE tenant_id=? ORDER BY due_at`).all(tenantId);
+      filename = `tareas-${Date.now()}`;
+      break;
+    case 'custom_fields':
+      rows = db.prepare(`SELECT id, entity, label, field_type, options, sort_order FROM custom_field_defs WHERE tenant_id=? ORDER BY entity, sort_order`).all(tenantId)
+        .map(f => ({ ...f, options: f.options ? (() => { try { return JSON.parse(f.options); } catch { return null; } })() : null }));
+      filename = `campos-custom-${Date.now()}`;
+      isNested = true;
+      break;
+    case 'webhooks':
+      rows = db.prepare(`SELECT id, name, url, events, active FROM outgoing_webhooks WHERE tenant_id=? ORDER BY id`).all(tenantId);
+      filename = `webhooks-${Date.now()}`;
+      break;
+    case 'reports':
+      rows = db.prepare(`SELECT id, name, config, datetime(created_at,'unixepoch') AS created_at FROM reports WHERE tenant_id=? ORDER BY id`).all(tenantId);
+      filename = `reportes-${Date.now()}`;
+      isNested = true;
+      break;
+    case 'woo_config':
+      const wc = db.prepare(`SELECT config_json FROM woo_config WHERE tenant_id=?`).get(tenantId);
+      rows = wc ? [JSON.parse(wc.config_json || '{}')] : [];
+      filename = `woo-config-${Date.now()}`;
+      isNested = true;
+      break;
+    case 'ai_knowledge':
+      rows = db.prepare(`SELECT id, title, content, source_type, datetime(created_at,'unixepoch') AS created_at
+        FROM ai_knowledge_sources WHERE tenant_id=? ORDER BY id`).all(tenantId);
+      filename = `conocimiento-ia-${Date.now()}`;
+      break;
+    case 'comments':
+      rows = db.prepare(`SELECT id, provider, post_id, comment_id, parent_id, author_name, body, status,
+        datetime(created_at,'unixepoch') AS created_at FROM social_comments WHERE tenant_id=? ORDER BY created_at DESC LIMIT 5000`).all(tenantId);
+      filename = `comentarios-${Date.now()}`;
+      break;
+    case 'orders':
+      rows = db.prepare(`SELECT id, woo_id, status, total, currency, customer_phone, customer_email,
+        datetime(created_at,'unixepoch') AS created_at FROM woo_orders WHERE tenant_id=? ORDER BY id DESC LIMIT 5000`).all(tenantId);
+      filename = `pedidos-${Date.now()}`;
+      break;
     default:
-      return res.status(400).json({ error: `Export de "${entity}" no soportado todavía` });
+      return res.status(400).json({ error: `Export de "${entity}" no soportado` });
   }
 
   if (format === 'json') {
@@ -677,8 +1095,8 @@ function _exportEntity(db, tenantId, entity, format, query, res) {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
     return res.end('');
   }
-  // Para pipelines (que es anidado) caemos a JSON aunque pidan CSV
-  if (entity === 'pipelines') {
+  // Para entidades anidadas (con sub-arrays) caemos a JSON aunque pidan CSV
+  if (isNested) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}.json"`);
     return res.end(JSON.stringify(rows, null, 2));

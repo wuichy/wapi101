@@ -52,7 +52,9 @@ function scheduleRemindersFromRecentBotRun(db, tenantId, ctx) {
       if (!_hasStepType(steps, 'book_appointment')) continue;
 
       for (const remStep of reminderSteps) {
-        const reminders = Array.isArray(remStep.reminders) ? remStep.reminders : [];
+        // El step guarda reminders[] dentro de config (estructura de salsbots)
+        const cfg = remStep.config || remStep;
+        const reminders = Array.isArray(cfg.reminders) ? cfg.reminders : [];
         for (const rem of reminders) {
           if (!rem.steps?.length) continue;
           let fireAt;

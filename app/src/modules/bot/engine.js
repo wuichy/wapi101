@@ -1532,7 +1532,7 @@ async function executeStep(db, step, ctx) {
                 (tenant_id, bot_id, run_id, contact_id, expedient_id, convo_id,
                  reminder_id, steps_json, ctx_json, fire_at, skipped, skip_reason)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'fire_time_already_passed')
-            `).run(ctx.tenantId, ctx.botId, ctx.runId, ctx.contactId, ctx.expedientId || null,
+            `).run(ctx.tenantId, ctx._botId, ctx.runId || ctx._runId, ctx.contactId, ctx.expedientId || null,
                    ctx.convoId || null, rem.id || String(scheduled),
                    JSON.stringify(rem.steps), JSON.stringify(ctx), fireAt);
             skipped++;
@@ -1543,7 +1543,7 @@ async function executeStep(db, step, ctx) {
                 (tenant_id, bot_id, run_id, contact_id, expedient_id, convo_id,
                  reminder_id, steps_json, ctx_json, fire_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(ctx.tenantId, ctx.botId, ctx.runId, ctx.contactId, ctx.expedientId || null,
+            `).run(ctx.tenantId, ctx._botId, ctx.runId || ctx._runId, ctx.contactId, ctx.expedientId || null,
                    ctx.convoId || null, rem.id || String(scheduled),
                    JSON.stringify(rem.steps), JSON.stringify(ctx), fireAt);
             scheduled++;

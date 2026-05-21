@@ -9949,34 +9949,165 @@ function populateTriggerPipelines(selectedPipelineId, selectedStageId) {
   const plSel = document.getElementById('sbTriggerPipeline');
   const stageSel = document.getElementById('sbTriggerStage');
   if (!plSel || !stageSel) return;
+
+  // Mantener el <select> oculto sincronizado (serialize/deserialize)
   plSel.innerHTML = '<option value="">— Pipeline —</option>' +
     (PIPELINES || []).map(p =>
       `<option value="${p.id}" ${p.id == selectedPipelineId ? 'selected' : ''}>${escHtml(p.name)}</option>`
     ).join('');
+
+  // Renderizar el picker visual + popup
+  _renderTriggerPipelinePicker(selectedPipelineId);
   updateTriggerStageOptions(selectedPipelineId, selectedStageId);
+}
+
+function _renderTriggerPipelinePicker(selectedPipelineId) {
+  const btnIcon = document.getElementById('sbTriggerPipelineIcon');
+  const btnText = document.getElementById('sbTriggerPipelineText');
+  const popup   = document.getElementById('sbTriggerPipelinePopup');
+  if (!btnText || !popup) return;
+
+  const pipelines = PIPELINES || [];
+  const selected = pipelines.find(p => p.id == selectedPipelineId);
+
+  if (selected) {
+    btnText.textContent = selected.name;
+    btnText.classList.remove('is-placeholder');
+    if (btnIcon) {
+      btnIcon.style.background = selected.color || '#94a3b8';
+      btnIcon.style.color = '#fff';
+      btnIcon.textContent = (selected.icon || selected.name.charAt(0)).toUpperCase().slice(0, 1);
+    }
+  } else {
+    btnText.textContent = 'Selecciona un pipeline…';
+    btnText.classList.add('is-placeholder');
+    if (btnIcon) {
+      btnIcon.style.background = '#f1f5f9';
+      btnIcon.style.color = '#94a3b8';
+      btnIcon.textContent = '';
+    }
+  }
+
+  popup.innerHTML = pipelines.length === 0
+    ? '<div class="sb-picker-empty">No hay pipelines configurados</div>'
+    : pipelines.map(p => `
+      <div class="sb-picker-option ${p.id == selectedPipelineId ? 'is-selected' : ''}" data-picker-pipeline="${p.id}">
+        <span class="sb-picker-option-icon" style="background:${escHtml(p.color || '#94a3b8')};color:#fff">
+          ${escHtml((p.icon || p.name.charAt(0)).toUpperCase().slice(0, 1))}
+        </span>
+        <span class="sb-picker-option-text">${escHtml(p.name)}</span>
+        <span class="sb-picker-option-meta">${(p.stages || []).length} etapa${(p.stages || []).length === 1 ? '' : 's'}</span>
+      </div>
+    `).join('');
+
+  // Bind clicks (idempotente)
+  popup.querySelectorAll('[data-picker-pipeline]').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const pid = Number(opt.getAttribute('data-picker-pipeline'));
+      const plSel = document.getElementById('sbTriggerPipeline');
+      if (plSel) plSel.value = String(pid);
+      _renderTriggerPipelinePicker(pid);
+      updateTriggerStageOptions(pid, null);
+      _closeAllSbPopups();
+    });
+  });
 }
 
 function updateTriggerStageOptions(pipelineId, selectedStageId) {
   const stageSel = document.getElementById('sbTriggerStage');
   if (!stageSel) return;
   const pl = (PIPELINES || []).find(p => p.id == pipelineId);
+
   if (!pl?.stages?.length) {
     stageSel.innerHTML = '<option value="">— Primero elige pipeline —</option>';
-    updateTriggerStageDot(null);
+    _renderTriggerStagePicker(null, null);
     return;
   }
+
   stageSel.innerHTML = pl.stages.map(s =>
     `<option value="${s.id}" data-color="${s.color || ''}" ${s.id == selectedStageId ? 'selected' : ''}>${escHtml(s.name)}</option>`
   ).join('');
-  updateTriggerStageDot(stageSel.options[stageSel.selectedIndex]);
+
+  _renderTriggerStagePicker(pl, selectedStageId);
 }
 
-function updateTriggerStageDot(opt) {
-  const dot = document.getElementById('sbTriggerStageDot');
-  if (!dot) return;
-  const color = opt?.dataset?.color || '';
-  dot.style.background = color || 'transparent';
+function _renderTriggerStagePicker(pipeline, selectedStageId) {
+  const btnDot  = document.getElementById('sbTriggerStagePickerDot');
+  const btnText = document.getElementById('sbTriggerStagePickerText');
+  const popup   = document.getElementById('sbTriggerStagePopup');
+  if (!btnText || !popup) return;
+
+  if (!pipeline || !pipeline.stages?.length) {
+    btnText.textContent = 'Primero elige un pipeline';
+    btnText.classList.add('is-placeholder');
+    if (btnDot) btnDot.style.background = '#cbd5e1';
+    popup.innerHTML = '<div class="sb-picker-empty">Selecciona un pipeline primero</div>';
+    return;
+  }
+
+  const selected = pipeline.stages.find(s => s.id == selectedStageId);
+  if (selected) {
+    btnText.textContent = selected.name;
+    btnText.classList.remove('is-placeholder');
+    if (btnDot) btnDot.style.background = selected.color || '#94a3b8';
+  } else {
+    btnText.textContent = 'Selecciona una etapa…';
+    btnText.classList.add('is-placeholder');
+    if (btnDot) btnDot.style.background = '#cbd5e1';
+  }
+
+  popup.innerHTML = pipeline.stages.map(s => `
+    <div class="sb-picker-option ${s.id == selectedStageId ? 'is-selected' : ''}" data-picker-stage="${s.id}">
+      <span class="sb-picker-option-dot" style="background:${escHtml(s.color || '#94a3b8')}"></span>
+      <span class="sb-picker-option-text">${escHtml(s.name)}</span>
+    </div>
+  `).join('');
+
+  popup.querySelectorAll('[data-picker-stage]').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const sid = Number(opt.getAttribute('data-picker-stage'));
+      const stageSel = document.getElementById('sbTriggerStage');
+      if (stageSel) stageSel.value = String(sid);
+      _renderTriggerStagePicker(pipeline, sid);
+      _closeAllSbPopups();
+    });
+  });
 }
+
+// Compat con código viejo que llamaba updateTriggerStageDot
+function updateTriggerStageDot() { /* obsoleto — el dot se maneja en _renderTriggerStagePicker */ }
+
+// ─── Lógica de popups (anchored dropdowns) ────────────────────────
+function _closeAllSbPopups() {
+  document.querySelectorAll('.sb-picker-popup').forEach(p => p.hidden = true);
+  document.querySelectorAll('.sb-picker-btn').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+function _toggleSbPopup(btn) {
+  const popupId = btn.getAttribute('data-popup');
+  const popup = document.getElementById(popupId);
+  if (!popup) return;
+  const wasOpen = !popup.hidden;
+  _closeAllSbPopups();
+  if (!wasOpen) {
+    popup.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+// Bind global (idempotente) — al hacer click en cualquier .sb-picker-btn toggle popup
+document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.sb-picker-btn');
+    if (btn) {
+      e.stopPropagation();
+      _toggleSbPopup(btn);
+      return;
+    }
+    // Click afuera de cualquier picker o popup → cerrar
+    if (!e.target.closest('.sb-picker-popup')) {
+      _closeAllSbPopups();
+    }
+  });
+});
 
 function connectedIntegrationOptions(selectedId) {
   const all = INTEGRATIONS.flatMap(p => (p.integrations || []).map(inst => ({

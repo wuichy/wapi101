@@ -1943,24 +1943,46 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     </select>
                   </div>
                 </div>
-                <div id="sbTriggerStageWrap" hidden style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
-                  <select id="sbTriggerPipeline"><option value="">— Pipeline —</option></select>
-                  <div style="position:relative;display:flex;align-items:center">
-                    <span id="sbTriggerStageDot" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:transparent;pointer-events:none;flex-shrink:0;z-index:1"></span>
-                    <select id="sbTriggerStage" style="padding-left:28px;width:100%"><option value="">— Etapa —</option></select>
+                <div id="sbTriggerStageWrap" hidden>
+                  <!-- Hidden selects para mantener compat con serialize/deserialize del bot -->
+                  <select id="sbTriggerPipeline" hidden><option value="">— Pipeline —</option></select>
+                  <select id="sbTriggerStage" hidden><option value="">— Etapa —</option></select>
+
+                  <!-- Picker visible: Pipeline -->
+                  <div class="sb-field">
+                    <label class="sb-field-label">Pipeline</label>
+                    <button type="button" class="sb-picker-btn" id="sbTriggerPipelinePickerBtn" data-popup="sbTriggerPipelinePopup">
+                      <span class="sb-picker-icon" id="sbTriggerPipelineIcon"></span>
+                      <span class="sb-picker-text" id="sbTriggerPipelineText">Selecciona un pipeline…</span>
+                      <svg class="sb-picker-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="sb-picker-popup" id="sbTriggerPipelinePopup" hidden></div>
                   </div>
-                  <!-- Modos del trigger: solo aplica a pipeline_stage (entra), no a _leave -->
-                  <div id="sbTriggerStageModesWrap" style="margin-top:8px;padding:10px 12px;background:#fafbfc;border:1px solid var(--border);border-radius:8px">
-                    <div style="font-size:11.5px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Disparar cuando el lead:</div>
-                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 0">
-                      <input type="checkbox" id="sbTriggerModeCreated" checked />
-                      <span>Es <strong>creado</strong> en esta etapa</span>
+
+                  <!-- Picker visible: Etapa -->
+                  <div class="sb-field">
+                    <label class="sb-field-label">Etapa</label>
+                    <button type="button" class="sb-picker-btn" id="sbTriggerStagePickerBtn" data-popup="sbTriggerStagePopup">
+                      <span class="sb-picker-dot" id="sbTriggerStagePickerDot"></span>
+                      <span class="sb-picker-text" id="sbTriggerStagePickerText">Primero elige un pipeline</span>
+                      <svg class="sb-picker-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                    <div class="sb-picker-popup" id="sbTriggerStagePopup" hidden></div>
+                  </div>
+
+                  <!-- Modos del trigger (solo pipeline_stage, no _leave) -->
+                  <div id="sbTriggerStageModesWrap" class="sb-modes">
+                    <div class="sb-modes-header">Modos</div>
+                    <label class="sb-toggle-row">
+                      <span class="sb-toggle-text">Al <strong>crearse</strong> en esta etapa</span>
+                      <input type="checkbox" id="sbTriggerModeCreated" class="sb-toggle-input" checked />
+                      <span class="sb-toggle-slider"></span>
                     </label>
-                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 0">
-                      <input type="checkbox" id="sbTriggerModeMoved" checked />
-                      <span>Es <strong>movido / arrastrado</strong> a esta etapa</span>
+                    <label class="sb-toggle-row">
+                      <span class="sb-toggle-text">Al <strong>moverse</strong> a esta etapa</span>
+                      <input type="checkbox" id="sbTriggerModeMoved" class="sb-toggle-input" checked />
+                      <span class="sb-toggle-slider"></span>
                     </label>
-                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Tip: marca ambos si quieres que dispare siempre. Default para bots viejos: ambos.</div>
                   </div>
                 </div>
               </div>

@@ -22088,8 +22088,41 @@ async function loadTasks() {
   if (!root) return;
   root.innerHTML = '<div class="tasks-loading">Cargando…</div>';
   try {
-    const r = await api('GET', `/api/tasks?filter=${_tasksFilter}`);
-    _tasksItems = r.items || [];
+    const [tasksRes, apptsRes] = await Promise.all([
+      api('GET', `/api/tasks?filter=${_tasksFilter}`),
+      api('GET', '/api/appointments?limit=500').catch(() => ({ items: [] })),
+    ]);
+    const tasks = (tasksRes.items || []).map(t => ({ ...t, kind: 'task' }));
+    // Convertir appointments al shape de task para que renderTaskList los pinte
+    const now = Math.floor(Date.now() / 1000);
+    const appts = (apptsRes.items || [])
+      .filter(a => a.status !== 'cancelled')
+      .map(a => ({
+        id:        'appt-' + a.id,         // prefijo para no chocar con task IDs
+        rawApptId: a.id,
+        kind:      'appointment',
+        title:     a.title || (a.contactName ? `Cita: ${a.contactName}` : `Cita #${a.id}`),
+        description: a.notes || '',
+        dueAt:     a.startsAt || a.starts_at,
+        completed: ['completed','no_show'].includes(a.status),
+        contactId: a.contactId,
+        contactName: a.contactName,
+        contactPhone: a.contactPhone,
+        durationMin: a.durationMin || a.duration_min,
+        status: a.status,
+      }));
+    // Aplicar el mismo filtro temporal a appts según _tasksFilter
+    let filteredAppts = appts;
+    if (_tasksFilter === 'overdue') {
+      filteredAppts = appts.filter(a => !a.completed && a.dueAt < now);
+    } else if (_tasksFilter === 'today') {
+      const start = new Date(); start.setHours(0,0,0,0);
+      const end   = new Date(); end.setHours(23,59,59,999);
+      filteredAppts = appts.filter(a => a.dueAt >= start.getTime()/1000 && a.dueAt <= end.getTime()/1000);
+    } else if (_tasksFilter === 'upcoming') {
+      filteredAppts = appts.filter(a => !a.completed && a.dueAt >= now);
+    }
+    _tasksItems = [...tasks, ...filteredAppts].sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0));
     renderTaskList();
     refreshTaskCounts();
   } catch (err) {
@@ -22789,11 +22822,29 @@ async function loadCalendar() {
   gridEnd.setDate(lastDayMonth.getDate() + (6 - lastDayMonth.getDay()));
 
   try {
-    const r = await api('GET', '/api/tasks?filter=all&limit=500');
-    _calTasks = (r.items || []).filter(t => {
+    // Fetch en paralelo tasks + appointments. Las unifico en _calTasks como
+    // entries con shape común: { id, title, dueAt (unix), completed, kind }.
+    // kind: 'task' | 'appointment'
+    const [tasksRes, apptsRes] = await Promise.all([
+      api('GET', '/api/tasks?filter=all&limit=500').catch(() => ({ items: [] })),
+      api('GET', '/api/appointments?limit=500').catch(() => ({ items: [] })),
+    ]);
+    const tasks = (tasksRes.items || []).map(t => ({ ...t, kind: 'task' }));
+    const appts = (apptsRes.items || []).map(a => ({
+      id:        a.id,
+      title:     a.title || (a.contactName ? `Cita: ${a.contactName}` : `Cita #${a.id}`),
+      dueAt:     a.startsAt || a.starts_at,
+      completed: ['completed','cancelled','no_show'].includes(a.status),
+      cancelled: a.status === 'cancelled',
+      kind:      'appointment',
+      contactPhone: a.contactPhone,
+      durationMin: a.durationMin || a.duration_min || 30,
+    }));
+    _calTasks = [...tasks, ...appts].filter(t => {
+      if (!t.dueAt) return false;
       const d = new Date(t.dueAt * 1000);
       return d >= gridStart && d <= new Date(gridEnd.getTime() + 24*3600*1000);
-    });
+    }).sort((a, b) => a.dueAt - b.dueAt);
   } catch (_) { _calTasks = []; }
 
   // Construir grid
@@ -22816,8 +22867,16 @@ async function loadCalendar() {
         return td >= dayStart && td <= dayEnd;
       });
       const tasksHtml = dayTasks.slice(0, 3).map(t => {
-        const cls = t.completed ? 'is-completed' : (t.dueAt < Math.floor(Date.now()/1000) ? 'is-overdue' : '');
-        return `<div class="cal-task-pill ${cls}" data-task-id="${t.id}" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</div>`;
+        const cls = [
+          t.completed ? 'is-completed' : (t.dueAt < Math.floor(Date.now()/1000) ? 'is-overdue' : ''),
+          t.kind === 'appointment' ? 'is-appointment' : '',
+        ].filter(Boolean).join(' ');
+        const dataAttr = t.kind === 'appointment' ? `data-appt-id="${t.id}"` : `data-task-id="${t.id}"`;
+        // Para citas, prefijar la hora
+        const hour = t.kind === 'appointment'
+          ? new Date(t.dueAt * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }) + ' '
+          : '';
+        return `<div class="cal-task-pill ${cls}" ${dataAttr} title="${escapeHtml(hour + t.title)}">${escapeHtml(hour + t.title)}</div>`;
       }).join('');
       const moreHtml = dayTasks.length > 3 ? `<div class="cal-task-more">+${dayTasks.length - 3} más</div>` : '';
       const isoDate = cur.toISOString().slice(0, 10);
@@ -22838,14 +22897,21 @@ async function loadCalendar() {
   // Wire click en celda (crear tarea con esa fecha pre-cargada)
   grid.querySelectorAll('.cal-cell').forEach(cell => {
     cell.addEventListener('click', (e) => {
-      // Si clickearon en una task pill, abrir modal de edit
-      const taskId = e.target.closest('.cal-task-pill')?.dataset?.taskId;
+      // Si clickearon en una pill, decidir qué hacer según tipo
+      const pill = e.target.closest('.cal-task-pill');
+      const taskId = pill?.dataset?.taskId;
+      const apptId = pill?.dataset?.apptId;
       if (taskId) {
         e.stopPropagation();
         api('GET', `/api/tasks/${taskId}`).then(t => {
           _tasksItems = [t];
           openTaskModal(Number(taskId));
         });
+        return;
+      }
+      if (apptId) {
+        e.stopPropagation();
+        toast('Cita programada — gestiónala desde el lead asociado', 'info');
         return;
       }
       // Click en celda vacía → nueva tarea con fecha pre-cargada

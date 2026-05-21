@@ -13167,3 +13167,18 @@ button, a, [role="button"], .btn, [data-action] {
   color: #ef4444;
   font-weight: 700;
 }
+
+/* ─── Citas en el calendario (distintas a tareas) ────────────────── */
+.cal-task-pill.is-appointment {
+  background: rgba(16, 185, 129, 0.12);
+  border-left: 3px solid #10b981;
+  color: #065f46;
+  font-weight: 500;
+}
+.cal-task-pill.is-appointment:hover {
+  background: rgba(16, 185, 129, 0.2);
+}
+.cal-task-pill.is-appointment.is-completed {
+  opacity: 0.55;
+  text-decoration: line-through;
+}

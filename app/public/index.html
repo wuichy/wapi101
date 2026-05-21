@@ -2677,6 +2677,81 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <button class="btn btn--ghost" id="btnTestAI" data-i18n="ia.test">Probar conexión</button>
                 <span id="aiTestStatus" style="font-size:13px;align-self:center"></span>
               </div>
+
+              <!-- ─── MCP Server (expone wapi101 a clientes MCP) ─── -->
+              <div class="mcp-card">
+                <div class="mcp-card-head">
+                  <div class="mcp-card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M12 2v6m0 8v6M2 12h6m8 0h6M5 5l4 4m6 6l4 4m0-14l-4 4m-6 6l-4 4"/></svg>
+                    <h3>MCP Server — conecta tu CRM a Claude, Cursor o cualquier cliente MCP</h3>
+                  </div>
+                  <span class="mcp-badge mcp-badge--beta">Beta</span>
+                </div>
+                <p class="mcp-card-desc">
+                  Expone tu wapi101 como servidor <strong>Model Context Protocol</strong>. Permite que asistentes de IA (Claude Desktop, Claude Code, Cursor, etc.) lean contactos, busquen leads, envíen mensajes y muevan etapas de tu CRM hablando contigo en lenguaje natural.
+                </p>
+
+                <div class="mcp-row">
+                  <label class="mcp-label">URL del servidor</label>
+                  <div class="mcp-copybox">
+                    <input type="text" id="mcpServerUrl" readonly value="https://wapi101.com/api/mcp" />
+                    <button class="btn btn--ghost" data-mcp-copy="mcpServerUrl" type="button">Copiar</button>
+                  </div>
+                </div>
+
+                <div class="mcp-row">
+                  <label class="mcp-label">Token de autenticación</label>
+                  <p class="mcp-hint">Usa un <strong>machine token</strong> de la sección <a href="#" id="mcpGoToTokens">Configuración → Tokens API</a>. Si no tienes uno, créalo ahí y vuelve a esta pantalla.</p>
+                </div>
+
+                <div class="mcp-row">
+                  <label class="mcp-label">Herramientas expuestas</label>
+                  <ul class="mcp-tools-list">
+                    <li><code>list_contacts</code> — lista contactos con búsqueda y paginación</li>
+                    <li><code>search_contact</code> — busca un contacto por teléfono</li>
+                    <li><code>list_templates</code> — lista plantillas de mensaje</li>
+                    <li><code>send_message</code> — envía mensaje a un teléfono (auto-detecta canal)</li>
+                    <li><code>list_pipelines</code> — lista pipelines y sus etapas</li>
+                    <li><code>create_lead</code> — crea un lead en pipeline + etapa</li>
+                    <li><code>move_lead_stage</code> — mueve un lead a otra etapa</li>
+                  </ul>
+                </div>
+
+                <div class="mcp-row">
+                  <label class="mcp-label">Cómo conectar — Claude Desktop</label>
+                  <p class="mcp-hint">Edita <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> y agrega:</p>
+                  <div class="mcp-snippet">
+                    <pre id="mcpSnippetClaudeDesktop">{
+  "mcpServers": {
+    "wapi101": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://wapi101.com/api/mcp",
+        "--header",
+        "Authorization: Bearer mt_TU_TOKEN_AQUI"
+      ]
+    }
+  }
+}</pre>
+                    <button class="btn btn--ghost" data-mcp-copy="mcpSnippetClaudeDesktop" type="button">Copiar</button>
+                  </div>
+                  <p class="mcp-hint">Reinicia Claude Desktop. Luego escribe algo como <em>"¿cuántos contactos tengo en mi CRM?"</em> y deberías ver el icono de MCP activo.</p>
+                </div>
+
+                <div class="mcp-row">
+                  <label class="mcp-label">Cómo conectar — Claude Code / Cursor</label>
+                  <div class="mcp-snippet">
+                    <pre id="mcpSnippetCli">claude mcp add wapi101 --transport http https://wapi101.com/api/mcp --header "Authorization: Bearer mt_TU_TOKEN_AQUI"</pre>
+                    <button class="btn btn--ghost" data-mcp-copy="mcpSnippetCli" type="button">Copiar</button>
+                  </div>
+                </div>
+
+                <div class="mcp-row">
+                  <button class="btn btn--ghost" id="btnTestMcp" type="button">Probar conexión</button>
+                  <span id="mcpTestStatus" style="font-size:13px;margin-left:10px;align-self:center"></span>
+                </div>
+              </div>
             </div>
 
             <!-- ─── Notificaciones ─── -->

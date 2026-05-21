@@ -12346,3 +12346,81 @@ button, a, [role="button"], .btn, [data-action] {
 .mobile-bottom-nav {
   padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
+
+/* ─── MCP Card (Settings → IA) ─────────────────────────────────────── */
+.mcp-card {
+  margin-top: 32px;
+  padding: 22px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 14px;
+  background: var(--surface-2, #fafbfc);
+}
+.mcp-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 6px;
+}
+.mcp-card-title {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--text-primary, #111);
+}
+.mcp-card-title h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.mcp-card-title svg { color: var(--accent, #2563eb); }
+.mcp-badge {
+  font-size: 11px; font-weight: 600; padding: 3px 8px;
+  border-radius: 999px; letter-spacing: 0.3px;
+}
+.mcp-badge--beta {
+  background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa;
+}
+.mcp-card-desc {
+  margin: 0 0 18px 0; color: var(--text-secondary, #4b5563);
+  font-size: 13.5px; line-height: 1.55;
+}
+.mcp-row { margin-bottom: 16px; }
+.mcp-label {
+  display: block; font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-muted, #6b7280); margin-bottom: 6px;
+}
+.mcp-hint {
+  margin: 6px 0 0 0; font-size: 13px; color: var(--text-muted, #6b7280);
+  line-height: 1.5;
+}
+.mcp-hint code {
+  background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px;
+  font-size: 12.5px;
+}
+.mcp-copybox {
+  display: flex; gap: 8px; align-items: stretch;
+}
+.mcp-copybox input {
+  flex: 1; min-width: 0; padding: 8px 12px;
+  border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px;
+  background: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; color: var(--text-primary, #111);
+}
+.mcp-snippet {
+  position: relative; margin-top: 6px;
+}
+.mcp-snippet pre {
+  margin: 0; padding: 14px 16px;
+  background: #0f172a; color: #e2e8f0;
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; line-height: 1.6;
+  overflow-x: auto; white-space: pre;
+}
+.mcp-snippet .btn {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(255,255,255,0.1); color: #fff;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.mcp-snippet .btn:hover { background: rgba(255,255,255,0.18); }
+.mcp-tools-list {
+  margin: 0; padding-left: 18px; color: var(--text-secondary, #4b5563);
+  font-size: 13px; line-height: 1.7;
+}
+.mcp-tools-list code {
+  background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px;
+  font-size: 12px; color: var(--accent, #2563eb); font-weight: 500;
+}

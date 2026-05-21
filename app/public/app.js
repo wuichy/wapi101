@@ -5249,6 +5249,56 @@ function setupSettingsTabs() {
     }
   });
 
+  // ─── MCP card: copy-to-clipboard + test connection ───────────────
+  document.querySelectorAll('[data-mcp-copy]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-mcp-copy');
+      const el = document.getElementById(id);
+      if (!el) return;
+      const text = el.value !== undefined ? el.value : el.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        const prev = btn.textContent;
+        btn.textContent = '✓ Copiado';
+        setTimeout(() => { btn.textContent = prev; }, 1500);
+      } catch (e) {
+        toast('No se pudo copiar al portapapeles', 'error');
+      }
+    });
+  });
+
+  document.getElementById('mcpGoToTokens')?.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    document.querySelector('.settings-tab[data-settings="tokens"]')?.click();
+  });
+
+  document.getElementById('btnTestMcp')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btnTestMcp');
+    const statusEl = document.getElementById('mcpTestStatus');
+    if (!btn) return;
+    btn.disabled = true; btn.textContent = 'Probando…';
+    if (statusEl) statusEl.textContent = '';
+    try {
+      // Hace una request con el mismo session token del navegador (el endpoint
+      // acepta tanto session como machine_token). Si funciona, listamos tools.
+      const r = await api('POST', '/api/mcp', {
+        jsonrpc: '2.0', id: 1, method: 'tools/list', params: {}
+      });
+      const n = (r?.result?.tools || []).length;
+      if (statusEl) {
+        statusEl.style.color = '#22c55e';
+        statusEl.textContent = `✓ ${n} herramientas expuestas correctamente`;
+      }
+    } catch (e) {
+      if (statusEl) {
+        statusEl.style.color = '#ef4444';
+        statusEl.textContent = '✗ ' + (e.message || 'Error');
+      }
+    } finally {
+      btn.disabled = false; btn.textContent = 'Probar conexión';
+    }
+  });
+
   // Switch: mostrar alarmas de leads estancados en pipelines
   const alarmsToggle = document.getElementById('cfgPlAlarmsEnabled');
   if (alarmsToggle) {

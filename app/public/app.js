@@ -17552,15 +17552,518 @@ function _bindDataCenterOnce() {
   });
 }
 
-// Stubs — los wizards reales vienen en el siguiente commit
+// ─── Data Center: Wizard de Import (framework genérico) ──────────────
+// Cada entidad define sus pasos en DC_WIZARDS. El framework maneja
+// la navegación, el estado entre pasos, y el botón final.
+
+const DC_WIZARDS = {
+  contacts: {
+    title: 'Importar Contactos',
+    steps: ['upload', 'mapping', 'dedup', 'createLeads', 'confirm'],
+    stepLabels: ['Archivo', 'Mapeo', 'Duplicados', 'Leads', 'Listo'],
+    onConfirm: async (state) => {
+      return api('POST', '/api/data-center/import', {
+        entity: 'contacts',
+        filename: state.file.name,
+        content: state.file.content,
+        mapping: state.mapping,
+        options: {
+          dedupPolicy: state.dedupPolicy || 'skip',
+          createLeads: !!state.createLeads,
+          pipelineId: state.pipelineId,
+          stageId: state.stageId,
+        },
+      });
+    },
+  },
+};
+
+let _dcWizard = null; // estado activo
+
 function openDcImportWizard(entity) {
-  toast(`Wizard de import para "${entity}" — viene en el próximo deploy`, 'info');
+  const config = DC_WIZARDS[entity];
+  if (!config) {
+    toast(`Wizard de "${entity}" próximamente`, 'info');
+    return;
+  }
+  _dcWizard = {
+    entity,
+    config,
+    stepIdx: 0,
+    state: {},
+  };
+  document.getElementById('dcWizardModal').hidden = false;
+  document.body.classList.add('modal-open');
+  document.getElementById('dcWizardTitle').textContent = config.title;
+  _renderDcWizard();
 }
+
+function _closeDcWizard() {
+  document.getElementById('dcWizardModal').hidden = true;
+  document.body.classList.remove('modal-open');
+  _dcWizard = null;
+}
+
+function _renderDcWizard() {
+  if (!_dcWizard) return;
+  const { config, stepIdx, state } = _dcWizard;
+  const step = config.steps[stepIdx];
+
+  // Stepper visual
+  const stepperEl = document.getElementById('dcWizardStepper');
+  stepperEl.innerHTML = config.stepLabels.map((label, i) => `
+    <div class="dc-step ${i === stepIdx ? 'is-active' : ''} ${i < stepIdx ? 'is-done' : ''}">
+      <div class="dc-step-dot">${i < stepIdx ? '✓' : i + 1}</div>
+      <div class="dc-step-label">${escHtml(label)}</div>
+    </div>
+  `).join('<div class="dc-step-line"></div>');
+
+  // Body
+  const bodyEl = document.getElementById('dcWizardBody');
+  const renderer = DC_STEP_RENDERERS[step];
+  if (renderer) renderer(bodyEl, state, () => _refreshDcWizardButtons());
+
+  // Botones
+  _refreshDcWizardButtons();
+}
+
+function _refreshDcWizardButtons() {
+  if (!_dcWizard) return;
+  const { config, stepIdx, state } = _dcWizard;
+  const step = config.steps[stepIdx];
+  const isLast = stepIdx === config.steps.length - 1;
+  const backBtn = document.getElementById('dcWizardBack');
+  const nextBtn = document.getElementById('dcWizardNext');
+  backBtn.disabled = stepIdx === 0;
+  nextBtn.textContent = isLast ? 'Importar' : 'Siguiente';
+  // Validación: ¿se puede avanzar?
+  const validator = DC_STEP_VALIDATORS[step];
+  nextBtn.disabled = validator ? !validator(state) : false;
+}
+
+async function _dcWizardAdvance() {
+  if (!_dcWizard) return;
+  const { config, stepIdx, state } = _dcWizard;
+  const step = config.steps[stepIdx];
+  const isLast = stepIdx === config.steps.length - 1;
+
+  // Side effects al avanzar (ej. después de upload → analyze)
+  const beforeNext = DC_STEP_BEFORE_NEXT[step];
+  if (beforeNext) {
+    const nextBtn = document.getElementById('dcWizardNext');
+    const orig = nextBtn.textContent;
+    nextBtn.disabled = true; nextBtn.textContent = 'Procesando…';
+    try {
+      await beforeNext(state, _dcWizard.entity);
+    } catch (e) {
+      toast('Error: ' + e.message, 'error');
+      nextBtn.disabled = false; nextBtn.textContent = orig;
+      return;
+    }
+    nextBtn.disabled = false; nextBtn.textContent = orig;
+  }
+
+  if (isLast) {
+    // Ejecutar import
+    const nextBtn = document.getElementById('dcWizardNext');
+    nextBtn.disabled = true; nextBtn.textContent = 'Importando…';
+    try {
+      const result = await config.onConfirm(state);
+      toast(`✓ Importado: ${result.created || 0} nuevos${result.updated ? ', ' + result.updated + ' actualizados' : ''}${result.leadsCreated ? ', ' + result.leadsCreated + ' leads creados' : ''}`, 'success');
+      _closeDcWizard();
+      // Refrescar conteos del Data Center si está visible
+      if (document.querySelector('[data-settings="datos"].is-active')) loadDataCenter();
+    } catch (e) {
+      toast('Error: ' + e.message, 'error');
+      nextBtn.disabled = false; nextBtn.textContent = 'Importar';
+    }
+    return;
+  }
+
+  _dcWizard.stepIdx++;
+  _renderDcWizard();
+}
+
+function _dcWizardBack() {
+  if (!_dcWizard || _dcWizard.stepIdx === 0) return;
+  _dcWizard.stepIdx--;
+  _renderDcWizard();
+}
+
+// ─── Renderers de cada paso ──────────────────────────────────────────
+const DC_STEP_RENDERERS = {
+  upload(body, state, onChange) {
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>Sube tu archivo</h4>
+        <p class="dc-step-desc">Acepta CSV, JSON, o Excel exportado como CSV. Soportamos formatos de Kommo, HubSpot, Pipedrive y wapi101 nativo.</p>
+        <div class="dc-file-drop" id="dcFileDrop">
+          <input type="file" id="dcFileInput" accept=".csv,.json,.txt" hidden />
+          <div class="dc-file-drop-inner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p><strong>Arrastra un archivo aquí</strong> o <button type="button" class="btn btn--link" id="dcFilePick">elige uno</button></p>
+            <p class="dc-step-hint">CSV, JSON · máx 20 MB</p>
+          </div>
+        </div>
+        ${state.file ? `<div class="dc-file-info">📄 <strong>${escHtml(state.file.name)}</strong> · ${(state.file.content.length / 1024).toFixed(1)} KB</div>` : ''}
+      </div>
+    `;
+    const input = body.querySelector('#dcFileInput');
+    const drop = body.querySelector('#dcFileDrop');
+    body.querySelector('#dcFilePick')?.addEventListener('click', () => input.click());
+    input.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (f.size > 20 * 1024 * 1024) { toast('Archivo muy grande (max 20MB)', 'error'); return; }
+      const content = await f.text();
+      _dcWizard.state.file = { name: f.name, content };
+      _renderDcWizard();
+    });
+    // Drag-drop
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('is-dragover'));
+    drop.addEventListener('drop', async e => {
+      e.preventDefault(); drop.classList.remove('is-dragover');
+      const f = e.dataTransfer.files[0];
+      if (!f) return;
+      const content = await f.text();
+      _dcWizard.state.file = { name: f.name, content };
+      _renderDcWizard();
+    });
+  },
+
+  mapping(body, state, onChange) {
+    const a = state.analysis;
+    if (!a) { body.innerHTML = '<p class="dc-step-desc">Analizando archivo…</p>'; return; }
+    const wapiFields = DC_TARGET_FIELDS[_dcWizard.entity] || [];
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>Mapea las columnas</h4>
+        <p class="dc-step-desc">Detectamos <strong>${a.rowCount}</strong> filas y formato origen: <strong>${a.sourceFormat}</strong>. Conecta cada columna con un campo de wapi101.</p>
+        <table class="dc-mapping-table">
+          <thead><tr><th>Columna del archivo</th><th>Campo en wapi101</th></tr></thead>
+          <tbody>
+            ${a.headers.map(h => {
+              const suggested = state.mapping?.[h] ?? a.suggestedMapping[h];
+              return `
+                <tr>
+                  <td><code>${escHtml(h)}</code></td>
+                  <td>
+                    <select data-dc-map="${escHtml(h)}">
+                      <option value="">— Ignorar —</option>
+                      ${wapiFields.map(f => `<option value="${f.value}" ${suggested === f.value ? 'selected' : ''}>${escHtml(f.label)}</option>`).join('')}
+                    </select>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+        <details class="dc-preview-details">
+          <summary>Vista previa (primeras 3 filas)</summary>
+          <pre>${escHtml(a.sampleRows.slice(0, 3).map(r => r.join(' · ')).join('\n'))}</pre>
+        </details>
+      </div>
+    `;
+    // Inicializar state.mapping con sugerencias si está vacío
+    if (!state.mapping) state.mapping = { ...a.suggestedMapping };
+    body.querySelectorAll('[data-dc-map]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const col = sel.getAttribute('data-dc-map');
+        _dcWizard.state.mapping[col] = sel.value || null;
+        _refreshDcWizardButtons();
+      });
+    });
+  },
+
+  dedup(body, state) {
+    const conflicts = state.analysis?.conflicts || {};
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>¿Qué hacer con duplicados?</h4>
+        <p class="dc-step-desc">Detectamos que <strong>${conflicts.duplicates || 0}</strong> de <strong>${conflicts.total || 0}</strong> contactos del archivo ya existen en wapi101 (mismo teléfono).</p>
+        <div class="dc-radio-group">
+          <label class="dc-radio">
+            <input type="radio" name="dedup" value="skip" ${state.dedupPolicy === 'skip' || !state.dedupPolicy ? 'checked' : ''} />
+            <div>
+              <strong>Solo crear los nuevos (saltar duplicados)</strong>
+              <p>Los ${conflicts.duplicates || 0} existentes se quedan como están. ${Math.max(0, (conflicts.total || 0) - (conflicts.duplicates || 0))} nuevos.</p>
+            </div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="dedup" value="overwrite" ${state.dedupPolicy === 'overwrite' ? 'checked' : ''} />
+            <div>
+              <strong>Actualizar los existentes con la info nueva</strong>
+              <p>Sobrescribe nombre, teléfono, email de los duplicados.</p>
+            </div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="dedup" value="merge" ${state.dedupPolicy === 'merge' ? 'checked' : ''} />
+            <div>
+              <strong>Mezclar inteligentemente (recomendado)</strong>
+              <p>Combina la info nueva sin perder la existente. Si el archivo trae algo nuevo, lo agrega. Si trae lo mismo, conserva lo de wapi.</p>
+            </div>
+          </label>
+        </div>
+      </div>
+    `;
+    body.querySelectorAll('input[name="dedup"]').forEach(r => {
+      r.addEventListener('change', () => { _dcWizard.state.dedupPolicy = r.value; });
+    });
+  },
+
+  createLeads(body, state) {
+    const pipelines = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>¿Crear leads también?</h4>
+        <p class="dc-step-desc">Tu archivo solo tiene contactos. ¿Quieres que cada nuevo contacto tenga un lead asociado en algún pipeline?</p>
+        <div class="dc-radio-group">
+          <label class="dc-radio">
+            <input type="radio" name="createLeads" value="no" ${!state.createLeads ? 'checked' : ''} />
+            <div>
+              <strong>No, solo importar contactos sueltos</strong>
+              <p>Los contactos no se asignan a ningún pipeline.</p>
+            </div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="createLeads" value="yes" ${state.createLeads ? 'checked' : ''} />
+            <div>
+              <strong>Sí, crear un lead por contacto</strong>
+              <div id="dcLeadsPipelinePicker" style="margin-top:10px;${state.createLeads ? '' : 'display:none'}">
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px">Pipeline:</label>
+                <select id="dcLeadsPipeline" style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px">
+                  ${pipelines.map(p => `<option value="${p.id}" ${state.pipelineId === p.id ? 'selected' : ''}>${escHtml(p.name)}</option>`).join('')}
+                </select>
+                <label style="display:block;font-size:12px;color:var(--text-muted);margin:10px 0 4px">Etapa inicial:</label>
+                <select id="dcLeadsStage" style="width:100%;padding:7px 10px;border:1px solid #e5e7eb;border-radius:6px">
+                  ${_dcLeadsStageOptions(pipelines, state.pipelineId, state.stageId)}
+                </select>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+    `;
+    const picker = body.querySelector('#dcLeadsPipelinePicker');
+    body.querySelectorAll('input[name="createLeads"]').forEach(r => {
+      r.addEventListener('change', () => {
+        _dcWizard.state.createLeads = r.value === 'yes';
+        picker.style.display = _dcWizard.state.createLeads ? 'block' : 'none';
+        // Seleccionar primer pipeline/stage por defecto
+        if (_dcWizard.state.createLeads && !_dcWizard.state.pipelineId && pipelines[0]) {
+          _dcWizard.state.pipelineId = pipelines[0].id;
+          _dcWizard.state.stageId = pipelines[0].stages?.[0]?.id;
+          _renderDcWizard();
+        }
+      });
+    });
+    body.querySelector('#dcLeadsPipeline')?.addEventListener('change', e => {
+      _dcWizard.state.pipelineId = Number(e.target.value);
+      const p = pipelines.find(p => p.id === _dcWizard.state.pipelineId);
+      _dcWizard.state.stageId = p?.stages?.[0]?.id || null;
+      _renderDcWizard();
+    });
+    body.querySelector('#dcLeadsStage')?.addEventListener('change', e => {
+      _dcWizard.state.stageId = Number(e.target.value);
+    });
+  },
+
+  confirm(body, state) {
+    const a = state.analysis || {};
+    const mapped = Object.values(state.mapping || {}).filter(Boolean).length;
+    const newCount = Math.max(0, (a.conflicts?.total || 0) - (a.conflicts?.duplicates || 0));
+    const dedupLabel = { skip: 'Saltar duplicados', overwrite: 'Sobrescribir', merge: 'Mezclar' }[state.dedupPolicy || 'skip'];
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>Confirmar importación</h4>
+        <p class="dc-step-desc">Vas a importar contactos con esta configuración:</p>
+        <ul class="dc-summary">
+          <li><strong>${a.rowCount || 0}</strong> filas en el archivo</li>
+          <li><strong>${mapped}</strong> columnas mapeadas</li>
+          <li><strong>${a.conflicts?.duplicates || 0}</strong> duplicados detectados — política: <strong>${dedupLabel}</strong></li>
+          <li><strong>${newCount}</strong> contactos nuevos a crear</li>
+          ${state.createLeads ? `<li>Se crearán <strong>~${newCount}</strong> leads en el pipeline elegido</li>` : ''}
+        </ul>
+        <p class="dc-step-hint">Esta acción es difícil de revertir. ¿Estás seguro?</p>
+      </div>
+    `;
+  },
+};
+
+const DC_STEP_VALIDATORS = {
+  upload: (state) => !!state.file?.content,
+  mapping: (state) => {
+    if (!state.mapping) return false;
+    // Al menos un campo crítico mapeado
+    const vals = Object.values(state.mapping).filter(Boolean);
+    return vals.includes('phone') || vals.includes('email');
+  },
+  dedup: () => true,
+  createLeads: (state) => {
+    if (state.createLeads) return !!state.pipelineId && !!state.stageId;
+    return true;
+  },
+  confirm: () => true,
+};
+
+const DC_STEP_BEFORE_NEXT = {
+  upload: async (state, entity) => {
+    // Llamar /analyze después de subir el archivo
+    const r = await api('POST', '/api/data-center/analyze', {
+      entity,
+      filename: state.file.name,
+      content: state.file.content,
+    });
+    state.analysis = r;
+    state.mapping = { ...r.suggestedMapping };
+  },
+};
+
+const DC_TARGET_FIELDS = {
+  contacts: [
+    { value: 'firstName', label: 'Nombre' },
+    { value: 'lastName',  label: 'Apellido' },
+    { value: 'phone',     label: 'Teléfono' },
+    { value: 'email',     label: 'Email' },
+    { value: 'tags',      label: 'Etiquetas (separadas por coma)' },
+  ],
+};
+
+function _dcLeadsStageOptions(pipelines, pipelineId, stageId) {
+  const p = pipelines.find(p => p.id === pipelineId) || pipelines[0];
+  if (!p?.stages) return '';
+  return p.stages.map(s => `<option value="${s.id}" ${stageId === s.id ? 'selected' : ''}>${escHtml(s.name)}</option>`).join('');
+}
+
+// ─── Bind global del wizard (idempotente) ────────────────────────────
+function _bindDcWizardOnce() {
+  if (document.getElementById('dcWizardModal')?.dataset.bound) return;
+  document.getElementById('dcWizardModal').dataset.bound = '1';
+
+  document.getElementById('dcWizardClose')?.addEventListener('click', _closeDcWizard);
+  document.getElementById('dcWizardCancel')?.addEventListener('click', _closeDcWizard);
+  document.getElementById('dcWizardBack')?.addEventListener('click', _dcWizardBack);
+  document.getElementById('dcWizardNext')?.addEventListener('click', _dcWizardAdvance);
+}
+
+// ─── Export Panel (panel con filtros + live count) ────────────────────
+let _dcExport = null;
+
+const DC_EXPORTS = {
+  contacts: {
+    title: 'Exportar Contactos',
+    filters: [
+      { id: 'tags',      label: 'Etiquetas (separadas por coma)',  type: 'text' },
+      { id: 'hasPhone',  label: 'Con teléfono', type: 'select', options: [['','Cualquiera'],['1','Sí'],['0','No']] },
+      { id: 'hasEmail',  label: 'Con email',    type: 'select', options: [['','Cualquiera'],['1','Sí'],['0','No']] },
+      { id: 'from',      label: 'Creado desde', type: 'date' },
+      { id: 'to',        label: 'Creado hasta', type: 'date' },
+    ],
+  },
+  leads:     { title: 'Exportar Leads',      filters: [] },
+  templates: { title: 'Exportar Plantillas', filters: [] },
+  pipelines: { title: 'Exportar Pipelines',  filters: [] },
+  bots:      { title: 'Exportar Bots',       filters: [] },
+  chats:     { title: 'Exportar Chats',      filters: [
+    { id: 'from', label: 'Desde', type: 'date' },
+    { id: 'to', label: 'Hasta', type: 'date' },
+  ] },
+};
+
 function openDcExportPanel(entity) {
-  // Por ahora: descarga directa CSV (sin filtros). El panel con filtros viene después.
-  const url = `/api/data-center/export/${entity}?format=csv`;
-  window.location.href = url;
+  const config = DC_EXPORTS[entity];
+  if (!config) {
+    // Fallback: descarga directa CSV
+    window.location.href = `/api/data-center/export/${entity}?format=csv`;
+    return;
+  }
+  _dcExport = { entity, config, filters: {}, format: 'csv' };
+  document.getElementById('dcExportModal').hidden = false;
+  document.body.classList.add('modal-open');
+  document.getElementById('dcExportTitle').textContent = config.title;
+  _renderDcExportPanel();
 }
+
+function _closeDcExportPanel() {
+  document.getElementById('dcExportModal').hidden = true;
+  document.body.classList.remove('modal-open');
+  _dcExport = null;
+}
+
+function _renderDcExportPanel() {
+  if (!_dcExport) return;
+  const { config, filters, format } = _dcExport;
+  const bodyEl = document.getElementById('dcExportBody');
+  bodyEl.innerHTML = `
+    <div class="dc-export-section">
+      <h4>Filtros</h4>
+      ${config.filters.length === 0
+        ? '<p class="dc-step-hint">Esta entidad aún no tiene filtros específicos — se exportará todo.</p>'
+        : `<div class="dc-export-filters">
+            ${config.filters.map(f => _dcRenderFilter(f, filters[f.id])).join('')}
+          </div>`
+      }
+    </div>
+    <div class="dc-export-section">
+      <h4>Formato</h4>
+      <div class="dc-radio-row">
+        <label><input type="radio" name="dcFmt" value="csv" ${format === 'csv' ? 'checked' : ''} /> CSV</label>
+        <label><input type="radio" name="dcFmt" value="json" ${format === 'json' ? 'checked' : ''} /> JSON</label>
+      </div>
+    </div>
+  `;
+  // Bind filters
+  bodyEl.querySelectorAll('[data-dc-filter]').forEach(el => {
+    el.addEventListener('input', () => {
+      _dcExport.filters[el.getAttribute('data-dc-filter')] = el.value;
+    });
+  });
+  bodyEl.querySelectorAll('input[name="dcFmt"]').forEach(r => {
+    r.addEventListener('change', () => { _dcExport.format = r.value; });
+  });
+  document.getElementById('dcExportCount').textContent = 'Listo para exportar';
+}
+
+function _dcRenderFilter(f, val = '') {
+  if (f.type === 'select') {
+    return `<label class="dc-filter">
+      <span>${escHtml(f.label)}</span>
+      <select data-dc-filter="${f.id}">
+        ${f.options.map(([v, l]) => `<option value="${v}" ${val === v ? 'selected' : ''}>${escHtml(l)}</option>`).join('')}
+      </select>
+    </label>`;
+  }
+  return `<label class="dc-filter">
+    <span>${escHtml(f.label)}</span>
+    <input type="${f.type || 'text'}" data-dc-filter="${f.id}" value="${escHtml(val)}" />
+  </label>`;
+}
+
+async function _dcRunExport() {
+  if (!_dcExport) return;
+  const { entity, format, filters } = _dcExport;
+  const qs = new URLSearchParams({ format, ...filters }).toString();
+  // Por ahora descarga directa via GET — el backend de filtros se extiende en el próximo chunk
+  window.location.href = `/api/data-center/export/${entity}?${qs}`;
+  _closeDcExportPanel();
+}
+
+function _bindDcExportOnce() {
+  if (document.getElementById('dcExportModal')?.dataset.bound) return;
+  document.getElementById('dcExportModal').dataset.bound = '1';
+  document.getElementById('dcExportClose')?.addEventListener('click', _closeDcExportPanel);
+  document.getElementById('dcExportCancel')?.addEventListener('click', _closeDcExportPanel);
+  document.getElementById('dcExportRun')?.addEventListener('click', _dcRunExport);
+}
+
+// Conectar al DOMContentLoaded existente
+const _origDcBind = _bindDataCenterOnce;
+_bindDataCenterOnce = function() {
+  _origDcBind();
+  _bindDcWizardOnce();
+  _bindDcExportOnce();
+};
 
 // ─── Composer del chat: botón "Enviar producto" + modal ──────────────
 function _bindProductComposerOnce() {

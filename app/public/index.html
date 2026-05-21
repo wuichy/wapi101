@@ -4117,5 +4117,40 @@ Ana, , ana@hotmail.com, 5551112222</pre>
       <div class="modal-body option-picker-list" id="optionPickerList"></div>
     </div>
   </div>
+
+  <!-- ─── Data Center: Import Wizard (modal compartido) ─── -->
+  <div class="modal-backdrop" id="dcWizardModal" hidden>
+    <div class="modal dc-wizard">
+      <header class="modal-head">
+        <h3 id="dcWizardTitle">Importar</h3>
+        <button type="button" class="modal-close" id="dcWizardClose">×</button>
+      </header>
+      <div class="dc-wizard-stepper" id="dcWizardStepper"></div>
+      <div class="modal-body dc-wizard-body" id="dcWizardBody"></div>
+      <footer class="dc-wizard-footer">
+        <button type="button" class="btn btn--ghost" id="dcWizardBack">Atrás</button>
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn--ghost" id="dcWizardCancel">Cancelar</button>
+        <button type="button" class="btn btn--primary" id="dcWizardNext">Siguiente</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ─── Data Center: Export Panel (modal compartido) ─── -->
+  <div class="modal-backdrop" id="dcExportModal" hidden>
+    <div class="modal dc-export">
+      <header class="modal-head">
+        <h3 id="dcExportTitle">Exportar</h3>
+        <button type="button" class="modal-close" id="dcExportClose">×</button>
+      </header>
+      <div class="modal-body dc-export-body" id="dcExportBody"></div>
+      <footer class="dc-export-footer">
+        <span id="dcExportCount" class="dc-export-count">Calculando…</span>
+        <div style="flex:1"></div>
+        <button type="button" class="btn btn--ghost" id="dcExportCancel">Cancelar</button>
+        <button type="button" class="btn btn--primary" id="dcExportRun">Exportar</button>
+      </footer>
+    </div>
+  </div>
 </body>
 </html>

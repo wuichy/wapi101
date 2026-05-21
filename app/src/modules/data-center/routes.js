@@ -77,40 +77,105 @@ async function _importContacts(db, tenantId, advisor, body) {
   const expedients = require('../expedients/service');
 
   const { headers, rows } = svc.parseFile({ filename: filename || 'data.csv', content });
+  const dedupPolicy = options.dedupPolicy || 'skip'; // skip | overwrite | merge
 
-  // Construir rows de objetos según mapping
+  // Construir rows de objetos según mapping. Si el archivo tiene "Nombre" como
+  // un solo campo (sin Apellido separado), lo partimos en primer/último.
   const items = rows.map(row => {
     const obj = {};
     headers.forEach((h, i) => {
       const dest = mapping[h];
-      if (dest) obj[dest] = row[i];
+      if (!dest) return;
+      const val = (row[i] || '').toString().trim();
+      if (dest === 'firstName' && !obj.lastName) {
+        const parts = val.split(/\s+/);
+        if (parts.length > 1 && !mapping[headers.find(hh => mapping[hh] === 'lastName')]) {
+          obj.firstName = parts[0];
+          obj.lastName = parts.slice(1).join(' ');
+          return;
+        }
+      }
+      if (dest === 'tags') {
+        obj.tags = val.split(',').map(t => t.trim()).filter(Boolean);
+        return;
+      }
+      obj[dest] = val;
     });
     return obj;
-  });
+  }).filter(o => o.firstName || o.lastName || o.phone || o.email);
 
-  // Delegamos al importer existente (que ya tiene dedup + tags)
-  const result = customers.importBulk(db, tenantId, items, {
-    dupePolicy: options.dedupPolicy || 'skip',
-    bulkTag: options.bulkTag || null,
-  });
+  // Procesar uno por uno para capturar los IDs creados (necesarios para leads)
+  const result = { created: 0, updated: 0, skipped: 0, errors: 0 };
+  const newContactIds = [];
+  const allTargetIds = []; // tanto creados como actualizados (para crear leads en ambos casos si user pidió)
 
-  // Si pidió crear leads, recorrer los contactos creados y crear leads
+  const txn = db.transaction(() => {
+    for (const r of items) {
+      try {
+        const phone = r.phone ? customers.normalizePhone(r.phone) : null;
+        const dupe = (phone || r.email)
+          ? customers.findDuplicate(db, tenantId, { phone, email: r.email })
+          : null;
+
+        if (dupe) {
+          if (dedupPolicy === 'skip') { result.skipped++; continue; }
+          if (dedupPolicy === 'overwrite' || dedupPolicy === 'merge') {
+            // overwrite: pisa todo. merge: solo rellena lo vacío.
+            const updates = dedupPolicy === 'overwrite'
+              ? { firstName: r.firstName || dupe.first_name, lastName: r.lastName || dupe.last_name, phone: phone || dupe.phone, email: r.email || dupe.email }
+              : { firstName: dupe.first_name || r.firstName, lastName: dupe.last_name || r.lastName, phone: dupe.phone || phone, email: dupe.email || r.email };
+            customers.update(db, tenantId, dupe.id, { ...updates, tags: undefined });
+            // Tags se mergean siempre (UNION)
+            if (Array.isArray(r.tags)) {
+              for (const t of r.tags) {
+                db.prepare('INSERT OR IGNORE INTO contact_tags (tenant_id, contact_id, tag) VALUES (?, ?, ?)').run(tenantId, dupe.id, t);
+              }
+            }
+            result.updated++;
+            allTargetIds.push(dupe.id);
+            continue;
+          }
+        }
+
+        // Crear nuevo
+        const created = customers.create(db, tenantId, {
+          firstName: r.firstName || '(Sin nombre)',
+          lastName: r.lastName || '',
+          phone, email: r.email || null,
+          tags: Array.isArray(r.tags) ? r.tags : [],
+        });
+        result.created++;
+        newContactIds.push(created.id);
+        allTargetIds.push(created.id);
+      } catch (e) {
+        result.errors++;
+        console.warn('[data-center] contact row error:', e.message);
+      }
+    }
+  });
+  txn();
+
+  // Crear leads si pidió
   let leadsCreated = 0;
   if (options.createLeads && options.pipelineId && options.stageId) {
-    const newContactIds = result.created || [];
-    const txn = db.transaction(() => {
+    // Política: solo para nuevos (mantener comportamiento del wizard)
+    const txn2 = db.transaction(() => {
       for (const cid of newContactIds) {
-        expedients.create(db, tenantId, {
-          contactId: cid,
-          pipelineId: Number(options.pipelineId),
-          stageId: Number(options.stageId),
-          name: null,
-          value: 0,
-        });
-        leadsCreated++;
+        try {
+          expedients.create(db, tenantId, {
+            contactId: cid,
+            pipelineId: Number(options.pipelineId),
+            stageId: Number(options.stageId),
+            name: null,
+            value: 0,
+          });
+          leadsCreated++;
+        } catch (e) {
+          console.warn('[data-center] lead create error:', e.message);
+        }
       }
     });
-    try { txn(); } catch (e) { console.warn('[data-center] error creando leads:', e.message); }
+    txn2();
   }
 
   return { ok: true, ...result, leadsCreated };

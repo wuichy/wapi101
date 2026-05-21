@@ -24439,6 +24439,12 @@ async function _loadApptSlots() {
   }
 
   _checkReminderWarnings(date);
+
+  // Re-sincronizar con los valores de hora/minuto que el usuario ya tiene en
+  // los selects libres. Si están llenos, _apptBookSelectedSlot vuelve a tener
+  // el valor y el botón se habilita. Soluciona el caso donde el usuario llenó
+  // la hora pero el botón quedó disabled por el reset al cargar slots.
+  _updateApptSelectedSlotFromInputs();
 }
 
 function _checkReminderWarnings(dateStr) {

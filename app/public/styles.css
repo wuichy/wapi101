@@ -9172,6 +9172,50 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .adv-toggle-btn.is-active .adv-toggle-track { background: #22c55e; }
 .adv-toggle-btn.is-active .adv-toggle-thumb { transform: translateX(14px); }
+
+/* ── Mobile: convertir tabla de asesores en cards ──
+   En mobile el grid de 5 columnas (2fr 1.5fr 100px 1fr 140px) no cabe.
+   Convertimos cada row en una card con áreas:
+     [avatar  name+badges]
+     [email   email      ]  (oculto en mobile)
+     [rol     perms       ]
+     [actions actions     ]
+*/
+@media (max-width: 720px) {
+  .advisors-row--head { display: none; }
+  .advisors-row {
+    grid-template-columns: 48px 1fr;
+    grid-template-areas:
+      "user user"
+      "rol  perms"
+      "actions actions";
+    row-gap: 10px;
+    column-gap: 12px;
+    padding: 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .advisors-row > :nth-child(1) { grid-area: user; }
+  .advisors-row > :nth-child(2) { display: none; }   /* email — se ve en el modal de edición */
+  .advisors-row > :nth-child(3) { grid-area: rol; align-self: center; }
+  .advisors-row > :nth-child(4) { grid-area: perms; align-self: center; }
+  .advisors-row > :nth-child(5) { grid-area: actions; justify-content: flex-end; }
+
+  .adv-cell-user { gap: 12px; }
+  .adv-cell-name {
+    font-size: 15px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .adv-cell-sub { font-size: 12px; }
+  .adv-perms-row { justify-content: flex-start; }
+}
 .adv-toggle-btn.is-active { color: #15803d; }
 
 /* ── Modal de asesor ── */

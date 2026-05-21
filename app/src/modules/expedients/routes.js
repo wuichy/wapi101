@@ -188,6 +188,7 @@ module.exports = function createExpedientsRouter(db) {
           contactId:   item.contactId,
           pipelineId:  item.pipelineId,
           stageId:     item.stageId,
+          eventType:   'created',
         });
       }
     } catch (e) {
@@ -292,6 +293,7 @@ module.exports = function createExpedientsRouter(db) {
           contactId:   item.contactId,
           pipelineId:  item.pipelineId,
           stageId:     newStageId,
+          eventType:   'moved',
           botCollisionPolicy: policy,
         });
       }

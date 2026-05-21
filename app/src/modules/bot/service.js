@@ -254,11 +254,11 @@ function getById(db, tenantId, id) {
   return hydrate(db, tenantId ?? row.tenant_id, row);
 }
 
-function create(db, tenantId, { name, enabled = 0, trigger_type = 'keyword', trigger_value = '', steps = [], tagIds }) {
+function create(db, tenantId, { name, enabled = 0, trigger_type = 'keyword', trigger_value = '', trigger_modes = null, steps = [], tagIds }) {
   if (!name || !name.trim()) throw new Error('El nombre es requerido');
   const r = db.prepare(
-    'INSERT INTO salsbots (tenant_id, name, enabled, trigger_type, trigger_value, steps) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(tenantId, name.trim(), enabled ? 1 : 0, trigger_type, trigger_value || '', JSON.stringify(steps));
+    'INSERT INTO salsbots (tenant_id, name, enabled, trigger_type, trigger_value, trigger_modes, steps) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(tenantId, name.trim(), enabled ? 1 : 0, trigger_type, trigger_value || '', trigger_modes || null, JSON.stringify(steps));
   setTags(db, tenantId, r.lastInsertRowid, tagIds);
   return getById(db, tenantId, r.lastInsertRowid);
 }
@@ -267,12 +267,15 @@ function update(db, tenantId, id, patch) {
   const current = getById(db, tenantId, id);
   const next = { ...current, ...patch };
   db.prepare(
-    'UPDATE salsbots SET name=?, enabled=?, trigger_type=?, trigger_value=?, steps=?, updated_at=unixepoch() WHERE id=? AND tenant_id=?'
+    'UPDATE salsbots SET name=?, enabled=?, trigger_type=?, trigger_value=?, trigger_modes=?, steps=?, updated_at=unixepoch() WHERE id=? AND tenant_id=?'
   ).run(
     (next.name || '').trim() || current.name,
     next.enabled ? 1 : 0,
     next.trigger_type || current.trigger_type,
     next.trigger_value ?? current.trigger_value,
+    // trigger_modes acepta explícito null si pasó null en patch (= "ambos"),
+    // o el JSON string si pasó algo. Si no se pasó en patch, conserva actual.
+    patch.trigger_modes !== undefined ? patch.trigger_modes : current.trigger_modes,
     JSON.stringify(Array.isArray(next.steps) ? next.steps : current.steps),
     id, tenantId
   );

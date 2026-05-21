@@ -144,8 +144,12 @@ function triggerMessage(db, { convoId, contactId, messageBody, provider, integra
 // triggers cíclicos hacen bucles infinitos.
 const MAX_BOT_CHAIN_DEPTH = 20;
 
-function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId, chainDepth = 0, botCollisionPolicy = 'skip' }) {
-  _log('info', `triggerPipelineStage → expediente=${expedientId} contacto=${contactId} etapa=${stageId} (tipo=${typeof stageId}, chain=${chainDepth}, policy=${botCollisionPolicy})`);
+// eventType: 'created' (lead recién creado en esta etapa) | 'moved' (movido/arrastrado a esta etapa).
+// Default 'moved' — históricamente la mayoría de callers eran moves.
+// El bot decide en qué modos quiere dispararse vía bot.trigger_modes (JSON array).
+// trigger_modes NULL/vacío == ['created','moved'] (compatibilidad con bots viejos).
+function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId, eventType = 'moved', chainDepth = 0, botCollisionPolicy = 'skip' }) {
+  _log('info', `triggerPipelineStage → expediente=${expedientId} contacto=${contactId} etapa=${stageId} event=${eventType} (chain=${chainDepth}, policy=${botCollisionPolicy})`);
 
   if (chainDepth > MAX_BOT_CHAIN_DEPTH) {
     _log('error', `chain depth ${chainDepth} excede el máximo (${MAX_BOT_CHAIN_DEPTH}). Posible bucle de bots — abortando.`);
@@ -161,6 +165,16 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId,
     if (bot.trigger_type !== 'pipeline_stage') continue;
     const targetStageId = Number(bot.trigger_value);
     const match = targetStageId === stageId;
+    // Filtrar por trigger_modes: si el bot solo quiere 'created' pero el evento
+    // es 'moved' (o viceversa), no dispararlo. NULL/vacío = ambos modos.
+    let modes;
+    try {
+      modes = bot.trigger_modes ? JSON.parse(bot.trigger_modes) : null;
+    } catch { modes = null; }
+    if (Array.isArray(modes) && modes.length > 0 && !modes.includes(eventType)) {
+      _log('info', `bot "${bot.name}" descartado: modes=${JSON.stringify(modes)} no incluye event=${eventType}`);
+      continue;
+    }
     _log('info', `bot "${bot.name}" (id=${bot.id}): trigger_value="${bot.trigger_value}" → targetStage=${targetStageId}(${typeof targetStageId}) vs stageId=${stageId}(${typeof stageId}) → match=${match}`);
     if (targetStageId && match) {
       const convoRow = db.prepare(

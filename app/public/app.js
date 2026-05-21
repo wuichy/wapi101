@@ -9839,6 +9839,21 @@ function openBotBuilder(bot, returnTo = null) {
   }
   updateTriggerValueVisibility();
 
+  // Cargar trigger_modes (solo aplica a pipeline_stage). NULL/vacío = ambos.
+  const modeCreatedEl = document.getElementById('sbTriggerModeCreated');
+  const modeMovedEl   = document.getElementById('sbTriggerModeMoved');
+  if (modeCreatedEl && modeMovedEl) {
+    let modes = null;
+    try { modes = bot?.trigger_modes ? JSON.parse(bot.trigger_modes) : null; } catch {}
+    if (Array.isArray(modes) && modes.length > 0) {
+      modeCreatedEl.checked = modes.includes('created');
+      modeMovedEl.checked   = modes.includes('moved');
+    } else {
+      modeCreatedEl.checked = true;
+      modeMovedEl.checked   = true;
+    }
+  }
+
   // Si el trigger tiene valor guardado, deserializa al widget según el registry
   if (bot?.trigger_type && bot.trigger_value !== undefined && bot.trigger_value !== null) {
     const def = BOT_TRIGGER_REGISTRY[bot.trigger_type];
@@ -9892,6 +9907,11 @@ function updateTriggerValueVisibility() {
   // Side effects específicos al activar ciertos widgets
   if (widget === 'stage') populateTriggerPipelines();
   if (widget === 'field') populateTriggerDateFields();
+
+  // Modos del stage (created/moved) — solo aplican a pipeline_stage (entrada),
+  // no a pipeline_stage_leave que es un evento único de salida.
+  const modesWrap = document.getElementById('sbTriggerStageModesWrap');
+  if (modesWrap) modesWrap.hidden = (type !== 'pipeline_stage');
 }
 
 // Carga campos custom de tipo fecha en el dropdown del trigger scheduled_field
@@ -12752,8 +12772,25 @@ function setupBot() {
       return;
     }
     const steps = collectAllSteps().map(({ _id, ...rest }) => rest);
+
+    // Solo pipeline_stage usa modes (entra). _leave no (es un solo evento).
+    let trigger_modes = null;
+    if (trigger_type === 'pipeline_stage') {
+      const created = document.getElementById('sbTriggerModeCreated')?.checked ?? true;
+      const moved   = document.getElementById('sbTriggerModeMoved')?.checked ?? true;
+      const modes = [];
+      if (created) modes.push('created');
+      if (moved)   modes.push('moved');
+      if (modes.length === 0) {
+        toast('Marca al menos un modo en "Disparar cuando el lead"', 'error');
+        return;
+      }
+      // Si están los 2, dejamos NULL (equivale a "ambos" sin sobrecargar la DB)
+      trigger_modes = modes.length === 2 ? null : JSON.stringify(modes);
+    }
+
     try {
-      const payload = { name, enabled, trigger_type, trigger_value, steps, tagIds: sbTagIds };
+      const payload = { name, enabled, trigger_type, trigger_value, steps, tagIds: sbTagIds, trigger_modes };
       if (sbCurrentId) {
         await api('PATCH', `/api/bot/${sbCurrentId}`, payload);
       } else {

@@ -1949,6 +1949,19 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     <span id="sbTriggerStageDot" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:transparent;pointer-events:none;flex-shrink:0;z-index:1"></span>
                     <select id="sbTriggerStage" style="padding-left:28px;width:100%"><option value="">— Etapa —</option></select>
                   </div>
+                  <!-- Modos del trigger: solo aplica a pipeline_stage (entra), no a _leave -->
+                  <div id="sbTriggerStageModesWrap" style="margin-top:8px;padding:10px 12px;background:#fafbfc;border:1px solid var(--border);border-radius:8px">
+                    <div style="font-size:11.5px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Disparar cuando el lead:</div>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 0">
+                      <input type="checkbox" id="sbTriggerModeCreated" checked />
+                      <span>Es <strong>creado</strong> en esta etapa</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 0">
+                      <input type="checkbox" id="sbTriggerModeMoved" checked />
+                      <span>Es <strong>movido / arrastrado</strong> a esta etapa</span>
+                    </label>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Tip: marca ambos si quieres que dispare siempre. Default para bots viejos: ambos.</div>
+                  </div>
                 </div>
               </div>
             </div>

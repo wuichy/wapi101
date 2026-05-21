@@ -11737,12 +11737,57 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
 .app-card-icon { font-size: 32px; flex-shrink: 0; }
 .app-card-body { flex: 1; min-width: 0; }
 .app-card-name { font-weight: 600; font-size: 14px; }
-.app-card-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.app-card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
 .app-card-reqs { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
 .app-card-reqs span { font-size: 11px; background: #f1f5f9; color: var(--text-muted); padding: 1px 7px; border-radius: 99px; }
 .app-card-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .app-card--paused { opacity: 0.55; }
 .app-card-toggle { margin-right: 2px; }
+
+/* Mobile: layout grid — icono y nombre arriba (row 1), descripción debajo
+   ocupando todo el ancho (row 2), y botones al final (row 3). Evita que
+   la descripción quede atrapada en una columna delgada entre el icono y
+   los botones. */
+@media (max-width: 640px) {
+  .app-card {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    grid-template-areas:
+      "icon name"
+      "desc desc"
+      "reqs reqs"
+      "actions actions";
+    align-items: start;
+    column-gap: 10px;
+    row-gap: 8px;
+    padding: 14px;
+  }
+  .app-card-icon {
+    grid-area: icon;
+    font-size: 32px;
+    line-height: 1;
+  }
+  .app-card-body {
+    grid-area: name;
+    width: auto;
+    display: contents; /* Que name/desc/reqs hereden el grid del padre */
+  }
+  .app-card-name { grid-area: name; align-self: center; }
+  .app-card-desc { grid-area: desc; margin-top: 0; }
+  .app-card-reqs { grid-area: reqs; margin-top: 0; }
+  .app-card-actions {
+    grid-area: actions;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}
 .app-version { font-size: 11px; color: var(--text-muted); }
 
 /* ── Woo Modal ── */

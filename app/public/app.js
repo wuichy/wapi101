@@ -15282,11 +15282,66 @@ function setupPipelines() {
 }
 
 // ════════ Estadísticas de bot ════════
+// Inyecta el HTML del modal en el DOM si no existe (útil cuando el index.html
+// está cacheado viejo pero app.js ya tiene la feature).
+function _ensureBotActiveLeadsModal() {
+  if (document.getElementById('botActiveLeadsModal')) return;
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <div class="modal-backdrop" id="botActiveLeadsModal" hidden>
+      <div class="modal-box" style="max-width:720px">
+        <header class="modal-header">
+          <h2 id="botActiveLeadsTitle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align:-3px;margin-right:6px;color:#15803d"><circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>
+            <span>Leads con este bot activo</span>
+          </h2>
+          <button class="modal-close" data-close-bot-active-leads>×</button>
+        </header>
+        <div class="modal-body">
+          <div id="botActiveLeadsContent" class="bot-active-leads-list">
+            <div class="bot-active-leads-loading">Cargando…</div>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button class="btn btn--ghost" data-close-bot-active-leads>Cerrar</button>
+        </footer>
+      </div>
+    </div>`;
+  document.body.appendChild(wrapper.firstElementChild);
+  // Registrar handlers de cierre para el modal inyectado
+  const modal = document.getElementById('botActiveLeadsModal');
+  modal.querySelectorAll('[data-close-bot-active-leads]').forEach(el => {
+    el.addEventListener('click', () => { modal.hidden = true; });
+  });
+  modal.addEventListener('click', (e) => {
+    if (e.target.id === 'botActiveLeadsModal') modal.hidden = true;
+  });
+  document.getElementById('botActiveLeadsContent').addEventListener('click', (e) => {
+    const row = e.target.closest('.bot-active-lead-row.is-clickable');
+    if (!row) return;
+    const leadId = row.dataset.leadId ? Number(row.dataset.leadId) : null;
+    const contactId = row.dataset.contactId ? Number(row.dataset.contactId) : null;
+    modal.hidden = true;
+    if (leadId && typeof openExpDetail === 'function') openExpDetail(leadId);
+    else if (contactId) {
+      // Para contacts: navegar a la sección y abrir
+      try {
+        if (typeof loadCustomers === 'function') loadCustomers();
+        location.hash = '#/contactos';
+      } catch {}
+    }
+  });
+}
+
 async function openBotActiveLeadsModal(botId, botName) {
+  _ensureBotActiveLeadsModal();
   const modal = document.getElementById('botActiveLeadsModal');
   const content = document.getElementById('botActiveLeadsContent');
   const title = document.getElementById('botActiveLeadsTitle');
-  if (!modal || !content) return;
+  if (!modal || !content) {
+    console.error('[bot-active-leads] modal no se pudo crear');
+    return;
+  }
   if (title) {
     title.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align:-3px;margin-right:6px;color:#15803d"><circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>

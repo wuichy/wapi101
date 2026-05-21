@@ -7715,10 +7715,15 @@ async function saveExpDetailEdits() {
   }
 
   try {
+    const prevStageId = exp.stageId;
     const data = await api('PATCH', `/api/expedients/${exp.id}`, patch);
     EXP_DETAIL = data.item;
     toast('Guardado', 'success');
     renderExpDetailInfo();
+    // Si el stage cambió y la nueva etapa tiene book_appointment, abrir modal
+    if (patch.stageId && patch.stageId !== prevStageId) {
+      try { _checkAndOpenApptModal(exp.id, patch.stageId); } catch (_) {}
+    }
   } catch (err) { toast(err.message, 'error'); }
 }
 
@@ -8381,15 +8386,24 @@ async function saveExpedient(e) {
   saveBtn.disabled = true;
   saveBtn.textContent = 'Guardando…';
   try {
+    let resultExpId = null;
+    const prevStageId = EXP_EDIT?.stageId;
     if (EXP_EDIT) {
       await api('PATCH', `/api/expedients/${EXP_EDIT.id}`, { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues, ...(value !== undefined ? { value } : {}) });
+      resultExpId = EXP_EDIT.id;
       toast('Lead actualizado', 'success');
     } else {
-      await api('POST', '/api/expedients', { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues, ...(value !== undefined ? { value } : {}) });
+      const r = await api('POST', '/api/expedients', { contactId, pipelineId, stageId, name, tags: EXP_TAGS, fieldValues, ...(value !== undefined ? { value } : {}) });
+      resultExpId = r?.item?.id || r?.id;
       toast('Lead creado', 'success');
     }
     closeExpModal();
     await loadExpedients();
+    // Si el stage cambió (o es lead nuevo) y la nueva etapa tiene un bot
+    // con book_appointment, abrir el modal de agendar cita.
+    if (resultExpId && (prevStageId !== stageId || !EXP_EDIT)) {
+      try { _checkAndOpenApptModal(resultExpId, stageId); } catch (_) {}
+    }
   } catch (err) {
     errBox.textContent = err.message;
     errBox.hidden = false;
@@ -14729,6 +14743,8 @@ function setupPipelines() {
       renderPipelineTabs();
       renderPipelinesBoard();
       toast(`Movido a ${targetPipeline.name} → ${firstStage.name}`, 'success');
+      // Si la nueva etapa tiene un bot con book_appointment, abrir modal
+      try { _checkAndOpenApptModal(expId, firstStage.id); } catch (_) {}
     } catch (err) {
       toast('Error al mover: ' + err.message, 'error');
     }
@@ -23942,10 +23958,22 @@ function _checkAndOpenApptModal(expId, stageId) {
   const pipeline = (PIPELINES || []).find(p => p.stages?.some(s => s.id === stageId));
   if (!pipeline) return;
   const stage = pipeline.stages.find(s => s.id === stageId);
-  if (!stage?.bot_id) return;
+  if (!stage) return;
 
-  // Buscar el bot en sbBots (ya cargado en el builder)
-  const bot = (sbBots || []).find(b => b.id === stage.bot_id);
+  // 1) Asignación manual del stage (stage.bot_id) — caso explícito
+  let bot = null;
+  if (stage.bot_id) {
+    bot = (sbBots || []).find(b => b.id === stage.bot_id);
+  }
+  // 2) Auto-detect: bot habilitado cuyo trigger pipeline_stage apunta a este stage
+  //    (mismo patrón que usa el kanban footer para mostrar el bot asignado)
+  if (!bot) {
+    bot = (sbBots || []).find(b =>
+      b.enabled &&
+      b.trigger_type === 'pipeline_stage' &&
+      Number(b.trigger_value) === stage.id
+    );
+  }
   if (!bot) return;
 
   const steps = Array.isArray(bot.steps) ? bot.steps : (JSON.parse(bot.steps || '[]'));
@@ -23954,7 +23982,6 @@ function _checkAndOpenApptModal(expId, stageId) {
 
   // Obtener info del lead
   const exp = PL_EXP_CACHE?.find(x => x.id === expId);
-  const contact = exp ? { name: exp.name } : null;
 
   openApptBookModal({
     expId,

@@ -42,10 +42,12 @@ module.exports = (db) => {
       if (!entity) return res.status(400).json({ error: 'entity requerida' });
 
       switch (entity) {
-        case 'contacts':
-          return res.json(await _importContacts(db, req.tenantId, req.advisor, req.body));
-        case 'leads':
-          return res.json(await _importLeads(db, req.tenantId, req.advisor, req.body));
+        case 'contacts':  return res.json(await _importContacts(db, req.tenantId, req.advisor, req.body));
+        case 'leads':     return res.json(await _importLeads(db, req.tenantId, req.advisor, req.body));
+        case 'templates': return res.json(await _importTemplates(db, req.tenantId, req.body));
+        case 'tags':      return res.json(await _importTags(db, req.tenantId, req.body));
+        case 'pipelines': return res.json(await _importPipelines(db, req.tenantId, req.body));
+        case 'bots':      return res.json(await _importBots(db, req.tenantId, req.body));
         default:
           return res.status(501).json({ error: `Import de "${entity}" pendiente de implementar` });
       }
@@ -246,6 +248,179 @@ async function _importLeads(db, tenantId, advisor, body) {
   txn();
 
   return { ok: true, created, skipped, errors };
+}
+
+// ─── Importers: templates ─────────────────────────────────────────────
+
+async function _importTemplates(db, tenantId, body) {
+  const { content, filename, mapping = {}, options = {} } = body;
+  const conflictPolicy = options.conflictPolicy || 'skip'; // skip | overwrite | rename
+
+  // Soporta JSON (export nativo de wapi) o CSV (mapeo de columnas)
+  const isJSON = (filename || '').toLowerCase().endsWith('.json');
+  let items = [];
+
+  if (isJSON) {
+    const arr = JSON.parse(content);
+    items = (Array.isArray(arr) ? arr : (arr.items || [])).map(t => ({
+      name: t.name, type: t.type || 'text', body: t.body || '',
+      wa_status: t.wa_status || 'pending', header: t.header || null,
+      footer: t.footer || null, buttons: t.buttons || null,
+    }));
+  } else {
+    const { headers, rows } = svc.parseFile({ filename, content });
+    items = rows.map(row => {
+      const o = {};
+      headers.forEach((h, i) => { if (mapping[h]) o[mapping[h]] = row[i]; });
+      return { name: o.name, type: o.type || 'text', body: o.body || '', wa_status: o.wa_status || 'pending' };
+    });
+  }
+
+  const result = { created: 0, skipped: 0, renamed: 0, errors: 0 };
+  const txn = db.transaction(() => {
+    for (const t of items) {
+      if (!t.name?.trim() || !t.body?.trim()) { result.errors++; continue; }
+      const existing = db.prepare('SELECT id FROM message_templates WHERE name = ? AND tenant_id = ?').get(t.name, tenantId);
+      let name = t.name;
+      if (existing) {
+        if (conflictPolicy === 'skip') { result.skipped++; continue; }
+        if (conflictPolicy === 'overwrite') {
+          db.prepare('UPDATE message_templates SET body=?, type=?, wa_status=?, updated_at=unixepoch() WHERE id=?')
+            .run(t.body, t.type, t.wa_status, existing.id);
+          result.created++; // counts as success
+          continue;
+        }
+        if (conflictPolicy === 'rename') {
+          name = `${t.name} (Importada)`;
+          let n = 2;
+          while (db.prepare('SELECT 1 FROM message_templates WHERE name=? AND tenant_id=?').get(name, tenantId)) {
+            name = `${t.name} (Importada ${n++})`;
+          }
+          result.renamed++;
+        }
+      }
+      db.prepare(`INSERT INTO message_templates (tenant_id, name, type, body, wa_status, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, unixepoch(), unixepoch())`)
+        .run(tenantId, name, t.type, t.body, t.wa_status);
+      result.created++;
+    }
+  });
+  txn();
+  return { ok: true, ...result };
+}
+
+// ─── Importers: tags ─────────────────────────────────────────────────
+
+async function _importTags(db, tenantId, body) {
+  const { content, filename } = body;
+  const isJSON = (filename || '').toLowerCase().endsWith('.json');
+  let items = [];
+
+  if (isJSON) {
+    const arr = JSON.parse(content);
+    items = (Array.isArray(arr) ? arr : (arr.items || []));
+  } else {
+    const { headers, rows } = svc.parseFile({ filename, content });
+    const nameIdx = headers.findIndex(h => /^(nombre|name|tag|etiqueta)$/i.test(h));
+    const colorIdx = headers.findIndex(h => /^(color|hex)$/i.test(h));
+    items = rows.map(r => ({
+      name: r[nameIdx]?.trim(),
+      color: r[colorIdx]?.trim() || '#94a3b8',
+    })).filter(t => t.name);
+  }
+
+  // Solo importamos a bot_tags (la tabla más estructurada). contact_tags
+  // se llenan implícitamente cuando se usan.
+  const result = { created: 0, skipped: 0 };
+  const txn = db.transaction(() => {
+    for (const t of items) {
+      const existing = db.prepare('SELECT id FROM bot_tags WHERE name=? AND tenant_id=?').get(t.name, tenantId);
+      if (existing) { result.skipped++; continue; }
+      db.prepare('INSERT INTO bot_tags (tenant_id, name, color, created_at) VALUES (?, ?, ?, unixepoch())')
+        .run(tenantId, t.name, t.color || '#94a3b8');
+      result.created++;
+    }
+  });
+  txn();
+  return { ok: true, ...result };
+}
+
+// ─── Importers: pipelines ────────────────────────────────────────────
+
+async function _importPipelines(db, tenantId, body) {
+  const { content, options = {} } = body;
+  const data = JSON.parse(content);
+  const pipelines = Array.isArray(data) ? data : (data.pipelines || data.items || []);
+  if (!pipelines.length) throw new Error('No se encontraron pipelines en el JSON');
+
+  const result = { pipelinesCreated: 0, stagesCreated: 0, skipped: 0 };
+  const skipDuplicates = options.skipDuplicates !== false;
+
+  const txn = db.transaction(() => {
+    for (const p of pipelines) {
+      if (!p.name?.trim()) continue;
+      if (skipDuplicates) {
+        const existing = db.prepare('SELECT id FROM pipelines WHERE name=? AND tenant_id=?').get(p.name, tenantId);
+        if (existing) { result.skipped++; continue; }
+      }
+      const ins = db.prepare(`INSERT INTO pipelines (tenant_id, name, color, icon, sort_order, created_at)
+                              VALUES (?, ?, ?, ?, ?, unixepoch())`);
+      const r = ins.run(tenantId, p.name, p.color || '#2563eb', p.icon || null, p.sort_order ?? 99);
+      const pid = r.lastInsertRowid;
+      result.pipelinesCreated++;
+
+      const stages = Array.isArray(p.stages) ? p.stages : [];
+      for (const s of stages) {
+        if (!s.name?.trim()) continue;
+        db.prepare(`INSERT INTO stages (tenant_id, pipeline_id, name, color, sort_order, kind, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, unixepoch())`)
+          .run(tenantId, pid, s.name, s.color || '#94a3b8', s.sort_order ?? 10, s.kind || 'in_progress');
+        result.stagesCreated++;
+      }
+    }
+  });
+  txn();
+  return { ok: true, ...result };
+}
+
+// ─── Importers: bots ─────────────────────────────────────────────────
+
+async function _importBots(db, tenantId, body) {
+  const { content, options = {} } = body;
+  const data = JSON.parse(content);
+  const bots = Array.isArray(data) ? data : (data.bots || data.items || []);
+  if (!bots.length) throw new Error('No se encontraron bots en el JSON');
+
+  // Política: skip si existe nombre igual, o renombrar
+  const conflictPolicy = options.conflictPolicy || 'skip';
+  const result = { created: 0, skipped: 0, renamed: 0 };
+
+  const txn = db.transaction(() => {
+    for (const b of bots) {
+      if (!b.name?.trim()) continue;
+      const existing = db.prepare('SELECT id FROM salsbots WHERE name=? AND tenant_id=?').get(b.name, tenantId);
+      let name = b.name;
+      if (existing) {
+        if (conflictPolicy === 'skip') { result.skipped++; continue; }
+        name = `${b.name} (Importado)`;
+        let n = 2;
+        while (db.prepare('SELECT 1 FROM salsbots WHERE name=? AND tenant_id=?').get(name, tenantId)) {
+          name = `${b.name} (Importado ${n++})`;
+        }
+        result.renamed++;
+      }
+      // ATENCIÓN: trigger_value puede apuntar a un stage_id que no existe en
+      // este tenant. Lo importamos tal cual pero el validador lo marcará
+      // como 'missing_trigger_stage'. El user puede arreglarlo después.
+      db.prepare(`INSERT INTO salsbots (tenant_id, name, enabled, trigger_type, trigger_value, steps, created_at, updated_at)
+                  VALUES (?, ?, 0, ?, ?, ?, unixepoch(), unixepoch())`)
+        .run(tenantId, name, b.trigger_type || 'keyword',
+             b.trigger_value || '', JSON.stringify(b.steps || []));
+      result.created++;
+    }
+  });
+  txn();
+  return { ok: true, ...result };
 }
 
 // ─── Exporters ────────────────────────────────────────────────────────

@@ -17561,20 +17561,71 @@ const DC_WIZARDS = {
     title: 'Importar Contactos',
     steps: ['upload', 'mapping', 'dedup', 'createLeads', 'confirm'],
     stepLabels: ['Archivo', 'Mapeo', 'Duplicados', 'Leads', 'Listo'],
-    onConfirm: async (state) => {
-      return api('POST', '/api/data-center/import', {
-        entity: 'contacts',
-        filename: state.file.name,
-        content: state.file.content,
-        mapping: state.mapping,
-        options: {
-          dedupPolicy: state.dedupPolicy || 'skip',
-          createLeads: !!state.createLeads,
-          pipelineId: state.pipelineId,
-          stageId: state.stageId,
-        },
-      });
-    },
+    onConfirm: async (state) => api('POST', '/api/data-center/import', {
+      entity: 'contacts', filename: state.file.name, content: state.file.content,
+      mapping: state.mapping,
+      options: {
+        dedupPolicy: state.dedupPolicy || 'skip',
+        createLeads: !!state.createLeads,
+        pipelineId: state.pipelineId, stageId: state.stageId,
+      },
+    }),
+  },
+
+  leads: {
+    title: 'Importar Leads',
+    steps: ['upload', 'mapping', 'contactStrategy', 'leadsPipeline', 'confirm'],
+    stepLabels: ['Archivo', 'Mapeo', 'Contactos', 'Pipeline', 'Listo'],
+    onConfirm: async (state) => api('POST', '/api/data-center/import', {
+      entity: 'leads', filename: state.file.name, content: state.file.content,
+      mapping: state.mapping,
+      options: {
+        contactStrategy: state.contactStrategy || 'phone',
+        pipelineId: state.pipelineId, stageId: state.stageId,
+      },
+    }),
+  },
+
+  templates: {
+    title: 'Importar Plantillas',
+    steps: ['upload', 'mapping', 'templateConflict', 'confirm'],
+    stepLabels: ['Archivo', 'Mapeo', 'Conflictos', 'Listo'],
+    onConfirm: async (state) => api('POST', '/api/data-center/import', {
+      entity: 'templates', filename: state.file.name, content: state.file.content,
+      mapping: state.mapping,
+      options: { conflictPolicy: state.conflictPolicy || 'skip' },
+    }),
+  },
+
+  tags: {
+    title: 'Importar Etiquetas',
+    steps: ['upload', 'confirm'],
+    stepLabels: ['Archivo', 'Listo'],
+    onConfirm: async (state) => api('POST', '/api/data-center/import', {
+      entity: 'tags', filename: state.file.name, content: state.file.content,
+    }),
+  },
+
+  pipelines: {
+    title: 'Importar Pipelines',
+    steps: ['upload', 'pipelinePreview', 'confirm'],
+    stepLabels: ['Archivo JSON', 'Preview', 'Listo'],
+    skipAnalyze: true, // pipelines viene en JSON, no necesita /analyze
+    onConfirm: async (state) => api('POST', '/api/data-center/import', {
+      entity: 'pipelines', filename: state.file.name, content: state.file.content,
+      options: { skipDuplicates: state.skipDuplicates !== false },
+    }),
+  },
+
+  bots: {
+    title: 'Importar Bots',
+    steps: ['upload', 'botsPreview', 'botConflict', 'confirm'],
+    stepLabels: ['Archivo JSON', 'Preview', 'Conflictos', 'Listo'],
+    skipAnalyze: true,
+    onConfirm: async (state) => api('POST', '/api/data-center/import', {
+      entity: 'bots', filename: state.file.name, content: state.file.content,
+      options: { conflictPolicy: state.conflictPolicy || 'rename' },
+    }),
   },
 };
 
@@ -17874,6 +17925,87 @@ const DC_STEP_RENDERERS = {
     const mapped = Object.values(state.mapping || {}).filter(Boolean).length;
     const newCount = Math.max(0, (a.conflicts?.total || 0) - (a.conflicts?.duplicates || 0));
     const dedupLabel = { skip: 'Saltar duplicados', overwrite: 'Sobrescribir', merge: 'Mezclar' }[state.dedupPolicy || 'skip'];
+
+    // Render personalizado por entidad
+    const entity = _dcWizard?.entity;
+    if (entity === 'leads') {
+      const pipelines = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
+      const pipe = pipelines.find(p => p.id === state.pipelineId);
+      const stage = pipe?.stages?.find(s => s.id === state.stageId);
+      body.innerHTML = `<div class="dc-step-content">
+        <h4>Confirmar importación de leads</h4>
+        <ul class="dc-summary">
+          <li><strong>${a.rowCount || 0}</strong> filas en el archivo</li>
+          <li>Conectar contactos por: <strong>${state.contactStrategy || 'phone'}</strong></li>
+          <li>Destino: <strong>${pipe?.name || '?'}</strong> → <strong>${stage?.name || '?'}</strong></li>
+        </ul>
+      </div>`;
+      return;
+    }
+    if (entity === 'templates') {
+      const conflictLbl = { skip: 'Saltar', overwrite: 'Sobrescribir', rename: 'Renombrar (Importada)' }[state.conflictPolicy || 'skip'];
+      body.innerHTML = `<div class="dc-step-content">
+        <h4>Confirmar importación de plantillas</h4>
+        <ul class="dc-summary">
+          <li><strong>${a.rowCount || 0}</strong> plantillas en el archivo</li>
+          <li>Si hay nombre duplicado: <strong>${conflictLbl}</strong></li>
+        </ul>
+      </div>`;
+      return;
+    }
+    if (entity === 'tags') {
+      const { headers, rows } = (() => {
+        try {
+          const isJson = state.file.name.toLowerCase().endsWith('.json');
+          if (isJson) {
+            const arr = JSON.parse(state.file.content);
+            return { rows: Array.isArray(arr) ? arr : (arr.items || []) };
+          }
+          // CSV simple
+          const lines = state.file.content.split(/\r?\n/).filter(l => l.trim());
+          return { rows: lines.slice(1) };
+        } catch { return { rows: [] }; }
+      })();
+      body.innerHTML = `<div class="dc-step-content">
+        <h4>Confirmar importación de etiquetas</h4>
+        <ul class="dc-summary">
+          <li><strong>~${rows.length}</strong> etiquetas detectadas en el archivo</li>
+          <li>Las que ya existan se saltan (sin sobrescribir colores)</li>
+        </ul>
+      </div>`;
+      return;
+    }
+    if (entity === 'pipelines') {
+      const arr = state.parsedJson;
+      const pipelines = Array.isArray(arr) ? arr : (arr?.pipelines || arr?.items || []);
+      const totalStages = pipelines.reduce((sum, p) => sum + (p.stages?.length || 0), 0);
+      body.innerHTML = `<div class="dc-step-content">
+        <h4>Confirmar importación de pipelines</h4>
+        <ul class="dc-summary">
+          <li><strong>${pipelines.length}</strong> pipelines a crear</li>
+          <li><strong>${totalStages}</strong> etapas en total</li>
+          <li>Pipelines con nombre duplicado: <strong>${state.skipDuplicates !== false ? 'Saltar' : 'Crear duplicados'}</strong></li>
+        </ul>
+      </div>`;
+      return;
+    }
+    if (entity === 'bots') {
+      const arr = state.parsedJson;
+      const bots = Array.isArray(arr) ? arr : (arr?.bots || arr?.items || []);
+      const conflictLbl = { skip: 'Saltar', rename: 'Renombrar (Importado)' }[state.conflictPolicy || 'rename'];
+      body.innerHTML = `<div class="dc-step-content">
+        <h4>Confirmar importación de bots</h4>
+        <ul class="dc-summary">
+          <li><strong>${bots.length}</strong> bots a importar</li>
+          <li>Si hay nombre duplicado: <strong>${conflictLbl}</strong></li>
+          <li>Los bots se importan <strong>desactivados</strong> — actívalos manualmente después</li>
+          <li>Si el trigger apunta a una etapa que no existe en este tenant, el validador lo marcará como error</li>
+        </ul>
+      </div>`;
+      return;
+    }
+
+    // Default: contactos
     body.innerHTML = `
       <div class="dc-step-content">
         <h4>Confirmar importación</h4>
@@ -17889,14 +18021,185 @@ const DC_STEP_RENDERERS = {
       </div>
     `;
   },
+
+  // ─── Steps específicos por entidad ─────────────────────────────────
+
+  contactStrategy(body, state) {
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>¿Cómo conectar con los contactos?</h4>
+        <p class="dc-step-desc">Cada lead necesita un contacto. ¿Cómo encontramos o creamos el contacto al que va el lead?</p>
+        <div class="dc-radio-group">
+          <label class="dc-radio">
+            <input type="radio" name="cs" value="phone" ${(state.contactStrategy || 'phone') === 'phone' ? 'checked' : ''} />
+            <div>
+              <strong>Por teléfono (recomendado)</strong>
+              <p>Si el teléfono ya existe, vincula al contacto. Si no, crea uno nuevo.</p>
+            </div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="cs" value="email" ${state.contactStrategy === 'email' ? 'checked' : ''} />
+            <div><strong>Por email</strong><p>Igual que teléfono pero por email.</p></div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="cs" value="always_new" ${state.contactStrategy === 'always_new' ? 'checked' : ''} />
+            <div><strong>Siempre crear contacto nuevo</strong><p>⚠ Puede causar duplicados si el contacto ya existía.</p></div>
+          </label>
+        </div>
+      </div>
+    `;
+    body.querySelectorAll('input[name="cs"]').forEach(r => {
+      r.addEventListener('change', () => { _dcWizard.state.contactStrategy = r.value; });
+    });
+    if (!state.contactStrategy) _dcWizard.state.contactStrategy = 'phone';
+  },
+
+  leadsPipeline(body, state) {
+    const pipelines = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
+    if (!state.pipelineId && pipelines[0]) {
+      _dcWizard.state.pipelineId = pipelines[0].id;
+      _dcWizard.state.stageId = pipelines[0].stages?.[0]?.id;
+    }
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>¿En qué pipeline van los leads?</h4>
+        <p class="dc-step-desc">Todos los leads del archivo se crean en este pipeline + etapa.</p>
+        <div class="dc-filter" style="max-width:380px;margin-bottom:14px">
+          <span>Pipeline</span>
+          <select id="dcLeadPipe">
+            ${pipelines.map(p => `<option value="${p.id}" ${state.pipelineId === p.id ? 'selected' : ''}>${escHtml(p.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="dc-filter" style="max-width:380px">
+          <span>Etapa inicial</span>
+          <select id="dcLeadStage">
+            ${_dcLeadsStageOptions(pipelines, state.pipelineId, state.stageId)}
+          </select>
+        </div>
+      </div>
+    `;
+    body.querySelector('#dcLeadPipe')?.addEventListener('change', e => {
+      _dcWizard.state.pipelineId = Number(e.target.value);
+      const p = pipelines.find(p => p.id === _dcWizard.state.pipelineId);
+      _dcWizard.state.stageId = p?.stages?.[0]?.id || null;
+      _renderDcWizard();
+    });
+    body.querySelector('#dcLeadStage')?.addEventListener('change', e => {
+      _dcWizard.state.stageId = Number(e.target.value);
+    });
+  },
+
+  templateConflict(body, state) {
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>¿Qué hacer con plantillas duplicadas?</h4>
+        <p class="dc-step-desc">Si una plantilla del archivo tiene el mismo nombre que una existente en wapi101:</p>
+        <div class="dc-radio-group">
+          <label class="dc-radio">
+            <input type="radio" name="tc" value="skip" ${(state.conflictPolicy || 'skip') === 'skip' ? 'checked' : ''} />
+            <div><strong>Saltar (no importar las duplicadas)</strong><p>Conserva las plantillas que ya tienes.</p></div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="tc" value="overwrite" ${state.conflictPolicy === 'overwrite' ? 'checked' : ''} />
+            <div><strong>Sobrescribir las existentes</strong><p>⚠ Pierdes el contenido actual de esas plantillas.</p></div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="tc" value="rename" ${state.conflictPolicy === 'rename' ? 'checked' : ''} />
+            <div><strong>Renombrar como "(Importada)"</strong><p>Crea ambas: la actual y la importada con sufijo.</p></div>
+          </label>
+        </div>
+      </div>
+    `;
+    body.querySelectorAll('input[name="tc"]').forEach(r => {
+      r.addEventListener('change', () => { _dcWizard.state.conflictPolicy = r.value; });
+    });
+  },
+
+  pipelinePreview(body, state) {
+    const arr = state.parsedJson;
+    const pipelines = Array.isArray(arr) ? arr : (arr?.pipelines || arr?.items || []);
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>Preview de pipelines</h4>
+        <p class="dc-step-desc">Se crearán estos pipelines en tu wapi101:</p>
+        ${pipelines.length === 0 ? '<p style="color:#b91c1c">No se encontraron pipelines en el JSON.</p>' :
+          `<ul style="list-style:none;padding:0;margin:0">
+            ${pipelines.map(p => `<li style="padding:10px 14px;background:#fafbfc;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
+              <strong>${escHtml(p.name)}</strong> <span style="color:var(--text-muted);font-size:12px">— ${p.stages?.length || 0} etapas</span>
+            </li>`).join('')}
+          </ul>`
+        }
+        <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="dcSkipDupes" ${state.skipDuplicates !== false ? 'checked' : ''} />
+          <span>Saltar pipelines que ya existan (por nombre)</span>
+        </label>
+      </div>
+    `;
+    body.querySelector('#dcSkipDupes')?.addEventListener('change', e => {
+      _dcWizard.state.skipDuplicates = e.target.checked;
+    });
+  },
+
+  botsPreview(body, state) {
+    const arr = state.parsedJson;
+    const bots = Array.isArray(arr) ? arr : (arr?.bots || arr?.items || []);
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>Preview de bots</h4>
+        <p class="dc-step-desc">Se importarán estos bots <strong>desactivados</strong>:</p>
+        ${bots.length === 0 ? '<p style="color:#b91c1c">No se encontraron bots en el JSON.</p>' :
+          `<ul style="list-style:none;padding:0;margin:0;max-height:280px;overflow-y:auto">
+            ${bots.map(b => `<li style="padding:10px 14px;background:#fafbfc;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px">
+              <strong>${escHtml(b.name || '(sin nombre)')}</strong>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:3px">
+                Trigger: <code>${escHtml(b.trigger_type || '?')}</code>
+                ${b.trigger_value ? ` → <code>${escHtml(String(b.trigger_value))}</code>` : ''}
+                · ${b.steps?.length || 0} pasos
+              </div>
+            </li>`).join('')}
+          </ul>`
+        }
+      </div>
+    `;
+  },
+
+  botConflict(body, state) {
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>¿Qué hacer con bots duplicados?</h4>
+        <p class="dc-step-desc">Si un bot del archivo tiene el mismo nombre que uno existente:</p>
+        <div class="dc-radio-group">
+          <label class="dc-radio">
+            <input type="radio" name="bc" value="rename" ${(state.conflictPolicy || 'rename') === 'rename' ? 'checked' : ''} />
+            <div><strong>Renombrar como "(Importado)"</strong><p>Más seguro — no pisas nada existente.</p></div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="bc" value="skip" ${state.conflictPolicy === 'skip' ? 'checked' : ''} />
+            <div><strong>Saltar duplicados</strong><p>No se crean las que ya existen por nombre.</p></div>
+          </label>
+        </div>
+      </div>
+    `;
+    body.querySelectorAll('input[name="bc"]').forEach(r => {
+      r.addEventListener('change', () => { _dcWizard.state.conflictPolicy = r.value; });
+    });
+  },
 };
 
 const DC_STEP_VALIDATORS = {
   upload: (state) => !!state.file?.content,
   mapping: (state) => {
     if (!state.mapping) return false;
-    // Al menos un campo crítico mapeado
     const vals = Object.values(state.mapping).filter(Boolean);
+    const entity = _dcWizard?.entity;
+    if (entity === 'leads') {
+      // Para leads pedimos al menos contactPhone o contactEmail
+      return vals.includes('contactPhone') || vals.includes('contactEmail') || vals.includes('contactName');
+    }
+    if (entity === 'templates') {
+      return vals.includes('name') && vals.includes('body');
+    }
+    // contacts default
     return vals.includes('phone') || vals.includes('email');
   },
   dedup: () => true,
@@ -17904,16 +18207,36 @@ const DC_STEP_VALIDATORS = {
     if (state.createLeads) return !!state.pipelineId && !!state.stageId;
     return true;
   },
+  contactStrategy: () => true,
+  leadsPipeline: (state) => !!state.pipelineId && !!state.stageId,
+  templateConflict: () => true,
+  pipelinePreview: (state) => {
+    const arr = state.parsedJson;
+    const pipelines = Array.isArray(arr) ? arr : (arr?.pipelines || arr?.items || []);
+    return pipelines.length > 0;
+  },
+  botsPreview: (state) => {
+    const arr = state.parsedJson;
+    const bots = Array.isArray(arr) ? arr : (arr?.bots || arr?.items || []);
+    return bots.length > 0;
+  },
+  botConflict: () => true,
   confirm: () => true,
 };
 
 const DC_STEP_BEFORE_NEXT = {
   upload: async (state, entity) => {
-    // Llamar /analyze después de subir el archivo
+    // Algunos wizards (pipelines/bots) usan JSON puro, no requieren mapeo
+    if (DC_WIZARDS[entity]?.skipAnalyze) {
+      try {
+        state.parsedJson = JSON.parse(state.file.content);
+      } catch (e) {
+        throw new Error('JSON inválido: ' + e.message);
+      }
+      return;
+    }
     const r = await api('POST', '/api/data-center/analyze', {
-      entity,
-      filename: state.file.name,
-      content: state.file.content,
+      entity, filename: state.file.name, content: state.file.content,
     });
     state.analysis = r;
     state.mapping = { ...r.suggestedMapping };
@@ -17927,6 +18250,19 @@ const DC_TARGET_FIELDS = {
     { value: 'phone',     label: 'Teléfono' },
     { value: 'email',     label: 'Email' },
     { value: 'tags',      label: 'Etiquetas (separadas por coma)' },
+  ],
+  leads: [
+    { value: 'name',         label: 'Nombre del lead' },
+    { value: 'value',        label: 'Valor (MXN)' },
+    { value: 'contactName',  label: 'Nombre del contacto' },
+    { value: 'contactPhone', label: 'Teléfono del contacto' },
+    { value: 'contactEmail', label: 'Email del contacto' },
+  ],
+  templates: [
+    { value: 'name',      label: 'Nombre de la plantilla' },
+    { value: 'body',      label: 'Cuerpo del mensaje' },
+    { value: 'type',      label: 'Tipo (wa_api / texto)' },
+    { value: 'wa_status', label: 'Estado WA (approved/pending/rejected)' },
   ],
 };
 

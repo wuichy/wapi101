@@ -17346,7 +17346,7 @@ function renderCatalogProductCard(p) {
     : '';
   const imgHtml = p.image_url
     ? `<img src="${escHtml(p.image_url)}" alt="${escHtml(p.name)}" loading="lazy" />`
-    : `<div class="catalog-product-placeholder">📦</div>`;
+    : `<div class="catalog-product-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>`;
   const stockBadge = p.availability === 'out of stock'
     ? '<span class="catalog-product-badge catalog-product-badge--out">Agotado</span>'
     : '';
@@ -17419,28 +17419,48 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─── Centro de Datos (Configuración → Datos) ─────────────────────────
+// Iconos SVG inline tipo Lucide (stroke-based, consistentes con el resto de la app)
+const DC_ICONS = {
+  contacts:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  leads:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="7" y1="11" x2="17" y2="11"/><line x1="7" y1="15" x2="13" y2="15"/></svg>',
+  templates: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
+  tags:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+  pipelines: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="18" rx="1"/><rect x="11" y="3" width="6" height="12" rx="1"/><rect x="19" y="3" width="2" height="7" rx="1"/></svg>',
+  bots:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>',
+  catalog:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+  orders:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
+  chats:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  email:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+  comments:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+  // Iconos para tabs y acciones
+  import:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+  export:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  backup:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>',
+  arrow:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+};
+
 const DC_ENTITY_META = {
-  contacts:  { icon: '👥', label: 'Contactos',     desc: 'CSV/Excel desde Kommo, HubSpot, Pipedrive o tu propio CRM',
+  contacts:  { label: 'Contactos',     desc: 'CSV/Excel desde Kommo, HubSpot, Pipedrive o tu propio CRM',
                importDesc: 'Importa contactos con dedup automático y opción de crear leads' },
-  leads:     { icon: '📋', label: 'Leads',         desc: 'Oportunidades vinculadas a contactos',
+  leads:     { label: 'Leads',         desc: 'Oportunidades vinculadas a contactos',
                importDesc: 'Importa leads asignándolos a pipelines y etapas' },
-  templates: { icon: '💬', label: 'Plantillas',    desc: 'Mensajes pre-redactados',
+  templates: { label: 'Plantillas',    desc: 'Mensajes pre-redactados',
                importDesc: 'Importa plantillas de WhatsApp, email, etc.' },
-  tags:      { icon: '🏷',  label: 'Etiquetas',     desc: 'Tags para contactos, leads y bots',
+  tags:      { label: 'Etiquetas',     desc: 'Tags para contactos, leads y bots',
                importDesc: 'Importa etiquetas con sus colores' },
-  pipelines: { icon: '📊', label: 'Pipelines',     desc: 'Estructura de etapas',
+  pipelines: { label: 'Pipelines',     desc: 'Estructura de etapas',
                importDesc: 'Importa pipelines completos con sus etapas' },
-  bots:      { icon: '🤖', label: 'Bots',          desc: 'Flujos automatizados',
+  bots:      { label: 'Bots',          desc: 'Flujos automatizados',
                importDesc: 'Importa configuración de bots (JSON)' },
-  catalog:   { icon: '📦', label: 'Productos',     desc: 'Catálogo de WhatsApp',
+  catalog:   { label: 'Productos',     desc: 'Catálogo de WhatsApp',
                importDesc: 'Sincroniza desde Meta Commerce Manager' },
-  orders:    { icon: '🛒', label: 'Pedidos',       desc: 'Órdenes de WooCommerce',
+  orders:    { label: 'Pedidos',       desc: 'Órdenes de WooCommerce',
                importDesc: 'Sincroniza desde tu tienda WooCommerce' },
-  chats:     { icon: '💭', label: 'Chats',         desc: 'Conversaciones e historial',
+  chats:     { label: 'Chats',         desc: 'Conversaciones e historial',
                importDesc: 'Importa como histórico o para entrenar tu copiloto IA' },
-  email:     { icon: '📧', label: 'Email',         desc: 'Conversaciones de correo',
+  email:     { label: 'Email',         desc: 'Conversaciones de correo',
                importDesc: 'Importa mailbox de Gmail, Outlook, etc.' },
-  comments:  { icon: '💭', label: 'Comentarios',   desc: 'Comentarios de FB e Instagram',
+  comments:  { label: 'Comentarios',   desc: 'Comentarios de FB e Instagram',
                importDesc: 'Importa historial de comentarios de tus redes' },
 };
 
@@ -17471,28 +17491,29 @@ function _renderDataCenterCards() {
     const meta = DC_ENTITY_META[entity];
     if (!meta) return '';
     const info = av[entity];
+    const icon = DC_ICONS[entity] || '';
     if (!info?.available) {
       // Si no está disponible, mostrar card "deshabilitado" con la razón
       if (!info?.reason) return ''; // si ni reason hay, ocultar del todo
       return `
         <div class="dc-card dc-card--disabled">
-          <div class="dc-card-icon">${meta.icon}</div>
+          <div class="dc-card-icon">${icon}</div>
           <div class="dc-card-body">
             <div class="dc-card-title">${meta.label}</div>
-            <div class="dc-card-desc dc-card-desc--muted">⚙️ ${escHtml(info.reason)}</div>
+            <div class="dc-card-desc dc-card-desc--muted">${escHtml(info.reason)}</div>
           </div>
         </div>
       `;
     }
     return `
       <div class="dc-card" data-dc-entity="${entity}" data-dc-action="${type}">
-        <div class="dc-card-icon">${meta.icon}</div>
+        <div class="dc-card-icon">${icon}</div>
         <div class="dc-card-body">
           <div class="dc-card-title">${meta.label}</div>
           <div class="dc-card-desc">${escHtml(type === 'import' ? meta.importDesc : meta.desc)}</div>
           <div class="dc-card-count">${info.count != null ? info.count + ' actualmente' : ''}</div>
         </div>
-        <div class="dc-card-arrow">→</div>
+        <div class="dc-card-arrow">${DC_ICONS.arrow}</div>
       </div>
     `;
   };
@@ -17597,7 +17618,7 @@ async function _loadProductPicker(search) {
         : '';
       const img = p.image_url
         ? `<img src="${escHtml(p.image_url)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0" alt="${escHtml(p.name)}" loading="lazy"/>`
-        : `<div style="aspect-ratio:1;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:32px;opacity:0.4;border-radius:8px 8px 0 0">📦</div>`;
+        : `<div style="aspect-ratio:1;background:#f8fafc;display:flex;align-items:center;justify-content:center;border-radius:8px 8px 0 0;color:#cbd5e1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>`;
       return `
         <div class="rh-product-pick" data-product-id="${p.id}" style="border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;background:#fff;overflow:hidden;transition:transform 0.15s,border-color 0.15s">
           ${img}

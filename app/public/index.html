@@ -680,7 +680,9 @@
           <!-- Banner sugerencia: catálogo de WhatsApp detectado en Meta pero feature OFF -->
           <div id="catalogSuggestBanner" class="catalog-suggest-banner" hidden>
             <div class="catalog-suggest-content">
-              <span class="catalog-suggest-icon">📦</span>
+              <span class="catalog-suggest-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              </span>
               <div class="catalog-suggest-text">
                 <strong>Detectamos un catálogo de productos en tu Meta Commerce.</strong>
                 <span id="catalogSuggestDesc">¿Activar la integración en wapi101 para enviar productos en chats?</span>
@@ -1789,7 +1791,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
           <button class="btn btn--ghost" id="catalogNext" type="button">Siguiente ›</button>
         </div>
         <div id="catalogEmpty" class="catalog-empty" hidden>
-          <p>📦 Aún no hay productos sincronizados.</p>
+          <p>Aún no hay productos sincronizados.</p>
           <p class="muted">Asegúrate de tener un catálogo creado en
           <a href="https://business.facebook.com/commerce/catalogs" target="_blank" rel="noopener">Meta Commerce Manager</a>
           y vinculado a tu número de WhatsApp Business.</p>
@@ -2776,7 +2778,8 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
                 <div class="mcp-row mcp-card-actions">
                   <button class="btn btn--primary btn--lg" id="btnOpenMcpConnect" type="button">
-                    🤖 Conectar mi IA
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" style="vertical-align:-3px;margin-right:6px"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+                    Conectar mi IA
                   </button>
                   <button class="btn btn--ghost" id="btnTestMcp" type="button">Probar conexión</button>
                   <span id="mcpTestStatus" style="font-size:13px;margin-left:10px;align-self:center"></span>
@@ -3066,9 +3069,18 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </div>
 
               <div class="dc-tabs">
-                <button class="dc-tab is-active" data-dc-tab="import" type="button">📥 Importar</button>
-                <button class="dc-tab" data-dc-tab="export" type="button">📤 Exportar</button>
-                <button class="dc-tab" data-dc-tab="backup" type="button">💾 Backup completo</button>
+                <button class="dc-tab is-active" data-dc-tab="import" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span>Importar</span>
+                </button>
+                <button class="dc-tab" data-dc-tab="export" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Exportar</span>
+                </button>
+                <button class="dc-tab" data-dc-tab="backup" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+                  <span>Backup completo</span>
+                </button>
               </div>
 
               <!-- IMPORT panel -->
@@ -3086,14 +3098,16 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <!-- BACKUP panel -->
               <div class="dc-panel" data-dc-panel="backup">
                 <div class="dc-backup-hero">
-                  <div class="dc-backup-icon">💾</div>
+                  <div class="dc-backup-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" width="56" height="56"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                  </div>
                   <h3>Backup completo de tu CRM</h3>
                   <p>
                     Genera un archivo ZIP con <strong>toda tu información</strong>:
                     contactos, leads, plantillas, bots, mensajes históricos, productos, etiquetas y pipelines.
                     Formato neutro para que puedas migrar a otro sistema, hacer un respaldo personal, o solo tener la tranquilidad de que tu data no está secuestrada.
                   </p>
-                  <button class="btn btn--primary btn--lg" id="btnDcBackupFull" type="button">🚀 Generar backup completo</button>
+                  <button class="btn btn--primary btn--lg" id="btnDcBackupFull" type="button">Generar backup completo</button>
                   <p class="dc-backup-hint">Para configurar respaldos automáticos mensuales, ve a <a href="#" data-go-tab="respaldos">Respaldos</a>.</p>
                 </div>
               </div>

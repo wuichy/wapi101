@@ -932,7 +932,23 @@ body.nav-collapsed .nav-notif-panel {
 .bot-stats-card.accent-green { background: linear-gradient(135deg, #dcfce7 0%, #fff 60%); border-color: #86efac; }
 .bot-stats-card.accent-amber { background: linear-gradient(135deg, #fef3c7 0%, #fff 60%); border-color: #fcd34d; }
 .bot-stats-card.accent-red   { background: linear-gradient(135deg, #fee2e2 0%, #fff 60%); border-color: #fca5a5; }
-.bot-stats-card-ico { font-size: 18px; }
+.bot-stats-card-ico {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(37,99,235,0.08); color: #2563eb;
+  margin-bottom: 8px;
+}
+.bot-stats-card-ico svg { width: 18px; height: 18px; }
+.bot-stats-card-ico.is-target  { background: rgba(37,99,235,0.10);  color: #2563eb; }
+.bot-stats-card-ico.is-rocket  { background: rgba(168,85,247,0.10); color: #9333ea; }
+.bot-stats-card-ico.is-active  { background: rgba(16,185,129,0.10); color: #10b981; }
+.bot-stats-card-ico.is-success { background: rgba(16,185,129,0.10); color: #059669; }
+.bot-stats-card-ico.is-warn    { background: rgba(245,158,11,0.10); color: #d97706; }
+.bot-stats-card-ico.is-stop    { background: rgba(239,68,68,0.10);  color: #dc2626; }
+.bot-stats-card-ico.is-active svg { width: 14px; height: 14px; }
+
+/* Tabs del modal con icono + texto */
+.bot-stats-tab { display: inline-flex; align-items: center; gap: 7px; }
 .bot-stats-card-val { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1.1; }
 .bot-stats-card-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .bot-stats-card-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }

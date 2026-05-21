@@ -12884,3 +12884,21 @@ button, a, [role="button"], .btn, [data-action] {
   display: flex; align-items: center; gap: 6px;
   font-size: 13.5px; cursor: pointer;
 }
+
+/* ─── Data Center: Relaciones en export panel ────────────────────── */
+.dc-relations-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.dc-relation-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  font-size: 13px; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dc-relation-item:has(input:checked) {
+  border-color: var(--accent, #2563eb);
+  background: rgba(37,99,235,0.04);
+}
+.dc-relation-item input { accent-color: var(--accent, #2563eb); }

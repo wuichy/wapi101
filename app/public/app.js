@@ -18661,6 +18661,15 @@ function _bindDcWizardOnce() {
 
 // ─── Export Panel (panel con filtros + live count) ────────────────────
 let _dcExport = null;
+let _dcRelationsCache = null; // { contacts: [{key, label}], ... }
+
+async function _loadDcRelations() {
+  if (_dcRelationsCache) return _dcRelationsCache;
+  try {
+    _dcRelationsCache = await api('GET', '/api/data-center/export/relations');
+  } catch { _dcRelationsCache = {}; }
+  return _dcRelationsCache;
+}
 
 const DC_EXPORTS = {
   contacts: {
@@ -18683,17 +18692,18 @@ const DC_EXPORTS = {
   ] },
 };
 
-function openDcExportPanel(entity) {
+async function openDcExportPanel(entity) {
   const config = DC_EXPORTS[entity];
   if (!config) {
     // Fallback: descarga directa CSV
     window.location.href = `/api/data-center/export/${entity}?format=csv`;
     return;
   }
-  _dcExport = { entity, config, filters: {}, format: 'csv' };
+  _dcExport = { entity, config, filters: {}, format: 'csv', includes: new Set() };
   document.getElementById('dcExportModal').hidden = false;
   document.body.classList.add('modal-open');
   document.getElementById('dcExportTitle').textContent = config.title;
+  await _loadDcRelations();
   _renderDcExportPanel();
 }
 
@@ -18705,8 +18715,13 @@ function _closeDcExportPanel() {
 
 function _renderDcExportPanel() {
   if (!_dcExport) return;
-  const { config, filters, format } = _dcExport;
+  const { entity, config, filters, format, includes } = _dcExport;
   const bodyEl = document.getElementById('dcExportBody');
+
+  // Relaciones disponibles para esta entidad
+  const relations = (_dcRelationsCache || {})[entity] || [];
+  const hasIncludes = includes.size > 0;
+
   bodyEl.innerHTML = `
     <div class="dc-export-section">
       <h4>Filtros</h4>
@@ -18717,15 +18732,31 @@ function _renderDcExportPanel() {
           </div>`
       }
     </div>
+
+    ${relations.length > 0 ? `
+      <div class="dc-export-section">
+        <h4>Incluir relacionados</h4>
+        <p class="dc-step-hint" style="margin-bottom:10px">Si marcas algo, el archivo trae también la data relacionada de cada elemento.</p>
+        <div class="dc-relations-list">
+          ${relations.map(r => `
+            <label class="dc-relation-item">
+              <input type="checkbox" data-dc-include="${r.key}" ${includes.has(r.key) ? 'checked' : ''} />
+              <span>${escHtml(r.label)}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+
     <div class="dc-export-section">
       <h4>Formato</h4>
       <div class="dc-radio-row">
-        <label><input type="radio" name="dcFmt" value="csv" ${format === 'csv' ? 'checked' : ''} /> CSV</label>
-        <label><input type="radio" name="dcFmt" value="json" ${format === 'json' ? 'checked' : ''} /> JSON</label>
+        <label><input type="radio" name="dcFmt" value="csv" ${format === 'csv' ? 'checked' : ''} /> CSV ${hasIncludes ? '(ZIP con varios archivos)' : ''}</label>
+        <label><input type="radio" name="dcFmt" value="json" ${format === 'json' ? 'checked' : ''} /> JSON ${hasIncludes ? '(anidado)' : ''}</label>
       </div>
     </div>
   `;
-  // Bind filters
+
   bodyEl.querySelectorAll('[data-dc-filter]').forEach(el => {
     el.addEventListener('input', () => {
       _dcExport.filters[el.getAttribute('data-dc-filter')] = el.value;
@@ -18734,7 +18765,23 @@ function _renderDcExportPanel() {
   bodyEl.querySelectorAll('input[name="dcFmt"]').forEach(r => {
     r.addEventListener('change', () => { _dcExport.format = r.value; });
   });
-  document.getElementById('dcExportCount').textContent = 'Listo para exportar';
+  bodyEl.querySelectorAll('[data-dc-include]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const key = cb.getAttribute('data-dc-include');
+      if (cb.checked) _dcExport.includes.add(key);
+      else _dcExport.includes.delete(key);
+      // Re-render para actualizar el label del formato (ZIP/anidado)
+      _renderDcExportPanel();
+    });
+  });
+
+  // Actualizar contador con la info de includes
+  const countEl = document.getElementById('dcExportCount');
+  if (countEl) {
+    countEl.textContent = hasIncludes
+      ? `Listo para exportar — con ${includes.size} relación${includes.size > 1 ? 'es' : ''}`
+      : 'Listo para exportar';
+  }
 }
 
 function _dcRenderFilter(f, val = '') {
@@ -18754,9 +18801,12 @@ function _dcRenderFilter(f, val = '') {
 
 async function _dcRunExport() {
   if (!_dcExport) return;
-  const { entity, format, filters } = _dcExport;
-  const qs = new URLSearchParams({ format, ...filters }).toString();
-  // Por ahora descarga directa via GET — el backend de filtros se extiende en el próximo chunk
+  const { entity, format, filters, includes } = _dcExport;
+  const params = { format, ...filters };
+  if (includes && includes.size > 0) {
+    params.include = [...includes].join(',');
+  }
+  const qs = new URLSearchParams(params).toString();
   window.location.href = `/api/data-center/export/${entity}?${qs}`;
   _closeDcExportPanel();
 }

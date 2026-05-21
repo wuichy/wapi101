@@ -68,11 +68,24 @@ module.exports = (db) => {
     }
   });
 
+  // GET /export/relations — lista de relaciones disponibles por entidad
+  router.get('/export/relations', (req, res) => {
+    res.json(getAvailableRelations());
+  });
+
   // GET /export/:entity — descarga
+  // Acepta:
+  //   ?format=csv|json|zip
+  //   ?include=leads,appointments,...  (relations separadas por coma)
   router.get('/export/:entity', (req, res) => {
     try {
       const entity = req.params.entity;
       const format = String(req.query.format || 'csv').toLowerCase();
+      const include = String(req.query.include || '').split(',').map(s => s.trim()).filter(Boolean);
+
+      if (include.length > 0) {
+        return _exportWithRelations(db, req.tenantId, entity, format, include, req.query, res);
+      }
       _exportEntity(db, req.tenantId, entity, format, req.query, res);
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -969,6 +982,222 @@ async function _importSocialComments(db, tenantId, body) {
   return { ok: true, created };
 }
 
+// ─── Relaciones declaradas: qué se puede "incluir" al exportar cada entidad ──
+// Cada relación define cómo extraer la data adicional dado un set de IDs base.
+// La función recibe (db, tenantId, baseIds) y devuelve filas planas linkeables.
+const EXPORT_RELATIONS = {
+  contacts: {
+    leads: {
+      label: 'Sus leads (con pipeline + etapa)',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT e.id, e.contact_id, e.name, e.value,
+                 p.name AS pipeline, s.name AS stage,
+                 datetime(e.created_at,'unixepoch') AS created_at
+          FROM expedients e
+          JOIN pipelines p ON p.id = e.pipeline_id
+          JOIN stages s ON s.id = e.stage_id
+          WHERE e.tenant_id = ? AND e.contact_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    conversations: {
+      label: 'Sus conversaciones (metadata)',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT id, contact_id, provider, external_id,
+                 datetime(last_message_at,'unixepoch') AS last_message_at,
+                 unread_count, bot_paused
+          FROM conversations
+          WHERE tenant_id = ? AND contact_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    messages: {
+      label: 'Sus mensajes históricos (puede pesar)',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        // JOIN con conversations para sacar contact_id
+        return db.prepare(`
+          SELECT m.id, c.contact_id, m.conversation_id, m.direction, m.body,
+                 datetime(m.created_at,'unixepoch') AS created_at, m.imported_from
+          FROM messages m JOIN conversations c ON c.id = m.conversation_id
+          WHERE m.tenant_id = ? AND c.contact_id IN (${ph})
+          ORDER BY m.created_at DESC LIMIT 50000
+        `).all(tenantId, ...ids);
+      },
+    },
+    appointments: {
+      label: 'Sus citas agendadas',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT id, contact_id, datetime(starts_at,'unixepoch') AS starts_at,
+                 duration_min, status, notes
+          FROM appointments WHERE tenant_id = ? AND contact_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    tasks: {
+      label: 'Sus tareas',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT id, contact_id, title, description,
+                 datetime(due_at,'unixepoch') AS due_at, completed
+          FROM tasks WHERE tenant_id = ? AND contact_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    tags: {
+      label: 'Sus etiquetas',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT contact_id, tag FROM contact_tags
+          WHERE tenant_id = ? AND contact_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    products_sent: {
+      label: 'Productos del catálogo enviados',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT s.id, s.contact_id, p.name AS product_name, p.price_amount,
+                 datetime(s.sent_at,'unixepoch') AS sent_at, s.sent_via
+          FROM whatsapp_product_sends s
+          JOIN whatsapp_products p ON p.id = s.product_id
+          WHERE s.tenant_id = ? AND s.contact_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+  },
+
+  leads: {
+    contact: {
+      label: 'Su contacto asociado',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT c.id AS contact_id, c.first_name, c.last_name, c.phone, c.email,
+                 e.id AS lead_id
+          FROM expedients e JOIN contacts c ON c.id = e.contact_id
+          WHERE e.tenant_id = ? AND e.id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    tags: {
+      label: 'Sus etiquetas',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT expedient_id AS lead_id, tag FROM expedient_tags
+          WHERE tenant_id = ? AND expedient_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    custom_fields: {
+      label: 'Custom fields del lead',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT cfv.record_id AS lead_id, cfd.label AS field_label, cfv.value
+          FROM custom_field_values cfv
+          JOIN custom_field_defs cfd ON cfd.id = cfv.field_id
+          WHERE cfv.entity = 'expedient' AND cfv.tenant_id = ? AND cfv.record_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    appointments: {
+      label: 'Citas vinculadas al lead',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT id, expedient_id AS lead_id, datetime(starts_at,'unixepoch') AS starts_at, status
+          FROM appointments WHERE tenant_id = ? AND expedient_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+  },
+
+  pipelines: {
+    leads: {
+      label: 'Leads en cada etapa',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT id, pipeline_id, stage_id, name, value, contact_id
+          FROM expedients WHERE tenant_id = ? AND pipeline_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+  },
+
+  advisors: {
+    leads_assigned: {
+      label: 'Leads asignados',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT id, assigned_advisor_id AS advisor_id, name, stage_id, pipeline_id
+          FROM expedients WHERE tenant_id = ? AND assigned_advisor_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+    appointments: {
+      label: 'Citas que creó / le asignaron',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT id, advisor_id, datetime(starts_at,'unixepoch') AS starts_at, status
+          FROM appointments WHERE tenant_id = ? AND advisor_id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+  },
+
+  appointments: {
+    contact: {
+      label: 'Contacto de la cita',
+      fetch: (db, tenantId, ids) => {
+        if (!ids.length) return [];
+        const ph = ids.map(() => '?').join(',');
+        return db.prepare(`
+          SELECT a.id AS appointment_id, c.id AS contact_id, c.first_name, c.last_name, c.phone
+          FROM appointments a JOIN contacts c ON c.id = a.contact_id
+          WHERE a.tenant_id = ? AND a.id IN (${ph})
+        `).all(tenantId, ...ids);
+      },
+    },
+  },
+};
+
+// Devuelve la lista de relaciones disponibles para el frontend
+function getAvailableRelations() {
+  const out = {};
+  for (const [ent, rels] of Object.entries(EXPORT_RELATIONS)) {
+    out[ent] = Object.entries(rels).map(([key, def]) => ({ key, label: def.label }));
+  }
+  return out;
+}
+
 // ─── Exporters ────────────────────────────────────────────────────────
 
 function _exportEntity(db, tenantId, entity, format, query, res) {
@@ -1119,4 +1348,129 @@ function _csvCell(v) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
+}
+
+// ─── Export con relaciones (JSON anidado o CSV en ZIP) ─────────────────
+function _exportWithRelations(db, tenantId, entity, format, includes, query, res) {
+  // Cargar la entidad base
+  let baseRows = _fetchEntityRows(db, tenantId, entity);
+  if (!baseRows || baseRows.length === 0) {
+    return res.status(404).json({ error: 'No hay datos para exportar' });
+  }
+
+  // Validar relaciones
+  const allRelations = EXPORT_RELATIONS[entity] || {};
+  const validIncludes = includes.filter(k => allRelations[k]);
+  if (validIncludes.length === 0) {
+    // Sin relaciones válidas — caer al export normal
+    return _exportEntity(db, tenantId, entity, format, query, res);
+  }
+
+  // IDs base para hacer los JOINs
+  const baseIds = baseRows.map(r => r.id);
+
+  // Cargar cada relación pedida
+  const relData = {};
+  for (const key of validIncludes) {
+    relData[key] = allRelations[key].fetch(db, tenantId, baseIds);
+  }
+
+  const tsFile = `${entity}-con-relaciones-${Date.now()}`;
+
+  if (format === 'json') {
+    // JSON anidado: cada fila base lleva sus relaciones como sub-arrays.
+    // Indexamos las relaciones por el FK (contact_id, lead_id, etc.)
+    const fkByEntity = {
+      contacts: 'contact_id',
+      leads: 'lead_id',          // expedient_id en algunos casos
+      pipelines: 'pipeline_id',
+      advisors: 'advisor_id',
+      appointments: 'appointment_id',
+    };
+    const fk = fkByEntity[entity];
+    const indexed = {};
+    for (const [key, rows] of Object.entries(relData)) {
+      indexed[key] = {};
+      for (const r of rows) {
+        // Detectar la columna FK que usó la query
+        const fkVal = r[fk] || r.contact_id || r.expedient_id || r.lead_id || r.pipeline_id || r.advisor_id;
+        if (fkVal == null) continue;
+        (indexed[key][fkVal] = indexed[key][fkVal] || []).push(r);
+      }
+    }
+    const nested = baseRows.map(row => {
+      const enriched = { ...row };
+      for (const key of validIncludes) {
+        enriched[key] = indexed[key]?.[row.id] || [];
+      }
+      return enriched;
+    });
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${tsFile}.json"`);
+    return res.end(JSON.stringify(nested, null, 2));
+  }
+
+  // CSV → ZIP con un archivo por entidad
+  const archiver = require('archiver');
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${tsFile}.zip"`);
+  archive.pipe(res);
+
+  // Archivo principal: la entidad base
+  archive.append(_rowsToCsv(baseRows), { name: `${entity}.csv` });
+
+  // Archivos por cada relación
+  for (const key of validIncludes) {
+    const rows = relData[key] || [];
+    if (rows.length === 0) continue;
+    archive.append(_rowsToCsv(rows), { name: `${key}.csv` });
+  }
+
+  // README breve con la estructura
+  const readme = [
+    `Wapi101 — Export de ${entity} con relaciones`,
+    `Generado: ${new Date().toISOString()}`,
+    ``,
+    `Archivos:`,
+    `  • ${entity}.csv — datos principales (${baseRows.length} filas)`,
+    ...validIncludes.map(k => `  • ${k}.csv — ${(relData[k] || []).length} filas, FK enlazado`),
+    ``,
+    `Cómo usar en Excel:`,
+    `  1. Abre cada CSV en Excel`,
+    `  2. Usa VLOOKUP(id, otro_archivo!A:Z, columna, FALSE) para cruzar por ID`,
+  ].join('\n');
+  archive.append(readme, { name: 'README.txt' });
+
+  archive.finalize();
+}
+
+// Helper: fila base de cualquier entidad (reusable). Espejo simplificado
+// de _exportEntity pero solo para sacar las filas, sin pintar response.
+function _fetchEntityRows(db, tenantId, entity) {
+  const q = (sql) => { try { return db.prepare(sql).all(tenantId); } catch { return []; } };
+  switch (entity) {
+    case 'contacts':
+      return q(`SELECT id, first_name AS firstName, last_name AS lastName, phone, email FROM contacts WHERE tenant_id=?`);
+    case 'leads':
+      return q(`SELECT e.id, e.name, e.value, e.pipeline_id, e.stage_id, e.contact_id FROM expedients e WHERE e.tenant_id=?`);
+    case 'pipelines':
+      return q(`SELECT id, name, color FROM pipelines WHERE tenant_id=?`);
+    case 'advisors':
+      return q(`SELECT id, name, email, role FROM advisors WHERE tenant_id=?`);
+    case 'appointments':
+      return q(`SELECT id, contact_id, starts_at, status FROM appointments WHERE tenant_id=?`);
+    default:
+      return [];
+  }
+}
+
+function _rowsToCsv(rows) {
+  if (!rows.length) return '';
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(',')];
+  for (const r of rows) {
+    lines.push(headers.map(h => _csvCell(r[h])).join(','));
+  }
+  return '﻿' + lines.join('\n');
 }

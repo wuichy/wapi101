@@ -23788,10 +23788,14 @@ async function openApptBookModal(context) {
   const advisorSel = document.getElementById('apptBookAdvisor');
   if (advisorSel) {
     try {
-      const { advisors } = await api('GET', '/api/advisors/list-min');
-      advisorSel.innerHTML = advisors.map(a =>
-        `<option value="${a.id}" ${a.id === context.currentAdvisorId ? 'selected' : ''}>${escHtml(a.name)}</option>`
-      ).join('');
+      const resp = await api('GET', '/api/advisors/list-min');
+      // El endpoint devuelve { items: [...] } (no { advisors }). Aceptamos ambos.
+      const advisors = resp?.items || resp?.advisors || [];
+      if (advisors.length === 0) throw new Error('empty');
+      advisorSel.innerHTML = `<option value="">— Sin asignar —</option>` +
+        advisors.map(a =>
+          `<option value="${a.id}" ${a.id === context.currentAdvisorId ? 'selected' : ''}>${escHtml(a.name)}${a.role === 'admin' ? ' (admin)' : ''}</option>`
+        ).join('');
     } catch (_) {
       advisorSel.innerHTML = '<option value="">Sin asesores</option>';
     }
@@ -23824,10 +23828,20 @@ function closeApptBookModal() {
 
 let _apptBookSelectedSlot = null;
 
+// Lee la duración resolviendo "Personalizado…" → input custom.
+function _apptBookGetDuration() {
+  const sel = document.getElementById('apptBookDuration')?.value || '30';
+  if (sel === '__custom__') {
+    const v = Number(document.getElementById('apptBookDurationCustom')?.value);
+    return v > 0 ? v : 30;
+  }
+  return Number(sel) || 30;
+}
+
 async function _loadApptSlots() {
   const date     = document.getElementById('apptBookDate')?.value;
   const advisorId= document.getElementById('apptBookAdvisor')?.value;
-  const duration = document.getElementById('apptBookDuration')?.value || 30;
+  const duration = _apptBookGetDuration();
   const slotsEl  = document.getElementById('apptBookSlots');
   if (!date || !slotsEl) return;
 
@@ -23919,7 +23933,7 @@ async function _saveApptBook() {
   try {
     const date      = document.getElementById('apptBookDate')?.value;
     const advisorId = document.getElementById('apptBookAdvisor')?.value || null;
-    const duration  = document.getElementById('apptBookDuration')?.value || 30;
+    const duration  = _apptBookGetDuration();
     const notes     = document.getElementById('apptBookNotes')?.value || null;
 
     await api('POST', '/api/appointments', {
@@ -23949,7 +23963,24 @@ function setupApptBookModal() {
 
   // Recargar slots al cambiar fecha, asesor o duración
   ['apptBookDate','apptBookAdvisor','apptBookDuration'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', _loadApptSlots);
+    document.getElementById(id)?.addEventListener('change', () => {
+      // Si eligió Personalizado, mostrar el input numérico
+      if (id === 'apptBookDuration') {
+        const sel = document.getElementById('apptBookDuration');
+        const customInput = document.getElementById('apptBookDurationCustom');
+        if (customInput) {
+          customInput.hidden = sel.value !== '__custom__';
+          if (sel.value === '__custom__' && !customInput.value) customInput.focus();
+        }
+      }
+      _loadApptSlots();
+    });
+  });
+  // Cambios en el input custom también recargan slots (debounced)
+  let customTimer = null;
+  document.getElementById('apptBookDurationCustom')?.addEventListener('input', () => {
+    clearTimeout(customTimer);
+    customTimer = setTimeout(_loadApptSlots, 400);
   });
 }
 

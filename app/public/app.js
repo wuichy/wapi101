@@ -24026,15 +24026,85 @@ async function openApptBookModal(context) {
     dateInput.value = _todayStr();
   }
 
+  // Poblar selects de hora (0-23) y minuto (0-59, cada 5min)
+  _populateApptHourMinute();
+
   // Resetear slot seleccionado y save btn
   _apptBookSelectedSlot = null;
   const saveBtn = document.getElementById('apptBookSaveBtn');
   if (saveBtn) saveBtn.disabled = true;
 
+  // Forzar lectura inicial del time
+  _updateApptSelectedSlotFromInputs();
+
   modal.hidden = false;
 
-  // Cargar slots para hoy
+  // Cargar slots sugeridos (opcionales, dentro del <details>)
   await _loadApptSlots();
+}
+
+// Pueblar los selects de hora y minuto solo una vez
+function _populateApptHourMinute() {
+  const hourSel = document.getElementById('apptBookHour');
+  const minSel  = document.getElementById('apptBookMinute');
+  if (!hourSel || !minSel) return;
+
+  // Default: hora actual + 1 (próxima hora redondeada). Si es noche, queda en 9am del día siguiente.
+  const now = new Date();
+  let defaultHour = Math.min(now.getHours() + 1, 23);
+  if (defaultHour < 8) defaultHour = 9; // valor sensato por defecto en madrugada
+
+  // Si ya tienen opciones, no rellenar (idempotente)
+  if (hourSel.options.length === 0) {
+    for (let h = 0; h <= 23; h++) {
+      const opt = document.createElement('option');
+      opt.value = String(h).padStart(2, '0');
+      opt.textContent = String(h).padStart(2, '0');
+      hourSel.appendChild(opt);
+    }
+  }
+  if (minSel.options.length === 0) {
+    for (let m = 0; m < 60; m += 5) {
+      const opt = document.createElement('option');
+      opt.value = String(m).padStart(2, '0');
+      opt.textContent = String(m).padStart(2, '0');
+      minSel.appendChild(opt);
+    }
+  }
+  hourSel.value = String(defaultHour).padStart(2, '0');
+  minSel.value = '00';
+}
+
+// Actualiza _apptBookSelectedSlot leyendo los selects de hora/minuto.
+// También habilita el botón Guardar.
+function _updateApptSelectedSlotFromInputs() {
+  const h = document.getElementById('apptBookHour')?.value;
+  const m = document.getElementById('apptBookMinute')?.value;
+  if (!h || !m) return;
+  _apptBookSelectedSlot = `${h}:${m}`;
+  const saveBtn = document.getElementById('apptBookSaveBtn');
+  if (saveBtn) saveBtn.disabled = false;
+  _refreshApptTimeWarning();
+}
+
+function _refreshApptTimeWarning() {
+  const warn = document.getElementById('apptBookHourWarn');
+  if (!warn) return;
+  const date = document.getElementById('apptBookDate')?.value;
+  if (!date || !_apptBookSelectedSlot) { warn.textContent = ''; return; }
+  // Si la cita ya pasó (hoy + hora menor a ahora), avisar
+  const [hh, mm] = _apptBookSelectedSlot.split(':').map(Number);
+  const apptDt = new Date(`${date}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`);
+  const now = new Date();
+  if (apptDt < now) {
+    warn.textContent = '⚠ Esta hora ya pasó';
+    warn.style.color = '#b45309';
+  } else if (apptDt - now < 5 * 60 * 1000) {
+    warn.textContent = '⚠ La cita es en menos de 5 min';
+    warn.style.color = '#b45309';
+  } else {
+    warn.textContent = '';
+  }
 }
 
 function closeApptBookModal() {
@@ -24093,7 +24163,18 @@ async function _loadApptSlots() {
         slotsEl.querySelectorAll('.appt-slot').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         _apptBookSelectedSlot = btn.dataset.time;
+        // Sincronizar los selects de hora/minuto cuando se elige un slot sugerido
+        const [hh, mm] = btn.dataset.time.split(':');
+        const hSel = document.getElementById('apptBookHour');
+        const mSel = document.getElementById('apptBookMinute');
+        if (hSel && hh) hSel.value = hh;
+        if (mSel && mm) {
+          // El select de minutos solo tiene múltiplos de 5; redondear si hace falta
+          const rounded = Math.round(Number(mm) / 5) * 5;
+          mSel.value = String(rounded).padStart(2, '0');
+        }
         if (saveBtn) saveBtn.disabled = false;
+        _refreshApptTimeWarning();
       });
     });
   } catch (err) {
@@ -24191,6 +24272,7 @@ function setupApptBookModal() {
           if (sel.value === '__custom__' && !customInput.value) customInput.focus();
         }
       }
+      if (id === 'apptBookDate') _refreshApptTimeWarning();
       _loadApptSlots();
     });
   });
@@ -24199,6 +24281,11 @@ function setupApptBookModal() {
   document.getElementById('apptBookDurationCustom')?.addEventListener('input', () => {
     clearTimeout(customTimer);
     customTimer = setTimeout(_loadApptSlots, 400);
+  });
+
+  // Hora/minuto libres — al cambiar actualizar el slot seleccionado
+  ['apptBookHour', 'apptBookMinute'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', _updateApptSelectedSlotFromInputs);
   });
 }
 

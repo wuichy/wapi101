@@ -4052,12 +4052,22 @@ Ana, , ana@hotmail.com, 5551112222</pre>
           <input type="date" id="apptBookDate" class="appt-input" />
         </div>
 
-        <!-- Slots de hora -->
+        <!-- Hora libre (hora + minutos) -->
         <div>
-          <label class="appt-label">Hora disponible</label>
-          <div id="apptBookSlots" class="appt-slots-grid">
-            <p style="color:#94a3b8;font-size:13px">Selecciona una fecha para ver los horarios</p>
+          <label class="appt-label">Hora</label>
+          <div class="appt-time-picker">
+            <select id="apptBookHour" class="appt-input appt-time-input"></select>
+            <span class="appt-time-sep">:</span>
+            <select id="apptBookMinute" class="appt-input appt-time-input"></select>
+            <span class="appt-time-hint" id="apptBookHourWarn"></span>
           </div>
+          <!-- Slots opcionales — solo si el operador quiere ver horarios disponibles según horario del negocio -->
+          <details class="appt-slots-toggle">
+            <summary>Ver horarios sugeridos según horario del negocio</summary>
+            <div id="apptBookSlots" class="appt-slots-grid">
+              <p style="color:#94a3b8;font-size:13px">Selecciona una fecha primero</p>
+            </div>
+          </details>
         </div>
 
         <!-- Notas -->

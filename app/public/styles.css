@@ -13053,3 +13053,33 @@ button, a, [role="button"], .btn, [data-action] {
 .sb-toggle-input:focus-visible ~ .sb-toggle-slider {
   box-shadow: 0 0 0 3px rgba(37,99,235,0.25);
 }
+
+/* ─── Time picker libre (hora + minuto) ──────────────────────────── */
+.appt-time-picker {
+  display: flex; align-items: center; gap: 6px;
+}
+.appt-time-input {
+  flex: 0 1 90px;
+  text-align: center; font-size: 16px; font-weight: 600;
+  padding: 10px 12px;
+}
+.appt-time-sep {
+  font-size: 18px; font-weight: 700; color: var(--text-muted, #6b7280);
+}
+.appt-time-hint {
+  margin-left: 12px; font-size: 12.5px;
+}
+
+.appt-slots-toggle {
+  margin-top: 12px; padding-top: 10px;
+  border-top: 1px dashed #e5e7eb;
+}
+.appt-slots-toggle summary {
+  cursor: pointer; font-size: 12.5px; color: var(--accent, #2563eb);
+  list-style: none; padding: 6px 0;
+}
+.appt-slots-toggle summary::-webkit-details-marker { display: none; }
+.appt-slots-toggle summary::before {
+  content: '▸'; margin-right: 6px; transition: transform 0.15s; display: inline-block;
+}
+.appt-slots-toggle[open] summary::before { transform: rotate(90deg); }

@@ -127,12 +127,13 @@ async function callTool(db, tenantId, name, args = {}) {
         page:     Number(args.page) || 1,
         pageSize: Math.min(Math.max(Number(args.pageSize) || 25, 1), 100),
       });
+      const fullName = (c) => `${c.firstName || ''} ${c.lastName || ''}`.trim() || '(sin nombre)';
       return textContent({
         total: out.total,
         page:  out.page,
         items: (out.items || []).map(c => ({
-          id: c.id, name: c.name, phone: c.phone, email: c.email,
-          tags: (c.tags || []).map(t => t.name || t),
+          id: c.id, name: fullName(c), phone: c.phone, email: c.email,
+          tags: Array.isArray(c.tags) ? c.tags.map(t => (typeof t === 'string' ? t : t.name)) : [],
         })),
       });
     }
@@ -141,9 +142,10 @@ async function callTool(db, tenantId, name, args = {}) {
       const c = _findContactByPhone(db, tenantId, args.phone);
       if (!c) return textContent({ found: false });
       const full = customers.getById(db, tenantId, c.id);
+      const name = `${full.firstName || ''} ${full.lastName || ''}`.trim() || '(sin nombre)';
       return textContent({
         found: true,
-        contact: { id: full.id, name: full.name, phone: full.phone, email: full.email },
+        contact: { id: full.id, name, phone: full.phone, email: full.email },
       });
     }
 

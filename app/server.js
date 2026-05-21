@@ -823,6 +823,7 @@ mountSafe('/api/apps',               require('./src/modules/apps/routes'));
 mountSafe('/api/jobs',               require('./src/modules/jobs/routes'));
 mountSafe('/api/backups',            require('./src/modules/backups/routes'));
 mountSafe('/api/mcp',                require('./src/modules/mcp/routes'));
+mountSafe('/api/catalog',            require('./src/modules/whatsapp-catalog/routes'));
 const { authRouter: wooAuthRouter }  = require('./src/modules/woo/routes');
 app.use('/api/apps/woo', wooAuthRouter(db));
 
@@ -1079,6 +1080,10 @@ app.listen(config.port, config.host, () => {
   // Iniciar poller de reminder_timer jobs (step nuevo)
   try { require('./src/modules/bot/engine').startReminderJobPoller(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar reminder job poller:', err.message);
+  }
+  // Iniciar sync periódico del catálogo de WhatsApp (cada 1h, solo tenants con feature ON)
+  try { require('./src/modules/whatsapp-catalog/service').startCatalogSyncPoller(db, 60 * 60 * 1000); } catch (err) {
+    console.warn('[boot] no se pudo iniciar wa-catalog sync poller:', err.message);
   }
 });
 

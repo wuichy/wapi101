@@ -2683,29 +2683,16 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <div class="mcp-card-head">
                   <div class="mcp-card-title">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><path d="M12 2v6m0 8v6M2 12h6m8 0h6M5 5l4 4m6 6l4 4m0-14l-4 4m-6 6l-4 4"/></svg>
-                    <h3>MCP Server — conecta tu CRM a Claude, Cursor o cualquier cliente MCP</h3>
+                    <h3>Conectar Claude, ChatGPT, Cursor… a tu CRM</h3>
                   </div>
                   <span class="mcp-badge mcp-badge--beta">Beta</span>
                 </div>
                 <p class="mcp-card-desc">
-                  Expone tu wapi101 como servidor <strong>Model Context Protocol</strong>. Permite que asistentes de IA (Claude Desktop, Claude Code, Cursor, etc.) lean contactos, busquen leads, envíen mensajes y muevan etapas de tu CRM hablando contigo en lenguaje natural.
+                  Expone tu wapi101 como servidor <strong>MCP (Model Context Protocol)</strong>. Tu asistente de IA podrá <strong>leer contactos, buscar leads, enviar mensajes y mover etapas</strong> hablando contigo en lenguaje natural — desde Claude Desktop, ChatGPT, Cursor, o cualquier cliente MCP.
                 </p>
 
                 <div class="mcp-row">
-                  <label class="mcp-label">URL del servidor</label>
-                  <div class="mcp-copybox">
-                    <input type="text" id="mcpServerUrl" readonly value="https://wapi101.com/api/mcp" />
-                    <button class="btn btn--ghost" data-mcp-copy="mcpServerUrl" type="button">Copiar</button>
-                  </div>
-                </div>
-
-                <div class="mcp-row">
-                  <label class="mcp-label">Token de autenticación</label>
-                  <p class="mcp-hint">Usa un <strong>machine token</strong> de la sección <a href="#" id="mcpGoToTokens">Configuración → Tokens API</a>. Si no tienes uno, créalo ahí y vuelve a esta pantalla.</p>
-                </div>
-
-                <div class="mcp-row">
-                  <label class="mcp-label">Herramientas expuestas</label>
+                  <label class="mcp-label">Herramientas que tu IA podrá usar</label>
                   <ul class="mcp-tools-list">
                     <li><code>list_contacts</code> — lista contactos con búsqueda y paginación</li>
                     <li><code>search_contact</code> — busca un contacto por teléfono</li>
@@ -2717,11 +2704,85 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   </ul>
                 </div>
 
-                <div class="mcp-row">
-                  <label class="mcp-label">Cómo conectar — Claude Desktop</label>
-                  <p class="mcp-hint">Edita <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> y agrega:</p>
-                  <div class="mcp-snippet">
-                    <pre id="mcpSnippetClaudeDesktop">{
+                <div class="mcp-row mcp-card-actions">
+                  <button class="btn btn--primary btn--lg" id="btnOpenMcpConnect" type="button">
+                    🤖 Conectar mi IA
+                  </button>
+                  <button class="btn btn--ghost" id="btnTestMcp" type="button">Probar conexión</button>
+                  <span id="mcpTestStatus" style="font-size:13px;margin-left:10px;align-self:center"></span>
+                </div>
+              </div>
+
+              <!-- ─── Modal MCP Connect (manual paso a paso por cliente) ─── -->
+              <div class="modal-backdrop" id="mcpConnectModal" hidden>
+                <div class="modal mcp-modal" role="dialog" aria-modal="true" aria-labelledby="mcpConnectTitle">
+                  <div class="modal-head">
+                    <h3 id="mcpConnectTitle">Conectar tu IA al CRM</h3>
+                    <button type="button" class="modal-close" id="btnCloseMcpConnect" aria-label="Cerrar">×</button>
+                  </div>
+                  <div class="modal-body mcp-modal-body">
+
+                    <!-- PASO 1: Token -->
+                    <div class="mcp-step">
+                      <div class="mcp-step-num">1</div>
+                      <div class="mcp-step-content">
+                        <h4>Genera tu token de acceso</h4>
+                        <p>El token es como la llave de tu CRM. Lo creas aquí y lo pegas en tu IA.</p>
+
+                        <div id="mcpTokenForm">
+                          <div class="mcp-token-form-row">
+                            <input type="text" id="mcpTokenName" placeholder="Nombre del token (ej. Claude Desktop de Lucho)" maxlength="80" />
+                            <button class="btn btn--primary" id="btnCreateMcpToken" type="button">Generar token</button>
+                          </div>
+                          <p class="mcp-hint mcp-hint--warn" id="mcpTokenError" hidden></p>
+                        </div>
+
+                        <div id="mcpTokenResult" hidden>
+                          <div class="mcp-token-success">
+                            <span class="mcp-token-success-icon">✓</span>
+                            <div>
+                              <strong>Token generado correctamente.</strong>
+                              <p>Cópialo ahora — por seguridad, <strong>solo se muestra una vez</strong>. Si lo pierdes, tendrás que generar otro.</p>
+                            </div>
+                          </div>
+                          <div class="mcp-copybox">
+                            <input type="text" id="mcpGeneratedToken" readonly />
+                            <button class="btn btn--primary" data-mcp-copy="mcpGeneratedToken" type="button">Copiar</button>
+                          </div>
+                          <button class="btn btn--link" id="btnAnotherToken" type="button">Generar otro token</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- PASO 2: Elige tu cliente IA -->
+                    <div class="mcp-step">
+                      <div class="mcp-step-num">2</div>
+                      <div class="mcp-step-content">
+                        <h4>Elige tu asistente de IA y sigue las instrucciones</h4>
+
+                        <div class="mcp-client-tabs" role="tablist">
+                          <button type="button" class="mcp-client-tab is-active" data-mcp-client="claude-desktop" role="tab">Claude Desktop</button>
+                          <button type="button" class="mcp-client-tab" data-mcp-client="chatgpt" role="tab">ChatGPT</button>
+                          <button type="button" class="mcp-client-tab" data-mcp-client="claude-code" role="tab">Claude Code</button>
+                          <button type="button" class="mcp-client-tab" data-mcp-client="cursor" role="tab">Cursor</button>
+                          <button type="button" class="mcp-client-tab" data-mcp-client="otro" role="tab">Otro</button>
+                        </div>
+
+                        <!-- Claude Desktop -->
+                        <div class="mcp-client-panel is-active" data-mcp-client-panel="claude-desktop">
+                          <ol class="mcp-steps-list">
+                            <li>
+                              <strong>Abre el archivo de configuración</strong> de Claude Desktop:
+                              <ul>
+                                <li><strong>Mac</strong>: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></li>
+                                <li><strong>Windows</strong>: <code>%APPDATA%\Claude\claude_desktop_config.json</code></li>
+                              </ul>
+                              <p class="mcp-hint">Si el archivo no existe, créalo. Si Claude Desktop nunca lo ha tocado, déjalo vacío con <code>{}</code>.</p>
+                            </li>
+                            <li>
+                              <strong>Pega este contenido</strong> (reemplaza lo que haya, o agrega solo la sección <code>"wapi101"</code> dentro de <code>mcpServers</code> si ya tenías otras):
+                              <div class="mcp-snippet">
+                                <pre data-mcp-snippet="claude-desktop">{
   "mcpServers": {
     "wapi101": {
       "command": "npx",
@@ -2729,27 +2790,121 @@ Ana, , ana@hotmail.com, 5551112222</pre>
         "mcp-remote",
         "https://wapi101.com/api/mcp",
         "--header",
-        "Authorization: Bearer mt_TU_TOKEN_AQUI"
+        "Authorization: Bearer __TOKEN__"
       ]
     }
   }
 }</pre>
-                    <button class="btn btn--ghost" data-mcp-copy="mcpSnippetClaudeDesktop" type="button">Copiar</button>
-                  </div>
-                  <p class="mcp-hint">Reinicia Claude Desktop. Luego escribe algo como <em>"¿cuántos contactos tengo en mi CRM?"</em> y deberías ver el icono de MCP activo.</p>
-                </div>
+                                <button class="btn btn--ghost" data-mcp-copy-snippet="claude-desktop" type="button">Copiar</button>
+                              </div>
+                            </li>
+                            <li>
+                              <strong>Cierra Claude Desktop y vuélvelo a abrir.</strong> En la barra inferior del chat verás un ícono de "herramientas" si conectó bien.
+                            </li>
+                            <li>
+                              <strong>Prueba diciéndole</strong>: <em>"¿cuántos contactos tengo en mi CRM?"</em> o <em>"manda un mensaje a +52... que diga 'hola'"</em>. Claude te pedirá confirmación antes de ejecutar.
+                            </li>
+                          </ol>
+                        </div>
 
-                <div class="mcp-row">
-                  <label class="mcp-label">Cómo conectar — Claude Code / Cursor</label>
-                  <div class="mcp-snippet">
-                    <pre id="mcpSnippetCli">claude mcp add wapi101 --transport http https://wapi101.com/api/mcp --header "Authorization: Bearer mt_TU_TOKEN_AQUI"</pre>
-                    <button class="btn btn--ghost" data-mcp-copy="mcpSnippetCli" type="button">Copiar</button>
-                  </div>
-                </div>
+                        <!-- ChatGPT -->
+                        <div class="mcp-client-panel" data-mcp-client-panel="chatgpt">
+                          <p class="mcp-hint mcp-hint--warn">⚠ MCP solo funciona en <strong>ChatGPT Pro, Team o Enterprise</strong>. Las cuentas Free y Plus aún no lo soportan.</p>
+                          <ol class="mcp-steps-list">
+                            <li>Entra a <strong>ChatGPT.com</strong> y abre <strong>Settings → Connectors</strong>.</li>
+                            <li>Click en <strong>"Add custom connector"</strong>.</li>
+                            <li>
+                              Llena los campos:
+                              <ul>
+                                <li><strong>Name</strong>: <code>wapi101</code></li>
+                                <li><strong>URL</strong>: <code>https://wapi101.com/api/mcp</code></li>
+                                <li><strong>Authentication</strong>: <code>Bearer token</code></li>
+                                <li><strong>Token</strong>: pega tu token del Paso 1</li>
+                              </ul>
+                            </li>
+                            <li>Click <strong>Save</strong>. ChatGPT detectará las 7 herramientas automáticamente.</li>
+                            <li>
+                              En el chat, activa el toggle del conector <code>wapi101</code> y dile: <em>"¿cuántos contactos tengo?"</em>.
+                            </li>
+                          </ol>
+                        </div>
 
-                <div class="mcp-row">
-                  <button class="btn btn--ghost" id="btnTestMcp" type="button">Probar conexión</button>
-                  <span id="mcpTestStatus" style="font-size:13px;margin-left:10px;align-self:center"></span>
+                        <!-- Claude Code -->
+                        <div class="mcp-client-panel" data-mcp-client-panel="claude-code">
+                          <ol class="mcp-steps-list">
+                            <li>Abre tu terminal.</li>
+                            <li>
+                              Pega este comando (ya tiene tu token incluido):
+                              <div class="mcp-snippet">
+                                <pre data-mcp-snippet="claude-code">claude mcp add wapi101 \
+  --transport http https://wapi101.com/api/mcp \
+  --header "Authorization: Bearer __TOKEN__"</pre>
+                                <button class="btn btn--ghost" data-mcp-copy-snippet="claude-code" type="button">Copiar</button>
+                              </div>
+                            </li>
+                            <li>Reinicia Claude Code: <code>claude</code></li>
+                            <li>Verifica con <code>/mcp</code> dentro de Claude Code. Debería listar wapi101 como "✓ connected".</li>
+                          </ol>
+                        </div>
+
+                        <!-- Cursor -->
+                        <div class="mcp-client-panel" data-mcp-client-panel="cursor">
+                          <ol class="mcp-steps-list">
+                            <li>Abre <strong>Cursor → Settings → MCP</strong> (o <code>Cmd+Shift+P</code> → "MCP").</li>
+                            <li>Click <strong>"+ Add new MCP server"</strong>.</li>
+                            <li>
+                              Selecciona <strong>"HTTP"</strong> como transport y llena:
+                              <ul>
+                                <li><strong>Name</strong>: <code>wapi101</code></li>
+                                <li><strong>URL</strong>: <code>https://wapi101.com/api/mcp</code></li>
+                                <li><strong>Headers</strong>: <code>Authorization: Bearer __TOKEN__</code> (con tu token del Paso 1)</li>
+                              </ul>
+                            </li>
+                            <li>Guarda. Cursor mostrará "✓ wapi101 connected" cuando funcione.</li>
+                          </ol>
+                        </div>
+
+                        <!-- Otro -->
+                        <div class="mcp-client-panel" data-mcp-client-panel="otro">
+                          <p>Cualquier cliente MCP que soporte transporte HTTP. Datos de conexión:</p>
+                          <ul>
+                            <li><strong>Endpoint</strong>: <code>https://wapi101.com/api/mcp</code></li>
+                            <li><strong>Transport</strong>: HTTP (POST con JSON-RPC 2.0)</li>
+                            <li><strong>Auth header</strong>: <code>Authorization: Bearer __TOKEN__</code></li>
+                            <li><strong>Protocol version</strong>: <code>2024-11-05</code></li>
+                          </ul>
+                          <p class="mcp-hint">Prueba rápida con curl:</p>
+                          <div class="mcp-snippet">
+                            <pre data-mcp-snippet="otro">curl -X POST https://wapi101.com/api/mcp \
+  -H "Authorization: Bearer __TOKEN__" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
+                            <button class="btn btn--ghost" data-mcp-copy-snippet="otro" type="button">Copiar</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- PASO 3: Verifica -->
+                    <div class="mcp-step">
+                      <div class="mcp-step-num">3</div>
+                      <div class="mcp-step-content">
+                        <h4>Verifica que funciona</h4>
+                        <p>Háblale a tu IA en lenguaje normal. Algunas pruebas que sirven:</p>
+                        <ul class="mcp-test-prompts">
+                          <li>"¿Cuántos contactos tengo en el CRM?"</li>
+                          <li>"Busca el contacto con teléfono +5215512345678"</li>
+                          <li>"¿Qué pipelines tengo configurados?"</li>
+                          <li>"Mándale un mensaje a Lucho que diga 'hola, ¿sigues interesado?'"</li>
+                        </ul>
+                        <p class="mcp-hint">Tu IA te pedirá confirmación antes de hacer cualquier acción que envíe mensajes o modifique datos.</p>
+                      </div>
+                    </div>
+
+                  </div>
+                  <div class="modal-foot">
+                    <button class="btn btn--primary" id="btnCloseMcpConnectFooter" type="button">Listo</button>
+                  </div>
                 </div>
               </div>
             </div>

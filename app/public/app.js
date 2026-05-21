@@ -5249,27 +5249,135 @@ function setupSettingsTabs() {
     }
   });
 
-  // ─── MCP card: copy-to-clipboard + test connection ───────────────
+  // ─── MCP card: copy-to-clipboard + test connection + modal ──────
+  // Helper: copia un texto cualquiera al clipboard y feedback efímero en el botón
+  async function _mcpCopy(btn, text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      const prev = btn.textContent;
+      btn.textContent = '✓ Copiado';
+      setTimeout(() => { btn.textContent = prev; }, 1500);
+    } catch (e) {
+      toast('No se pudo copiar al portapapeles', 'error');
+    }
+  }
+
+  // Copy de inputs/snippets con id (data-mcp-copy="id")
   document.querySelectorAll('[data-mcp-copy]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-mcp-copy');
       const el = document.getElementById(id);
       if (!el) return;
-      const text = el.value !== undefined ? el.value : el.textContent;
-      try {
-        await navigator.clipboard.writeText(text);
-        const prev = btn.textContent;
-        btn.textContent = '✓ Copiado';
-        setTimeout(() => { btn.textContent = prev; }, 1500);
-      } catch (e) {
-        toast('No se pudo copiar al portapapeles', 'error');
-      }
+      const text = el.value !== undefined && el.value !== '' ? el.value : el.textContent;
+      _mcpCopy(btn, text);
     });
   });
 
-  document.getElementById('mcpGoToTokens')?.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    document.querySelector('.settings-tab[data-settings="tokens"]')?.click();
+  // Copy de los snippets del modal que llevan token embebido (reemplaza __TOKEN__)
+  document.querySelectorAll('[data-mcp-copy-snippet]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-mcp-copy-snippet');
+      const pre = document.querySelector(`[data-mcp-snippet="${key}"]`);
+      if (!pre) return;
+      const token = (document.getElementById('mcpGeneratedToken')?.value || '__TOKEN__').trim();
+      const text = pre.textContent.replace(/__TOKEN__/g, token || '__TOKEN__');
+      _mcpCopy(btn, text);
+    });
+  });
+
+  // Re-renderizar los snippets cuando cambia el token: muestra el token en el
+  // <pre> visualmente (con un span destacado) para que el user vea qué va a copiar.
+  function _mcpRefreshSnippetsView() {
+    const token = (document.getElementById('mcpGeneratedToken')?.value || '').trim();
+    document.querySelectorAll('[data-mcp-snippet]').forEach(pre => {
+      // Guardar template original una vez
+      if (!pre.dataset.tpl) pre.dataset.tpl = pre.textContent;
+      const tpl = pre.dataset.tpl;
+      if (token) {
+        // Resaltar el token en HTML
+        const safe = token.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        pre.innerHTML = tpl
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/__TOKEN__/g, `<span class="mcp-token-hi">${safe}</span>`);
+      } else {
+        pre.textContent = tpl;
+      }
+    });
+    // Texto de cliente "Otro" (manual references al token)
+    document.querySelectorAll('.mcp-client-panel code').forEach(code => {
+      if (!code.dataset.tpl && /__TOKEN__/.test(code.textContent)) {
+        code.dataset.tpl = code.textContent;
+      }
+      if (code.dataset.tpl) {
+        code.textContent = code.dataset.tpl.replace(/__TOKEN__/g, token || '__TOKEN__');
+      }
+    });
+  }
+
+  // Tabs por cliente IA dentro del modal
+  document.querySelectorAll('.mcp-client-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const key = tab.getAttribute('data-mcp-client');
+      document.querySelectorAll('.mcp-client-tab').forEach(t => t.classList.toggle('is-active', t === tab));
+      document.querySelectorAll('.mcp-client-panel').forEach(p => {
+        p.classList.toggle('is-active', p.getAttribute('data-mcp-client-panel') === key);
+      });
+    });
+  });
+
+  // Abrir/cerrar modal
+  function _mcpOpenModal() {
+    const modal = document.getElementById('mcpConnectModal');
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add('modal-open');
+    // Reset estado del form de token (no del token en sí — sigue visible si ya se creó)
+    document.getElementById('mcpTokenError').hidden = true;
+    _mcpRefreshSnippetsView();
+  }
+  function _mcpCloseModal() {
+    const modal = document.getElementById('mcpConnectModal');
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+  document.getElementById('btnOpenMcpConnect')?.addEventListener('click', _mcpOpenModal);
+  document.getElementById('btnCloseMcpConnect')?.addEventListener('click', _mcpCloseModal);
+  document.getElementById('btnCloseMcpConnectFooter')?.addEventListener('click', _mcpCloseModal);
+  document.getElementById('mcpConnectModal')?.addEventListener('click', (ev) => {
+    if (ev.target.id === 'mcpConnectModal') _mcpCloseModal();
+  });
+
+  // Crear token
+  document.getElementById('btnCreateMcpToken')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btnCreateMcpToken');
+    const nameEl = document.getElementById('mcpTokenName');
+    const errEl = document.getElementById('mcpTokenError');
+    const name = (nameEl?.value || '').trim() || 'MCP — ' + new Date().toLocaleString();
+    errEl.hidden = true;
+    btn.disabled = true; btn.textContent = 'Generando…';
+    try {
+      const r = await api('POST', '/api/machine-tokens', { name });
+      if (!r?.token) throw new Error('La respuesta no incluyó token');
+      document.getElementById('mcpTokenForm').hidden = true;
+      document.getElementById('mcpTokenResult').hidden = false;
+      document.getElementById('mcpGeneratedToken').value = r.token;
+      _mcpRefreshSnippetsView();
+    } catch (e) {
+      errEl.textContent = e.message || 'No se pudo crear el token. Solo administradores pueden crearlos.';
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Generar token';
+    }
+  });
+
+  // Botón "generar otro" — reinicia el form
+  document.getElementById('btnAnotherToken')?.addEventListener('click', () => {
+    document.getElementById('mcpTokenForm').hidden = false;
+    document.getElementById('mcpTokenResult').hidden = true;
+    document.getElementById('mcpTokenName').value = '';
+    document.getElementById('mcpGeneratedToken').value = '';
+    _mcpRefreshSnippetsView();
   });
 
   document.getElementById('btnTestMcp')?.addEventListener('click', async () => {

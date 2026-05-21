@@ -2038,10 +2038,13 @@ function startReminderJobPoller(db) {
           const steps = JSON.parse(job.steps_json || '[]');
           const ctx   = JSON.parse(job.ctx_json   || '{}');
           if (!steps.length) continue;
-          // Ejecutar sub-steps en secuencia
+          // Ejecutar sub-steps en secuencia. executeStep retorna:
+          //  - false → continuar al siguiente step
+          //  - true  → detener (parar bot)
+          //  - 'suspend' → wait, romper loop
           for (let i = 0; i < steps.length; i++) {
-            const stop = await _runStep(db, steps[i], i, steps, ctx);
-            if (stop) break;
+            const result = await executeStep(db, steps[i], ctx);
+            if (result === true || result === 'suspend' || result === 'stop') break;
           }
           _log('info', `reminderJobPoller: job ${job.id} ejecutado (${steps.length} steps)`);
         } catch (err) {

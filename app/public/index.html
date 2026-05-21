@@ -620,8 +620,14 @@
           </header>
           <div class="modal-body">
             <div class="bot-stats-tabs">
-              <button class="bot-stats-tab is-active" data-stats-tab="resumen">📊 <span data-i18n="bot.stats.tab.summary">Resumen</span></button>
-              <button class="bot-stats-tab" data-stats-tab="historial">📜 <span data-i18n="bot.stats.tab.history">Historial</span></button>
+              <button class="bot-stats-tab is-active" data-stats-tab="resumen">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M3 3v18h18"/><path d="M9 17V9"/><path d="M13 17V5"/><path d="M17 17v-4"/></svg>
+                <span data-i18n="bot.stats.tab.summary">Resumen</span>
+              </button>
+              <button class="bot-stats-tab" data-stats-tab="historial">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span data-i18n="bot.stats.tab.history">Historial</span>
+              </button>
             </div>
             <div class="bot-stats-pane is-active" data-stats-pane="resumen">
               <div class="bot-stats-grid" id="botStatsCards"></div>

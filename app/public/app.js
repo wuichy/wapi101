@@ -15237,7 +15237,8 @@ async function openBotStatsModal(botId) {
   modal.hidden = false;
   try {
     const data = await api('GET', `/api/bot/${botId}/stats`);
-    document.getElementById('botStatsTitle').textContent = `📊 ${data.bot.name}`;
+    document.getElementById('botStatsTitle').innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" style="vertical-align:-4px;margin-right:8px;color:var(--accent,#2563eb)"><path d="M3 3v18h18"/><path d="M9 17V9"/><path d="M13 17V5"/><path d="M17 17v-4"/></svg>${escHtml(data.bot.name)}`;
     renderBotStatsResumen(data);
     renderBotStatsHistory(data.history);
   } catch (err) {
@@ -15258,17 +15259,26 @@ async function openBotStatsModal(botId) {
 function renderBotStatsResumen(data) {
   const m = data.metrics;
   const fmtTs = (ts) => ts ? new Date(ts * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  // SVGs Lucide-style para reemplazar emojis (consistente con el resto de la app)
+  const ICO = {
+    target:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+    rocket:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/></svg>',
+    play:    '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#10b981"/></svg>',
+    check:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    stop:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>',
+  };
   const cards = [
-    { icon: '🎯', label: 'Tasa de conversión', value: `${m.conversionRate}%`, sub: `${m.convertedCount} de ${m.totalRuns} avanzaron de etapa`, accent: m.conversionRate >= 50 ? 'green' : (m.conversionRate >= 25 ? 'amber' : 'red') },
-    { icon: '🚀', label: 'Lanzamientos totales', value: m.totalRuns, sub: m.firstRunAt ? `Desde ${fmtTs(m.firstRunAt)}` : 'Aún sin ejecuciones' },
-    { icon: '🟢', label: 'Sesiones activas', value: m.activeRuns, sub: 'En ejecución o pausadas ahora' },
-    { icon: '✅', label: 'Completadas', value: m.completedRuns, sub: `${m.totalRuns ? Math.round((m.completedRuns/m.totalRuns)*100) : 0}% del total` },
-    { icon: '⚠', label: 'Fallidas', value: m.failedRuns, sub: m.failedRuns > 0 ? 'Revisa el historial' : 'Sin errores' },
-    { icon: '⛔', label: 'Detenidas', value: m.killedRuns, sub: 'Manualmente o por límite' },
+    { icon: ICO.target,  iconCls: 'is-target',  label: 'Tasa de conversión', value: `${m.conversionRate}%`, sub: `${m.convertedCount} de ${m.totalRuns} avanzaron de etapa`, accent: m.conversionRate >= 50 ? 'green' : (m.conversionRate >= 25 ? 'amber' : 'red') },
+    { icon: ICO.rocket,  iconCls: 'is-rocket',  label: 'Lanzamientos totales', value: m.totalRuns, sub: m.firstRunAt ? `Desde ${fmtTs(m.firstRunAt)}` : 'Aún sin ejecuciones' },
+    { icon: ICO.play,    iconCls: 'is-active',  label: 'Sesiones activas', value: m.activeRuns, sub: 'En ejecución o pausadas ahora' },
+    { icon: ICO.check,   iconCls: 'is-success', label: 'Completadas', value: m.completedRuns, sub: `${m.totalRuns ? Math.round((m.completedRuns/m.totalRuns)*100) : 0}% del total` },
+    { icon: ICO.warning, iconCls: 'is-warn',    label: 'Fallidas', value: m.failedRuns, sub: m.failedRuns > 0 ? 'Revisa el historial' : 'Sin errores' },
+    { icon: ICO.stop,    iconCls: 'is-stop',    label: 'Detenidas', value: m.killedRuns, sub: 'Manualmente o por límite' },
   ];
   document.getElementById('botStatsCards').innerHTML = cards.map(c => `
     <div class="bot-stats-card ${c.accent ? 'accent-' + c.accent : ''}">
-      <div class="bot-stats-card-ico">${c.icon}</div>
+      <div class="bot-stats-card-ico ${c.iconCls || ''}">${c.icon}</div>
       <div class="bot-stats-card-val">${escHtml(String(c.value))}</div>
       <div class="bot-stats-card-label">${escHtml(c.label)}</div>
       <div class="bot-stats-card-sub">${escHtml(c.sub)}</div>

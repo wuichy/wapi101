@@ -128,6 +128,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="12" y1="16" x2="12" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
           <span>Bot</span>
         </a>
+        <a href="#catalogo" class="nav-item" data-view="catalogo" data-feature="catalog" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          <span>Catálogo</span>
+        </a>
         <a href="#calendario" class="nav-item" data-view="calendario" data-i18n="nav.calendario">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span>Calendario</span>
@@ -483,6 +487,9 @@
                     <button type="button" class="rh-icon-button rh-tpl-trigger" id="rhTplTrigger" data-i18n-title="chat.compose.tpl.title" title="Plantillas">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                     </button>
+                    <button type="button" class="rh-icon-button rh-product-trigger" id="rhProductTrigger" data-feature="catalog" title="Enviar producto" hidden>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+                    </button>
                     <button type="button" class="rh-icon-button rh-ai-suggest-btn" id="rhAiSuggestBtn" data-i18n-title="chat.compose.ai.title" title="Sugerir respuesta con IA">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 2 C11.5 7.5 7.5 11.5 2 12 C7.5 12.5 11.5 16.5 12 22 C12.5 16.5 16.5 12.5 22 12 C16.5 11.5 12.5 7.5 12 2 Z"/></svg>
                     </button>
@@ -515,6 +522,23 @@
               <button class="btn btn--ghost" data-close-attach-preview data-i18n="btn.cancel">Cancelar</button>
               <button class="btn btn--primary" id="rhAttachSendBtn" data-i18n="btn.send">Enviar</button>
             </footer>
+          </div>
+        </div>
+
+        <!-- Modal: enviar producto del catálogo -->
+        <div class="modal-backdrop" id="rhProductModal" hidden>
+          <div class="modal" style="max-width:720px;width:92vw;max-height:88vh;display:flex;flex-direction:column">
+            <div class="modal-head">
+              <h3>Enviar producto del catálogo</h3>
+              <button type="button" class="modal-close" id="rhProductClose">×</button>
+            </div>
+            <div class="modal-body" style="overflow-y:auto;padding:18px 22px">
+              <input type="search" id="rhProductSearch" placeholder="Buscar producto…" style="width:100%;padding:9px 13px;border:1px solid #e5e7eb;border-radius:8px;font-size:13.5px;margin-bottom:14px" />
+              <div id="rhProductList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px"></div>
+              <p id="rhProductEmpty" class="muted" style="text-align:center;padding:30px 0;color:var(--text-muted);" hidden>
+                No hay productos. Sincroniza el catálogo desde <a href="#catalogo">Catálogo</a>.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -653,6 +677,21 @@
       <!-- ─── VISTA: INICIO / DASHBOARD ─── -->
       <section class="view view-inicio" data-view="inicio" hidden>
         <div class="dash-shell">
+          <!-- Banner sugerencia: catálogo de WhatsApp detectado en Meta pero feature OFF -->
+          <div id="catalogSuggestBanner" class="catalog-suggest-banner" hidden>
+            <div class="catalog-suggest-content">
+              <span class="catalog-suggest-icon">📦</span>
+              <div class="catalog-suggest-text">
+                <strong>Detectamos un catálogo de productos en tu Meta Commerce.</strong>
+                <span id="catalogSuggestDesc">¿Activar la integración en wapi101 para enviar productos en chats?</span>
+              </div>
+              <div class="catalog-suggest-actions">
+                <button class="btn btn--primary btn--sm" id="catalogSuggestEnable">Activar</button>
+                <button class="btn btn--ghost btn--sm" id="catalogSuggestDismiss">No, gracias</button>
+              </div>
+            </div>
+          </div>
+
           <header class="dash-header">
             <div>
               <h1 class="dash-title" data-i18n="dash.title">Analíticas</h1>
@@ -1731,6 +1770,33 @@ Ana, , ana@hotmail.com, 5551112222</pre>
           </footer>
         </div>
       </div>
+      <!-- ─── VISTA: CATÁLOGO WHATSAPP ─── -->
+      <section class="view view-catalogo" data-view="catalogo" data-feature="catalog" hidden>
+        <div class="catalog-toolbar">
+          <div class="catalog-toolbar-left">
+            <h2 class="catalog-title">Catálogo de WhatsApp</h2>
+            <span class="catalog-meta" id="catalogMetaInfo"></span>
+          </div>
+          <div class="catalog-toolbar-right">
+            <input type="search" id="catalogSearch" placeholder="Buscar producto…" class="catalog-search-input" />
+            <button class="btn btn--ghost" id="btnCatalogSync" type="button">🔄 Sincronizar ahora</button>
+          </div>
+        </div>
+        <div id="catalogGrid" class="catalog-grid"></div>
+        <div id="catalogPager" class="catalog-pager" hidden>
+          <button class="btn btn--ghost" id="catalogPrev" type="button">‹ Anterior</button>
+          <span id="catalogPageInfo"></span>
+          <button class="btn btn--ghost" id="catalogNext" type="button">Siguiente ›</button>
+        </div>
+        <div id="catalogEmpty" class="catalog-empty" hidden>
+          <p>📦 Aún no hay productos sincronizados.</p>
+          <p class="muted">Asegúrate de tener un catálogo creado en
+          <a href="https://business.facebook.com/commerce/catalogs" target="_blank" rel="noopener">Meta Commerce Manager</a>
+          y vinculado a tu número de WhatsApp Business.</p>
+          <button class="btn btn--primary" id="btnCatalogSyncEmpty" type="button">Intentar sincronizar</button>
+        </div>
+      </section>
+
       <!-- ─── VISTA: BOT ─── -->
       <section class="view view-bot" data-view="bot" hidden>
 
@@ -3074,6 +3140,25 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   </div>
                   <label class="cfg-switch">
                     <input type="checkbox" id="cfgLeadValueEnabled" />
+                    <span class="cfg-switch-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="cfg-section">
+                <h3 class="cfg-section-title">Catálogo de WhatsApp</h3>
+                <div class="cfg-row">
+                  <div class="cfg-row-info">
+                    <div class="cfg-row-title">Habilitar catálogo de productos</div>
+                    <div class="cfg-row-desc">
+                      Si vendes productos físicos por WhatsApp, activa esto para conectar tu catálogo de
+                      <strong>Meta Commerce Manager</strong> y enviar productos en los chats.
+                      Si vendes servicios o productos especializados, déjalo apagado para mantener la interfaz limpia.
+                      <span id="cfgCatalogStatus" style="display:block;margin-top:6px;font-size:12px;color:var(--text-muted);"></span>
+                    </div>
+                  </div>
+                  <label class="cfg-switch">
+                    <input type="checkbox" id="cfgCatalogEnabled" />
                     <span class="cfg-switch-slider"></span>
                   </label>
                 </div>

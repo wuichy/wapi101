@@ -4612,6 +4612,9 @@ async function loadDashboard() {
     subtitle.textContent = `${greeting}${advisor ? ', ' + advisor : ''} · ${t('dash.subtitle.prefix')} ${periodLbl}`;
   }
 
+  // Banner catálogo: si nunca se configuró y Meta tiene catálogo, mostrar.
+  _maybeShowCatalogSuggestBanner();
+
   try {
     // Cargar advisors para selector (solo si admin y aún no cargados)
     if (me?.role === 'admin') {
@@ -5032,6 +5035,7 @@ function showView(viewName) {
   else stopPedidosPoller();
   if (viewName === 'pipelines') startKanbanWooPoller();
   else stopKanbanWooPoller();
+  if (viewName === 'catalogo') loadCatalogView();
 
   // Empujar al historial del navegador (no si estamos restaurando vía popstate).
   // 'exp-detail' lo maneja openExpDetail con su propio state (incluye id).
@@ -5436,6 +5440,64 @@ function setupSettingsTabs() {
     lvToggle.addEventListener('change', () => {
       try { localStorage.setItem('leadValueEnabled', lvToggle.checked ? '1' : '0'); } catch {}
       applyLeadValueVisibility();
+    });
+  }
+
+  // Switch: habilitar catálogo de WhatsApp.
+  // A diferencia de los otros, este NO vive solo en localStorage — necesita ir
+  // al backend para que (1) los endpoints /api/catalog/* abran, (2) el cron de
+  // sync corra. localStorage cachea el estado para que la UI prenda/apague
+  // inmediato sin esperar al backend en cada render.
+  const catToggle = document.getElementById('cfgCatalogEnabled');
+  const catStatusEl = document.getElementById('cfgCatalogStatus');
+  if (catToggle) {
+    // Cargar estado actual del backend
+    (async () => {
+      try {
+        const st = await api('GET', '/api/catalog/status');
+        catToggle.checked = !!st.enabled;
+        try { localStorage.setItem('catalogEnabled', st.enabled ? '1' : '0'); } catch {}
+        if (st.catalog?.last_synced_at) {
+          const d = new Date(st.catalog.last_synced_at * 1000).toLocaleString();
+          catStatusEl.textContent = `✓ Conectado: ${st.catalog.name || st.catalog.catalog_id} · ${st.catalog.product_count || 0} productos · sync ${d}`;
+        } else if (st.enabled) {
+          catStatusEl.textContent = 'Aún sin sincronizar — corriendo primer sync…';
+        }
+        // Smart-detect: si nunca se ha configurado, preguntar a Meta y proponer
+        if (!st.configured) {
+          api('POST', '/api/catalog/auto-detect').then(d => {
+            if (d.detected) {
+              catStatusEl.textContent = `💡 Detectamos un catálogo en Meta (${d.catalog.catalogName}). Activa el toggle para usarlo.`;
+            }
+          }).catch(() => {});
+        }
+      } catch (e) { console.warn('catalog status load:', e.message); }
+    })();
+
+    catToggle.addEventListener('change', async () => {
+      const enabled = catToggle.checked;
+      try { localStorage.setItem('catalogEnabled', enabled ? '1' : '0'); } catch {}
+      applyCatalogVisibility();
+      try {
+        await api('PATCH', '/api/catalog/settings', { enabled });
+        catStatusEl.textContent = enabled ? '⏳ Sincronizando productos por primera vez…' : 'Desactivado';
+        if (enabled) {
+          // Refrescar status en 5s para mostrar resultado del sync
+          setTimeout(async () => {
+            try {
+              const st = await api('GET', '/api/catalog/status');
+              if (st.catalog?.product_count) {
+                catStatusEl.textContent = `✓ ${st.catalog.product_count} productos sincronizados`;
+              } else if (st.catalog?.last_sync_error) {
+                catStatusEl.textContent = `⚠ ${st.catalog.last_sync_error}`;
+              }
+            } catch {}
+          }, 5000);
+        }
+      } catch (e) {
+        catStatusEl.textContent = '⚠ Error guardando preferencia: ' + e.message;
+        catToggle.checked = !enabled;
+      }
     });
   }
 
@@ -17209,6 +17271,304 @@ function applyLeadValueVisibility() {
   if (document.body.dataset.viewActive === 'pipelines') renderPipelinesBoard();
 }
 
+// Catálogo de WhatsApp: lee la flag cacheada en localStorage (el backend
+// /api/catalog/status la pobló al cargar Ajustes). Default OFF.
+function isCatalogEnabled() {
+  try { return localStorage.getItem('catalogEnabled') === '1'; } catch { return false; }
+}
+function applyCatalogVisibility() {
+  const on = isCatalogEnabled();
+  document.querySelectorAll('[data-feature="catalog"]').forEach(el => { el.hidden = !on; });
+}
+
+// ─── Vista /app#/catalogo — grid de productos ─────────────────────────
+let _catalogState = { page: 1, pageSize: 24, search: '', total: 0 };
+
+async function loadCatalogView() {
+  const grid    = document.getElementById('catalogGrid');
+  const emptyEl = document.getElementById('catalogEmpty');
+  const pager   = document.getElementById('catalogPager');
+  const metaEl  = document.getElementById('catalogMetaInfo');
+  if (!grid) return;
+  grid.innerHTML = '<p style="padding:24px;color:var(--text-muted)">Cargando productos…</p>';
+  if (pager) pager.hidden = true;
+  if (emptyEl) emptyEl.hidden = true;
+
+  try {
+    // Mostrar metadata (último sync, total productos)
+    const status = await api('GET', '/api/catalog/status').catch(() => ({}));
+    if (metaEl && status?.catalog) {
+      const d = status.catalog.last_synced_at
+        ? new Date(status.catalog.last_synced_at * 1000).toLocaleString()
+        : 'nunca';
+      metaEl.textContent = `${status.catalog.product_count || 0} productos · sync: ${d}`;
+    }
+
+    const out = await api('GET',
+      `/api/catalog/products?page=${_catalogState.page}&pageSize=${_catalogState.pageSize}&search=${encodeURIComponent(_catalogState.search)}`);
+    _catalogState.total = out.total || 0;
+
+    if (!out.items || out.items.length === 0) {
+      grid.innerHTML = '';
+      if (emptyEl) emptyEl.hidden = false;
+      return;
+    }
+
+    grid.innerHTML = out.items.map(renderCatalogProductCard).join('');
+
+    // Click en producto → modal de detalle (placeholder por ahora — en Fase 2)
+    grid.querySelectorAll('[data-product-id]').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.getAttribute('data-product-id');
+        // Por ahora: toast con el id. Detail modal viene en Fase 2.
+        toast(`Producto #${id} — detalle viene en Fase 2`, 'info');
+      });
+    });
+
+    // Paginación
+    if (pager && _catalogState.total > _catalogState.pageSize) {
+      pager.hidden = false;
+      const totalPages = Math.ceil(_catalogState.total / _catalogState.pageSize);
+      document.getElementById('catalogPageInfo').textContent =
+        `Página ${_catalogState.page} de ${totalPages} · ${_catalogState.total} productos`;
+      document.getElementById('catalogPrev').disabled = _catalogState.page <= 1;
+      document.getElementById('catalogNext').disabled = _catalogState.page >= totalPages;
+    }
+  } catch (e) {
+    grid.innerHTML = `<p style="padding:24px;color:#b91c1c">Error: ${e.message}</p>`;
+  }
+}
+
+function renderCatalogProductCard(p) {
+  const price = p.price_amount
+    ? `$${Number(p.price_amount).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${p.price_currency || ''}`.trim()
+    : '';
+  const imgHtml = p.image_url
+    ? `<img src="${escHtml(p.image_url)}" alt="${escHtml(p.name)}" loading="lazy" />`
+    : `<div class="catalog-product-placeholder">📦</div>`;
+  const stockBadge = p.availability === 'out of stock'
+    ? '<span class="catalog-product-badge catalog-product-badge--out">Agotado</span>'
+    : '';
+  return `
+    <div class="catalog-product-card" data-product-id="${p.id}">
+      <div class="catalog-product-img">${imgHtml}${stockBadge}</div>
+      <div class="catalog-product-info">
+        <div class="catalog-product-name">${escHtml(p.name)}</div>
+        ${price ? `<div class="catalog-product-price">${escHtml(price)}</div>` : ''}
+        <div class="catalog-product-sku">SKU: ${escHtml(p.retailer_id || '—')}</div>
+      </div>
+    </div>
+  `;
+}
+
+// Bindings de la vista catálogo (idempotente — usar `data-bound`)
+function _bindCatalogControlsOnce() {
+  const root = document.querySelector('.view-catalogo');
+  if (!root || root.dataset.bound === '1') return;
+  root.dataset.bound = '1';
+
+  const searchEl = document.getElementById('catalogSearch');
+  let searchTimer = null;
+  searchEl?.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      _catalogState.search = searchEl.value.trim();
+      _catalogState.page = 1;
+      loadCatalogView();
+    }, 300);
+  });
+
+  document.getElementById('btnCatalogSync')?.addEventListener('click', () => triggerCatalogSync());
+  document.getElementById('btnCatalogSyncEmpty')?.addEventListener('click', () => triggerCatalogSync());
+  document.getElementById('catalogPrev')?.addEventListener('click', () => {
+    if (_catalogState.page > 1) { _catalogState.page--; loadCatalogView(); }
+  });
+  document.getElementById('catalogNext')?.addEventListener('click', () => {
+    _catalogState.page++; loadCatalogView();
+  });
+}
+
+async function triggerCatalogSync() {
+  const btn = document.getElementById('btnCatalogSync');
+  const orig = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sincronizando…'; }
+  try {
+    const r = await api('POST', '/api/catalog/sync');
+    if (r?.ok) {
+      toast(`Sincronizados ${r.fetched || 0} productos`, 'success');
+      _catalogState.page = 1;
+      await loadCatalogView();
+    } else if (r?.skipped) {
+      toast(`No se pudo: ${r.reason}`, 'warning');
+    } else {
+      toast(`Error: ${r?.error || 'desconocido'}`, 'error');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig || '🔄 Sincronizar ahora'; }
+  }
+}
+
+// Llamar el bind al menos una vez después de cargar el DOM
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(_bindCatalogControlsOnce, 100);
+  setTimeout(_bindProductComposerOnce, 100);
+});
+
+// ─── Composer del chat: botón "Enviar producto" + modal ──────────────
+function _bindProductComposerOnce() {
+  const btn   = document.getElementById('rhProductTrigger');
+  const modal = document.getElementById('rhProductModal');
+  if (!btn || !modal || btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+
+  btn.addEventListener('click', async () => {
+    if (!isCatalogEnabled()) {
+      toast('Catálogo deshabilitado. Activa en Configuración → Ajustes', 'warning');
+      return;
+    }
+    modal.hidden = false;
+    document.body.classList.add('modal-open');
+    await _loadProductPicker('');
+    document.getElementById('rhProductSearch')?.focus();
+  });
+
+  document.getElementById('rhProductClose')?.addEventListener('click', () => {
+    modal.hidden = true;
+    document.body.classList.remove('modal-open');
+  });
+  modal.addEventListener('click', (ev) => {
+    if (ev.target === modal) {
+      modal.hidden = true;
+      document.body.classList.remove('modal-open');
+    }
+  });
+
+  // Buscador con debounce
+  let searchTimer = null;
+  document.getElementById('rhProductSearch')?.addEventListener('input', (e) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => _loadProductPicker(e.target.value.trim()), 300);
+  });
+}
+
+async function _loadProductPicker(search) {
+  const list = document.getElementById('rhProductList');
+  const empty = document.getElementById('rhProductEmpty');
+  if (!list) return;
+  list.innerHTML = '<p style="grid-column:1/-1;padding:20px;color:var(--text-muted);text-align:center">Cargando…</p>';
+  empty.hidden = true;
+  try {
+    const out = await api('GET', `/api/catalog/products?pageSize=60&search=${encodeURIComponent(search)}`);
+    if (!out.items || out.items.length === 0) {
+      list.innerHTML = '';
+      empty.hidden = false;
+      return;
+    }
+    list.innerHTML = out.items.map(p => {
+      const price = p.price_amount
+        ? `$${Number(p.price_amount).toLocaleString('es-MX')}`
+        : '';
+      const img = p.image_url
+        ? `<img src="${escHtml(p.image_url)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px 8px 0 0" alt="${escHtml(p.name)}" loading="lazy"/>`
+        : `<div style="aspect-ratio:1;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:32px;opacity:0.4;border-radius:8px 8px 0 0">📦</div>`;
+      return `
+        <div class="rh-product-pick" data-product-id="${p.id}" style="border:1px solid #e5e7eb;border-radius:8px;cursor:pointer;background:#fff;overflow:hidden;transition:transform 0.15s,border-color 0.15s">
+          ${img}
+          <div style="padding:8px 10px">
+            <div style="font-size:12px;font-weight:600;line-height:1.3;-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">${escHtml(p.name)}</div>
+            ${price ? `<div style="font-size:13px;color:var(--accent,#2563eb);font-weight:700;margin-top:3px">${escHtml(price)}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('[data-product-id]').forEach(card => {
+      card.addEventListener('mouseenter', () => { card.style.borderColor = 'var(--accent, #2563eb)'; card.style.transform = 'translateY(-1px)'; });
+      card.addEventListener('mouseleave', () => { card.style.borderColor = '#e5e7eb'; card.style.transform = ''; });
+      card.addEventListener('click', async () => {
+        const pid = Number(card.getAttribute('data-product-id'));
+        await _sendProductToCurrentChat(pid);
+      });
+    });
+  } catch (e) {
+    list.innerHTML = `<p style="grid-column:1/-1;padding:20px;color:#b91c1c;text-align:center">Error: ${e.message}</p>`;
+  }
+}
+
+// Banner: si el tenant nunca configuró catálogo Y Meta dice que sí tiene uno,
+// sugerirle que lo active. Se descarta con localStorage.
+async function _maybeShowCatalogSuggestBanner() {
+  const banner = document.getElementById('catalogSuggestBanner');
+  if (!banner) return;
+  // Si el user lo dismissed antes, no volver a mostrar nunca
+  if (localStorage.getItem('catalogSuggestDismissed') === '1') return;
+
+  try {
+    const st = await api('GET', '/api/catalog/status');
+    if (st.configured) return; // ya tomó decisión
+    const det = await api('POST', '/api/catalog/auto-detect').catch(() => ({}));
+    if (!det?.detected) return;
+    document.getElementById('catalogSuggestDesc').textContent =
+      `"${det.catalog.catalogName}" — ¿Activar para enviar productos en chats?`;
+    banner.hidden = false;
+
+    document.getElementById('catalogSuggestEnable')?.addEventListener('click', async () => {
+      try {
+        await api('PATCH', '/api/catalog/settings', { enabled: true });
+        try { localStorage.setItem('catalogEnabled', '1'); } catch {}
+        applyCatalogVisibility();
+        banner.hidden = true;
+        toast('Catálogo activado — sincronizando productos…', 'success');
+      } catch (e) { toast('Error: ' + e.message, 'error'); }
+    }, { once: true });
+
+    document.getElementById('catalogSuggestDismiss')?.addEventListener('click', async () => {
+      try {
+        await api('PATCH', '/api/catalog/settings', { enabled: false });
+        localStorage.setItem('catalogSuggestDismissed', '1');
+        banner.hidden = true;
+      } catch {}
+    }, { once: true });
+  } catch (e) {
+    // Silencio: no es crítico si el backend está caído
+    console.warn('catalog suggest banner:', e.message);
+  }
+}
+
+async function _sendProductToCurrentChat(productId) {
+  // current_conversation_id viene de la variable global del chat. Si no la hay
+  // (por algún motivo se invocó sin conversación abierta), abortar con toast.
+  const convoId = window.currentConvoId || window._currentConvoId
+    || document.querySelector('.rh-conversation-header')?.dataset.convoId;
+  if (!convoId) {
+    toast('Abre una conversación primero', 'warning');
+    return;
+  }
+  try {
+    const r = await api('POST', '/api/catalog/send', {
+      conversationId: Number(convoId),
+      productId,
+      via: 'manual',
+    });
+    if (r?.ok) {
+      toast('Producto enviado ✓', 'success');
+      // Cerrar modal
+      document.getElementById('rhProductModal').hidden = true;
+      document.body.classList.remove('modal-open');
+      // Refrescar mensajes del chat
+      if (typeof loadConversationMessages === 'function') {
+        setTimeout(() => loadConversationMessages(convoId, { append: false }), 600);
+      }
+    } else {
+      toast('Error enviando producto', 'error');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   try {
   // Redirigir a login si no hay token
@@ -17252,6 +17612,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.querySelectorAll('[data-admin-only]').forEach(e => { e.hidden = false; });
     }
     applyAppointmentsVisibility();
+    applyLeadValueVisibility();
+    applyCatalogVisibility();
   }
 
   document.getElementById('navLogoutBtn')?.addEventListener('click', () => {

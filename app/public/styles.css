@@ -12535,3 +12535,111 @@ button, a, [role="button"], .btn, [data-action] {
   padding: 1px 4px; border-radius: 3px;
   font-weight: 600;
 }
+
+/* ─── Catálogo de WhatsApp ────────────────────────────────────────── */
+.view-catalogo { padding: 24px 28px; }
+.catalog-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+}
+.catalog-toolbar-left {
+  display: flex; align-items: baseline; gap: 12px;
+}
+.catalog-title {
+  margin: 0; font-size: 22px; font-weight: 700; color: var(--text-primary, #111);
+}
+.catalog-meta {
+  font-size: 12.5px; color: var(--text-muted, #6b7280);
+}
+.catalog-toolbar-right {
+  display: flex; gap: 10px; align-items: center;
+}
+.catalog-search-input {
+  padding: 8px 14px; min-width: 240px;
+  border: 1px solid var(--border-color, #e5e7eb); border-radius: 999px;
+  font-size: 13.5px; outline: none; transition: border-color 0.15s;
+}
+.catalog-search-input:focus { border-color: var(--accent, #2563eb); }
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+.catalog-product-card {
+  background: #fff;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  overflow: hidden; cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.catalog-product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+  border-color: var(--accent, #2563eb);
+}
+.catalog-product-img {
+  position: relative; aspect-ratio: 1; background: #f8fafc;
+  display: flex; align-items: center; justify-content: center;
+}
+.catalog-product-img img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.catalog-product-placeholder {
+  font-size: 48px; opacity: 0.4;
+}
+.catalog-product-badge {
+  position: absolute; top: 8px; right: 8px;
+  background: #fee2e2; color: #b91c1c;
+  font-size: 11px; font-weight: 600;
+  padding: 3px 8px; border-radius: 999px;
+}
+.catalog-product-info { padding: 12px; }
+.catalog-product-name {
+  font-size: 13.5px; font-weight: 600; color: var(--text-primary, #111);
+  line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.catalog-product-price {
+  margin-top: 4px; font-size: 14px; font-weight: 700;
+  color: var(--accent, #2563eb);
+}
+.catalog-product-sku {
+  margin-top: 4px; font-size: 11px; color: var(--text-muted, #6b7280);
+  font-family: ui-monospace, monospace;
+}
+
+.catalog-pager {
+  display: flex; justify-content: center; align-items: center; gap: 16px;
+  margin-top: 24px;
+}
+.catalog-empty {
+  text-align: center; padding: 60px 24px; color: var(--text-muted, #6b7280);
+  background: #fafbfc; border-radius: 12px;
+}
+.catalog-empty p { margin: 8px 0; }
+.catalog-empty .muted { font-size: 13px; }
+.catalog-empty .btn { margin-top: 16px; }
+
+/* ─── Banner sugerencia catálogo ──────────────────────────────────── */
+.catalog-suggest-banner {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border: 1px solid #93c5fd;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+.catalog-suggest-content {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.catalog-suggest-icon {
+  font-size: 32px; flex-shrink: 0;
+}
+.catalog-suggest-text {
+  flex: 1; min-width: 200px; font-size: 13.5px; color: #1e3a8a; line-height: 1.5;
+}
+.catalog-suggest-text strong { display: block; margin-bottom: 2px; color: #1e40af; }
+.catalog-suggest-actions {
+  display: flex; gap: 8px; flex-shrink: 0;
+}

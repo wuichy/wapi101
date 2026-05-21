@@ -13101,3 +13101,69 @@ button, a, [role="button"], .btn, [data-action] {
   content: '▸'; margin-right: 6px; transition: transform 0.15s; display: inline-block;
 }
 .appt-slots-toggle[open] summary::before { transform: rotate(90deg); }
+
+/* ─── Modal Agendar Cita: botones y validación visual ────────────── */
+.appt-modal-actions {
+  display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid #e5e7eb;
+}
+.appt-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 14px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.appt-btn:active:not(:disabled) { transform: scale(0.97); }
+
+.appt-btn--ghost {
+  background: #fff;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+.appt-btn--ghost:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.appt-btn--primary {
+  background: var(--accent, #2563eb);
+  color: #fff;
+  border-color: var(--accent, #2563eb);
+}
+.appt-btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+.appt-btn--primary:disabled {
+  background: #cbd5e1;
+  border-color: #cbd5e1;
+  color: #fff;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Required field visual feedback */
+.appt-input.is-missing,
+.appt-time-input.is-missing {
+  border-color: #ef4444 !important;
+  background: #fef2f2;
+}
+.appt-input.is-missing:focus,
+.appt-time-input.is-missing:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+.appt-label.is-missing {
+  color: #b91c1c;
+}
+.appt-label.is-missing::after {
+  content: ' *';
+  color: #ef4444;
+  font-weight: 700;
+}

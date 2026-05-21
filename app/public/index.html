@@ -4079,9 +4079,12 @@ Ana, , ana@hotmail.com, 5551112222</pre>
         <!-- Warning recordatorios -->
         <div id="apptBookWarnings" style="display:none;background:#fef3c7;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e"></div>
 
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
-          <button class="btn-secondary" id="apptBookCancelBtn">Cancelar</button>
-          <button class="btn-primary" id="apptBookSaveBtn" disabled>Agendar cita</button>
+        <div class="appt-modal-actions">
+          <button type="button" class="appt-btn appt-btn--ghost" id="apptBookCancelBtn">Cancelar</button>
+          <button type="button" class="appt-btn appt-btn--primary" id="apptBookSaveBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="20 6 9 17 4 12"/></svg>
+            Agendar cita
+          </button>
         </div>
       </div>
     </div>

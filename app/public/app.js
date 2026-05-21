@@ -24076,15 +24076,46 @@ function _populateApptHourMinute() {
 }
 
 // Actualiza _apptBookSelectedSlot leyendo los selects de hora/minuto.
-// También habilita el botón Guardar.
+// También habilita el botón Guardar y aplica validación visual.
 function _updateApptSelectedSlotFromInputs() {
   const h = document.getElementById('apptBookHour')?.value;
   const m = document.getElementById('apptBookMinute')?.value;
-  if (!h || !m) return;
-  _apptBookSelectedSlot = `${h}:${m}`;
-  const saveBtn = document.getElementById('apptBookSaveBtn');
-  if (saveBtn) saveBtn.disabled = false;
+  if (h && m) {
+    _apptBookSelectedSlot = `${h}:${m}`;
+  } else {
+    _apptBookSelectedSlot = null;
+  }
   _refreshApptTimeWarning();
+  _refreshApptValidation();
+}
+
+// Recorre todos los campos requeridos del modal y:
+// - Pinta de rojo los faltantes con la clase is-missing
+// - Habilita/deshabilita el botón Agendar según completitud
+function _refreshApptValidation() {
+  const dateEl  = document.getElementById('apptBookDate');
+  const hourEl  = document.getElementById('apptBookHour');
+  const minEl   = document.getElementById('apptBookMinute');
+  // El asesor es opcional (puede ser '— Sin asignar —'), no lo validamos.
+  const requiredFields = [
+    { input: dateEl, labelText: 'Fecha' },
+    { input: hourEl, labelText: 'Hora' },
+    { input: minEl,  labelText: 'Hora' },
+  ];
+
+  let allFilled = true;
+  for (const f of requiredFields) {
+    if (!f.input) continue;
+    const filled = !!f.input.value;
+    f.input.classList.toggle('is-missing', !filled);
+    // También pintar el label si está al lado
+    const label = f.input.closest('div')?.querySelector('.appt-label');
+    if (label) label.classList.toggle('is-missing', !filled);
+    if (!filled) allFilled = false;
+  }
+
+  const saveBtn = document.getElementById('apptBookSaveBtn');
+  if (saveBtn) saveBtn.disabled = !allFilled;
 }
 
 function _refreshApptTimeWarning() {
@@ -24272,7 +24303,10 @@ function setupApptBookModal() {
           if (sel.value === '__custom__' && !customInput.value) customInput.focus();
         }
       }
-      if (id === 'apptBookDate') _refreshApptTimeWarning();
+      if (id === 'apptBookDate') {
+        _refreshApptTimeWarning();
+        _refreshApptValidation();
+      }
       _loadApptSlots();
     });
   });

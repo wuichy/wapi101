@@ -10,10 +10,25 @@ const TZ = process.env.TZ || 'America/Mexico_City';
 //
 // Ventana: 60 minutos (configurable). Si el asesor tarda más, no se programa.
 function scheduleRemindersFromRecentBotRun(db, tenantId, ctx) {
-  const { contactId, expedientId, convoId, appointmentId, startsAt } = ctx;
+  const { contactId, expedientId, appointmentId, startsAt } = ctx;
+  let { convoId } = ctx;
   if (!contactId || !startsAt) return { scheduled: 0, skipped: 0 };
   const WINDOW_SECS = 60 * 60; // 60 min hacia atrás
   const now = Math.floor(Date.now() / 1000);
+
+  // Si no tenemos convoId, buscar la conversación más reciente del contacto.
+  // El step 'message' (channelId='auto') requiere ctx.convoId para saber dónde
+  // enviar. Sin él, el mensaje se descarta silenciosamente con warn.
+  if (!convoId) {
+    try {
+      const lastConvo = db.prepare(`
+        SELECT id FROM conversations
+         WHERE contact_id = ? AND tenant_id = ?
+         ORDER BY COALESCE(last_message_at, created_at) DESC LIMIT 1
+      `).get(contactId, tenantId);
+      if (lastConvo) convoId = lastConvo.id;
+    } catch (_) { /* no bloquear si conversations no existe */ }
+  }
 
   try {
     // Bot runs recientes del contacto, ordenados por más reciente

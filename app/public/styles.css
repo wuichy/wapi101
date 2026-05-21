@@ -12461,6 +12461,17 @@ button, a, [role="button"], .btn, [data-action] {
     padding-top: env(safe-area-inset-top);
   }
 
+  /* Settings — vista detalle en mobile: el contenido se va detrás de la
+     status bar / Dynamic Island. Aplicar safe-area al top. */
+  .settings-shell.is-detail-mode .settings-content {
+    padding-top: calc(16px + env(safe-area-inset-top));
+  }
+  /* También para la lista de categorías (cuando NO es detalle) — para que
+     el primer item no quede pegado a la status bar. */
+  .settings-shell:not(.is-detail-mode) .settings-nav {
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+
   /* Input area del chat móvil se queda pegada al fondo respetando home indicator */
   body[data-chat-mobile-view="conversation"] .rh-reply-form,
   body[data-chat-mobile-view="conversation"] .rh-composer {

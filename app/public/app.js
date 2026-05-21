@@ -17627,6 +17627,22 @@ const DC_WIZARDS = {
       options: { conflictPolicy: state.conflictPolicy || 'rename' },
     }),
   },
+
+  chats: {
+    title: 'Importar Chats',
+    steps: ['chatMode', 'upload', 'chatContactStrategy', 'chatPreview', 'confirm'],
+    stepLabels: ['Modo', 'Archivo', 'Contactos', 'Preview', 'Listo'],
+    skipAnalyze: true,
+    onConfirm: async (state) => api('POST', '/api/data-center/import', {
+      entity: 'chats', filename: state.file.name, content: state.file.content,
+      options: {
+        mode: state.chatMode || 'both',
+        source: state.chatSource || 'import',
+        contactStrategy: state.contactStrategy || 'phone',
+        createMissingContacts: state.createMissingContacts !== false,
+      },
+    }),
+  },
 };
 
 let _dcWizard = null; // estado activo
@@ -18004,6 +18020,20 @@ const DC_STEP_RENDERERS = {
       </div>`;
       return;
     }
+    if (entity === 'chats') {
+      const modeLabels = { history: 'Solo histórico', knowledge: 'Solo IA', both: 'Histórico + IA' };
+      body.innerHTML = `<div class="dc-step-content">
+        <h4>Confirmar importación de chats</h4>
+        <ul class="dc-summary">
+          <li>Modo: <strong>${modeLabels[state.chatMode || 'both']}</strong></li>
+          <li>Contactos: <strong>${state.contactStrategy || 'phone'}</strong>${state.createMissingContacts ? ' (crear los faltantes)' : ' (solo existentes)'}</li>
+          <li>Los mensajes históricos se marcan con badge "Histórico" y NO disparan bots</li>
+          ${(state.chatMode === 'knowledge' || state.chatMode === 'both' || !state.chatMode) ? '<li>Los pares pregunta+respuesta se guardan en la base de conocimiento del copiloto</li>' : ''}
+        </ul>
+        <p class="dc-step-hint">⚠ Importar muchos mensajes puede tardar varios minutos. Por favor no cierres la ventana.</p>
+      </div>`;
+      return;
+    }
 
     // Default: contactos
     body.innerHTML = `
@@ -18184,6 +18214,139 @@ const DC_STEP_RENDERERS = {
       r.addEventListener('change', () => { _dcWizard.state.conflictPolicy = r.value; });
     });
   },
+
+  // ─── Steps específicos para CHATS ──────────────────────────────────
+
+  chatMode(body, state) {
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>¿Qué quieres hacer con los chats?</h4>
+        <p class="dc-step-desc">El import de conversaciones históricas tiene 2 modos. Puedes elegir uno o ambos (recomendado).</p>
+        <div class="dc-radio-group">
+          <label class="dc-radio">
+            <input type="radio" name="cm" value="history" ${state.chatMode === 'history' ? 'checked' : ''} />
+            <div>
+              <strong>📚 Solo histórico</strong>
+              <p>Los mensajes aparecen en la pestaña de Chats de cada contacto con badge "Histórico". No disparan bots, no notifican, solo te dan contexto cuando platicas con el cliente.</p>
+            </div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="cm" value="knowledge" ${state.chatMode === 'knowledge' ? 'checked' : ''} />
+            <div>
+              <strong>🧠 Solo entrenar a Claude/Copiloto IA</strong>
+              <p>Extrae pares "pregunta del cliente → tu respuesta" y los guarda como ejemplos para que el copiloto los use al sugerir respuestas. NO aparecen en los chats, solo en el cerebro de la IA.</p>
+            </div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="cm" value="both" ${!state.chatMode || state.chatMode === 'both' ? 'checked' : ''} />
+            <div>
+              <strong>🔀 Ambos (recomendado)</strong>
+              <p>Hace las 2 cosas: ves el histórico Y la IA aprende. Es lo que la mayoría quiere.</p>
+            </div>
+          </label>
+        </div>
+      </div>
+    `;
+    body.querySelectorAll('input[name="cm"]').forEach(r => {
+      r.addEventListener('change', () => { _dcWizard.state.chatMode = r.value; });
+    });
+    if (!state.chatMode) _dcWizard.state.chatMode = 'both';
+  },
+
+  chatContactStrategy(body, state) {
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>¿Cómo conectar con los contactos?</h4>
+        <p class="dc-step-desc">Cada chat pertenece a un contacto. ¿Cómo lo asociamos?</p>
+        <div class="dc-radio-group">
+          <label class="dc-radio">
+            <input type="radio" name="ccs" value="phone" ${(state.contactStrategy || 'phone') === 'phone' ? 'checked' : ''} />
+            <div><strong>Por teléfono (recomendado)</strong><p>Match por phone. Si el contacto no existe, lo creo automático con tag "Importado de chat".</p></div>
+          </label>
+          <label class="dc-radio">
+            <input type="radio" name="ccs" value="phone_skip" ${state.contactStrategy === 'phone_skip' ? 'checked' : ''} />
+            <div><strong>Solo si el contacto ya existe</strong><p>Saltea los chats de números que no tienes en wapi101.</p></div>
+          </label>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="dcCreateMissing" ${state.createMissingContacts !== false ? 'checked' : ''} />
+          <span>Crear contactos que no existan (recomendado si vienes de migración)</span>
+        </label>
+      </div>
+    `;
+    body.querySelectorAll('input[name="ccs"]').forEach(r => {
+      r.addEventListener('change', () => {
+        _dcWizard.state.contactStrategy = r.value === 'phone_skip' ? 'phone' : r.value;
+        _dcWizard.state.createMissingContacts = r.value !== 'phone_skip';
+        _renderDcWizard();
+      });
+    });
+    body.querySelector('#dcCreateMissing')?.addEventListener('change', e => {
+      _dcWizard.state.createMissingContacts = e.target.checked;
+    });
+    if (!state.contactStrategy) _dcWizard.state.contactStrategy = 'phone';
+  },
+
+  chatPreview(body, state) {
+    // Intentar parsear el JSON / CSV para mostrar stats
+    let stats = { conversations: 0, messages: 0, samplePair: null };
+    try {
+      const isJSON = state.file.name.toLowerCase().endsWith('.json');
+      if (isJSON) {
+        const data = JSON.parse(state.file.content);
+        const convs = Array.isArray(data) ? data : (data.conversations || data.items || []);
+        stats.conversations = convs.length;
+        stats.messages = convs.reduce((s, c) => s + (c.messages?.length || 0), 0);
+        // Buscar el primer par Q+A real para mostrar
+        for (const c of convs) {
+          const msgs = c.messages || [];
+          for (let i = 0; i < msgs.length - 1; i++) {
+            if (msgs[i].direction === 'incoming' && msgs[i+1].direction === 'outgoing') {
+              stats.samplePair = { customer: msgs[i].body, agent: msgs[i+1].body };
+              break;
+            }
+          }
+          if (stats.samplePair) break;
+        }
+      } else {
+        const lines = state.file.content.split(/\r?\n/).filter(l => l.trim());
+        stats.messages = Math.max(0, lines.length - 1); // -1 por header
+        stats.conversations = '~';
+      }
+    } catch (e) { /* nada */ }
+
+    const mode = state.chatMode || 'both';
+    const modeLabel = {
+      history: 'solo histórico',
+      knowledge: 'solo IA',
+      both: 'histórico + IA'
+    }[mode];
+
+    body.innerHTML = `
+      <div class="dc-step-content">
+        <h4>Preview</h4>
+        <p class="dc-step-desc">Esto es lo que detectamos en tu archivo:</p>
+        <ul class="dc-summary">
+          <li><strong>${stats.conversations}</strong> conversaciones</li>
+          <li><strong>${stats.messages}</strong> mensajes totales</li>
+          <li>Modo: <strong>${modeLabel}</strong></li>
+          <li>Conectar contactos por: <strong>${state.contactStrategy || 'phone'}</strong>${state.createMissingContacts ? ', creando los faltantes' : ', solo existentes'}</li>
+        </ul>
+
+        ${stats.samplePair ? `
+          <div style="background:#fafbfc;border:1px solid #e5e7eb;border-radius:10px;padding:14px 18px;margin-top:10px">
+            <p style="margin:0 0 8px;font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Ejemplo de par Q+A que se aprenderá</p>
+            <p style="margin:6px 0;font-size:13px"><strong>Cliente:</strong> "${escHtml(stats.samplePair.customer.slice(0, 200))}"</p>
+            <p style="margin:6px 0;font-size:13px"><strong>Respuesta:</strong> "${escHtml(stats.samplePair.agent.slice(0, 200))}"</p>
+          </div>
+        ` : ''}
+
+        ${mode !== 'history' ? `
+          <p class="dc-step-hint">💡 El copiloto IA usará estos pares como ejemplos al sugerir respuestas futuras. Mientras más datos cargues, mejor será su tono.</p>
+        ` : ''}
+      </div>
+    `;
+  },
 };
 
 const DC_STEP_VALIDATORS = {
@@ -18221,6 +18384,9 @@ const DC_STEP_VALIDATORS = {
     return bots.length > 0;
   },
   botConflict: () => true,
+  chatMode: (state) => !!state.chatMode,
+  chatContactStrategy: () => true,
+  chatPreview: () => true,
   confirm: () => true,
 };
 

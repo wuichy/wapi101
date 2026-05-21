@@ -48,6 +48,7 @@ module.exports = (db) => {
         case 'tags':      return res.json(await _importTags(db, req.tenantId, req.body));
         case 'pipelines': return res.json(await _importPipelines(db, req.tenantId, req.body));
         case 'bots':      return res.json(await _importBots(db, req.tenantId, req.body));
+        case 'chats':     return res.json(await _importChats(db, req.tenantId, req.body));
         default:
           return res.status(501).json({ error: `Import de "${entity}" pendiente de implementar` });
       }
@@ -421,6 +422,199 @@ async function _importBots(db, tenantId, body) {
   });
   txn();
   return { ok: true, ...result };
+}
+
+// ─── Importers: chats (Modo A histórico + Modo C knowledge IA) ──────
+
+async function _importChats(db, tenantId, body) {
+  const { content, filename, options = {} } = body;
+  const mode = options.mode || 'both'; // 'history' | 'knowledge' | 'both'
+  const source = options.source || 'import';
+  const contactStrategy = options.contactStrategy || 'phone';
+
+  // Parser: aceptamos JSON nativo (más común) y CSV con columnas mapeadas.
+  // Estructura JSON esperada:
+  //   { conversations: [
+  //       { external_id, contact_phone, contact_name, messages: [
+  //           { direction: 'incoming'|'outgoing', body, created_at (unix), media_url? }
+  //       ]}
+  //   ]}
+  // O array directo de conversations.
+  const isJSON = (filename || '').toLowerCase().endsWith('.json');
+  let conversations = [];
+
+  if (isJSON) {
+    const data = JSON.parse(content);
+    conversations = Array.isArray(data) ? data
+                  : Array.isArray(data.conversations) ? data.conversations
+                  : Array.isArray(data.items) ? data.items
+                  : [];
+  } else {
+    // CSV plano agrupado por contact_phone
+    const { headers, rows } = svc.parseFile({ filename, content });
+    const phoneIdx = headers.findIndex(h => /phone|tel|telefono|celular/i.test(h));
+    const nameIdx = headers.findIndex(h => /name|nombre|contacto/i.test(h));
+    const dirIdx = headers.findIndex(h => /direction|direccion|sender|tipo/i.test(h));
+    const bodyIdx = headers.findIndex(h => /body|message|mensaje|texto|content/i.test(h));
+    const timeIdx = headers.findIndex(h => /time|date|fecha|created_at|timestamp/i.test(h));
+    if (phoneIdx === -1 || bodyIdx === -1) {
+      throw new Error('CSV debe tener al menos columnas de teléfono y mensaje');
+    }
+    const byPhone = new Map();
+    for (const row of rows) {
+      const phone = (row[phoneIdx] || '').toString().trim();
+      if (!phone) continue;
+      if (!byPhone.has(phone)) {
+        byPhone.set(phone, {
+          contact_phone: phone,
+          contact_name: nameIdx !== -1 ? row[nameIdx] : null,
+          messages: [],
+        });
+      }
+      const dirRaw = dirIdx !== -1 ? String(row[dirIdx] || '').toLowerCase() : 'incoming';
+      const direction = /out|sale|saliente|agent|sent/i.test(dirRaw) ? 'outgoing' : 'incoming';
+      const ts = timeIdx !== -1 ? _parseTimestamp(row[timeIdx]) : Math.floor(Date.now() / 1000);
+      byPhone.get(phone).messages.push({
+        direction, body: row[bodyIdx] || '', created_at: ts,
+      });
+    }
+    conversations = Array.from(byPhone.values());
+  }
+
+  // Resolver contactos (estrategia por phone o email)
+  const customers = require('../customers/service');
+  const result = {
+    conversationsProcessed: 0,
+    messagesImported: 0,
+    chunksCreated: 0,
+    contactsCreated: 0,
+    skipped: 0,
+  };
+
+  const txn = db.transaction(() => {
+    for (const conv of conversations) {
+      const messages = Array.isArray(conv.messages) ? conv.messages : [];
+      if (messages.length === 0) { result.skipped++; continue; }
+
+      // Encontrar o crear el contacto
+      let contactId = null;
+      if (contactStrategy === 'phone' && conv.contact_phone) {
+        const phone = customers.normalizePhone(conv.contact_phone);
+        if (phone) {
+          const existing = db.prepare('SELECT id FROM contacts WHERE phone=? AND tenant_id=?').get(phone, tenantId);
+          if (existing) contactId = existing.id;
+          else if (options.createMissingContacts !== false) {
+            const created = customers.create(db, tenantId, {
+              firstName: conv.contact_name || phone, lastName: '',
+              phone, email: null, tags: ['Importado de chat'],
+            });
+            contactId = created.id;
+            result.contactsCreated++;
+          }
+        }
+      }
+
+      // Encontrar o crear la conversación (solo Modo A — para Modo C puro no necesitamos convo)
+      let conversationId = null;
+      if (mode !== 'knowledge' && contactId) {
+        // Usar la convo más reciente del contacto si existe, o crear una nueva
+        const existingConvo = db.prepare(`
+          SELECT id, integration_id FROM conversations
+          WHERE contact_id=? AND tenant_id=? ORDER BY last_message_at DESC LIMIT 1
+        `).get(contactId, tenantId);
+        if (existingConvo) {
+          conversationId = existingConvo.id;
+        } else {
+          // Crear conversación virtual (sin integration_id real, marcada como imported)
+          const r = db.prepare(`
+            INSERT INTO conversations (tenant_id, contact_id, provider, external_id, last_message_at, created_at)
+            VALUES (?, ?, 'imported', ?, ?, ?)
+          `).run(tenantId, contactId,
+                 conv.external_id || `imp-${Date.now()}-${contactId}`,
+                 messages[messages.length - 1]?.created_at || Math.floor(Date.now()/1000),
+                 Math.floor(Date.now()/1000));
+          conversationId = r.lastInsertRowid;
+        }
+      }
+
+      result.conversationsProcessed++;
+
+      // ─── Modo A: insertar mensajes a tabla messages ─────────────────
+      if ((mode === 'history' || mode === 'both') && conversationId) {
+        const ins = db.prepare(`
+          INSERT INTO messages (
+            tenant_id, conversation_id, direction, provider, body,
+            status, created_at, imported_from, imported_at, external_id
+          ) VALUES (?, ?, ?, 'imported', ?, 'sent', ?, ?, unixepoch(), ?)
+          ON CONFLICT(provider, external_id) DO NOTHING
+        `);
+        let idx = 0;
+        for (const m of messages) {
+          if (!m.body || !m.body.trim()) continue;
+          try {
+            ins.run(
+              tenantId, conversationId, m.direction || 'incoming',
+              m.body.slice(0, 4000),
+              m.created_at || Math.floor(Date.now()/1000),
+              source,
+              m.external_id || `${source}-${conv.external_id || contactId}-${idx++}`,
+            );
+            result.messagesImported++;
+          } catch (e) {
+            // ignorar duplicados / errores de constraint
+          }
+        }
+      }
+
+      // ─── Modo C: generar chunks Q+A para el copiloto ────────────────
+      if (mode === 'knowledge' || mode === 'both') {
+        // Recorrer mensajes secuencialmente buscando pares incoming→outgoing
+        const chunkIns = db.prepare(`
+          INSERT OR IGNORE INTO ai_chat_chunks (
+            tenant_id, source, source_chat_id, contact_id, contact_phone, contact_name,
+            customer_message, agent_response, context_before,
+            created_at_original
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (let i = 0; i < messages.length - 1; i++) {
+          const cur = messages[i], next = messages[i + 1];
+          if (cur.direction !== 'incoming' || next.direction !== 'outgoing') continue;
+          if (!cur.body?.trim() || !next.body?.trim()) continue;
+          if (cur.body.length < 3 || next.body.length < 3) continue; // muy cortos para entrenar
+
+          // Contexto: 2 mensajes anteriores al cur
+          const ctxBefore = messages.slice(Math.max(0, i - 2), i)
+            .map(m => ({ direction: m.direction, body: m.body }));
+
+          try {
+            chunkIns.run(
+              tenantId, source,
+              conv.external_id || `${source}-${contactId}`,
+              contactId, conv.contact_phone || null, conv.contact_name || null,
+              cur.body.slice(0, 1000), next.body.slice(0, 2000),
+              JSON.stringify(ctxBefore),
+              cur.created_at || Math.floor(Date.now()/1000)
+            );
+            result.chunksCreated++;
+          } catch (e) {
+            // skip duplicates
+          }
+        }
+      }
+    }
+  });
+  txn();
+  return { ok: true, ...result };
+}
+
+function _parseTimestamp(raw) {
+  if (!raw) return Math.floor(Date.now() / 1000);
+  if (/^\d+$/.test(String(raw))) {
+    const n = Number(raw);
+    return n > 1e12 ? Math.floor(n / 1000) : n;
+  }
+  const d = new Date(raw);
+  return isNaN(d) ? Math.floor(Date.now() / 1000) : Math.floor(d.getTime() / 1000);
 }
 
 // ─── Exporters ────────────────────────────────────────────────────────

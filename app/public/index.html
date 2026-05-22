@@ -4088,6 +4088,8 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <select id="apptBookMinute" class="appt-input appt-time-input"></select>
             <span class="appt-time-hint" id="apptBookHourWarn"></span>
           </div>
+          <!-- Conflict warning: aparece cuando hora elegida choca con otra cita del asesor -->
+          <div id="apptBookConflictWarn" class="appt-conflict-warn" hidden></div>
           <!-- Slots opcionales — solo si el operador quiere ver horarios disponibles según horario del negocio -->
           <details class="appt-slots-toggle">
             <summary>Ver horarios sugeridos según horario del negocio</summary>

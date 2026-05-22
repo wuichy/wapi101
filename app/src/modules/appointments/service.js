@@ -368,6 +368,20 @@ function getAvailableSlots(db, tenantId, dateStr, advisorId, durationMin = 30) {
 // Crear cita manualmente (desde modal receptionist)
 function bookManual(db, tenantId, { contactId, expedientId, convoId, advisorId, date, time, durationMin, notes }) {
   const dur = Number(durationMin) || 30;
+
+  // Safeguard: si hay asesor, validar que no choque con otra cita.
+  // El frontend ya lo chequea pero protegemos contra hacks/race conditions.
+  if (advisorId) {
+    const conflict = checkConflict(db, tenantId, { advisorId, date, time, durationMin: dur });
+    if (conflict.conflict) {
+      const err = new Error(`El asesor ya tiene una cita de ${conflict.conflictWith.starts_label} a ${conflict.conflictWith.ends_label} con ${conflict.conflictWith.contact_name}`);
+      err.code = 'SLOT_CONFLICT';
+      err.conflictWith = conflict.conflictWith;
+      err.suggestedSlots = conflict.suggestedSlots;
+      throw err;
+    }
+  }
+
   const [yr, mo, dy] = date.split('-').map(Number);
   const [h, m] = time.split(':').map(Number);
   const startsAt = Math.floor(new Date(yr, mo - 1, dy, h, m, 0).getTime() / 1000);
@@ -395,4 +409,106 @@ function bookManual(db, tenantId, { contactId, expedientId, convoId, advisorId, 
   };
 }
 
-module.exports = { book, bookManual, scheduleReminder, cancelLatest, reschedule, list, update, getAvailableSlots, _fmtDate, _fmtTime };
+// ── Chequear si hay conflicto de horario para un asesor ─────────────────────
+// Dado (advisorId, date, time, durationMin), responde si choca con otra cita
+// del MISMO asesor. Si choca, devuelve datos de esa cita + slots libres cerca.
+//
+// Argumentos:
+//   advisorId   — null/undefined = "sin asignar", no chequeamos
+//   date        — 'YYYY-MM-DD'
+//   time        — 'HH:MM'
+//   durationMin — minutos (default 30)
+//   excludeId   — id de cita a ignorar (útil al editar/reagendar)
+//
+// Devuelve:
+//   {
+//     conflict: boolean,
+//     conflictWith: { id, starts_at, ends_at, contact_name, duration_min } | null,
+//     suggestedSlots: [{ time: 'HH:MM', label: '6:00 PM' }, ...]  // hasta 6
+//   }
+function checkConflict(db, tenantId, { advisorId, date, time, durationMin, excludeId }) {
+  const dur = Number(durationMin) || 30;
+  if (!date || !time) return { conflict: false, conflictWith: null, suggestedSlots: [] };
+  // Sin asesor → no hay conflicto que chequear
+  if (!advisorId) return { conflict: false, conflictWith: null, suggestedSlots: [] };
+
+  const [yr, mo, dy] = date.split('-').map(Number);
+  const [h, m] = time.split(':').map(Number);
+  const startsAt = Math.floor(new Date(yr, mo - 1, dy, h, m, 0).getTime() / 1000);
+  const endsAt   = startsAt + dur * 60;
+
+  // Buscar cita del MISMO asesor que solape este rango
+  const params = [tenantId, Number(advisorId), endsAt, startsAt];
+  let where = `
+    WHERE a.tenant_id = ?
+      AND a.advisor_id = ?
+      AND a.status IN ('scheduled','confirmed')
+      AND a.starts_at < ?
+      AND a.ends_at > ?
+  `;
+  if (excludeId) {
+    where += ' AND a.id != ?';
+    params.push(Number(excludeId));
+  }
+
+  const conflictRow = db.prepare(`
+    SELECT a.id, a.starts_at, a.ends_at, a.duration_min,
+           c.first_name || ' ' || COALESCE(c.last_name, '') AS contact_name
+      FROM appointments a
+      LEFT JOIN contacts c ON c.id = a.contact_id
+      ${where}
+      ORDER BY a.starts_at ASC LIMIT 1
+  `).get(...params);
+
+  if (!conflictRow) return { conflict: false, conflictWith: null, suggestedSlots: [] };
+
+  // Hay conflicto — buscar slots libres cercanos usando getAvailableSlots
+  let suggestedSlots = [];
+  try {
+    const allSlots = getAvailableSlots(db, tenantId, date, advisorId, dur);
+    // Solo libres, y empezando justo después del fin de la cita en conflicto
+    const conflictEndMin = Math.floor((conflictRow.ends_at - Math.floor(new Date(yr, mo - 1, dy, 0, 0, 0).getTime() / 1000)) / 60);
+    suggestedSlots = allSlots
+      .filter(s => s.available)
+      .map(s => {
+        const [sh, sm] = s.time.split(':').map(Number);
+        return { ...s, _min: sh * 60 + sm };
+      })
+      .filter(s => s._min >= conflictEndMin) // solo a partir del fin del conflicto
+      .slice(0, 6)
+      .map(s => ({
+        time:  s.time,
+        label: _fmtTime(Math.floor(new Date(yr, mo - 1, dy, Math.floor(s._min/60), s._min%60).getTime() / 1000)),
+      }));
+
+    // Si no hay después, intentar antes
+    if (!suggestedSlots.length) {
+      suggestedSlots = allSlots
+        .filter(s => s.available)
+        .slice(0, 6)
+        .map(s => {
+          const [sh, sm] = s.time.split(':').map(Number);
+          const ts = Math.floor(new Date(yr, mo - 1, dy, sh, sm).getTime() / 1000);
+          return { time: s.time, label: _fmtTime(ts) };
+        });
+    }
+  } catch (e) {
+    suggestedSlots = [];
+  }
+
+  return {
+    conflict: true,
+    conflictWith: {
+      id:           conflictRow.id,
+      starts_at:    conflictRow.starts_at,
+      ends_at:      conflictRow.ends_at,
+      duration_min: conflictRow.duration_min,
+      contact_name: (conflictRow.contact_name || '').trim() || 'otro lead',
+      starts_label: _fmtTime(conflictRow.starts_at),
+      ends_label:   _fmtTime(conflictRow.ends_at),
+    },
+    suggestedSlots,
+  };
+}
+
+module.exports = { book, bookManual, scheduleReminder, cancelLatest, reschedule, list, update, getAvailableSlots, checkConflict, _fmtDate, _fmtTime };

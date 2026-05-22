@@ -24368,6 +24368,82 @@ function _updateApptSelectedSlotFromInputs() {
   }
   _refreshApptTimeWarning();
   _refreshApptValidation();
+  _checkApptConflict(); // chequeo async — habilita/deshabilita botón si hay conflicto
+}
+
+// Chequear conflicto de horario contra otras citas del asesor.
+// Llama al endpoint /api/appointments/check-conflict (debounced).
+// Si hay conflict: muestra warning rojo + lista de slots libres + deshabilita botón.
+// Si NO hay conflict: oculta warning, deja la validación normal manejar el botón.
+let _apptConflictTimer = null;
+let _apptConflictBusy = false;
+function _checkApptConflict() {
+  clearTimeout(_apptConflictTimer);
+  _apptConflictTimer = setTimeout(async () => {
+    const warnEl = document.getElementById('apptBookConflictWarn');
+    if (!warnEl) return;
+    const date     = document.getElementById('apptBookDate')?.value;
+    const time     = _apptBookSelectedSlot;
+    const advisorId = document.getElementById('apptBookAdvisor')?.value;
+    const duration = _apptBookGetDuration();
+    if (!date || !time || !advisorId) {
+      warnEl.hidden = true;
+      warnEl.innerHTML = '';
+      return;
+    }
+    if (_apptConflictBusy) return;
+    _apptConflictBusy = true;
+    try {
+      const params = new URLSearchParams({ advisorId, date, time, duration });
+      const data = await api('GET', `/api/appointments/check-conflict?${params}`);
+      if (data.conflict) {
+        const cw = data.conflictWith || {};
+        const slotsHtml = (data.suggestedSlots || []).length
+          ? `<div class="appt-conflict-slots">
+               <div class="appt-conflict-slots-label">Horarios disponibles:</div>
+               <div class="appt-conflict-slots-grid">
+                 ${data.suggestedSlots.map(s => `<button type="button" class="appt-conflict-slot" data-time="${escHtml(s.time)}">${escHtml(s.label)}</button>`).join('')}
+               </div>
+             </div>`
+          : '';
+        warnEl.innerHTML = `
+          <div class="appt-conflict-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
+            <span><strong>Asesor ocupado</strong> · ya tiene cita de ${escHtml(cw.starts_label || '')} a ${escHtml(cw.ends_label || '')} con ${escHtml(cw.contact_name || 'otro lead')}</span>
+          </div>
+          ${slotsHtml}`;
+        warnEl.hidden = false;
+        // Bloquear el botón mientras haya conflicto
+        const saveBtn = document.getElementById('apptBookSaveBtn');
+        if (saveBtn) saveBtn.disabled = true;
+        // Click en un slot sugerido → autocompletar hora/minuto
+        warnEl.querySelectorAll('.appt-conflict-slot').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const [hh, mm] = btn.dataset.time.split(':');
+            const hSel = document.getElementById('apptBookHour');
+            const mSel = document.getElementById('apptBookMinute');
+            if (hSel) hSel.value = hh;
+            if (mSel) {
+              const rounded = Math.round(Number(mm) / 5) * 5;
+              mSel.value = String(rounded).padStart(2, '0');
+            }
+            _updateApptSelectedSlotFromInputs();
+          });
+        });
+      } else {
+        warnEl.hidden = true;
+        warnEl.innerHTML = '';
+        // Re-aplicar validación normal por si era el único bloqueo
+        _refreshApptValidation();
+      }
+    } catch (err) {
+      // Si falla el endpoint, no bloquear — solo log
+      console.warn('check-conflict error:', err.message);
+      warnEl.hidden = true;
+    } finally {
+      _apptConflictBusy = false;
+    }
+  }, 300);
 }
 
 // Recorre todos los campos requeridos del modal y:
@@ -24595,13 +24671,15 @@ function setupApptBookModal() {
         _refreshApptValidation();
       }
       _loadApptSlots();
+      // Re-chequear conflicto al cambiar asesor / fecha / duración
+      _checkApptConflict();
     });
   });
   // Cambios en el input custom también recargan slots (debounced)
   let customTimer = null;
   document.getElementById('apptBookDurationCustom')?.addEventListener('input', () => {
     clearTimeout(customTimer);
-    customTimer = setTimeout(_loadApptSlots, 400);
+    customTimer = setTimeout(() => { _loadApptSlots(); _checkApptConflict(); }, 400);
   });
 
   // Hora/minuto libres — al cambiar actualizar el slot seleccionado

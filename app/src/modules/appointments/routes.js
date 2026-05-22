@@ -31,6 +31,26 @@ module.exports = function createAppointmentsRouter(db) {
     }
   });
 
+  // GET /api/appointments/check-conflict?advisorId=X&date=Y&time=Z&duration=W&excludeId=N
+  // Devuelve { conflict, conflictWith, suggestedSlots }
+  router.get('/check-conflict', (req, res) => {
+    try {
+      const { advisorId, date, time, duration, excludeId } = req.query;
+      if (!date || !time) return res.json({ conflict: false, conflictWith: null, suggestedSlots: [] });
+      const result = svc.checkConflict(db, req.tenantId, {
+        advisorId:   advisorId ? Number(advisorId) : null,
+        date,
+        time,
+        durationMin: duration ? Number(duration) : 30,
+        excludeId:   excludeId ? Number(excludeId) : null,
+      });
+      res.json(result);
+    } catch (err) {
+      console.error('[appointments] check-conflict error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/appointments — creación manual (desde modal CRM)
   router.post('/', (req, res) => {
     try {
@@ -42,6 +62,15 @@ module.exports = function createAppointmentsRouter(db) {
       });
       res.status(201).json({ item: appt });
     } catch (err) {
+      // Si fue conflicto de horario, devolver info estructurada para que el frontend muestre slots sugeridos
+      if (err.code === 'SLOT_CONFLICT') {
+        return res.status(409).json({
+          error: err.message,
+          errorCode: 'SLOT_CONFLICT',
+          conflictWith:   err.conflictWith,
+          suggestedSlots: err.suggestedSlots,
+        });
+      }
       console.error('[appointments] create error:', err.message);
       res.status(500).json({ error: err.message });
     }

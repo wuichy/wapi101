@@ -141,7 +141,7 @@ setTimeout(() => { checkWooInactivity(db); setInterval(() => checkWooInactivity(
 // cambia en cada deploy (cada reinicio del proceso) → cache key cambia →
 // browser y SW descargan fresco automáticamente.
 const BUILD_VERSION = String(Date.now());
-const HTML_FILES = ['index.html', 'login.html', 'super.html', 'signup.html', 'landing.html', 'privacy.html', 'terms.html'];
+const HTML_FILES = ['index.html', 'login.html', 'super.html', 'signup.html', 'landing.html', 'privacy.html', 'terms.html', 'developers.html'];
 const _htmlCache = {};
 function _injectVersion(html) {
   return html
@@ -174,6 +174,14 @@ app.get('/super', (_req, res) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
   if (_htmlCache['super.html']) return res.type('html').send(_htmlCache['super.html']);
   res.sendFile(path.join(__dirname, 'public', 'super.html'));
+});
+
+// Portal de developers — SPA mini (mismo HTML para todas las rutas hash-based).
+// Sin auth — la auth la maneja el JS del portal contra /api/dev.
+app.get(['/developers', '/developers/*'], (_req, res) => {
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  if (_htmlCache['developers.html']) return res.type('html').send(_htmlCache['developers.html']);
+  res.sendFile(path.join(__dirname, 'public', 'developers.html'));
 });
 
 // Páginas legales (públicas, sin auth). Servidas como rutas explícitas para
@@ -259,6 +267,15 @@ app.get('/api/public/plans', (_req, res) => {
 // ─── Super-admin API: monta ANTES del authMiddleware (/api). Tiene su propio
 // flujo de auth con tokens sa_*. NO usa req.tenantId ni filtros multi-tenant.
 mountSafe('/super', require('./src/modules/super/routes'));
+
+// ─── Developers Platform API: portal para devs externos. Sin auth advisor.
+// Tiene su propio flujo (tokens dev_*).
+mountSafe('/api/dev', require('./src/modules/developers/routes'));
+
+// ─── OAuth 2.0 server: /oauth/authorize, /oauth/token, /oauth/revoke
+// El consent screen es HTML inline; el authorize requiere cookie/header con
+// rh_token (sesión de advisor) para saber quién está autorizando.
+mountSafe('/oauth', require('./src/modules/oauth/routes'));
 
 // ─── Headers de seguridad globales (helmet) ───
 // Protege contra clickjacking, MIME sniffing, downgrade HTTP, etc.

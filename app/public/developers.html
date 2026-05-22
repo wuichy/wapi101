@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Wapi101 — Build with Wapi101</title>
+<meta name="description" content="Crea apps, integra webhooks y conecta IA con tu CRM Wapi101."/>
+<link rel="icon" href="/favicon.ico?v=3"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0b1220; --bg-alt:#101a30; --panel:#152038; --border:#1f2c4a;
+  --text:#e2e8f0; --text-muted:#94a3b8; --accent:#3b82f6; --accent-2:#60a5fa;
+  --success:#22c55e; --warning:#f59e0b; --danger:#ef4444;
+  --radius:12px; --code-bg:#0a1428;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2);text-decoration:none}
+a:hover{color:#93c5fd}
+code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
+
+/* ── Nav ── */
+.dp-nav{position:sticky;top:0;z-index:50;background:rgba(11,18,32,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.dp-nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:14px 24px}
+.dp-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:var(--text)}
+.dp-logo-square{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px}
+.dp-nav-links{display:flex;align-items:center;gap:20px}
+.dp-nav-links a{font-size:14px;color:var(--text-muted);font-weight:500}
+.dp-nav-links a:hover{color:var(--text)}
+.dp-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.dp-btn-primary{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}
+.dp-btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,.3)}
+.dp-btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+.dp-btn-ghost:hover{background:var(--bg-alt)}
+.dp-btn-danger{background:rgba(239,68,68,.15);color:#fca5a5}
+.dp-btn-danger:hover{background:rgba(239,68,68,.25)}
+
+/* ── Hero ── */
+.dp-hero{padding:100px 24px 80px;text-align:center;max-width:900px;margin:0 auto}
+.dp-hero h1{font-size:54px;line-height:1.1;font-weight:800;letter-spacing:-1px;background:linear-gradient(135deg,#e2e8f0,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.dp-hero .sub{margin-top:18px;font-size:20px;color:var(--text-muted);max-width:640px;margin-left:auto;margin-right:auto}
+.dp-hero-cta{margin-top:36px;display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.dp-hero-cta .dp-btn{padding:13px 22px;font-size:15px}
+
+/* ── Features grid ── */
+.dp-section{max-width:1100px;margin:0 auto;padding:60px 24px}
+.dp-section h2{font-size:32px;font-weight:700;margin-bottom:12px;letter-spacing:-.5px}
+.dp-section .lead{color:var(--text-muted);font-size:16px;margin-bottom:36px;max-width:600px}
+.dp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.dp-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:24px;transition:transform .15s,border-color .15s}
+.dp-card:hover{transform:translateY(-2px);border-color:#2d3f6b}
+.dp-card-ico{width:38px;height:38px;border-radius:9px;background:rgba(59,130,246,.18);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:var(--accent-2)}
+.dp-card h3{font-size:17px;font-weight:600;margin-bottom:6px}
+.dp-card p{font-size:14px;color:var(--text-muted)}
+
+/* ── Code preview ── */
+.dp-code{background:var(--code-bg);border:1px solid var(--border);border-radius:var(--radius);padding:20px;overflow-x:auto;font-size:13px;line-height:1.6;margin-top:20px}
+.dp-code code{color:#e2e8f0}
+.dp-code .k{color:#c084fc}
+.dp-code .s{color:#86efac}
+.dp-code .c{color:#64748b;font-style:italic}
+.dp-code .n{color:#fbbf24}
+
+/* ── Footer ── */
+.dp-footer{margin-top:80px;padding:40px 24px;border-top:1px solid var(--border);text-align:center;color:var(--text-muted);font-size:13px}
+
+/* ── Auth pages (signup/login) ── */
+.dp-auth-wrap{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 70px);padding:40px 24px}
+.dp-auth-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:32px;max-width:420px;width:100%}
+.dp-auth-card h1{font-size:24px;margin-bottom:6px}
+.dp-auth-card .sub{color:var(--text-muted);font-size:14px;margin-bottom:24px}
+.dp-input-group{margin-bottom:14px}
+.dp-input-group label{display:block;font-size:12px;color:var(--text-muted);margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.dp-input{width:100%;padding:11px 13px;border-radius:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-size:14px;font-family:inherit}
+.dp-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.dp-form-actions{margin-top:20px}
+.dp-form-actions .dp-btn{width:100%;justify-content:center;padding:12px}
+.dp-form-bottom{margin-top:18px;text-align:center;font-size:13px;color:var(--text-muted)}
+.dp-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:14px}
+
+/* ── Dashboard ── */
+.dp-dash{max-width:1100px;margin:0 auto;padding:32px 24px}
+.dp-dash-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:14px}
+.dp-dash-head h1{font-size:28px;font-weight:700}
+.dp-dash-head .sub{color:var(--text-muted);font-size:14px;margin-top:4px}
+.dp-apps-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.dp-app-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;transition:border-color .15s,transform .15s}
+.dp-app-card:hover{border-color:#2d3f6b;transform:translateY(-1px)}
+.dp-app-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.dp-app-ico{width:36px;height:36px;border-radius:8px;background:#1d2940;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.dp-app-name{font-weight:600;font-size:15px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dp-app-status{font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em}
+.dp-app-status-draft{background:rgba(148,163,184,.2);color:#cbd5e1}
+.dp-app-status-in_review{background:rgba(245,158,11,.2);color:#fcd34d}
+.dp-app-status-approved{background:rgba(34,197,94,.2);color:#86efac}
+.dp-app-status-rejected{background:rgba(239,68,68,.2);color:#fca5a5}
+.dp-app-status-suspended{background:rgba(239,68,68,.4);color:#fff}
+.dp-app-desc{font-size:13px;color:var(--text-muted);margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dp-app-meta{display:flex;gap:14px;font-size:12px;color:var(--text-muted)}
+.dp-app-meta b{color:var(--text)}
+.dp-empty{background:var(--panel);border:1px dashed var(--border);border-radius:var(--radius);padding:40px 24px;text-align:center;color:var(--text-muted)}
+.dp-empty h3{color:var(--text);margin-bottom:6px}
+
+/* ── Modal ── */
+.dp-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px}
+.dp-modal-backdrop[hidden]{display:none}
+.dp-modal{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);max-width:560px;width:100%;max-height:90vh;overflow-y:auto}
+.dp-modal-head{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.dp-modal-head h2{font-size:18px}
+.dp-modal-body{padding:20px 24px}
+.dp-modal-foot{padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+.dp-modal-close{background:transparent;border:none;color:var(--text-muted);font-size:24px;cursor:pointer;line-height:1}
+.dp-checkbox-group{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px}
+.dp-checkbox-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px}
+.dp-checkbox-item:hover{background:var(--bg-alt)}
+.dp-checkbox-item input{margin:0}
+.dp-checkbox-item.sensitive{background:rgba(245,158,11,.05)}
+.dp-checkbox-item code{font-size:11px;background:var(--bg);padding:1px 5px;border-radius:4px;margin-left:auto;color:var(--text-muted)}
+.dp-input-help{font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.4}
+.dp-secret-display{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:12px;word-break:break-all;color:var(--success);margin:8px 0}
+.dp-warn-box{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:12px;font-size:13px;color:#fcd34d;margin:12px 0}
+
+/* ── App detail view ── */
+.dp-detail{max-width:900px;margin:0 auto;padding:32px 24px}
+.dp-detail-back{display:inline-flex;align-items:center;gap:6px;color:var(--text-muted);font-size:13px;margin-bottom:18px;cursor:pointer;background:none;border:0}
+.dp-detail-back:hover{color:var(--text)}
+.dp-detail-head{display:flex;align-items:flex-start;gap:16px;margin-bottom:28px}
+.dp-detail-head .ico{width:56px;height:56px;border-radius:12px;background:#1d2940;display:flex;align-items:center;justify-content:center;font-size:24px}
+.dp-detail-head h1{font-size:24px;margin-bottom:4px}
+.dp-detail-head .sub{color:var(--text-muted);font-size:13px}
+.dp-detail-section{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:18px}
+.dp-detail-section h3{font-size:14px;font-weight:600;margin-bottom:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)}
+.dp-kv{display:grid;grid-template-columns:140px 1fr;gap:10px 14px;align-items:start;font-size:13px}
+.dp-kv .k{color:var(--text-muted)}
+.dp-kv .v{font-family:'JetBrains Mono',monospace;font-size:12px;word-break:break-all}
+.dp-copy-btn{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-muted);padding:1px 6px;font-size:10px;cursor:pointer;margin-left:6px;font-family:inherit}
+.dp-copy-btn:hover{color:var(--text)}
+
+@media (max-width:640px){
+  .dp-hero h1{font-size:36px}
+  .dp-hero .sub{font-size:16px}
+  .dp-nav-links a:not(.dp-btn){display:none}
+}
+
+</style>
+</head><body>
+
+<!-- ═════════════ NAV ═════════════ -->
+<nav class="dp-nav">
+  <div class="dp-nav-inner">
+    <a href="#/" class="dp-logo">
+      <div class="dp-logo-square">W</div>
+      <span>Wapi101 Developers</span>
+    </a>
+    <div class="dp-nav-links">
+      <a href="#/docs">Docs</a>
+      <a href="#/dashboard" id="dpNavDashboard" hidden>Dashboard</a>
+      <button class="dp-btn dp-btn-ghost" id="dpNavLogin">Iniciar sesión</button>
+      <button class="dp-btn dp-btn-primary" id="dpNavSignup">Crear cuenta</button>
+      <button class="dp-btn dp-btn-ghost" id="dpNavLogout" hidden>Salir</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ═════════════ LANDING (#/) ═════════════ -->
+<div id="viewLanding">
+  <div class="dp-hero">
+    <h1>Construye con Wapi101</h1>
+    <p class="sub">Crea apps, recibe webhooks y conecta IA con uno de los CRMs más usados de LATAM. OAuth 2.0, REST API y MCP listos para integrar.</p>
+    <div class="dp-hero-cta">
+      <button class="dp-btn dp-btn-primary" onclick="location.hash='#/signup'">Crear cuenta de desarrollador →</button>
+      <a href="#/docs" class="dp-btn dp-btn-ghost">Ver documentación</a>
+    </div>
+  </div>
+
+  <div class="dp-section">
+    <h2>Todo lo que necesitas</h2>
+    <p class="lead">Herramientas estándar de la industria. Sin sorpresas, sin lock-in.</p>
+    <div class="dp-grid">
+      <div class="dp-card">
+        <div class="dp-card-ico">🔐</div>
+        <h3>OAuth 2.0</h3>
+        <p>Authorization code flow + refresh tokens. Lo mismo que Stripe, Shopify, Slack.</p>
+      </div>
+      <div class="dp-card">
+        <div class="dp-card-ico">⚡</div>
+        <h3>Webhooks</h3>
+        <p>Suscríbete a eventos en tiempo real: leads, mensajes, citas. Firmados con HMAC.</p>
+      </div>
+      <div class="dp-card">
+        <div class="dp-card-ico">🤖</div>
+        <h3>MCP nativo</h3>
+        <p>Conecta GPT, Claude o cualquier IA con el CRM directamente. JSON-RPC sobre HTTP.</p>
+      </div>
+      <div class="dp-card">
+        <div class="dp-card-ico">📦</div>
+        <h3>Marketplace</h3>
+        <p>Lanza tu app al marketplace de Wapi101. Llega a todos nuestros clientes en LATAM.</p>
+      </div>
+      <div class="dp-card">
+        <div class="dp-card-ico">🛡</div>
+        <h3>Permisos granulares</h3>
+        <p>Scopes específicos: leads:read, messages:send, etc. El cliente ve y aprueba cada uno.</p>
+      </div>
+      <div class="dp-card">
+        <div class="dp-card-ico">📊</div>
+        <h3>Audit logs</h3>
+        <p>Cada llamada queda registrada. Para tu debugging y para que el cliente confíe.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="dp-section">
+    <h2>Empieza en 5 minutos</h2>
+    <p class="lead">Crea una app, recibe credenciales OAuth, y haz tu primera llamada.</p>
+    <div class="dp-code">
+<pre><code><span class="c"># 1) Tu cliente autoriza tu app (OAuth flow)</span>
+<span class="k">GET</span> https://wapi101.com/oauth/authorize?client_id=<span class="n">tu_app</span>&redirect_uri=<span class="n">...</span>&scope=<span class="n">leads:read</span>
+
+<span class="c"># 2) Intercambias el code por un token</span>
+<span class="k">POST</span> https://wapi101.com/oauth/token
+  grant_type=authorization_code&code=<span class="n">...</span>
+
+<span class="c"># 3) Llamas la API con tu token</span>
+<span class="k">GET</span> https://wapi101.com/api/expedients
+  Authorization: Bearer <span class="s">wapi_at_xxx...</span></code></pre>
+    </div>
+  </div>
+
+  <div class="dp-footer">
+    Wapi101 Developers · <a href="/">Volver al CRM</a>
+  </div>
+</div>
+
+<!-- ═════════════ SIGNUP / LOGIN ═════════════ -->
+<div id="viewSignup" hidden>
+  <div class="dp-auth-wrap">
+    <div class="dp-auth-card">
+      <h1>Crear cuenta de desarrollador</h1>
+      <p class="sub">Empieza a construir con Wapi101 — es gratis.</p>
+      <div id="signupErr" class="dp-error" hidden></div>
+      <form id="signupForm">
+        <div class="dp-input-group">
+          <label>Nombre completo</label>
+          <input class="dp-input" name="name" required autocomplete="name"/>
+        </div>
+        <div class="dp-input-group">
+          <label>Email</label>
+          <input class="dp-input" type="email" name="email" required autocomplete="email"/>
+        </div>
+        <div class="dp-input-group">
+          <label>Password</label>
+          <input class="dp-input" type="password" name="password" minlength="8" required autocomplete="new-password"/>
+          <div class="dp-input-help">Mínimo 8 caracteres</div>
+        </div>
+        <div class="dp-input-group">
+          <label>Empresa (opcional)</label>
+          <input class="dp-input" name="company" autocomplete="organization"/>
+        </div>
+        <div class="dp-input-group">
+          <label>País (opcional)</label>
+          <input class="dp-input" name="country" placeholder="ej. México" autocomplete="country-name"/>
+        </div>
+        <div class="dp-form-actions">
+          <button type="submit" class="dp-btn dp-btn-primary">Crear cuenta</button>
+        </div>
+      </form>
+      <div class="dp-form-bottom">
+        ¿Ya tienes cuenta? <a href="#/login">Iniciar sesión</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewLogin" hidden>
+  <div class="dp-auth-wrap">
+    <div class="dp-auth-card">
+      <h1>Iniciar sesión</h1>
+      <p class="sub">Accede a tu portal de developer.</p>
+      <div id="loginErr" class="dp-error" hidden></div>
+      <form id="loginForm">
+        <div class="dp-input-group">
+          <label>Email</label>
+          <input class="dp-input" type="email" name="email" required autocomplete="email"/>
+        </div>
+        <div class="dp-input-group">
+          <label>Password</label>
+          <input class="dp-input" type="password" name="password" required autocomplete="current-password"/>
+        </div>
+        <div class="dp-form-actions">
+          <button type="submit" class="dp-btn dp-btn-primary">Entrar</button>
+        </div>
+      </form>
+      <div class="dp-form-bottom">
+        ¿No tienes cuenta? <a href="#/signup">Crear cuenta</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════ DASHBOARD ═════════════ -->
+<div id="viewDashboard" hidden>
+  <div class="dp-dash">
+    <div class="dp-dash-head">
+      <div>
+        <h1>Tus apps</h1>
+        <p class="sub" id="dashGreeting">Hola</p>
+      </div>
+      <button class="dp-btn dp-btn-primary" id="btnNewApp">+ Nueva app</button>
+    </div>
+    <div id="appsListContainer"></div>
+  </div>
+</div>
+
+<!-- ═════════════ APP DETAIL ═════════════ -->
+<div id="viewAppDetail" hidden>
+  <div class="dp-detail">
+    <button class="dp-detail-back" onclick="location.hash='#/dashboard'">← Volver a tus apps</button>
+    <div id="appDetailContent"></div>
+  </div>
+</div>
+
+<!-- ═════════════ MODAL: NUEVA APP ═════════════ -->
+<div class="dp-modal-backdrop" id="newAppModal" hidden>
+  <div class="dp-modal">
+    <div class="dp-modal-head">
+      <h2>Crear nueva app</h2>
+      <button class="dp-modal-close" data-close-new-app>×</button>
+    </div>
+    <div class="dp-modal-body">
+      <div id="newAppErr" class="dp-error" hidden></div>
+      <form id="newAppForm">
+        <div class="dp-input-group">
+          <label>Nombre de la app</label>
+          <input class="dp-input" name="name" required placeholder="ej. SyncCRM Pro"/>
+        </div>
+        <div class="dp-input-group">
+          <label>Descripción corta</label>
+          <input class="dp-input" name="shortDescription" placeholder="Una frase describiendo qué hace"/>
+        </div>
+        <div class="dp-input-group">
+          <label>Categoría</label>
+          <select class="dp-input" name="category">
+            <option value="">— Sin categoría —</option>
+            <option>productividad</option>
+            <option>email</option>
+            <option>sms</option>
+            <option>pagos</option>
+            <option>ecommerce</option>
+            <option>ia</option>
+            <option>otros</option>
+          </select>
+        </div>
+        <div class="dp-input-group">
+          <label>Redirect URIs (una por línea)</label>
+          <textarea class="dp-input" name="redirectUris" rows="3" placeholder="https://tuapp.com/oauth/callback"></textarea>
+          <div class="dp-input-help">A dónde redirigimos al usuario después del OAuth. Acepta múltiples (una por línea).</div>
+        </div>
+        <div class="dp-input-group">
+          <label>Permisos que pedirás (scopes)</label>
+          <div class="dp-checkbox-group" id="newAppScopes"></div>
+        </div>
+        <div class="dp-input-group">
+          <label>Webhook URL (opcional)</label>
+          <input class="dp-input" name="webhookUrl" type="url" placeholder="https://tuapp.com/webhooks/wapi"/>
+        </div>
+      </form>
+    </div>
+    <div class="dp-modal-foot">
+      <button class="dp-btn dp-btn-ghost" data-close-new-app>Cancelar</button>
+      <button class="dp-btn dp-btn-primary" id="btnSubmitNewApp">Crear app</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════════ MODAL: NUEVA APP CREATED (secret display) ═════════════ -->
+<div class="dp-modal-backdrop" id="appCreatedModal" hidden>
+  <div class="dp-modal">
+    <div class="dp-modal-head">
+      <h2>¡App creada!</h2>
+    </div>
+    <div class="dp-modal-body">
+      <p style="margin-bottom:14px">Guarda estos valores en un lugar seguro. <strong>El client_secret no se mostrará de nuevo.</strong></p>
+      <label class="dp-input-group" style="margin-bottom:10px">
+        <span style="font-size:11px;text-transform:uppercase;color:var(--text-muted);font-weight:500">client_id</span>
+        <div class="dp-secret-display" id="createdClientId"></div>
+      </label>
+      <label class="dp-input-group" style="margin-bottom:10px">
+        <span style="font-size:11px;text-transform:uppercase;color:var(--text-muted);font-weight:500">client_secret</span>
+        <div class="dp-secret-display" id="createdClientSecret"></div>
+      </label>
+      <label class="dp-input-group" id="webhookSecretWrap" hidden>
+        <span style="font-size:11px;text-transform:uppercase;color:var(--text-muted);font-weight:500">webhook signing secret</span>
+        <div class="dp-secret-display" id="createdWebhookSecret"></div>
+      </label>
+      <div class="dp-warn-box">⚠ Guarda el secret AHORA. Si lo pierdes, tendrás que regenerarlo (invalidando todos los tokens activos).</div>
+    </div>
+    <div class="dp-modal-foot">
+      <button class="dp-btn dp-btn-primary" id="btnAppCreatedDone">Lo guardé, continuar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═════════════ SPA mini ═════════════
+const $ = (id) => document.getElementById(id);
+const TOKEN_KEY = 'wapi_dev_token';
+const ACCOUNT_KEY = 'wapi_dev_account';
+
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function setAuth(token, account) {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
+  updateNavAuth();
+}
+function clearAuth() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(ACCOUNT_KEY);
+  updateNavAuth();
+}
+function getAccount() {
+  try { return JSON.parse(localStorage.getItem(ACCOUNT_KEY) || 'null'); } catch { return null; }
+}
+
+async function api(method, path, body) {
+  const r = await fetch('/api/dev' + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Error ' + r.status);
+  return data;
+}
+
+function showView(name) {
+  ['Landing', 'Signup', 'Login', 'Dashboard', 'AppDetail'].forEach(v => {
+    $('view' + v).hidden = (v.toLowerCase() !== name);
+  });
+}
+
+function updateNavAuth() {
+  const tok = getToken();
+  $('dpNavLogin').hidden = !!tok;
+  $('dpNavSignup').hidden = !!tok;
+  $('dpNavLogout').hidden = !tok;
+  $('dpNavDashboard').hidden = !tok;
+}
+
+// ─── Router ───
+function route() {
+  const hash = location.hash || '#/';
+  if (hash.startsWith('#/login'))    return showView('login');
+  if (hash.startsWith('#/signup'))   return showView('signup');
+  if (hash.startsWith('#/dashboard')) {
+    if (!getToken()) { location.hash = '#/login'; return; }
+    loadDashboard();
+    return showView('dashboard');
+  }
+  const appMatch = hash.match(/^#\/apps\/(\d+)/);
+  if (appMatch) {
+    if (!getToken()) { location.hash = '#/login'; return; }
+    loadAppDetail(Number(appMatch[1]));
+    return showView('appDetail');
+  }
+  showView('landing');
+}
+
+window.addEventListener('hashchange', route);
+window.addEventListener('load', () => {
+  updateNavAuth();
+  route();
+});
+
+// ─── Nav handlers ───
+$('dpNavLogin').addEventListener('click', () => location.hash = '#/login');
+$('dpNavSignup').addEventListener('click', () => location.hash = '#/signup');
+$('dpNavLogout').addEventListener('click', async () => {
+  try { await api('POST', '/logout'); } catch {}
+  clearAuth();
+  location.hash = '#/';
+});
+
+// ─── Signup ───
+$('signupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const errEl = $('signupErr');
+  errEl.hidden = true;
+  try {
+    const r = await api('POST', '/signup', Object.fromEntries(fd));
+    setAuth(r.token, r.account);
+    location.hash = '#/dashboard';
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  }
+});
+
+// ─── Login ───
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const errEl = $('loginErr');
+  errEl.hidden = true;
+  try {
+    const r = await api('POST', '/login', Object.fromEntries(fd));
+    setAuth(r.token, r.account);
+    location.hash = '#/dashboard';
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  }
+});
+
+// ─── Dashboard ───
+async function loadDashboard() {
+  const acc = getAccount();
+  if (acc) $('dashGreeting').textContent = 'Hola ' + acc.name;
+  const list = $('appsListContainer');
+  list.innerHTML = '<p style="color:var(--text-muted)">Cargando…</p>';
+  try {
+    const { items } = await api('GET', '/apps');
+    if (!items.length) {
+      list.innerHTML = `
+        <div class="dp-empty">
+          <h3>Aún no tienes apps</h3>
+          <p>Crea tu primera app para empezar a integrar con Wapi101.</p>
+        </div>`;
+      return;
+    }
+    list.innerHTML = '<div class="dp-apps-list">' + items.map(a => `
+      <div class="dp-app-card" onclick="location.hash='#/apps/${a.id}'">
+        <div class="dp-app-head">
+          <div class="dp-app-ico">${a.icon_url ? `<img src="${esc(a.icon_url)}" style="width:100%;height:100%;border-radius:8px"/>` : '🧩'}</div>
+          <div class="dp-app-name">${esc(a.name)}</div>
+          <span class="dp-app-status dp-app-status-${a.status}">${a.status.replace('_', ' ')}</span>
+        </div>
+        <div class="dp-app-desc">${esc(a.short_description || 'Sin descripción')}</div>
+        <div class="dp-app-meta">
+          <span><b>${a.install_count || 0}</b> instalaciones</span>
+          <span>${a.category || '—'}</span>
+        </div>
+      </div>`).join('') + '</div>';
+  } catch (err) {
+    list.innerHTML = '<p style="color:#fca5a5">Error: ' + esc(err.message) + '</p>';
+  }
+}
+
+// ─── App detail ───
+async function loadAppDetail(id) {
+  const root = $('appDetailContent');
+  root.innerHTML = '<p style="color:var(--text-muted)">Cargando…</p>';
+  try {
+    const { app } = await api('GET', '/apps/' + id);
+    root.innerHTML = `
+      <div class="dp-detail-head">
+        <div class="ico">${app.icon_url ? `<img src="${esc(app.icon_url)}" style="width:100%;height:100%;border-radius:12px"/>` : '🧩'}</div>
+        <div style="flex:1;min-width:0">
+          <h1>${esc(app.name)}</h1>
+          <div class="sub">${esc(app.short_description || 'Sin descripción')} · <span class="dp-app-status dp-app-status-${app.status}">${app.status.replace('_', ' ')}</span></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          ${app.status === 'draft' ? `<button class="dp-btn dp-btn-primary" onclick="submitApp(${app.id})">Enviar a revisión</button>` : ''}
+          <button class="dp-btn dp-btn-danger" onclick="deleteApp(${app.id})">Eliminar</button>
+        </div>
+      </div>
+      <div class="dp-detail-section">
+        <h3>Credenciales OAuth</h3>
+        <div class="dp-kv">
+          <div class="k">client_id</div>
+          <div class="v">${esc(app.client_id)} <button class="dp-copy-btn" onclick="copy('${esc(app.client_id)}', this)">Copiar</button></div>
+          <div class="k">client_secret</div>
+          <div class="v" style="color:var(--text-muted)">[oculto] <button class="dp-copy-btn" onclick="regenSecret(${app.id})">Regenerar</button></div>
+        </div>
+      </div>
+      <div class="dp-detail-section">
+        <h3>Configuración</h3>
+        <div class="dp-kv">
+          <div class="k">Redirect URIs</div>
+          <div class="v">${(app.redirect_uris || []).map(u => esc(u)).join('<br/>') || '<span style="color:var(--text-muted)">—</span>'}</div>
+          <div class="k">Scopes</div>
+          <div class="v">${(app.scopes_requested || []).map(s => `<code style="background:var(--bg);padding:1px 5px;border-radius:4px;margin-right:4px">${esc(s)}</code>`).join('') || '<span style="color:var(--text-muted)">—</span>'}</div>
+          <div class="k">Webhook URL</div>
+          <div class="v">${esc(app.webhook_url || '—')}</div>
+          <div class="k">Categoría</div>
+          <div class="v">${esc(app.category || '—')}</div>
+        </div>
+      </div>
+      <div class="dp-detail-section">
+        <h3>Instalaciones (${app.install_count || 0})</h3>
+        <p style="color:var(--text-muted);font-size:13px">Cuando alguien autorice tu app vía OAuth, aparecerá aquí.</p>
+      </div>`;
+  } catch (err) {
+    root.innerHTML = '<p style="color:#fca5a5">Error: ' + esc(err.message) + '</p>';
+  }
+}
+
+async function submitApp(id) {
+  if (!confirm('¿Enviar esta app a revisión? Asegúrate de tener descripción, icono y privacy policy completos.')) return;
+  try {
+    await api('POST', '/apps/' + id + '/submit');
+    alert('App enviada a revisión');
+    loadAppDetail(id);
+  } catch (err) { alert(err.message); }
+}
+
+async function deleteApp(id) {
+  if (!confirm('¿Eliminar esta app? Esta acción no se puede deshacer.')) return;
+  try {
+    await api('DELETE', '/apps/' + id);
+    location.hash = '#/dashboard';
+  } catch (err) { alert(err.message); }
+}
+
+async function regenSecret(id) {
+  if (!confirm('Esto invalidará TODOS los tokens activos de esta app. ¿Continuar?')) return;
+  try {
+    const r = await api('POST', '/apps/' + id + '/secret/regenerate');
+    prompt('Nuevo client_secret (cópialo, no se mostrará de nuevo):', r.clientSecret);
+  } catch (err) { alert(err.message); }
+}
+
+function copy(text, btn) {
+  navigator.clipboard.writeText(text);
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓'; setTimeout(() => btn.textContent = orig, 1200); }
+}
+
+// ─── New app modal ───
+$('btnNewApp').addEventListener('click', async () => {
+  $('newAppModal').hidden = false;
+  const scopesEl = $('newAppScopes');
+  scopesEl.innerHTML = '<p style="color:var(--text-muted);font-size:12px">Cargando…</p>';
+  try {
+    const { scopes } = await api('GET', '/scopes');
+    scopesEl.innerHTML = scopes.map(s => `
+      <label class="dp-checkbox-item ${s.sensitive ? 'sensitive' : ''}">
+        <input type="checkbox" name="scope" value="${esc(s.key)}"/>
+        <span>${esc(s.label)}</span>
+        <code>${esc(s.key)}</code>
+      </label>`).join('');
+  } catch (err) {
+    scopesEl.innerHTML = '<p style="color:#fca5a5">Error cargando scopes</p>';
+  }
+});
+
+document.querySelectorAll('[data-close-new-app]').forEach(el => {
+  el.addEventListener('click', () => $('newAppModal').hidden = true);
+});
+
+$('btnSubmitNewApp').addEventListener('click', async () => {
+  const form = $('newAppForm');
+  const fd = new FormData(form);
+  const scopes = Array.from(form.querySelectorAll('input[name="scope"]:checked')).map(c => c.value);
+  const redirectUris = String(fd.get('redirectUris') || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const body = {
+    name: fd.get('name'),
+    shortDescription: fd.get('shortDescription'),
+    category: fd.get('category'),
+    redirectUris,
+    scopesRequested: scopes,
+    webhookUrl: fd.get('webhookUrl') || null,
+  };
+  const errEl = $('newAppErr');
+  errEl.hidden = true;
+  try {
+    const { app } = await api('POST', '/apps', body);
+    $('newAppModal').hidden = true;
+    form.reset();
+    // Mostrar secrets
+    $('createdClientId').textContent = app.client_id;
+    $('createdClientSecret').textContent = app.clientSecret;
+    if (app.webhookSecret) {
+      $('webhookSecretWrap').hidden = false;
+      $('createdWebhookSecret').textContent = app.webhookSecret;
+    } else {
+      $('webhookSecretWrap').hidden = true;
+    }
+    $('appCreatedModal').hidden = false;
+    // Refrescar dashboard cuando se cierre
+    $('btnAppCreatedDone').onclick = () => {
+      $('appCreatedModal').hidden = true;
+      location.hash = '#/apps/' + app.id;
+    };
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  }
+});
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+</script>
+</body></html>

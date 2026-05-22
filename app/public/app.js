@@ -9969,6 +9969,8 @@ function openBotBuilder(bot, returnTo = null) {
 }
 
 function closeBotBuilder() {
+  // Si el modo Pantalla completa de la vista Editable estaba activo, salir.
+  document.body.classList.remove('bb-ve-fullscreen-on');
   document.getElementById('botBuilder').hidden = true;
   document.getElementById('botListView').hidden = false;
   const _bce = document.getElementById('topbarBotExtras'); if (_bce) _bce.hidden = false;
@@ -12319,6 +12321,11 @@ function setupBot() {
     document.querySelectorAll('.bb-view-content').forEach(c => {
       c.hidden = c.dataset.view !== view;
     });
+    // Si salimos de la vista Editable mientras estaba en fullscreen, desactivar
+    // el modo fullscreen para que la UI normal vuelva a mostrarse.
+    if (view !== 'editable' && document.body.classList.contains('bb-ve-fullscreen-on')) {
+      document.body.classList.remove('bb-ve-fullscreen-on');
+    }
     if (view === 'code')     bbRenderCodeView();
     if (view === 'indented') bbRenderIndentedView();
     if (view === 'visual')   { bbRenderVisualView(); }
@@ -12759,6 +12766,31 @@ function setupBot() {
     document.getElementById('bbVeZoomIn')?.addEventListener('click', () => { _bbVe.viewport.zoom = Math.min(2.5, _bbVe.viewport.zoom*1.2); _bbVeApplyViewport(); });
     document.getElementById('bbVeZoomOut')?.addEventListener('click', () => { _bbVe.viewport.zoom = Math.max(0.3, _bbVe.viewport.zoom/1.2); _bbVeApplyViewport(); });
     document.getElementById('bbVeZoomReset')?.addEventListener('click', () => _bbVeFitView());
+
+    // Botón Pantalla completa
+    document.getElementById('bbVeFsBtn')?.addEventListener('click', _bbVeToggleFullscreen);
+
+    // Tecla Esc → salir del fullscreen (solo si está activo)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.body.classList.contains('bb-ve-fullscreen-on')) {
+        _bbVeToggleFullscreen();
+      } else if ((e.key === 'f' || e.key === 'F') && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        // F = toggle fullscreen (solo si la vista Editable está visible)
+        const editableView = document.querySelector('.bb-view-content[data-view="editable"]');
+        if (editableView && !editableView.hidden) {
+          e.preventDefault();
+          _bbVeToggleFullscreen();
+        }
+      }
+    });
+  }
+
+  function _bbVeToggleFullscreen() {
+    const on = document.body.classList.toggle('bb-ve-fullscreen-on');
+    const btn = document.getElementById('bbVeFsBtn');
+    if (btn) btn.title = on ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa (F)';
+    // Recentrar viewport tras cambiar el tamaño del canvas
+    setTimeout(() => { try { _bbVeFitView(); } catch (_) {} }, 250);
   }
 
   function _bbVeSetupInspector() {

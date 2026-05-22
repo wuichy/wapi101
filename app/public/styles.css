@@ -13602,6 +13602,86 @@ button, a, [role="button"], .btn, [data-action] {
   background-size: 24px 24px;
   background-position: 0 0;
 }
+
+/* Botón Pantalla completa — esquina superior derecha del canvas */
+.bb-ve-fs-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 30;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(21, 32, 56, 0.92);
+  color: #cbd5e1;
+  border: 1px solid #25334f;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  transition: background .15s, color .15s, border-color .15s, transform .12s;
+  padding: 0;
+}
+.bb-ve-fs-btn:hover {
+  background: rgba(59, 130, 246, 0.95);
+  color: #fff;
+  border-color: rgba(59, 130, 246, 0.95);
+  transform: scale(1.04);
+}
+.bb-ve-fs-btn .bb-ve-fs-ico-compress { display: none; }
+body.bb-ve-fullscreen-on .bb-ve-fs-btn .bb-ve-fs-ico-expand { display: none; }
+body.bb-ve-fullscreen-on .bb-ve-fs-btn .bb-ve-fs-ico-compress { display: block; }
+
+/* ─── Modo Pantalla Completa ───
+   Cuando body tiene .bb-ve-fullscreen-on, la vista Editable ocupa toda la
+   pantalla: oculta nav lateral, top header del builder, y los tabs.
+   Salir con click en el botón o tecla Esc. */
+body.bb-ve-fullscreen-on {
+  overflow: hidden;
+}
+body.bb-ve-fullscreen-on .nav-bar,
+body.bb-ve-fullscreen-on .rh-top-nav,
+body.bb-ve-fullscreen-on .mobile-bottom-nav,
+body.bb-ve-fullscreen-on .top-mobile-bar,
+body.bb-ve-fullscreen-on #rhPushCta,
+body.bb-ve-fullscreen-on .impersonation-floating-btn {
+  display: none !important;
+}
+body.bb-ve-fullscreen-on .view[data-view-name="bot"],
+body.bb-ve-fullscreen-on .view[data-view-name="bot"] .view-content,
+body.bb-ve-fullscreen-on .view[data-view-name="bot"] .bot-builder {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9000;
+  background: #0e162a;
+  overflow: hidden;
+}
+/* Ocultar el resto del builder cuando estamos en fullscreen — solo el canvas
+   editable se ve. Los tabs/header del builder se esconden. */
+body.bb-ve-fullscreen-on .bb-view-tabs,
+body.bb-ve-fullscreen-on .bb-builder-header,
+body.bb-ve-fullscreen-on .bb-view-content:not([data-view="editable"]) {
+  display: none !important;
+}
+body.bb-ve-fullscreen-on .bb-view-content[data-view="editable"] {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body.bb-ve-fullscreen-on .bb-ve-wrap {
+  height: 100vh !important;
+  min-height: 100vh !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
 .bb-ve-canvas {
   position: absolute; inset: 0;
   transform-origin: 0 0;

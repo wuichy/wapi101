@@ -300,6 +300,7 @@ app.get('/api/push/vapid-public-key', (_req, res) => {
 
 // ─── Login endpoints (públicos, no requieren sesión) ───
 const { authMiddleware, loadTenant } = require('./src/middleware/auth');
+const { oauthRateLimit } = require('./src/middleware/oauthRateLimit');
 
 // Rate limiting para login: 10 intentos por IP cada 15 min.
 // Si el atacante usa rotación de IPs hay menos prevención (necesitaríamos fail2ban
@@ -582,6 +583,7 @@ app.use('/api', (_req, res, next) => {
 
 // ─── Proteger todas las rutas /api/* con auth ───
 app.use('/api', authMiddleware(db));
+app.use('/api', oauthRateLimit()); // no-op para advisors; enforza límite si req.appAuth
 
 // API básica (protegida)
 app.get('/api/me', (req, res) => res.json({ advisor: req.advisor }));
@@ -849,6 +851,7 @@ mountSafe('/api/push',               require('./src/modules/notifications/routes
 mountSafe('/api/notifications',      require('./src/modules/notifications/routes'));
 mountSafe('/api/billing',            require('./src/modules/billing/routes'));
 mountSafe('/api/tasks',              require('./src/modules/tasks/routes'));
+mountSafe('/api/tenant-apps',        require('./src/modules/tenant-apps/routes'));
 mountSafe('/api/ai-knowledge',       require('./src/modules/ai-knowledge/routes'));
 mountSafe('/api/analytics',          require('./src/modules/analytics/routes'));
 mountSafe('/api/business',           require('./src/modules/business/routes'));

@@ -3066,6 +3066,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <div class="apps-subtabs">
                   <button class="apps-tab-btn is-active" data-apps-tab="installed" data-i18n="apps.tab.installed">Instaladas</button>
                   <button class="apps-tab-btn" data-apps-tab="available" data-i18n="apps.tab.available">Disponibles</button>
+                  <button class="apps-tab-btn" data-apps-tab="oauth" data-i18n="apps.tab.oauth">Conectadas vía OAuth</button>
                 </div>
               </div>
               <div class="apps-wrap">
@@ -3081,6 +3082,14 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <div class="apps-tab-pane" id="appsTabAvailable" hidden>
                   <div class="apps-grid" id="appsCatalogGrid">
                     <div class="apps-loading">Cargando apps...</div>
+                  </div>
+                </div>
+                <div class="apps-tab-pane" id="appsTabOauth" hidden>
+                  <div style="margin-bottom:14px;padding:10px 14px;background:#f1f5f9;border-radius:8px;font-size:13px;color:#475569">
+                    🔌 Apps de terceros conectadas a tu CRM vía OAuth. <a href="/developers" target="_blank" style="color:#2563eb">Crea la tuya en /developers</a>.
+                  </div>
+                  <div id="oauthAppsList">
+                    <div class="apps-loading">Cargando…</div>
                   </div>
                 </div>
               </div>

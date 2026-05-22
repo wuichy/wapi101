@@ -70,22 +70,48 @@ function invalidateTenantCache(tenantId) {
 }
 
 function authMiddleware(db) {
+  const oauthSvc = require('../modules/oauth/service');
   return (req, res, next) => {
     const token = extractToken(req);
     if (!token) {
       return res.status(401).json({ error: 'No autenticado', code: 'UNAUTHENTICATED' });
     }
     let advisor;
+    let appAuth = null;
+
     if (token.startsWith('mt_')) {
       advisor = authenticateMachineToken(db, token, clientIp(req));
       if (!advisor) return res.status(401).json({ error: 'Token de máquina inválido o revocado', code: 'UNAUTHENTICATED' });
+    } else if (token.startsWith('wapi_at_')) {
+      // OAuth access token de una app externa
+      appAuth = oauthSvc.verifyAccessToken(db, token);
+      if (!appAuth) return res.status(401).json({ error: 'OAuth token inválido o expirado', code: 'OAUTH_INVALID' });
+      // Construir un "advisor virtual" para que las queries que usan req.advisor sigan funcionando.
+      // Hereda permisos del advisor que originalmente autorizó la app.
+      const installerRow = db.prepare(`
+        SELECT a.id, a.name, a.username, a.email, a.role, a.permissions, a.tenant_id
+          FROM advisors a WHERE a.id = ?
+      `).get(appAuth.advisorId);
+      if (!installerRow) return res.status(401).json({ error: 'Advisor que instaló la app fue eliminado', code: 'OAUTH_ORPHANED' });
+      advisor = {
+        id:          installerRow.id,
+        name:        installerRow.name + ` (via ${appAuth.appName})`,
+        username:    installerRow.username,
+        email:       installerRow.email,
+        role:        installerRow.role,
+        permissions: JSON.parse(installerRow.permissions || '{}'),
+        tenantId:    installerRow.tenant_id,
+        _viaOAuth:   true,
+        _appId:      appAuth.appId,
+        _appName:    appAuth.appName,
+        _scopes:     appAuth.scopes,
+      };
     } else {
       advisor = getSession(db, token);
       if (!advisor) return res.status(401).json({ error: 'No autenticado', code: 'UNAUTHENTICATED' });
     }
-    // Cargar tenant y verificar que esté activo. Si está suspendido o cancelado,
-    // se rechaza el request (excepto endpoints del super-admin, que se monten
-    // antes de este middleware).
+
+    // Cargar tenant y verificar que esté activo.
     const tenant = loadTenant(db, advisor.tenantId);
     if (!tenant) {
       return res.status(403).json({ error: 'Tenant inexistente', code: 'TENANT_NOT_FOUND' });
@@ -99,8 +125,41 @@ function authMiddleware(db) {
     req.advisor  = advisor;
     req.tenantId = tenant.id;
     req.tenant   = tenant;
+    req.appAuth  = appAuth; // null si es advisor normal; objeto si es OAuth
+
+    // Si es OAuth, registrar la llamada en audit log al final del request (no bloqueante)
+    if (appAuth) {
+      const startedAt = Date.now();
+      res.on('finish', () => {
+        try {
+          const duration = Date.now() - startedAt;
+          db.prepare(`
+            INSERT INTO app_audit_log (app_id, install_id, tenant_id, method, path, status_code, duration_ms, ip)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(appAuth.appId, appAuth.installId, tenant.id, req.method, req.path, res.statusCode, duration, clientIp(req));
+        } catch { /* no bloquear si falla el log */ }
+      });
+    }
+
     next();
   };
 }
 
-module.exports = { authMiddleware, extractToken, loadTenant, invalidateTenantCache };
+// ── Middleware: requiere un scope específico (solo aplica si la auth es OAuth) ──
+// Uso: router.get('/expedients', requireScope('leads:read'), handler)
+// Si la auth es advisor normal (rh_token), pasa todo. Solo enforza scopes para apps.
+function requireScope(scope) {
+  return (req, res, next) => {
+    if (!req.appAuth) return next(); // advisor normal — no aplica
+    const scopes = req.appAuth.scopes || [];
+    if (scopes.includes(scope)) return next();
+    return res.status(403).json({
+      error:    `Esta app no tiene el scope "${scope}"`,
+      code:     'SCOPE_MISSING',
+      required: scope,
+      granted:  scopes,
+    });
+  };
+}
+
+module.exports = { authMiddleware, extractToken, loadTenant, invalidateTenantCache, requireScope };

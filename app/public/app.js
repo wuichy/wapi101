@@ -363,6 +363,7 @@ const I18N_TRANSLATIONS = {
     'bot.builder.labels': 'ETIQUETAS',
     'bot.builder.trigger': 'DISPARADOR',
     'bot.builder.active': 'Activo',
+    'apps.tab.oauth': 'Conectadas vía OAuth',
     'bot.th.active_leads': 'Leads activos',
     'bot.active.tooltip': 'Ver leads con este bot corriendo',
     'bot.active.title': 'Leads con este bot activo',
@@ -1318,6 +1319,7 @@ const I18N_TRANSLATIONS = {
     'bot.builder.labels': 'TAGS',
     'bot.builder.trigger': 'TRIGGER',
     'bot.builder.active': 'Active',
+    'apps.tab.oauth': 'OAuth connected',
     'bot.th.active_leads': 'Active leads',
     'bot.active.tooltip': 'See leads with this bot running',
     'bot.active.title': 'Leads with this bot active',
@@ -22738,8 +22740,65 @@ function setupTasksView() {
     const tab = btn.dataset.appsTab;
     document.getElementById('appsTabInstalled').hidden = (tab !== 'installed');
     document.getElementById('appsTabAvailable').hidden  = (tab !== 'available');
-    filterAppsList(_appsSearch || '');
+    const oauthEl = document.getElementById('appsTabOauth');
+    if (oauthEl) oauthEl.hidden = (tab !== 'oauth');
+    if (tab === 'oauth') loadOAuthApps();
+    else filterAppsList(_appsSearch || '');
   });
+
+  // ─── OAuth apps tab: cargar y permitir desinstalar ───
+  async function loadOAuthApps() {
+    const list = document.getElementById('oauthAppsList');
+    if (!list) return;
+    list.innerHTML = '<div class="apps-loading">Cargando…</div>';
+    try {
+      const data = await api('GET', '/api/tenant-apps');
+      const items = data.items || [];
+      if (!items.length) {
+        list.innerHTML = `
+          <div class="apps-empty-state">
+            <div class="apps-emoji">🔌</div>
+            <h3>Sin apps conectadas</h3>
+            <p>Cuando autorices una app externa vía OAuth, aparecerá aquí.</p>
+          </div>`;
+        return;
+      }
+      list.innerHTML = items.map(it => `
+        <div class="oauth-app-card" style="display:flex;align-items:flex-start;gap:14px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-bottom:10px">
+          <div style="width:42px;height:42px;border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">${it.icon_url ? `<img src="${escHtml(it.icon_url)}" style="width:100%;height:100%;border-radius:10px"/>` : '🧩'}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              ${escHtml(it.name)}
+              <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:${it.status === 'approved' ? '#d1fae5' : '#fef3c7'};color:${it.status === 'approved' ? '#065f46' : '#92400e'};text-transform:uppercase">${escHtml(it.status)}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${escHtml(it.short_description || '')} · por ${escHtml(it.dev_company || it.dev_name)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Permisos: ${(it.scopes_granted || []).map(s => `<code style="background:var(--bg);padding:1px 5px;border-radius:4px;margin-right:3px;font-size:10px">${escHtml(s)}</code>`).join('') || '—'}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Instalada el ${escHtml(new Date(it.installed_at * 1000).toLocaleString('es-MX'))} por ${escHtml(it.installed_by_name || 'alguien')}</div>
+          </div>
+          <button class="btn btn--danger-ghost" data-uninstall-oauth="${it.install_id}" data-name="${escHtml(it.name)}" style="flex-shrink:0">Desinstalar</button>
+        </div>
+      `).join('');
+      // Wire up uninstall buttons
+      list.querySelectorAll('[data-uninstall-oauth]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const installId = Number(btn.dataset.uninstallOauth);
+          const name = btn.dataset.name;
+          if (!confirm(`¿Desinstalar "${name}"? La app dejará de tener acceso a tus datos inmediatamente.`)) return;
+          btn.disabled = true;
+          try {
+            await api('DELETE', `/api/tenant-apps/${installId}`);
+            toast('App desinstalada', 'success');
+            loadOAuthApps();
+          } catch (err) {
+            btn.disabled = false;
+            toast(err.message, 'error');
+          }
+        });
+      });
+    } catch (err) {
+      list.innerHTML = `<div class="apps-empty-state"><h3>Error</h3><p>${escHtml(err.message)}</p></div>`;
+    }
+  }
 
   // Cargar al entrar a la vista unificada
   document.querySelectorAll('.nav-item[data-view="calendario"]').forEach(n => {

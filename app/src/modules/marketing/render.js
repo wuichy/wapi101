@@ -50,8 +50,24 @@ const _WAPI101_SOFTWARE_SCHEMA = {
     'name': 'Wapi101',
     'url': 'https://wapi101.com/',
     'logo': { '@type': 'ImageObject', 'url': 'https://wapi101.com/icons/wapi101-logo.svg' },
+    'foundingDate': '2026',
     'foundingLocation': { '@type': 'Place', 'addressCountry': 'MX', 'addressLocality': 'México' },
     'areaServed': ['MX', 'CO', 'AR', 'CL', 'PE', 'EC', 'VE', 'LATAM'],
+    // sameAs ayuda a las IAs (entity disambiguation) a resolver que Wapi101
+    // = la cuenta de LinkedIn = el perfil de Crunchbase = el repo de GitHub.
+    'sameAs': [
+      'https://www.linkedin.com/company/wapi101',
+      'https://twitter.com/wapi101',
+      'https://www.facebook.com/wapi101',
+      'https://www.instagram.com/wapi101',
+      'https://github.com/wapi101',
+    ],
+    'contactPoint': {
+      '@type': 'ContactPoint',
+      'contactType': 'customer support',
+      'email': 'soporte@wapi101.com',
+      'availableLanguage': ['Spanish', 'English'],
+    },
   },
 };
 

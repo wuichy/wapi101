@@ -9971,9 +9971,11 @@ function openBotBuilder(bot, returnTo = null) {
 function closeBotBuilder() {
   // Si el modo Pantalla completa de la vista Editable estaba activo, salir.
   document.body.classList.remove('bb-ve-fullscreen-on');
-  // Reset del flag de auto-fullscreen: la próxima vez que abras OTRO bot,
-  // que vuelva a auto-abrirse en pantalla completa al entrar a Editable.
+  // Reset de flags: el próximo bot que abra OTRO bot debería:
+  //   - Volver a auto-abrir fullscreen en Editable (si aplica)
+  //   - Volver a auto-abrir el editor del trigger
   window.__bbVeFsAutoTriggered = false;
+  window.__bbVeTrigAutoOpened = false;
   document.getElementById('botBuilder').hidden = true;
   document.getElementById('botListView').hidden = false;
   const _bce = document.getElementById('topbarBotExtras'); if (_bce) _bce.hidden = false;
@@ -12456,9 +12458,21 @@ function setupBot() {
       fsBtn.dataset.wired = '1';
       fsBtn.addEventListener('click', _bbVeToggleFullscreen);
     }
-    // (Auto-fullscreen removido — ahora el user abre la ventana nueva con
-    // el botón ⬈ esquina sup. derecha cuando quiera. Más control y menos
-    // sorpresivo que activar el overlay automáticamente.)
+    // Auto-abrir el inspector con el editor del trigger la primera vez que
+    // se entra a Editable para este bot. Así el user ve directamente qué
+    // disparador configurar (especialmente útil para bots nuevos). Si lo
+    // cierra a propósito (X), no vuelve a abrir solo hasta cambiar de bot.
+    if (!window.__bbVeTrigAutoOpened) {
+      window.__bbVeTrigAutoOpened = true;
+      setTimeout(() => {
+        const triggerNode = Object.values(_bbVe.nodes).find(n => n.type === '__trigger__');
+        if (triggerNode && typeof _bbVeOpenInspector === 'function') {
+          _bbVe.selection = triggerNode.id;
+          _bbVeOpenInspector(triggerNode);
+          _bbVeRenderNodes();
+        }
+      }, 120);
+    }
     _bbVeRenderAll();
     _bbVeFitView();
   }

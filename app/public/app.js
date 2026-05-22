@@ -2008,6 +2008,54 @@ function logout() {
   window.location.href = '/login';
 }
 
+// ─── User Switching: botón flotante "Volver a super-admin" ──────────────────
+// Se renderiza solo cuando la sesión actual fue creada vía impersonate.
+// Click → POST /api/auth/end-impersonation, restaura el super-token en
+// localStorage como wapi101_super_token y redirige a /super.
+function _renderImpersonationFloatingBtn(info) {
+  if (document.getElementById('impersonationFloatBtn')) return;
+  const tenantName = info?.tenantName || 'el tenant';
+  const btn = document.createElement('button');
+  btn.id = 'impersonationFloatBtn';
+  btn.type = 'button';
+  btn.className = 'impersonation-float-btn';
+  btn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="m12 19-7-7 7-7"/><path d="M5 12h14"/></svg>
+    <span class="impersonation-float-txt">
+      <span class="impersonation-float-label">Volver a super</span>
+      <span class="impersonation-float-sub">Conectado como ${escHtml(tenantName)}</span>
+    </span>`;
+  btn.title = `Estás impersonando ${tenantName} — click para volver`;
+  btn.addEventListener('click', async () => {
+    if (!confirm(`Vas a cerrar la impersonation de ${tenantName} y regresar a tu sesión de super-admin. ¿Continuar?`)) return;
+    btn.disabled = true;
+    try {
+      const token = getToken();
+      const res = await fetch('/api/auth/end-impersonation', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al cerrar impersonation');
+      // Restaurar el super-token original
+      if (data.superToken) {
+        localStorage.setItem('wapi101_super_token', data.superToken);
+      }
+      // Limpiar la sesión de advisor (ya está borrada en backend)
+      localStorage.removeItem('rh_token');
+      localStorage.removeItem('rh_advisor');
+      sessionStorage.removeItem('rh_token');
+      sessionStorage.removeItem('rh_advisor');
+      _clearCookie('rh_token');
+      window.location.href = data.redirectTo || '/super';
+    } catch (err) {
+      btn.disabled = false;
+      alert(err.message);
+    }
+  });
+  document.body.appendChild(btn);
+}
+
 // ═══════ Estado de conexión global ═══════
 const connState = {
   fails: 0,
@@ -19371,6 +19419,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyLeadValueVisibility();
     applyCatalogVisibility();
   }
+
+  // ─── User Switching: detectar impersonation y mostrar botón flotante ───
+  // Si esta sesión fue creada por un super-admin vía "Entrar como",
+  // mostramos un botón en la esquina inferior derecha para regresar
+  // a /super sin tener que re-login.
+  try {
+    const meRes = await api('GET', '/api/me');
+    if (meRes?.advisor?.isImpersonated) {
+      _renderImpersonationFloatingBtn(meRes.advisor.impersonation);
+    }
+  } catch {}
 
   document.getElementById('navLogoutBtn')?.addEventListener('click', () => {
     if (confirm('¿Cerrar sesión?')) logout();

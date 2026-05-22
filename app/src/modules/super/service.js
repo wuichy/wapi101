@@ -217,7 +217,10 @@ function cancelTenant(db, id) {
 // Genera un token de sesión de advisor regular para el admin del tenant
 // destino, de modo que el super-admin pueda "entrar como" ese tenant
 // usando la UI normal. Se emite un token de corta duración (1 hora).
-function impersonate(db, tenantId, superAdminId) {
+//
+// Si se pasa `superToken`, lo guardamos en la nueva sesión para poder
+// restaurarlo cuando el super-admin haga "switch back" desde la UI.
+function impersonate(db, tenantId, superAdminId, superToken = null) {
   const tenant = db.prepare('SELECT id, slug, display_name FROM tenants WHERE id = ?').get(tenantId);
   if (!tenant) throw new Error('Tenant no encontrado');
 
@@ -237,9 +240,16 @@ function impersonate(db, tenantId, superAdminId) {
 
   // Reducir el TTL de la sesión impersonada a 1 hora (default es 30 días).
   // Esto la hace "tocar y soltar" — el super-admin no debe quedarse logueado
-  // como tenant indefinidamente.
+  // como tenant indefinidamente. Y guardar el super-token para switch-back.
   const oneHour = Math.floor(Date.now() / 1000) + 3600;
-  db.prepare('UPDATE advisor_sessions SET expires_at = ? WHERE token = ?').run(oneHour, token);
+  db.prepare(`
+    UPDATE advisor_sessions
+       SET expires_at = ?,
+           impersonator_super_token = ?,
+           impersonator_super_admin_id = ?,
+           impersonated_at = unixepoch()
+     WHERE token = ?
+  `).run(oneHour, superToken, superAdminId, token);
 
   // Audit log: quedar registro de quién impersonó a quién y cuándo.
   console.log(`[super] super-admin ${superAdminId} impersonó tenant ${tenant.slug} como advisor ${admin.username}`);
@@ -249,6 +259,43 @@ function impersonate(db, tenantId, superAdminId) {
     tenant: { id: tenant.id, slug: tenant.slug, displayName: tenant.display_name },
     advisor: { id: admin.id, name: admin.name, username: admin.username, role: admin.role, permissions: JSON.parse(admin.permissions || '{}'), tenantId },
     expiresAt: oneHour,
+  };
+}
+
+// Cierra una sesión impersonada y devuelve el super-token original para que
+// el frontend lo restaure como cookie/storage. Borra la sesión del advisor.
+function endImpersonation(db, advisorToken) {
+  const row = db.prepare(`
+    SELECT s.impersonator_super_token, s.impersonator_super_admin_id, s.advisor_id,
+           a.name AS advisor_name, a.tenant_id,
+           t.display_name AS tenant_name
+      FROM advisor_sessions s
+      JOIN advisors a ON a.id = s.advisor_id
+      LEFT JOIN tenants t ON t.id = a.tenant_id
+     WHERE s.token = ?
+  `).get(advisorToken);
+  if (!row || !row.impersonator_super_token) {
+    throw new Error('Esta sesión no es una impersonation activa');
+  }
+  // Verificar que el super-token original aún sea válido
+  const superSession = db.prepare(`
+    SELECT s.super_admin_id, s.expires_at, sa.id, sa.username, sa.name
+      FROM super_admin_sessions s
+      JOIN super_admins sa ON sa.id = s.super_admin_id
+     WHERE s.token = ? AND s.expires_at > unixepoch()
+  `).get(row.impersonator_super_token);
+  if (!superSession) {
+    throw new Error('La sesión de super-admin original expiró. Vuelve a iniciar sesión en /super.');
+  }
+  // Borrar la sesión impersonada (one-shot)
+  db.prepare('DELETE FROM advisor_sessions WHERE token = ?').run(advisorToken);
+
+  console.log(`[super] super-admin ${superSession.id} cerró impersonation de tenant ${row.tenant_id}`);
+
+  return {
+    superToken: row.impersonator_super_token,
+    superAdmin: { id: superSession.id, username: superSession.username, name: superSession.name },
+    redirectTo: '/super',
   };
 }
 
@@ -285,6 +332,6 @@ function saveMailConfig(db, cfg) {
 
 module.exports = {
   login, createSession, getSession, deleteSession, ensureFirstSuperAdmin,
-  listTenants, getTenant, createTenant, updateTenant, cancelTenant, impersonate,
+  listTenants, getTenant, createTenant, updateTenant, cancelTenant, impersonate, endImpersonation,
   getSystemSetting, setSystemSetting, getMailConfig, saveMailConfig,
 };

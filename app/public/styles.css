@@ -5149,6 +5149,63 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   color: #fff;
 }
 
+/* ─── User Switching: botón flotante "Volver a super-admin" ─────────────
+   Estilo distintivo (naranja como el plugin User Switching de WP) para que
+   sea obvio que estás impersonando. Posicionado abajo-derecha, arriba del
+   bottom nav móvil. */
+.impersonation-float-btn {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(234, 88, 12, .35), 0 2px 6px rgba(0,0,0,.15);
+  transition: transform 150ms, box-shadow 150ms;
+}
+.impersonation-float-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(234, 88, 12, .45), 0 4px 10px rgba(0,0,0,.15);
+}
+.impersonation-float-btn:active { transform: translateY(0); }
+.impersonation-float-btn:disabled { opacity: .65; cursor: wait; }
+.impersonation-float-btn svg { flex-shrink: 0; }
+.impersonation-float-txt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.impersonation-float-label { font-size: 13px; font-weight: 700; }
+.impersonation-float-sub {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: .9;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+/* Subir el botón arriba del bottom nav en mobile */
+@media (max-width: 720px) {
+  .impersonation-float-btn {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0));
+    right: 12px;
+    padding: 8px 12px;
+  }
+  .impersonation-float-sub { display: none; } /* solo el texto principal en mobile */
+}
+
 /* Modal: leads activos por bot */
 .bot-active-leads-list { display: flex; flex-direction: column; gap: 8px; }
 .bot-active-leads-loading,

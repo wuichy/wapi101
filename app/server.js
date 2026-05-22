@@ -337,6 +337,23 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── End impersonation ──────────────────────────────────────────────────────
+// El advisor actual (impersonado por super-admin) cierra la impersonation y
+// el frontend restaura el super-token original. Solo funciona si esta sesión
+// FUE creada vía impersonate.
+app.post('/api/auth/end-impersonation', (req, res) => {
+  const auth = req.headers['authorization'] || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+  if (!token) return res.status(401).json({ error: 'No autenticado' });
+  try {
+    const superSvc = require('./src/modules/super/service');
+    const result = superSvc.endImpersonation(db, token);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ─── Forgot Password — pide reset por email ───────────────────────────
 // Siempre devuelve 200 (no revela si el email existe — evita enumeration).
 const _forgotAttempts = new Map();

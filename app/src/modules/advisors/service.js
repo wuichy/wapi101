@@ -42,9 +42,12 @@ function createSession(db, advisorId, remember = false) {
 function getSession(db, token) {
   if (!token) return null;
   const row = db.prepare(`
-    SELECT s.advisor_id, s.expires_at, a.id, a.name, a.username, a.email, a.role, a.permissions, a.active, a.tenant_id
+    SELECT s.advisor_id, s.expires_at, s.impersonator_super_token, s.impersonator_super_admin_id, s.impersonated_at,
+           a.id, a.name, a.username, a.email, a.role, a.permissions, a.active, a.tenant_id,
+           t.display_name AS tenant_name, t.slug AS tenant_slug
     FROM advisor_sessions s
     JOIN advisors a ON a.id = s.advisor_id
+    LEFT JOIN tenants t ON t.id = a.tenant_id
     WHERE s.token = ? AND s.expires_at > unixepoch()
   `).get(token);
   if (!row || !row.active) return null;
@@ -56,6 +59,14 @@ function getSession(db, token) {
     role:        row.role,
     permissions: JSON.parse(row.permissions || '{}'),
     tenantId:    row.tenant_id,
+    // Flag de impersonation — el frontend muestra el botón "Volver a super"
+    isImpersonated: !!row.impersonator_super_token,
+    impersonation: row.impersonator_super_token ? {
+      tenantName: row.tenant_name,
+      tenantSlug: row.tenant_slug,
+      since:      row.impersonated_at,
+      expiresAt:  row.expires_at,
+    } : null,
   };
 }
 

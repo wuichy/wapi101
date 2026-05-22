@@ -121,7 +121,10 @@ module.exports = function createSuperRouter(db) {
   // super-admin lo use en /api con el comportamiento normal.
   router.post('/tenants/:id/impersonate', (req, res) => {
     try {
-      const result = service.impersonate(db, Number(req.params.id), req.superAdmin.id);
+      // Pasamos el super-token actual para que se guarde en la sesión del
+      // advisor — el switch-back lo restaurará como cookie.
+      const superToken = extractToken(req);
+      const result = service.impersonate(db, Number(req.params.id), req.superAdmin.id, superToken);
       res.json(result);
     } catch (err) {
       res.status(400).json({ error: err.message });

@@ -1353,11 +1353,14 @@ $('tenantTbody').addEventListener('click', async (e) => {
   const action = btn.dataset.action;
 
   if (action === 'impersonate') {
-    if (!confirm('Vas a entrar como ese tenant. Tu sesión actual de super-admin queda activa, pero abrirás la app como ese cliente. ¿Continuar?')) return;
+    if (!confirm('Vas a entrar como ese tenant. Tu sesión de super-admin queda activa y podrás regresar con el botón flotante "Volver a super". ¿Continuar?')) return;
     try {
       const r = await api('POST', `/tenants/${id}/impersonate`);
-      localStorage.setItem('wapi101_token', r.token);
-      window.location.href = '/';
+      // Guardar el token + advisor con las MISMAS keys que usa /app (app.js)
+      localStorage.setItem('rh_token', r.token);
+      if (r.advisor) localStorage.setItem('rh_advisor', JSON.stringify(r.advisor));
+      // OJO: NO borramos wapi101_super_token — al hacer switch-back lo recuperaremos
+      window.location.href = '/app';
     } catch (err) { alert(err.message); }
     return;
   }

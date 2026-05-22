@@ -4577,7 +4577,25 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   color: var(--rh-text);
 }
 .rh-attach-option:hover { background: var(--bg, #f8fafc); }
-.rh-attach-ico { font-size: 22px; line-height: 1; flex-shrink: 0; }
+.rh-attach-option:hover .rh-attach-ico {
+  background: var(--accent, #2563eb);
+  color: #fff;
+  border-color: transparent;
+}
+.rh-attach-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--bg, #f1f5f9);
+  color: var(--accent, #2563eb);
+  border: 1px solid var(--rh-border, #e2e8f0);
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.rh-attach-ico svg { width: 18px; height: 18px; display: block; }
 .rh-attach-label { font-weight: 600; font-size: 13px; }
 .rh-attach-hint { font-size: 11px; color: var(--rh-muted); margin-top: 2px; }
 

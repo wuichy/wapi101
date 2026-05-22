@@ -9971,6 +9971,9 @@ function openBotBuilder(bot, returnTo = null) {
 function closeBotBuilder() {
   // Si el modo Pantalla completa de la vista Editable estaba activo, salir.
   document.body.classList.remove('bb-ve-fullscreen-on');
+  // Reset del flag de auto-fullscreen: la próxima vez que abras OTRO bot,
+  // que vuelva a auto-abrirse en pantalla completa al entrar a Editable.
+  window.__bbVeFsAutoTriggered = false;
   document.getElementById('botBuilder').hidden = true;
   document.getElementById('botListView').hidden = false;
   const _bce = document.getElementById('topbarBotExtras'); if (_bce) _bce.hidden = false;
@@ -12428,6 +12431,21 @@ function setupBot() {
       _bbVeSetupCanvas();
       _bbVeSetupInspector();
       _bbVe.initialized = true;
+    } else {
+      // Safety net: si por alguna razón la sidebar quedó vacía (DOM reseteado,
+      // bot cambió, etc.), re-renderizar. Es barato.
+      const sidebar = document.getElementById('bbVeSidebarGroups');
+      if (sidebar && !sidebar.children.length) _bbVeRenderSidebar();
+    }
+    // Auto-entrar a Pantalla Completa la primera vez que se abre Editable
+    // para este bot (window.__bbVeFsAutoTriggered se resetea al cerrar el
+    // builder, así otro bot vuelve a auto-abrir).
+    // Si el user salió a propósito (sessionStorage bbVeFsOptOut), no auto-abrir.
+    if (!window.__bbVeFsAutoTriggered && !sessionStorage.getItem('bbVeFsOptOut')) {
+      window.__bbVeFsAutoTriggered = true;
+      if (!document.body.classList.contains('bb-ve-fullscreen-on')) {
+        setTimeout(() => _bbVeToggleFullscreen(), 50);
+      }
     }
     _bbVeRenderAll();
     _bbVeFitView();
@@ -12789,6 +12807,10 @@ function setupBot() {
     const on = document.body.classList.toggle('bb-ve-fullscreen-on');
     const btn = document.getElementById('bbVeFsBtn');
     if (btn) btn.title = on ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa (F)';
+    // Si el user salió a propósito de fullscreen, recordarlo para esta sesión
+    // (no volver a auto-abrirlo cuando entre de nuevo a Editable).
+    if (!on) sessionStorage.setItem('bbVeFsOptOut', '1');
+    else sessionStorage.removeItem('bbVeFsOptOut');
     // Recentrar viewport tras cambiar el tamaño del canvas
     setTimeout(() => { try { _bbVeFitView(); } catch (_) {} }, 250);
   }

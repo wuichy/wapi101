@@ -5407,6 +5407,10 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .bb-view-content { width: 100%; display: flex; flex-direction: column; align-items: center; }
 .bb-view-content[hidden] { display: none; }
+/* La vista Editable necesita todo el ancho — su contenido es un grid que ya
+   maneja sidebar/canvas/inspector. align-items: center la apretaba. */
+.bb-view-content[data-view="editable"] { align-items: stretch; }
+.bb-view-content[data-view="editable"] .bb-ve-wrap { width: 100%; }
 
 /* ── Code view ── */
 .bb-code-toolbar {

@@ -22,6 +22,7 @@ module.exports = function createMarketingRouter(_db) {
       { loc: 'https://wapi101.com/', priority: '1.0', changefreq: 'weekly' },
       { loc: 'https://wapi101.com/signup', priority: '0.8', changefreq: 'monthly' },
       { loc: 'https://wapi101.com/login', priority: '0.5', changefreq: 'yearly' },
+      { loc: 'https://wapi101.com/developers', priority: '0.8', changefreq: 'monthly' },
       { loc: 'https://wapi101.com/privacy', priority: '0.3', changefreq: 'yearly' },
       { loc: 'https://wapi101.com/terms', priority: '0.3', changefreq: 'yearly' },
     ];

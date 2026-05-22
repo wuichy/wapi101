@@ -1,7 +1,7 @@
 // Renderer de páginas de marketing (comparaciones y nichos).
 // Toma un objeto de PAGES (ver data.js) y devuelve HTML completo.
 
-const { WAPI101 } = require('./data');
+const { WAPI101, PAGES } = require('./data');
 
 function escHtml(s) {
   return String(s || '')
@@ -119,6 +119,29 @@ function _jsonLdForFaqs(faqs) {
       'acceptedAnswer': { '@type': 'Answer', 'text': a },
     })),
   };
+}
+
+// Genera la sección "Comparativas relacionadas" en runtime usando PAGES.
+// Prioriza páginas del mismo tipo (vs ↔ vs, topic ↔ topic) hasta 5, luego
+// completa con las del otro tipo hasta 10 total. Excluye la página actual.
+function _renderRelatedLinks(currentPage) {
+  const allSlugs = Object.keys(PAGES);
+  const isVs = currentPage.type === 'vs';
+  const sameType = allSlugs.filter(s => s !== currentPage.slug && PAGES[s].type === currentPage.type).slice(0, 5);
+  const otherType = allSlugs.filter(s => s !== currentPage.slug && PAGES[s].type !== currentPage.type).slice(0, 5);
+  const links = [...sameType, ...otherType].slice(0, 10);
+  if (!links.length) return '';
+  const items = links.map(slug => {
+    const p = PAGES[slug];
+    let label;
+    if (p.type === 'vs') label = `vs ${p.competitor}`;
+    else label = (p.title || slug).split(':')[0].trim();
+    return `<li><a href="/${slug}">${escHtml(label)}</a></li>`;
+  }).join('');
+  return `<div class="related-links">
+      <h3>${isVs ? 'Comparativas y guías relacionadas' : 'Te puede interesar'}</h3>
+      <ul>${items}<li><a href="/developers">API y Developers</a></li></ul>
+    </div>`;
 }
 
 function renderPage(page) {
@@ -364,6 +387,7 @@ function renderPage(page) {
       <a href="/#features">Funcionalidades</a>
       <a href="/#pricing">Precios</a>
       <a href="/crm-whatsapp-business">CRM WhatsApp</a>
+      <a href="/developers">Developers</a>
       <a href="/signup" class="btn-cta">Probar gratis</a>
     </div>
   </div>
@@ -385,21 +409,7 @@ function renderPage(page) {
   ${sectionsHtml}
   ${faqHtml}
 
-  <div class="related-links">
-    <h3>Comparativas relacionadas</h3>
-    <ul>
-      <li><a href="/vs/kommo">vs Kommo</a></li>
-      <li><a href="/vs/hubspot">vs HubSpot</a></li>
-      <li><a href="/vs/zoho">vs Zoho</a></li>
-      <li><a href="/vs/pipedrive">vs Pipedrive</a></li>
-      <li><a href="/vs/manychat">vs ManyChat</a></li>
-      <li><a href="/vs/leadsales">vs Leadsales</a></li>
-      <li><a href="/vs/bitrix24">vs Bitrix24</a></li>
-      <li><a href="/crm-whatsapp-business">CRM WhatsApp Business</a></li>
-      <li><a href="/crm-para-pymes-mexico">CRM para PyMEs México</a></li>
-      <li><a href="/mejor-crm-latam">Mejor CRM LATAM</a></li>
-    </ul>
-  </div>
+  ${_renderRelatedLinks(page)}
 
   <section class="cta-final">
     <h2>Pruébalo 14 días gratis</h2>

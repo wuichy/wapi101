@@ -12819,8 +12819,8 @@ function setupBot() {
     document.getElementById('bbVeZoomOut')?.addEventListener('click', () => { _bbVe.viewport.zoom = Math.max(0.3, _bbVe.viewport.zoom/1.2); _bbVeApplyViewport(); });
     document.getElementById('bbVeZoomReset')?.addEventListener('click', () => _bbVeFitView());
 
-    // Botón Pantalla completa
-    document.getElementById('bbVeFsBtn')?.addEventListener('click', _bbVeToggleFullscreen);
+    // Botón Pantalla completa → el handler se engancha desde bbVeInit (idempotente)
+    // para evitar duplicados que cancelan el toggle.
 
     // Tecla Esc → salir del fullscreen (solo si está activo)
     document.addEventListener('keydown', (e) => {

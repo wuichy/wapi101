@@ -139,10 +139,17 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
 .dp-copy-btn{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-muted);padding:1px 6px;font-size:10px;cursor:pointer;margin-left:6px;font-family:inherit}
 .dp-copy-btn:hover{color:var(--text)}
 
+/* Language switcher */
+.dp-lang{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--border);border-radius:8px;padding:2px;background:var(--bg-alt);margin-right:6px}
+.dp-lang button{background:transparent;border:0;color:var(--text-muted);padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;border-radius:6px;font-family:inherit;text-transform:uppercase;letter-spacing:.04em}
+.dp-lang button.is-active{background:var(--accent);color:#fff}
+.dp-lang button:hover:not(.is-active){color:var(--text)}
+
 @media (max-width:640px){
   .dp-hero h1{font-size:36px}
   .dp-hero .sub{font-size:16px}
-  .dp-nav-links a:not(.dp-btn){display:none}
+  .dp-nav-links a:not(.dp-btn):not(.dp-lang){display:none}
+  .dp-lang button{padding:4px 7px;font-size:11px}
 }
 
 </style>
@@ -156,11 +163,15 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
       <span>Wapi101 Developers</span>
     </a>
     <div class="dp-nav-links">
-      <a href="#/docs">Docs</a>
-      <a href="#/dashboard" id="dpNavDashboard" hidden>Dashboard</a>
-      <button class="dp-btn dp-btn-ghost" id="dpNavLogin">Iniciar sesión</button>
-      <button class="dp-btn dp-btn-primary" id="dpNavSignup">Crear cuenta</button>
-      <button class="dp-btn dp-btn-ghost" id="dpNavLogout" hidden>Salir</button>
+      <a href="#/docs" data-i18n="nav.docs">Docs</a>
+      <a href="#/dashboard" id="dpNavDashboard" hidden data-i18n="nav.dashboard">Dashboard</a>
+      <span class="dp-lang">
+        <button data-lang="es">ES</button>
+        <button data-lang="en">EN</button>
+      </span>
+      <button class="dp-btn dp-btn-ghost" id="dpNavLogin" data-i18n="nav.login">Iniciar sesión</button>
+      <button class="dp-btn dp-btn-primary" id="dpNavSignup" data-i18n="nav.signup">Crear cuenta</button>
+      <button class="dp-btn dp-btn-ghost" id="dpNavLogout" hidden data-i18n="nav.logout">Salir</button>
     </div>
   </div>
 </nav>
@@ -168,54 +179,54 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
 <!-- ═════════════ LANDING (#/) ═════════════ -->
 <div id="viewLanding">
   <div class="dp-hero">
-    <h1>Construye con Wapi101</h1>
-    <p class="sub">Crea apps, recibe webhooks y conecta IA con uno de los CRMs más usados de LATAM. OAuth 2.0, REST API y MCP listos para integrar.</p>
+    <h1 data-i18n="hero.title">Construye con Wapi101</h1>
+    <p class="sub" data-i18n="hero.sub">Crea apps, recibe webhooks y conecta IA con uno de los CRMs más usados de LATAM. OAuth 2.0, REST API y MCP listos para integrar.</p>
     <div class="dp-hero-cta">
-      <button class="dp-btn dp-btn-primary" onclick="location.hash='#/signup'">Crear cuenta de desarrollador →</button>
-      <a href="#/docs" class="dp-btn dp-btn-ghost">Ver documentación</a>
+      <button class="dp-btn dp-btn-primary" onclick="location.hash='#/signup'" data-i18n="hero.cta">Crear cuenta de desarrollador →</button>
+      <a href="#/docs" class="dp-btn dp-btn-ghost" data-i18n="hero.cta2">Ver documentación</a>
     </div>
   </div>
 
   <div class="dp-section">
-    <h2>Todo lo que necesitas</h2>
-    <p class="lead">Herramientas estándar de la industria. Sin sorpresas, sin lock-in.</p>
+    <h2 data-i18n="features.title">Todo lo que necesitas</h2>
+    <p class="lead" data-i18n="features.lead">Herramientas estándar de la industria. Sin sorpresas, sin lock-in.</p>
     <div class="dp-grid">
       <div class="dp-card">
         <div class="dp-card-ico">🔐</div>
         <h3>OAuth 2.0</h3>
-        <p>Authorization code flow + refresh tokens. Lo mismo que Stripe, Shopify, Slack.</p>
+        <p data-i18n="feat.oauth">Authorization code flow + refresh tokens. Lo mismo que Stripe, Shopify, Slack.</p>
       </div>
       <div class="dp-card">
         <div class="dp-card-ico">⚡</div>
         <h3>Webhooks</h3>
-        <p>Suscríbete a eventos en tiempo real: leads, mensajes, citas. Firmados con HMAC.</p>
+        <p data-i18n="feat.webhooks">Suscríbete a eventos en tiempo real: leads, mensajes, citas. Firmados con HMAC.</p>
       </div>
       <div class="dp-card">
         <div class="dp-card-ico">🤖</div>
-        <h3>MCP nativo</h3>
-        <p>Conecta GPT, Claude o cualquier IA con el CRM directamente. JSON-RPC sobre HTTP.</p>
+        <h3 data-i18n="feat.mcp.t">MCP nativo</h3>
+        <p data-i18n="feat.mcp">Conecta GPT, Claude o cualquier IA con el CRM directamente. JSON-RPC sobre HTTP.</p>
       </div>
       <div class="dp-card">
         <div class="dp-card-ico">📦</div>
-        <h3>Marketplace</h3>
-        <p>Lanza tu app al marketplace de Wapi101. Llega a todos nuestros clientes en LATAM.</p>
+        <h3 data-i18n="feat.market.t">Marketplace</h3>
+        <p data-i18n="feat.market">Lanza tu app al marketplace de Wapi101. Llega a todos nuestros clientes en LATAM.</p>
       </div>
       <div class="dp-card">
         <div class="dp-card-ico">🛡</div>
-        <h3>Permisos granulares</h3>
-        <p>Scopes específicos: leads:read, messages:send, etc. El cliente ve y aprueba cada uno.</p>
+        <h3 data-i18n="feat.scopes.t">Permisos granulares</h3>
+        <p data-i18n="feat.scopes">Scopes específicos: leads:read, messages:send, etc. El cliente ve y aprueba cada uno.</p>
       </div>
       <div class="dp-card">
         <div class="dp-card-ico">📊</div>
-        <h3>Audit logs</h3>
-        <p>Cada llamada queda registrada. Para tu debugging y para que el cliente confíe.</p>
+        <h3 data-i18n="feat.audit.t">Audit logs</h3>
+        <p data-i18n="feat.audit">Cada llamada queda registrada. Para tu debugging y para que el cliente confíe.</p>
       </div>
     </div>
   </div>
 
   <div class="dp-section">
-    <h2>Empieza en 5 minutos</h2>
-    <p class="lead">Crea una app, recibe credenciales OAuth, y haz tu primera llamada.</p>
+    <h2 data-i18n="quick.title">Empieza en 5 minutos</h2>
+    <p class="lead" data-i18n="quick.lead">Crea una app, recibe credenciales OAuth, y haz tu primera llamada.</p>
     <div class="dp-code">
 <pre><code><span class="c"># 1) Tu cliente autoriza tu app (OAuth flow)</span>
 <span class="k">GET</span> https://wapi101.com/oauth/authorize?client_id=<span class="n">tu_app</span>&redirect_uri=<span class="n">...</span>&scope=<span class="n">leads:read</span>
@@ -231,7 +242,7 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
   </div>
 
   <div class="dp-footer">
-    Wapi101 Developers · <a href="/">Volver al CRM</a>
+    Wapi101 Developers · <a href="/" data-i18n="footer.back">Volver al CRM</a>
   </div>
 </div>
 
@@ -239,37 +250,37 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
 <div id="viewSignup" hidden>
   <div class="dp-auth-wrap">
     <div class="dp-auth-card">
-      <h1>Crear cuenta de desarrollador</h1>
-      <p class="sub">Empieza a construir con Wapi101 — es gratis.</p>
+      <h1 data-i18n="signup.title">Crear cuenta de desarrollador</h1>
+      <p class="sub" data-i18n="signup.sub">Empieza a construir con Wapi101 — es gratis.</p>
       <div id="signupErr" class="dp-error" hidden></div>
       <form id="signupForm">
         <div class="dp-input-group">
-          <label>Nombre completo</label>
+          <label data-i18n="signup.name">Nombre completo</label>
           <input class="dp-input" name="name" required autocomplete="name"/>
         </div>
         <div class="dp-input-group">
-          <label>Email</label>
+          <label data-i18n="signup.email">Email</label>
           <input class="dp-input" type="email" name="email" required autocomplete="email"/>
         </div>
         <div class="dp-input-group">
-          <label>Password</label>
+          <label data-i18n="signup.password">Password</label>
           <input class="dp-input" type="password" name="password" minlength="8" required autocomplete="new-password"/>
-          <div class="dp-input-help">Mínimo 8 caracteres</div>
+          <div class="dp-input-help" data-i18n="signup.password.help">Mínimo 8 caracteres</div>
         </div>
         <div class="dp-input-group">
-          <label>Empresa (opcional)</label>
+          <label data-i18n="signup.company">Empresa (opcional)</label>
           <input class="dp-input" name="company" autocomplete="organization"/>
         </div>
         <div class="dp-input-group">
-          <label>País (opcional)</label>
-          <input class="dp-input" name="country" placeholder="ej. México" autocomplete="country-name"/>
+          <label data-i18n="signup.country">País (opcional)</label>
+          <input class="dp-input" name="country" data-i18n-placeholder="signup.country.placeholder" placeholder="ej. México" autocomplete="country-name"/>
         </div>
         <div class="dp-form-actions">
-          <button type="submit" class="dp-btn dp-btn-primary">Crear cuenta</button>
+          <button type="submit" class="dp-btn dp-btn-primary" data-i18n="signup.submit">Crear cuenta</button>
         </div>
       </form>
       <div class="dp-form-bottom">
-        ¿Ya tienes cuenta? <a href="#/login">Iniciar sesión</a>
+        <span data-i18n="signup.have">¿Ya tienes cuenta?</span> <a href="#/login" data-i18n="signup.login_link">Iniciar sesión</a>
       </div>
     </div>
   </div>
@@ -278,24 +289,24 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
 <div id="viewLogin" hidden>
   <div class="dp-auth-wrap">
     <div class="dp-auth-card">
-      <h1>Iniciar sesión</h1>
-      <p class="sub">Accede a tu portal de developer.</p>
+      <h1 data-i18n="login.title">Iniciar sesión</h1>
+      <p class="sub" data-i18n="login.sub">Accede a tu portal de developer.</p>
       <div id="loginErr" class="dp-error" hidden></div>
       <form id="loginForm">
         <div class="dp-input-group">
-          <label>Email</label>
+          <label data-i18n="signup.email">Email</label>
           <input class="dp-input" type="email" name="email" required autocomplete="email"/>
         </div>
         <div class="dp-input-group">
-          <label>Password</label>
+          <label data-i18n="signup.password">Password</label>
           <input class="dp-input" type="password" name="password" required autocomplete="current-password"/>
         </div>
         <div class="dp-form-actions">
-          <button type="submit" class="dp-btn dp-btn-primary">Entrar</button>
+          <button type="submit" class="dp-btn dp-btn-primary" data-i18n="login.submit">Entrar</button>
         </div>
       </form>
       <div class="dp-form-bottom">
-        ¿No tienes cuenta? <a href="#/signup">Crear cuenta</a>
+        <span data-i18n="login.no_account">¿No tienes cuenta?</span> <a href="#/signup" data-i18n="login.signup_link">Crear cuenta</a>
       </div>
     </div>
   </div>
@@ -306,10 +317,10 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
   <div class="dp-dash">
     <div class="dp-dash-head">
       <div>
-        <h1>Tus apps</h1>
+        <h1 data-i18n="dash.title">Tus apps</h1>
         <p class="sub" id="dashGreeting">Hola</p>
       </div>
-      <button class="dp-btn dp-btn-primary" id="btnNewApp">+ Nueva app</button>
+      <button class="dp-btn dp-btn-primary" id="btnNewApp" data-i18n="dash.new">+ Nueva app</button>
     </div>
     <div id="appsListContainer"></div>
   </div>
@@ -405,6 +416,163 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
 </div>
 
 <script>
+// ═════════════ i18n ═════════════
+const I18N = {
+  es: {
+    'nav.docs': 'Docs', 'nav.dashboard': 'Dashboard',
+    'nav.login': 'Iniciar sesión', 'nav.signup': 'Crear cuenta', 'nav.logout': 'Salir',
+    'hero.title': 'Construye con Wapi101',
+    'hero.sub': 'Crea apps, recibe webhooks y conecta IA con uno de los CRMs más usados de LATAM. OAuth 2.0, REST API y MCP listos para integrar.',
+    'hero.cta': 'Crear cuenta de desarrollador →',
+    'hero.cta2': 'Ver documentación',
+    'features.title': 'Todo lo que necesitas',
+    'features.lead': 'Herramientas estándar de la industria. Sin sorpresas, sin lock-in.',
+    'feat.oauth': 'Authorization code flow + refresh tokens. Lo mismo que Stripe, Shopify, Slack.',
+    'feat.webhooks': 'Suscríbete a eventos en tiempo real: leads, mensajes, citas. Firmados con HMAC.',
+    'feat.mcp.t': 'MCP nativo',
+    'feat.mcp': 'Conecta GPT, Claude o cualquier IA con el CRM directamente. JSON-RPC sobre HTTP.',
+    'feat.market.t': 'Marketplace',
+    'feat.market': 'Lanza tu app al marketplace de Wapi101. Llega a todos nuestros clientes en LATAM.',
+    'feat.scopes.t': 'Permisos granulares',
+    'feat.scopes': 'Scopes específicos: leads:read, messages:send, etc. El cliente ve y aprueba cada uno.',
+    'feat.audit.t': 'Audit logs',
+    'feat.audit': 'Cada llamada queda registrada. Para tu debugging y para que el cliente confíe.',
+    'quick.title': 'Empieza en 5 minutos',
+    'quick.lead': 'Crea una app, recibe credenciales OAuth, y haz tu primera llamada.',
+    'footer.back': 'Volver al CRM',
+    'signup.title': 'Crear cuenta de desarrollador',
+    'signup.sub': 'Empieza a construir con Wapi101 — es gratis.',
+    'signup.name': 'Nombre completo', 'signup.email': 'Email', 'signup.password': 'Password',
+    'signup.password.help': 'Mínimo 8 caracteres',
+    'signup.company': 'Empresa (opcional)', 'signup.country': 'País (opcional)',
+    'signup.country.placeholder': 'ej. México',
+    'signup.submit': 'Crear cuenta',
+    'signup.have': '¿Ya tienes cuenta?', 'signup.login_link': 'Iniciar sesión',
+    'login.title': 'Iniciar sesión', 'login.sub': 'Accede a tu portal de developer.',
+    'login.submit': 'Entrar',
+    'login.no_account': '¿No tienes cuenta?', 'login.signup_link': 'Crear cuenta',
+    'dash.title': 'Tus apps', 'dash.new': '+ Nueva app',
+    'dash.greeting': 'Hola',
+    'dash.empty.title': 'Aún no tienes apps',
+    'dash.empty.sub': 'Crea tu primera app para empezar a integrar con Wapi101.',
+    'dash.installs': 'instalaciones',
+    'newapp.title': 'Crear nueva app',
+    'newapp.name': 'Nombre de la app', 'newapp.name.ph': 'ej. SyncCRM Pro',
+    'newapp.desc': 'Descripción corta', 'newapp.desc.ph': 'Una frase describiendo qué hace',
+    'newapp.cat': 'Categoría', 'newapp.cat.none': '— Sin categoría —',
+    'newapp.redirects': 'Redirect URIs (una por línea)',
+    'newapp.redirects.help': 'A dónde redirigimos al usuario después del OAuth. Acepta múltiples (una por línea).',
+    'newapp.scopes': 'Permisos que pedirás (scopes)',
+    'newapp.webhook': 'Webhook URL (opcional)',
+    'btn.cancel': 'Cancelar', 'btn.create': 'Crear app', 'btn.copy': 'Copiar',
+    'created.title': '¡App creada!',
+    'created.lead': 'Guarda estos valores en un lugar seguro. <strong>El client_secret no se mostrará de nuevo.</strong>',
+    'created.warn': '⚠ Guarda el secret AHORA. Si lo pierdes, tendrás que regenerarlo (invalidando todos los tokens activos).',
+    'created.done': 'Lo guardé, continuar',
+    'detail.back': '← Volver a tus apps',
+    'detail.creds': 'Credenciales OAuth', 'detail.hidden': '[oculto]',
+    'detail.regen': 'Regenerar',
+    'detail.config': 'Configuración',
+    'detail.redirects': 'Redirect URIs', 'detail.scopes': 'Scopes',
+    'detail.webhook': 'Webhook URL', 'detail.category': 'Categoría',
+    'detail.installs': 'Instalaciones',
+    'detail.installs.help': 'Cuando alguien autorice tu app vía OAuth, aparecerá aquí.',
+    'detail.submit': 'Enviar a revisión',
+    'detail.delete': 'Eliminar',
+  },
+  en: {
+    'nav.docs': 'Docs', 'nav.dashboard': 'Dashboard',
+    'nav.login': 'Sign in', 'nav.signup': 'Sign up', 'nav.logout': 'Sign out',
+    'hero.title': 'Build with Wapi101',
+    'hero.sub': 'Create apps, receive webhooks and connect AI to one of LATAM\'s most used CRMs. OAuth 2.0, REST API and MCP ready to integrate.',
+    'hero.cta': 'Create developer account →',
+    'hero.cta2': 'View documentation',
+    'features.title': 'Everything you need',
+    'features.lead': 'Industry-standard tools. No surprises, no lock-in.',
+    'feat.oauth': 'Authorization code flow + refresh tokens. Same as Stripe, Shopify, Slack.',
+    'feat.webhooks': 'Subscribe to real-time events: leads, messages, appointments. HMAC signed.',
+    'feat.mcp.t': 'Native MCP',
+    'feat.mcp': 'Connect GPT, Claude or any AI directly to the CRM. JSON-RPC over HTTP.',
+    'feat.market.t': 'Marketplace',
+    'feat.market': 'Launch your app to the Wapi101 marketplace. Reach all our LATAM clients.',
+    'feat.scopes.t': 'Granular permissions',
+    'feat.scopes': 'Specific scopes: leads:read, messages:send, etc. The client sees and approves each one.',
+    'feat.audit.t': 'Audit logs',
+    'feat.audit': 'Every call is logged. For your debugging and so the client can trust you.',
+    'quick.title': 'Get started in 5 minutes',
+    'quick.lead': 'Create an app, receive OAuth credentials, and make your first call.',
+    'footer.back': 'Back to CRM',
+    'signup.title': 'Create developer account',
+    'signup.sub': 'Start building with Wapi101 — it\'s free.',
+    'signup.name': 'Full name', 'signup.email': 'Email', 'signup.password': 'Password',
+    'signup.password.help': 'Minimum 8 characters',
+    'signup.company': 'Company (optional)', 'signup.country': 'Country (optional)',
+    'signup.country.placeholder': 'e.g. Mexico',
+    'signup.submit': 'Create account',
+    'signup.have': 'Already have an account?', 'signup.login_link': 'Sign in',
+    'login.title': 'Sign in', 'login.sub': 'Access your developer portal.',
+    'login.submit': 'Enter',
+    'login.no_account': 'No account yet?', 'login.signup_link': 'Sign up',
+    'dash.title': 'Your apps', 'dash.new': '+ New app',
+    'dash.greeting': 'Hi',
+    'dash.empty.title': 'You don\'t have any apps yet',
+    'dash.empty.sub': 'Create your first app to start integrating with Wapi101.',
+    'dash.installs': 'installs',
+    'newapp.title': 'Create new app',
+    'newapp.name': 'App name', 'newapp.name.ph': 'e.g. SyncCRM Pro',
+    'newapp.desc': 'Short description', 'newapp.desc.ph': 'One sentence describing what it does',
+    'newapp.cat': 'Category', 'newapp.cat.none': '— No category —',
+    'newapp.redirects': 'Redirect URIs (one per line)',
+    'newapp.redirects.help': 'Where we redirect users after OAuth. Multiple accepted (one per line).',
+    'newapp.scopes': 'Scopes your app will request',
+    'newapp.webhook': 'Webhook URL (optional)',
+    'btn.cancel': 'Cancel', 'btn.create': 'Create app', 'btn.copy': 'Copy',
+    'created.title': 'App created!',
+    'created.lead': 'Save these values somewhere safe. <strong>The client_secret will not be shown again.</strong>',
+    'created.warn': '⚠ Save the secret NOW. If you lose it, you\'ll have to regenerate it (invalidating all active tokens).',
+    'created.done': 'Saved, continue',
+    'detail.back': '← Back to your apps',
+    'detail.creds': 'OAuth credentials', 'detail.hidden': '[hidden]',
+    'detail.regen': 'Regenerate',
+    'detail.config': 'Configuration',
+    'detail.redirects': 'Redirect URIs', 'detail.scopes': 'Scopes',
+    'detail.webhook': 'Webhook URL', 'detail.category': 'Category',
+    'detail.installs': 'Installs',
+    'detail.installs.help': 'When someone authorizes your app via OAuth, it will appear here.',
+    'detail.submit': 'Submit for review',
+    'detail.delete': 'Delete',
+  },
+};
+let _lang = localStorage.getItem('wapi_dev_lang') || (navigator.language.startsWith('en') ? 'en' : 'es');
+function t(key) { return (I18N[_lang] || I18N.es)[key] || (I18N.es[key] || key); }
+function applyI18n() {
+  document.documentElement.lang = _lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.dataset.i18n;
+    el.innerHTML = t(k);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  // Switch buttons active state
+  document.querySelectorAll('.dp-lang button').forEach(b => {
+    b.classList.toggle('is-active', b.dataset.lang === _lang);
+  });
+}
+function setLang(lang) {
+  _lang = lang;
+  localStorage.setItem('wapi_dev_lang', lang);
+  applyI18n();
+  // Re-render dashboard/detail si están abiertos para reflejar el cambio
+  const h = location.hash;
+  if (h.startsWith('#/dashboard')) loadDashboard();
+  const m = h.match(/^#\/apps\/(\d+)/);
+  if (m) loadAppDetail(Number(m[1]));
+}
+document.querySelectorAll('.dp-lang button').forEach(b => {
+  b.addEventListener('click', () => setLang(b.dataset.lang));
+});
+
 // ═════════════ SPA mini ═════════════
 const $ = (id) => document.getElementById(id);
 const TOKEN_KEY = 'wapi_dev_token';
@@ -471,6 +639,7 @@ function route() {
 
 window.addEventListener('hashchange', route);
 window.addEventListener('load', () => {
+  applyI18n();
   updateNavAuth();
   route();
 });
@@ -519,16 +688,16 @@ $('loginForm').addEventListener('submit', async (e) => {
 // ─── Dashboard ───
 async function loadDashboard() {
   const acc = getAccount();
-  if (acc) $('dashGreeting').textContent = 'Hola ' + acc.name;
+  if (acc) $('dashGreeting').textContent = t('dash.greeting') + ' ' + acc.name;
   const list = $('appsListContainer');
-  list.innerHTML = '<p style="color:var(--text-muted)">Cargando…</p>';
+  list.innerHTML = '<p style="color:var(--text-muted)">…</p>';
   try {
     const { items } = await api('GET', '/apps');
     if (!items.length) {
       list.innerHTML = `
         <div class="dp-empty">
-          <h3>Aún no tienes apps</h3>
-          <p>Crea tu primera app para empezar a integrar con Wapi101.</p>
+          <h3>${t('dash.empty.title')}</h3>
+          <p>${t('dash.empty.sub')}</p>
         </div>`;
       return;
     }
@@ -539,9 +708,9 @@ async function loadDashboard() {
           <div class="dp-app-name">${esc(a.name)}</div>
           <span class="dp-app-status dp-app-status-${a.status}">${a.status.replace('_', ' ')}</span>
         </div>
-        <div class="dp-app-desc">${esc(a.short_description || 'Sin descripción')}</div>
+        <div class="dp-app-desc">${esc(a.short_description || '—')}</div>
         <div class="dp-app-meta">
-          <span><b>${a.install_count || 0}</b> instalaciones</span>
+          <span><b>${a.install_count || 0}</b> ${t('dash.installs')}</span>
           <span>${a.category || '—'}</span>
         </div>
       </div>`).join('') + '</div>';
@@ -561,38 +730,38 @@ async function loadAppDetail(id) {
         <div class="ico">${app.icon_url ? `<img src="${esc(app.icon_url)}" style="width:100%;height:100%;border-radius:12px"/>` : '🧩'}</div>
         <div style="flex:1;min-width:0">
           <h1>${esc(app.name)}</h1>
-          <div class="sub">${esc(app.short_description || 'Sin descripción')} · <span class="dp-app-status dp-app-status-${app.status}">${app.status.replace('_', ' ')}</span></div>
+          <div class="sub">${esc(app.short_description || '—')} · <span class="dp-app-status dp-app-status-${app.status}">${app.status.replace('_', ' ')}</span></div>
         </div>
         <div style="display:flex;gap:8px">
-          ${app.status === 'draft' ? `<button class="dp-btn dp-btn-primary" onclick="submitApp(${app.id})">Enviar a revisión</button>` : ''}
-          <button class="dp-btn dp-btn-danger" onclick="deleteApp(${app.id})">Eliminar</button>
+          ${app.status === 'draft' ? `<button class="dp-btn dp-btn-primary" onclick="submitApp(${app.id})">${t('detail.submit')}</button>` : ''}
+          <button class="dp-btn dp-btn-danger" onclick="deleteApp(${app.id})">${t('detail.delete')}</button>
         </div>
       </div>
       <div class="dp-detail-section">
-        <h3>Credenciales OAuth</h3>
+        <h3>${t('detail.creds')}</h3>
         <div class="dp-kv">
           <div class="k">client_id</div>
-          <div class="v">${esc(app.client_id)} <button class="dp-copy-btn" onclick="copy('${esc(app.client_id)}', this)">Copiar</button></div>
+          <div class="v">${esc(app.client_id)} <button class="dp-copy-btn" onclick="copy('${esc(app.client_id)}', this)">${t('btn.copy')}</button></div>
           <div class="k">client_secret</div>
-          <div class="v" style="color:var(--text-muted)">[oculto] <button class="dp-copy-btn" onclick="regenSecret(${app.id})">Regenerar</button></div>
+          <div class="v" style="color:var(--text-muted)">${t('detail.hidden')} <button class="dp-copy-btn" onclick="regenSecret(${app.id})">${t('detail.regen')}</button></div>
         </div>
       </div>
       <div class="dp-detail-section">
-        <h3>Configuración</h3>
+        <h3>${t('detail.config')}</h3>
         <div class="dp-kv">
-          <div class="k">Redirect URIs</div>
+          <div class="k">${t('detail.redirects')}</div>
           <div class="v">${(app.redirect_uris || []).map(u => esc(u)).join('<br/>') || '<span style="color:var(--text-muted)">—</span>'}</div>
-          <div class="k">Scopes</div>
+          <div class="k">${t('detail.scopes')}</div>
           <div class="v">${(app.scopes_requested || []).map(s => `<code style="background:var(--bg);padding:1px 5px;border-radius:4px;margin-right:4px">${esc(s)}</code>`).join('') || '<span style="color:var(--text-muted)">—</span>'}</div>
-          <div class="k">Webhook URL</div>
+          <div class="k">${t('detail.webhook')}</div>
           <div class="v">${esc(app.webhook_url || '—')}</div>
-          <div class="k">Categoría</div>
+          <div class="k">${t('detail.category')}</div>
           <div class="v">${esc(app.category || '—')}</div>
         </div>
       </div>
       <div class="dp-detail-section">
-        <h3>Instalaciones (${app.install_count || 0})</h3>
-        <p style="color:var(--text-muted);font-size:13px">Cuando alguien autorice tu app vía OAuth, aparecerá aquí.</p>
+        <h3>${t('detail.installs')} (${app.install_count || 0})</h3>
+        <p style="color:var(--text-muted);font-size:13px">${t('detail.installs.help')}</p>
       </div>`;
   } catch (err) {
     root.innerHTML = '<p style="color:#fca5a5">Error: ' + esc(err.message) + '</p>';

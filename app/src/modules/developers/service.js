@@ -168,7 +168,7 @@ function listApps(db, devAccountId) {
   return db.prepare(`
     SELECT id, name, slug, short_description, icon_url, client_id, category, status,
            is_public, webhook_url, created_at, updated_at,
-           (SELECT COUNT(*) FROM app_installs WHERE app_id = apps.id AND revoked_at IS NULL) AS install_count
+           (SELECT COUNT(*) FROM dev_app_installs WHERE app_id = apps.id AND revoked_at IS NULL) AS install_count
       FROM apps
      WHERE dev_account_id = ?
      ORDER BY created_at DESC
@@ -181,7 +181,7 @@ function getAppById(db, id, devAccountId) {
            client_id, redirect_uris, scopes_requested, webhook_url, webhook_events,
            homepage_url, privacy_policy_url, category, status, is_public,
            rejection_reason, suspended_reason, rate_limit_per_min, created_at, updated_at,
-           (SELECT COUNT(*) FROM app_installs WHERE app_id = apps.id AND revoked_at IS NULL) AS install_count
+           (SELECT COUNT(*) FROM dev_app_installs WHERE app_id = apps.id AND revoked_at IS NULL) AS install_count
       FROM apps WHERE id = ?
   `).get(id);
   if (!row) return null;
@@ -232,7 +232,7 @@ function regenerateSecret(db, id, devAccountId) {
   // También invalidar todos los tokens emitidos a esta app
   db.prepare(`
     UPDATE app_oauth_tokens SET revoked_at = unixepoch()
-     WHERE install_id IN (SELECT id FROM app_installs WHERE app_id = ?)
+     WHERE install_id IN (SELECT id FROM dev_app_installs WHERE app_id = ?)
        AND revoked_at IS NULL
   `).run(id);
   return { clientSecret: newSecret };
@@ -264,7 +264,7 @@ function listInstallsForApp(db, appId, devAccountId) {
   if (!own) return [];
   return db.prepare(`
     SELECT i.id, i.tenant_id, i.installed_at, i.revoked_at, t.display_name AS tenant_name
-      FROM app_installs i
+      FROM dev_app_installs i
       LEFT JOIN tenants t ON t.id = i.tenant_id
      WHERE i.app_id = ?
      ORDER BY i.installed_at DESC

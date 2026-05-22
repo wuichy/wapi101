@@ -59,15 +59,15 @@ function exchangeCodeForTokens(db, { clientId, clientSecret, code, redirectUri }
   db.prepare('UPDATE app_oauth_codes SET used = 1, used_at = unixepoch() WHERE code = ?').run(code);
 
   // 4. Find or create install
-  let install = db.prepare('SELECT id FROM app_installs WHERE app_id = ? AND tenant_id = ?')
+  let install = db.prepare('SELECT id FROM dev_app_installs WHERE app_id = ? AND tenant_id = ?')
     .get(app.id, codeRow.tenant_id);
   if (install && install.revoked_at) {
     // Re-activar instalación previamente revocada
-    db.prepare('UPDATE app_installs SET revoked_at = NULL, revoked_reason = NULL, installed_at = unixepoch(), scopes_granted = ? WHERE id = ?')
+    db.prepare('UPDATE dev_app_installs SET revoked_at = NULL, revoked_reason = NULL, installed_at = unixepoch(), scopes_granted = ? WHERE id = ?')
       .run(codeRow.scopes, install.id);
   } else if (!install) {
     const r = db.prepare(`
-      INSERT INTO app_installs (app_id, tenant_id, installed_by_advisor_id, scopes_granted)
+      INSERT INTO dev_app_installs (app_id, tenant_id, installed_by_advisor_id, scopes_granted)
       VALUES (?, ?, ?, ?)
     `).run(app.id, codeRow.tenant_id, codeRow.advisor_id, codeRow.scopes);
     install = { id: r.lastInsertRowid };
@@ -93,7 +93,7 @@ function exchangeRefreshToken(db, { clientId, clientSecret, refreshToken }) {
   if (tokenRow.refresh_expires_at <= Math.floor(Date.now() / 1000)) throw new Error('invalid_grant');
 
   // Verificar que el install no esté revocado y pertenezca a esta app
-  const install = db.prepare('SELECT * FROM app_installs WHERE id = ?').get(tokenRow.install_id);
+  const install = db.prepare('SELECT * FROM dev_app_installs WHERE id = ?').get(tokenRow.install_id);
   if (!install || install.revoked_at || install.app_id !== app.id) {
     throw new Error('invalid_grant');
   }
@@ -112,7 +112,7 @@ function verifyAccessToken(db, accessToken) {
     SELECT t.*, i.app_id, i.tenant_id, i.installed_by_advisor_id, i.revoked_at AS install_revoked,
            a.status AS app_status, a.rate_limit_per_min, a.name AS app_name
       FROM app_oauth_tokens t
-      JOIN app_installs i ON i.id = t.install_id
+      JOIN dev_app_installs i ON i.id = t.install_id
       JOIN apps a ON a.id = i.app_id
      WHERE t.token = ?
   `).get(accessToken);
@@ -147,7 +147,7 @@ function revokeToken(db, accessTokenOrRefresh) {
 }
 
 function revokeInstall(db, installId, reason) {
-  db.prepare('UPDATE app_installs SET revoked_at = unixepoch(), revoked_reason = ? WHERE id = ? AND revoked_at IS NULL')
+  db.prepare('UPDATE dev_app_installs SET revoked_at = unixepoch(), revoked_reason = ? WHERE id = ? AND revoked_at IS NULL')
     .run(reason || null, installId);
   // Revocar todos los tokens activos de este install
   db.prepare('UPDATE app_oauth_tokens SET revoked_at = unixepoch() WHERE install_id = ? AND revoked_at IS NULL')

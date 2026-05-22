@@ -17726,6 +17726,82 @@ function setupAttachMenu() {
     if (e.target.id === 'rhAttachPreviewModal') closeAttachPreview();
   });
   document.getElementById('rhAttachSendBtn')?.addEventListener('click', sendAttachmentNow);
+
+  // ─── Drag & drop de archivos al chat ───
+  // El usuario puede arrastrar imágenes/docs/videos/audios al panel de chat
+  // y se abre el preview modal automáticamente.
+  setupChatDragDrop();
+}
+
+// Detecta el tipo de archivo y lo manda al preview
+function _chatDetectAttachType(file) {
+  if (!file) return null;
+  const mime = (file.type || '').toLowerCase();
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  // Por extensión si no hay mime
+  const name = (file.name || '').toLowerCase();
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(name)) return 'image';
+  if (/\.(mp4|mov|webm|avi|mkv)$/.test(name)) return 'video';
+  if (/\.(mp3|wav|ogg|m4a|aac|opus)$/.test(name)) return 'audio';
+  return 'document';
+}
+
+function setupChatDragDrop() {
+  const panels = [
+    document.getElementById('rhConvPanel'),
+    // También el panel de chat dentro del detalle de expediente
+    document.querySelector('.exp-detail-right.rh-conversation-panel'),
+  ].filter(Boolean);
+
+  for (const panel of panels) {
+    // dragover y dragenter: prevenir default + visual highlight
+    let depth = 0;
+    panel.addEventListener('dragenter', e => {
+      // Solo si está arrastrando files (no nodos del builder ni otro drag interno)
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+      e.preventDefault();
+      depth++;
+      panel.classList.add('rh-chat-dragover');
+    });
+    panel.addEventListener('dragover', e => {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    panel.addEventListener('dragleave', e => {
+      depth--;
+      if (depth <= 0) {
+        depth = 0;
+        panel.classList.remove('rh-chat-dragover');
+      }
+    });
+    panel.addEventListener('drop', e => {
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
+      e.preventDefault();
+      depth = 0;
+      panel.classList.remove('rh-chat-dragover');
+      const files = Array.from(e.dataTransfer.files || []);
+      if (!files.length) return;
+      // Verificar que haya una conversación activa
+      if (!ACTIVE_CONVO_ID) {
+        toast('Abre una conversación primero', 'warning');
+        return;
+      }
+      // Verificar que el tipo sea soportado por el provider de la convo
+      const convo = CONVERSATIONS.find(c => c.id === ACTIVE_CONVO_ID);
+      const supported = PROVIDER_MEDIA_SUPPORT[convo?.provider] || PROVIDER_MEDIA_SUPPORT.whatsapp;
+      // Por simplicidad mandamos solo el primer archivo (los pasos siguientes pueden ser uno por uno)
+      const file = files[0];
+      const type = _chatDetectAttachType(file);
+      if (!supported.has(type)) {
+        toast(`Este canal no soporta archivos de tipo "${type}"`, 'error');
+        return;
+      }
+      onAttachFileSelected(file, type);
+    });
+  }
 }
 
 function onAttachFileSelected(file, type) {

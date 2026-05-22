@@ -139,6 +139,66 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
 .dp-copy-btn{background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text-muted);padding:1px 6px;font-size:10px;cursor:pointer;margin-left:6px;font-family:inherit}
 .dp-copy-btn:hover{color:var(--text)}
 
+/* ── Docs ── */
+.dp-docs-wrap{display:grid;grid-template-columns:240px 1fr;max-width:1300px;margin:0 auto;gap:32px;padding:24px}
+.dp-docs-side{position:sticky;top:80px;align-self:start;max-height:calc(100vh - 100px);overflow-y:auto;font-size:13px}
+.dp-docs-side h4{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin:18px 0 8px}
+.dp-docs-side h4:first-child{margin-top:0}
+.dp-docs-side a{display:block;padding:6px 10px;border-radius:6px;color:var(--text-muted);font-weight:500}
+.dp-docs-side a:hover{background:var(--bg-alt);color:var(--text)}
+.dp-docs-side a.is-active{background:rgba(59,130,246,.18);color:var(--accent-2);font-weight:600}
+.dp-docs-content{min-width:0;max-width:780px;padding-bottom:80px}
+.dp-docs-content h1{font-size:36px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px;line-height:1.15}
+.dp-docs-content .lead{font-size:17px;color:var(--text-muted);margin-bottom:24px;line-height:1.6}
+.dp-docs-content h2{font-size:22px;font-weight:700;margin:36px 0 12px;letter-spacing:-.3px;border-top:1px solid var(--border);padding-top:30px}
+.dp-docs-content h2:first-of-type{border-top:0;padding-top:0}
+.dp-docs-content h3{font-size:17px;font-weight:600;margin:22px 0 8px}
+.dp-docs-content p{margin-bottom:14px;line-height:1.7;color:#cbd5e1}
+.dp-docs-content ul, .dp-docs-content ol{margin:0 0 16px 22px;line-height:1.7;color:#cbd5e1}
+.dp-docs-content li{margin-bottom:4px}
+.dp-docs-content code{font-family:'JetBrains Mono',monospace;font-size:13px;background:var(--code-bg);padding:1px 6px;border-radius:4px;color:#fbbf24}
+.dp-docs-content pre code{background:transparent;padding:0;color:inherit}
+.dp-docs-content a{color:var(--accent-2)}
+.dp-docs-content strong{color:var(--text);font-weight:600}
+.dp-docs-content table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+.dp-docs-content th{text-align:left;padding:10px 14px;background:var(--bg-alt);border-bottom:1px solid var(--border);font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.dp-docs-content td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+.dp-docs-content td code{font-size:12px}
+
+/* Endpoint card (REST API ref) */
+.dp-endpoint{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:18px}
+.dp-endpoint-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.dp-method{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;text-transform:uppercase}
+.dp-method-get{background:rgba(34,197,94,.18);color:#86efac}
+.dp-method-post{background:rgba(59,130,246,.2);color:#93c5fd}
+.dp-method-patch{background:rgba(245,158,11,.2);color:#fcd34d}
+.dp-method-delete{background:rgba(239,68,68,.2);color:#fca5a5}
+.dp-endpoint-path{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--text)}
+.dp-endpoint-scope{margin-left:auto;font-size:11px;color:var(--text-muted)}
+.dp-endpoint-scope code{font-size:10px;background:rgba(245,158,11,.1);color:#fcd34d;padding:1px 5px;border-radius:4px}
+.dp-endpoint-desc{font-size:13px;color:var(--text-muted);margin-bottom:0;line-height:1.6}
+
+/* Code block with tabs */
+.dp-codeblock{margin:14px 0;background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.dp-code-tabs{display:flex;border-bottom:1px solid var(--border);background:#0c1322}
+.dp-code-tab{background:transparent;border:0;color:var(--text-muted);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-right:1px solid var(--border)}
+.dp-code-tab.is-active{background:var(--code-bg);color:var(--text)}
+.dp-code-tab:hover:not(.is-active){color:var(--text)}
+.dp-code-content{position:relative}
+.dp-code-content pre{padding:16px 18px;overflow-x:auto;font-size:13px;line-height:1.65;font-family:'JetBrains Mono',monospace;margin:0}
+.dp-code-copy{position:absolute;top:8px;right:8px;background:rgba(15,23,42,.7);border:1px solid var(--border);color:var(--text-muted);padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit}
+.dp-code-copy:hover{color:var(--text)}
+.dp-code-pane{display:none}
+.dp-code-pane.is-active{display:block}
+
+/* Mobile docs */
+@media (max-width:880px){
+  .dp-docs-wrap{grid-template-columns:1fr;padding:16px}
+  .dp-docs-side{position:relative;top:0;max-height:none;border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:14px;overflow:visible}
+  .dp-docs-content h1{font-size:28px}
+  .dp-docs-content .lead{font-size:15px}
+}
+
 /* Language switcher */
 .dp-lang{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--border);border-radius:8px;padding:2px;background:var(--bg-alt);margin-right:6px}
 .dp-lang button{background:transparent;border:0;color:var(--text-muted);padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;border-radius:6px;font-family:inherit;text-transform:uppercase;letter-spacing:.04em}
@@ -243,6 +303,14 @@ code,pre{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace}
 
   <div class="dp-footer">
     Wapi101 Developers · <a href="/" data-i18n="footer.back">Volver al CRM</a>
+  </div>
+</div>
+
+<!-- ═════════════ DOCS ═════════════ -->
+<div id="viewDocs" hidden>
+  <div class="dp-docs-wrap">
+    <aside class="dp-docs-side" id="docsSidebar"></aside>
+    <article class="dp-docs-content" id="docsContent"></article>
   </div>
 </div>
 
@@ -563,15 +631,725 @@ function setLang(lang) {
   _lang = lang;
   localStorage.setItem('wapi_dev_lang', lang);
   applyI18n();
-  // Re-render dashboard/detail si están abiertos para reflejar el cambio
+  // Re-render dashboard/detail/docs si están abiertos para reflejar el cambio
   const h = location.hash;
   if (h.startsWith('#/dashboard')) loadDashboard();
   const m = h.match(/^#\/apps\/(\d+)/);
   if (m) loadAppDetail(Number(m[1]));
+  if (h.startsWith('#/docs')) {
+    const dm = h.match(/^#\/docs\/([a-z0-9-]+)/);
+    loadDocs(dm ? dm[1] : 'introduction');
+  }
 }
 document.querySelectorAll('.dp-lang button').forEach(b => {
   b.addEventListener('click', () => setLang(b.dataset.lang));
 });
+
+// ═════════════ DOCS ═════════════
+// Estructura: cada sección tiene { title, body }. body es HTML directo.
+// `_lang` decide qué versión renderizar.
+function _ce(opts) {
+  // Helper para code blocks con tabs: opts.tabs = [{ lang, code }]
+  const id = 'cb_' + Math.random().toString(36).slice(2, 8);
+  return `<div class="dp-codeblock">
+    <div class="dp-code-tabs">${opts.tabs.map((t, i) => `<button class="dp-code-tab ${i === 0 ? 'is-active' : ''}" data-cb="${id}" data-pane="${i}">${escd(t.lang)}</button>`).join('')}</div>
+    <div class="dp-code-content">
+      ${opts.tabs.map((t, i) => `<div class="dp-code-pane ${i === 0 ? 'is-active' : ''}" data-cb-pane="${id}-${i}"><pre><code>${escd(t.code)}</code></pre></div>`).join('')}
+      <button class="dp-code-copy" data-cb-copy="${id}">${tDoc('copy')}</button>
+    </div>
+  </div>`;
+}
+function escd(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function tDoc(k) { return _lang === 'en' ? ({copy: 'Copy', copied: 'Copied!'}[k]) : ({copy: 'Copiar', copied: '¡Copiado!'}[k]); }
+
+const DOCS = {
+  // ────── GETTING STARTED ──────
+  'introduction': {
+    section: 'getting-started',
+    nav: { es: 'Introducción', en: 'Introduction' },
+    title: { es: 'Bienvenido a Wapi101 Developers', en: 'Welcome to Wapi101 Developers' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Build apps that integrate with Wapi101 — one of LATAM's most-used CRMs for WhatsApp Business.</p>
+      <h2>What you can build</h2>
+      <ul>
+        <li><strong>Internal automations</strong>: sync leads from your existing systems into Wapi101</li>
+        <li><strong>Public marketplace apps</strong>: launch to all Wapi101 clients (review required)</li>
+        <li><strong>AI integrations</strong>: connect Claude, GPT or other LLMs via MCP</li>
+        <li><strong>Webhooks consumers</strong>: react to events in real-time (lead created, message received, etc.)</li>
+      </ul>
+      <h2>How it works</h2>
+      <ol>
+        <li>Create a developer account at <a href="#/signup">/signup</a></li>
+        <li>Create an app — receive <code>client_id</code> and <code>client_secret</code></li>
+        <li>Your client authorizes your app via OAuth (they see exactly what permissions you request)</li>
+        <li>You get an <code>access_token</code> to call the REST API on their behalf</li>
+        <li>Subscribe to webhooks for real-time events</li>
+      </ol>
+      <h2>Standards used</h2>
+      <ul>
+        <li><strong>OAuth 2.0</strong> (RFC 6749) — authorization code flow with refresh tokens</li>
+        <li><strong>REST API</strong> — JSON over HTTP, predictable resource URLs</li>
+        <li><strong>Webhooks</strong> — POST callbacks signed with HMAC-SHA256</li>
+        <li><strong>MCP</strong> (Model Context Protocol) — JSON-RPC 2.0 for AI tool use</li>
+      </ul>
+      <p>Ready? <a href="#/docs/quickstart">Get started in 5 minutes →</a></p>
+    ` : `
+      <p class="lead">Construye apps que se integran con Wapi101 — uno de los CRMs más usados de LATAM para WhatsApp Business.</p>
+      <h2>Qué puedes construir</h2>
+      <ul>
+        <li><strong>Automatizaciones internas</strong>: sincroniza leads desde tus sistemas existentes hacia Wapi101</li>
+        <li><strong>Apps del marketplace público</strong>: lánzalas a todos los clientes Wapi101 (requiere review)</li>
+        <li><strong>Integraciones con IA</strong>: conecta Claude, GPT u otros LLMs vía MCP</li>
+        <li><strong>Consumidores de webhooks</strong>: reacciona a eventos en tiempo real (lead creado, mensaje recibido, etc.)</li>
+      </ul>
+      <h2>Cómo funciona</h2>
+      <ol>
+        <li>Crea una cuenta de developer en <a href="#/signup">/signup</a></li>
+        <li>Crea una app — recibe <code>client_id</code> y <code>client_secret</code></li>
+        <li>Tu cliente autoriza tu app vía OAuth (ve exactamente qué permisos pides)</li>
+        <li>Obtienes un <code>access_token</code> para llamar la REST API a su nombre</li>
+        <li>Suscríbete a webhooks para eventos en tiempo real</li>
+      </ol>
+      <h2>Estándares que usamos</h2>
+      <ul>
+        <li><strong>OAuth 2.0</strong> (RFC 6749) — authorization code flow con refresh tokens</li>
+        <li><strong>REST API</strong> — JSON sobre HTTP, URLs predecibles por recurso</li>
+        <li><strong>Webhooks</strong> — callbacks POST firmados con HMAC-SHA256</li>
+        <li><strong>MCP</strong> (Model Context Protocol) — JSON-RPC 2.0 para uso de herramientas con IA</li>
+      </ul>
+      <p>¿Listo? <a href="#/docs/quickstart">Empieza en 5 minutos →</a></p>
+    `,
+  },
+
+  'quickstart': {
+    section: 'getting-started',
+    nav: { es: 'Quickstart (5 min)', en: 'Quickstart (5 min)' },
+    title: { es: 'Tu primera llamada en 5 minutos', en: 'Your first call in 5 minutes' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">From zero to your first API call. Follow these 4 steps.</p>
+      <h2>1. Create your app</h2>
+      <ol>
+        <li>Sign up at <a href="#/signup">/signup</a></li>
+        <li>Click <strong>+ New app</strong></li>
+        <li>Fill: name, a redirect URI (e.g. <code>https://yourapp.com/callback</code>), and check the scopes you need</li>
+        <li><strong>Copy and save</strong> your <code>client_id</code> and <code>client_secret</code> (shown only once)</li>
+      </ol>
+      <h2>2. Get user authorization</h2>
+      <p>Send your user to this URL (replace placeholders):</p>
+      ${_ce({ tabs: [{ lang: 'URL', code: 'https://wapi101.com/oauth/authorize?\n  client_id=wapi_app_xxx&\n  redirect_uri=https://yourapp.com/callback&\n  response_type=code&\n  scope=leads:read+messages:send&\n  state=random_csrf_token' }] })}
+      <p>They'll see a consent screen with the scopes you requested. After approving, we redirect them back to your <code>redirect_uri</code> with a <code>code</code> in the query string.</p>
+      <h2>3. Exchange code for access_token</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: 'curl -X POST https://wapi101.com/oauth/token \\\n  -u wapi_app_xxx:wapi_sk_xxx \\\n  -d grant_type=authorization_code \\\n  -d code=wapi_code_xxx \\\n  -d redirect_uri=https://yourapp.com/callback' },
+        { lang: 'Node.js', code: 'const res = await fetch("https://wapi101.com/oauth/token", {\n  method: "POST",\n  headers: {\n    "Authorization": "Basic " + btoa(`${CLIENT_ID}:${CLIENT_SECRET}`),\n    "Content-Type": "application/x-www-form-urlencoded",\n  },\n  body: new URLSearchParams({\n    grant_type: "authorization_code",\n    code: req.query.code,\n    redirect_uri: REDIRECT_URI,\n  }),\n});\nconst { access_token, refresh_token, expires_in } = await res.json();' },
+        { lang: 'Python', code: 'import requests\nres = requests.post(\n    "https://wapi101.com/oauth/token",\n    auth=(CLIENT_ID, CLIENT_SECRET),\n    data={\n        "grant_type": "authorization_code",\n        "code": code,\n        "redirect_uri": REDIRECT_URI,\n    },\n)\ntokens = res.json()' },
+      ] })}
+      <h2>4. Call the API</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: 'curl https://wapi101.com/api/expedients \\\n  -H "Authorization: Bearer wapi_at_xxx"' },
+        { lang: 'Node.js', code: 'const leads = await fetch("https://wapi101.com/api/expedients", {\n  headers: { "Authorization": `Bearer ${access_token}` },\n}).then(r => r.json());' },
+        { lang: 'Python', code: 'leads = requests.get(\n    "https://wapi101.com/api/expedients",\n    headers={"Authorization": f"Bearer {access_token}"},\n).json()' },
+      ] })}
+      <p>That's it! Your app is now connected. Next: <a href="#/docs/oauth-flow">deep dive into OAuth</a> or browse the <a href="#/docs/api-leads">API reference</a>.</p>
+    ` : `
+      <p class="lead">De cero a tu primera llamada API. Sigue estos 4 pasos.</p>
+      <h2>1. Crea tu app</h2>
+      <ol>
+        <li>Regístrate en <a href="#/signup">/signup</a></li>
+        <li>Click <strong>+ Nueva app</strong></li>
+        <li>Llena: nombre, un redirect URI (ej. <code>https://tuapp.com/callback</code>), y marca los scopes que necesitas</li>
+        <li><strong>Copia y guarda</strong> tu <code>client_id</code> y <code>client_secret</code> (se muestra solo una vez)</li>
+      </ol>
+      <h2>2. Obtén autorización del usuario</h2>
+      <p>Envía a tu usuario a esta URL (reemplaza los placeholders):</p>
+      ${_ce({ tabs: [{ lang: 'URL', code: 'https://wapi101.com/oauth/authorize?\n  client_id=wapi_app_xxx&\n  redirect_uri=https://tuapp.com/callback&\n  response_type=code&\n  scope=leads:read+messages:send&\n  state=random_csrf_token' }] })}
+      <p>Verá una pantalla de consent con los scopes que pediste. Después de aprobar, lo redirigimos a tu <code>redirect_uri</code> con un <code>code</code> en query string.</p>
+      <h2>3. Cambia code por access_token</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: 'curl -X POST https://wapi101.com/oauth/token \\\n  -u wapi_app_xxx:wapi_sk_xxx \\\n  -d grant_type=authorization_code \\\n  -d code=wapi_code_xxx \\\n  -d redirect_uri=https://tuapp.com/callback' },
+        { lang: 'Node.js', code: 'const res = await fetch("https://wapi101.com/oauth/token", {\n  method: "POST",\n  headers: {\n    "Authorization": "Basic " + btoa(`${CLIENT_ID}:${CLIENT_SECRET}`),\n    "Content-Type": "application/x-www-form-urlencoded",\n  },\n  body: new URLSearchParams({\n    grant_type: "authorization_code",\n    code: req.query.code,\n    redirect_uri: REDIRECT_URI,\n  }),\n});\nconst { access_token, refresh_token, expires_in } = await res.json();' },
+        { lang: 'Python', code: 'import requests\nres = requests.post(\n    "https://wapi101.com/oauth/token",\n    auth=(CLIENT_ID, CLIENT_SECRET),\n    data={\n        "grant_type": "authorization_code",\n        "code": code,\n        "redirect_uri": REDIRECT_URI,\n    },\n)\ntokens = res.json()' },
+      ] })}
+      <h2>4. Llama la API</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: 'curl https://wapi101.com/api/expedients \\\n  -H "Authorization: Bearer wapi_at_xxx"' },
+        { lang: 'Node.js', code: 'const leads = await fetch("https://wapi101.com/api/expedients", {\n  headers: { "Authorization": `Bearer ${access_token}` },\n}).then(r => r.json());' },
+        { lang: 'Python', code: 'leads = requests.get(\n    "https://wapi101.com/api/expedients",\n    headers={"Authorization": f"Bearer {access_token}"},\n).json()' },
+      ] })}
+      <p>¡Eso es todo! Tu app ya está conectada. Continuar: <a href="#/docs/oauth-flow">deep dive en OAuth</a> o explora la <a href="#/docs/api-leads">referencia API</a>.</p>
+    `,
+  },
+
+  // ────── OAUTH ──────
+  'oauth-flow': {
+    section: 'oauth',
+    nav: { es: 'Authorization flow', en: 'Authorization flow' },
+    title: { es: 'OAuth 2.0 Authorization Code flow', en: 'OAuth 2.0 Authorization Code flow' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Standard RFC 6749 flow. Same as Stripe, Shopify, Slack, GitHub.</p>
+      <h2>Sequence diagram</h2>
+      ${_ce({ tabs: [{ lang: 'Flow', code: '┌─────────┐     1. Redirect to /authorize     ┌──────────────┐\n│         │ ─────────────────────────────────▶ │              │\n│         │                                    │              │\n│         │     2. User approves consent       │   Wapi101    │\n│  Your   │                                    │              │\n│  App    │     3. Redirect with code          │              │\n│         │ ◀───────────────────────────────── │              │\n│         │                                    │              │\n│         │     4. POST /token (code + auth)   │              │\n│         │ ─────────────────────────────────▶ │              │\n│         │                                    │              │\n│         │     5. Receive tokens              │              │\n│         │ ◀───────────────────────────────── │              │\n│         │                                    │              │\n│         │     6. GET /api/* with Bearer      │              │\n│         │ ─────────────────────────────────▶ │              │\n└─────────┘                                    └──────────────┘' }] })}
+      <h2>Authorization URL parameters</h2>
+      <table>
+        <thead><tr><th>Param</th><th>Required</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>client_id</code></td><td>Yes</td><td>Your app's client_id (starts with <code>wapi_app_</code>)</td></tr>
+          <tr><td><code>redirect_uri</code></td><td>Yes</td><td>Must match one of the redirect URIs registered in your app</td></tr>
+          <tr><td><code>response_type</code></td><td>Yes</td><td>Always <code>code</code></td></tr>
+          <tr><td><code>scope</code></td><td>No</td><td>Space-separated scopes. Defaults to all scopes registered for the app.</td></tr>
+          <tr><td><code>state</code></td><td>Recommended</td><td>Random string for CSRF protection. Echoed back in callback.</td></tr>
+        </tbody>
+      </table>
+      <h2>Token response</h2>
+      ${_ce({ tabs: [{ lang: 'JSON', code: '{\n  "access_token":  "wapi_at_xxxxx",\n  "refresh_token": "wapi_rt_xxxxx",\n  "token_type":    "Bearer",\n  "expires_in":    3600,\n  "scope":         "leads:read messages:send"\n}' }] })}
+      <h2>Token lifetimes</h2>
+      <ul>
+        <li><strong>Access token</strong>: 1 hour</li>
+        <li><strong>Refresh token</strong>: 90 days (rotated on each use)</li>
+        <li><strong>Authorization code</strong>: 10 minutes (single-use)</li>
+      </ul>
+      <h2>Error responses</h2>
+      <p>When the user denies, we redirect to <code>redirect_uri?error=access_denied&state=...</code>. On API errors (400/401), we return JSON with <code>error</code> and <code>error_description</code>.</p>
+      <p>See <a href="#/docs/errors">errors reference</a> for the full list.</p>
+    ` : `
+      <p class="lead">Flow estándar RFC 6749. Igual que Stripe, Shopify, Slack, GitHub.</p>
+      <h2>Diagrama de secuencia</h2>
+      ${_ce({ tabs: [{ lang: 'Flow', code: '┌─────────┐     1. Redirect a /authorize       ┌──────────────┐\n│         │ ─────────────────────────────────▶ │              │\n│         │                                    │              │\n│         │     2. Usuario aprueba consent     │   Wapi101    │\n│  Tu     │                                    │              │\n│  App    │     3. Redirect con code           │              │\n│         │ ◀───────────────────────────────── │              │\n│         │                                    │              │\n│         │     4. POST /token (code + auth)   │              │\n│         │ ─────────────────────────────────▶ │              │\n│         │                                    │              │\n│         │     5. Recibe tokens               │              │\n│         │ ◀───────────────────────────────── │              │\n│         │                                    │              │\n│         │     6. GET /api/* con Bearer       │              │\n│         │ ─────────────────────────────────▶ │              │\n└─────────┘                                    └──────────────┘' }] })}
+      <h2>Parámetros del URL de autorización</h2>
+      <table>
+        <thead><tr><th>Param</th><th>Requerido</th><th>Descripción</th></tr></thead>
+        <tbody>
+          <tr><td><code>client_id</code></td><td>Sí</td><td>El client_id de tu app (empieza con <code>wapi_app_</code>)</td></tr>
+          <tr><td><code>redirect_uri</code></td><td>Sí</td><td>Debe coincidir con uno de los redirect URIs registrados en tu app</td></tr>
+          <tr><td><code>response_type</code></td><td>Sí</td><td>Siempre <code>code</code></td></tr>
+          <tr><td><code>scope</code></td><td>No</td><td>Scopes separados por espacios. Default: todos los registrados.</td></tr>
+          <tr><td><code>state</code></td><td>Recomendado</td><td>String random para protección CSRF. Se devuelve en el callback.</td></tr>
+        </tbody>
+      </table>
+      <h2>Respuesta del token</h2>
+      ${_ce({ tabs: [{ lang: 'JSON', code: '{\n  "access_token":  "wapi_at_xxxxx",\n  "refresh_token": "wapi_rt_xxxxx",\n  "token_type":    "Bearer",\n  "expires_in":    3600,\n  "scope":         "leads:read messages:send"\n}' }] })}
+      <h2>Vida útil de los tokens</h2>
+      <ul>
+        <li><strong>Access token</strong>: 1 hora</li>
+        <li><strong>Refresh token</strong>: 90 días (rota en cada uso)</li>
+        <li><strong>Authorization code</strong>: 10 minutos (single-use)</li>
+      </ul>
+      <h2>Respuestas de error</h2>
+      <p>Cuando el usuario rechaza, redirigimos a <code>redirect_uri?error=access_denied&state=...</code>. En errores de API (400/401), devolvemos JSON con <code>error</code> y <code>error_description</code>.</p>
+      <p>Ver <a href="#/docs/errors">referencia de errores</a> para la lista completa.</p>
+    `,
+  },
+
+  'refresh-tokens': {
+    section: 'oauth',
+    nav: { es: 'Refresh tokens', en: 'Refresh tokens' },
+    title: { es: 'Refresh tokens', en: 'Refresh tokens' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Access tokens expire in 1 hour. Use the refresh_token to get a new one without re-asking the user.</p>
+      <h2>How to refresh</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: 'curl -X POST https://wapi101.com/oauth/token \\\n  -u $CLIENT_ID:$CLIENT_SECRET \\\n  -d grant_type=refresh_token \\\n  -d refresh_token=wapi_rt_xxx' },
+        { lang: 'Node.js', code: 'async function refresh(refreshToken) {\n  const res = await fetch("https://wapi101.com/oauth/token", {\n    method: "POST",\n    headers: {\n      "Authorization": "Basic " + btoa(`${CLIENT_ID}:${CLIENT_SECRET}`),\n      "Content-Type": "application/x-www-form-urlencoded",\n    },\n    body: new URLSearchParams({\n      grant_type: "refresh_token",\n      refresh_token: refreshToken,\n    }),\n  });\n  if (!res.ok) throw new Error("Refresh failed: " + res.status);\n  return res.json();\n}' },
+      ] })}
+      <h2>Token rotation</h2>
+      <p>Each refresh returns a <strong>new refresh_token</strong>. The old one is invalidated. <strong>Always store the latest refresh_token.</strong></p>
+      <p>This is a security best practice — if an old refresh_token is used after rotation, we treat it as a leak and invalidate the entire chain.</p>
+      <h2>Best practices</h2>
+      <ul>
+        <li>Refresh proactively at ~50 minutes (before the 1h expiry)</li>
+        <li>On 401 responses from the API, refresh and retry once</li>
+        <li>If refresh fails with <code>invalid_grant</code>, the user needs to re-authorize</li>
+        <li>Store refresh tokens encrypted at rest</li>
+      </ul>
+    ` : `
+      <p class="lead">Los access tokens expiran en 1 hora. Usa el refresh_token para obtener uno nuevo sin volver a pedir al usuario.</p>
+      <h2>Cómo refrescar</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: 'curl -X POST https://wapi101.com/oauth/token \\\n  -u $CLIENT_ID:$CLIENT_SECRET \\\n  -d grant_type=refresh_token \\\n  -d refresh_token=wapi_rt_xxx' },
+        { lang: 'Node.js', code: 'async function refresh(refreshToken) {\n  const res = await fetch("https://wapi101.com/oauth/token", {\n    method: "POST",\n    headers: {\n      "Authorization": "Basic " + btoa(`${CLIENT_ID}:${CLIENT_SECRET}`),\n      "Content-Type": "application/x-www-form-urlencoded",\n    },\n    body: new URLSearchParams({\n      grant_type: "refresh_token",\n      refresh_token: refreshToken,\n    }),\n  });\n  if (!res.ok) throw new Error("Refresh failed: " + res.status);\n  return res.json();\n}' },
+      ] })}
+      <h2>Rotación de tokens</h2>
+      <p>Cada refresh devuelve un <strong>refresh_token nuevo</strong>. El viejo queda invalidado. <strong>Siempre guarda el último refresh_token.</strong></p>
+      <p>Esta es una mejor práctica de seguridad — si un refresh_token viejo se usa después de la rotación, lo tratamos como leak y invalidamos toda la cadena.</p>
+      <h2>Mejores prácticas</h2>
+      <ul>
+        <li>Refresca proactivamente a los ~50 minutos (antes del expiry de 1h)</li>
+        <li>En respuestas 401 de la API, refresca y reintenta una vez</li>
+        <li>Si el refresh falla con <code>invalid_grant</code>, el usuario debe re-autorizar</li>
+        <li>Guarda refresh tokens cifrados en reposo</li>
+      </ul>
+    `,
+  },
+
+  'scopes': {
+    section: 'oauth',
+    nav: { es: 'Scopes', en: 'Scopes' },
+    title: { es: 'Permission scopes', en: 'Permission scopes' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Scopes are granular permissions your app requests. The user sees and approves each one.</p>
+      <h2>Available scopes</h2>
+      <table>
+        <thead><tr><th>Scope</th><th>Description</th><th>Sensitive</th></tr></thead>
+        <tbody>
+          <tr><td><code>tenant:read</code></td><td>Read basic CRM info</td><td>No</td></tr>
+          <tr><td><code>leads:read</code></td><td>Read leads</td><td>No</td></tr>
+          <tr><td><code>leads:write</code></td><td>Create and modify leads</td><td>Yes</td></tr>
+          <tr><td><code>contacts:read</code></td><td>Read contacts</td><td>No</td></tr>
+          <tr><td><code>contacts:write</code></td><td>Create and modify contacts</td><td>Yes</td></tr>
+          <tr><td><code>messages:read</code></td><td>Read messages and conversations</td><td>Yes</td></tr>
+          <tr><td><code>messages:send</code></td><td>Send messages</td><td>Yes</td></tr>
+          <tr><td><code>bots:read</code></td><td>Read configured bots</td><td>No</td></tr>
+          <tr><td><code>bots:write</code></td><td>Create and modify bots</td><td>Yes</td></tr>
+          <tr><td><code>appointments:read</code></td><td>Read appointments</td><td>No</td></tr>
+          <tr><td><code>appointments:write</code></td><td>Create and modify appointments</td><td>Yes</td></tr>
+          <tr><td><code>pipelines:read</code></td><td>Read pipelines and stages</td><td>No</td></tr>
+          <tr><td><code>webhooks</code></td><td>Receive webhook events</td><td>No</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Sensitive</strong> scopes are highlighted in yellow on the consent screen so users notice they're granting elevated access.</p>
+      <h2>Best practice: ask only what you need</h2>
+      <p>Don't request <code>leads:write</code> if you only read. Users (and our review team) will trust your app more if it asks for minimal permissions.</p>
+    ` : `
+      <p class="lead">Los scopes son permisos granulares que tu app pide. El usuario ve y aprueba cada uno.</p>
+      <h2>Scopes disponibles</h2>
+      <table>
+        <thead><tr><th>Scope</th><th>Descripción</th><th>Sensible</th></tr></thead>
+        <tbody>
+          <tr><td><code>tenant:read</code></td><td>Leer información básica del CRM</td><td>No</td></tr>
+          <tr><td><code>leads:read</code></td><td>Leer leads</td><td>No</td></tr>
+          <tr><td><code>leads:write</code></td><td>Crear y modificar leads</td><td>Sí</td></tr>
+          <tr><td><code>contacts:read</code></td><td>Leer contactos</td><td>No</td></tr>
+          <tr><td><code>contacts:write</code></td><td>Crear y modificar contactos</td><td>Sí</td></tr>
+          <tr><td><code>messages:read</code></td><td>Leer mensajes y conversaciones</td><td>Sí</td></tr>
+          <tr><td><code>messages:send</code></td><td>Enviar mensajes</td><td>Sí</td></tr>
+          <tr><td><code>bots:read</code></td><td>Leer bots configurados</td><td>No</td></tr>
+          <tr><td><code>bots:write</code></td><td>Crear y modificar bots</td><td>Sí</td></tr>
+          <tr><td><code>appointments:read</code></td><td>Leer citas</td><td>No</td></tr>
+          <tr><td><code>appointments:write</code></td><td>Crear y modificar citas</td><td>Sí</td></tr>
+          <tr><td><code>pipelines:read</code></td><td>Leer pipelines y etapas</td><td>No</td></tr>
+          <tr><td><code>webhooks</code></td><td>Recibir eventos vía webhook</td><td>No</td></tr>
+        </tbody>
+      </table>
+      <p>Los scopes <strong>sensibles</strong> se resaltan en amarillo en la pantalla de consent para que los usuarios noten que están otorgando acceso elevado.</p>
+      <h2>Mejor práctica: pide solo lo que necesitas</h2>
+      <p>No pidas <code>leads:write</code> si solo lees. Los usuarios (y nuestro equipo de review) confiarán más en tu app si pide permisos mínimos.</p>
+    `,
+  },
+
+  // ────── API REFERENCE ──────
+  'api-leads': {
+    section: 'api',
+    nav: { es: 'Leads', en: 'Leads' },
+    title: { es: 'Leads (Expedients)', en: 'Leads (Expedients)' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Leads are the core sales entity in Wapi101. Each lead belongs to a contact and lives in a pipeline stage.</p>
+      ${_endpoint('GET', '/api/expedients', 'leads:read', 'List all leads in the tenant. Paginated.')}
+      ${_endpoint('POST', '/api/expedients', 'leads:write', 'Create a new lead. Body: { name, contactId, pipelineId, stageId, value?, tags? }')}
+      ${_endpoint('GET', '/api/expedients/:id', 'leads:read', 'Get a single lead by ID.')}
+      ${_endpoint('PATCH', '/api/expedients/:id', 'leads:write', 'Update lead fields. Partial — send only what changes.')}
+      ${_endpoint('DELETE', '/api/expedients/:id', 'leads:write', 'Delete a lead (soft delete by default).')}
+      ${_endpoint('POST', '/api/expedients/:id/move', 'leads:write', 'Move a lead to another stage. Body: { stageId }')}
+      <h2>Example</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: 'curl https://wapi101.com/api/expedients?limit=10 \\\n  -H "Authorization: Bearer wapi_at_xxx"' },
+        { lang: 'Node.js', code: 'const res = await fetch("https://wapi101.com/api/expedients?limit=10", {\n  headers: { "Authorization": `Bearer ${token}` },\n});\nconst { items, total } = await res.json();' },
+      ] })}
+      <h2>Response shape</h2>
+      ${_ce({ tabs: [{ lang: 'JSON', code: '{\n  "items": [\n    {\n      "id": 8241,\n      "name": "Maria López 12/05",\n      "contactId": 506,\n      "contactName": "Maria López",\n      "pipelineId": 18,\n      "pipelineName": "WAPI101",\n      "stageId": 140,\n      "stageName": "Mensajes entrantes",\n      "value": 0,\n      "tags": ["lead", "hotsale"],\n      "createdAt": 1779418692\n    }\n  ],\n  "total": 4573,\n  "page": 1,\n  "pageSize": 10\n}' }] })}
+    ` : `
+      <p class="lead">Los leads son la entidad central de ventas en Wapi101. Cada lead pertenece a un contacto y vive en una etapa de pipeline.</p>
+      ${_endpoint('GET', '/api/expedients', 'leads:read', 'Lista todos los leads del tenant. Paginado.')}
+      ${_endpoint('POST', '/api/expedients', 'leads:write', 'Crea un nuevo lead. Body: { name, contactId, pipelineId, stageId, value?, tags? }')}
+      ${_endpoint('GET', '/api/expedients/:id', 'leads:read', 'Obtén un solo lead por ID.')}
+      ${_endpoint('PATCH', '/api/expedients/:id', 'leads:write', 'Actualiza campos del lead. Parcial — envía solo lo que cambia.')}
+      ${_endpoint('DELETE', '/api/expedients/:id', 'leads:write', 'Elimina un lead (soft delete por default).')}
+      ${_endpoint('POST', '/api/expedients/:id/move', 'leads:write', 'Mueve un lead a otra etapa. Body: { stageId }')}
+      <h2>Ejemplo</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: 'curl https://wapi101.com/api/expedients?limit=10 \\\n  -H "Authorization: Bearer wapi_at_xxx"' },
+        { lang: 'Node.js', code: 'const res = await fetch("https://wapi101.com/api/expedients?limit=10", {\n  headers: { "Authorization": `Bearer ${token}` },\n});\nconst { items, total } = await res.json();' },
+      ] })}
+      <h2>Forma de respuesta</h2>
+      ${_ce({ tabs: [{ lang: 'JSON', code: '{\n  "items": [\n    {\n      "id": 8241,\n      "name": "Maria López 12/05",\n      "contactId": 506,\n      "contactName": "Maria López",\n      "pipelineId": 18,\n      "pipelineName": "WAPI101",\n      "stageId": 140,\n      "stageName": "Mensajes entrantes",\n      "value": 0,\n      "tags": ["lead", "hotsale"],\n      "createdAt": 1779418692\n    }\n  ],\n  "total": 4573,\n  "page": 1,\n  "pageSize": 10\n}' }] })}
+    `,
+  },
+
+  'api-contacts': {
+    section: 'api',
+    nav: { es: 'Contacts', en: 'Contacts' },
+    title: { es: 'Contacts API', en: 'Contacts API' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Contacts are the people in your CRM. Each contact can have multiple leads.</p>
+      ${_endpoint('GET', '/api/contacts', 'contacts:read', 'List contacts. Supports search via ?q=')}
+      ${_endpoint('POST', '/api/contacts', 'contacts:write', 'Create contact. Body: { firstName, lastName?, phone, email? }')}
+      ${_endpoint('GET', '/api/contacts/:id', 'contacts:read', 'Get a single contact with all metadata.')}
+      ${_endpoint('PATCH', '/api/contacts/:id', 'contacts:write', 'Update contact.')}
+      ${_endpoint('DELETE', '/api/contacts/:id', 'contacts:write', 'Delete contact (cascade deletes leads and convos).')}
+    ` : `
+      <p class="lead">Los contactos son las personas en tu CRM. Cada contacto puede tener múltiples leads.</p>
+      ${_endpoint('GET', '/api/contacts', 'contacts:read', 'Lista contactos. Soporta búsqueda vía ?q=')}
+      ${_endpoint('POST', '/api/contacts', 'contacts:write', 'Crea contacto. Body: { firstName, lastName?, phone, email? }')}
+      ${_endpoint('GET', '/api/contacts/:id', 'contacts:read', 'Obtén un solo contacto con toda la metadata.')}
+      ${_endpoint('PATCH', '/api/contacts/:id', 'contacts:write', 'Actualiza contacto.')}
+      ${_endpoint('DELETE', '/api/contacts/:id', 'contacts:write', 'Elimina contacto (cascade borra leads y convos).')}
+    `,
+  },
+
+  'api-messages': {
+    section: 'api',
+    nav: { es: 'Messages', en: 'Messages' },
+    title: { es: 'Messages API', en: 'Messages API' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Send and receive messages through WhatsApp, Messenger, Instagram, Email, TikTok.</p>
+      ${_endpoint('GET', '/api/conversations', 'messages:read', 'List conversations. Filter by ?provider=whatsapp')}
+      ${_endpoint('GET', '/api/conversations/:id/messages', 'messages:read', 'Get messages of a conversation. Paginated.')}
+      ${_endpoint('POST', '/api/conversations/:id/send', 'messages:send', 'Send a message. Body: { text } or { mediaUrl, type }')}
+      <h2>Sending a WhatsApp template</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: `curl -X POST https://wapi101.com/api/conversations/2/send \\\n  -H "Authorization: Bearer wapi_at_xxx" \\\n  -H "Content-Type: application/json" \\\n  -d '{"templateId": 42, "vars": {"nombre": "Luis"}}'` },
+      ] })}
+    ` : `
+      <p class="lead">Envía y recibe mensajes por WhatsApp, Messenger, Instagram, Email, TikTok.</p>
+      ${_endpoint('GET', '/api/conversations', 'messages:read', 'Lista conversaciones. Filtra por ?provider=whatsapp')}
+      ${_endpoint('GET', '/api/conversations/:id/messages', 'messages:read', 'Obtén mensajes de una conversación. Paginado.')}
+      ${_endpoint('POST', '/api/conversations/:id/send', 'messages:send', 'Envía un mensaje. Body: { text } o { mediaUrl, type }')}
+      <h2>Enviar una plantilla de WhatsApp</h2>
+      ${_ce({ tabs: [
+        { lang: 'cURL', code: `curl -X POST https://wapi101.com/api/conversations/2/send \\\n  -H "Authorization: Bearer wapi_at_xxx" \\\n  -H "Content-Type: application/json" \\\n  -d '{"templateId": 42, "vars": {"nombre": "Luis"}}'` },
+      ] })}
+    `,
+  },
+
+  // ────── WEBHOOKS ──────
+  'webhooks-events': {
+    section: 'webhooks',
+    nav: { es: 'Eventos', en: 'Events' },
+    title: { es: 'Webhook events', en: 'Webhook events' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Subscribe to events to react in real-time. We POST to your <code>webhook_url</code> with HMAC signature.</p>
+      <h2>Available events</h2>
+      <table>
+        <thead><tr><th>Event</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td><code>lead.created</code></td><td>A new lead is added to any pipeline</td></tr>
+          <tr><td><code>lead.updated</code></td><td>Any field of a lead changes</td></tr>
+          <tr><td><code>lead.stage_changed</code></td><td>Lead moves to another stage</td></tr>
+          <tr><td><code>lead.deleted</code></td><td>Lead is soft-deleted</td></tr>
+          <tr><td><code>contact.created</code></td><td>New contact</td></tr>
+          <tr><td><code>contact.updated</code></td><td>Contact info changes</td></tr>
+          <tr><td><code>message.received</code></td><td>Incoming message (WhatsApp, FB, IG, email, TikTok)</td></tr>
+          <tr><td><code>message.sent</code></td><td>Outgoing message confirmed sent</td></tr>
+          <tr><td><code>message.failed</code></td><td>Outgoing message failed delivery</td></tr>
+          <tr><td><code>appointment.created</code></td><td>New appointment scheduled</td></tr>
+          <tr><td><code>appointment.cancelled</code></td><td>Appointment cancelled</td></tr>
+          <tr><td><code>appointment.rescheduled</code></td><td>Appointment date/time changed</td></tr>
+          <tr><td><code>bot.run.started</code></td><td>A bot started executing for a contact</td></tr>
+          <tr><td><code>bot.run.completed</code></td><td>Bot finished successfully</td></tr>
+          <tr><td><code>bot.run.failed</code></td><td>Bot errored mid-run</td></tr>
+        </tbody>
+      </table>
+      <h2>Payload format</h2>
+      ${_ce({ tabs: [{ lang: 'JSON', code: '{\n  "event": "lead.created",\n  "tenantId": 1,\n  "occurredAt": 1779418692,\n  "data": {\n    "lead": { "id": 8241, "name": "...", ... }\n  }\n}' }] })}
+      <p>Configure your webhook URL when creating the app (or update it later). You'll also receive a <code>webhook_secret</code> shown once — store it to verify signatures.</p>
+    ` : `
+      <p class="lead">Suscríbete a eventos para reaccionar en tiempo real. Hacemos POST a tu <code>webhook_url</code> con firma HMAC.</p>
+      <h2>Eventos disponibles</h2>
+      <table>
+        <thead><tr><th>Evento</th><th>Cuándo</th></tr></thead>
+        <tbody>
+          <tr><td><code>lead.created</code></td><td>Se agrega un lead nuevo a cualquier pipeline</td></tr>
+          <tr><td><code>lead.updated</code></td><td>Cambia cualquier campo de un lead</td></tr>
+          <tr><td><code>lead.stage_changed</code></td><td>Lead se mueve a otra etapa</td></tr>
+          <tr><td><code>lead.deleted</code></td><td>Lead se soft-deletea</td></tr>
+          <tr><td><code>contact.created</code></td><td>Contacto nuevo</td></tr>
+          <tr><td><code>contact.updated</code></td><td>Info del contacto cambia</td></tr>
+          <tr><td><code>message.received</code></td><td>Mensaje entrante (WhatsApp, FB, IG, email, TikTok)</td></tr>
+          <tr><td><code>message.sent</code></td><td>Mensaje saliente confirmado enviado</td></tr>
+          <tr><td><code>message.failed</code></td><td>Mensaje saliente falló entrega</td></tr>
+          <tr><td><code>appointment.created</code></td><td>Cita agendada</td></tr>
+          <tr><td><code>appointment.cancelled</code></td><td>Cita cancelada</td></tr>
+          <tr><td><code>appointment.rescheduled</code></td><td>Fecha/hora de cita cambia</td></tr>
+          <tr><td><code>bot.run.started</code></td><td>Un bot empezó a ejecutarse para un contacto</td></tr>
+          <tr><td><code>bot.run.completed</code></td><td>Bot terminó exitosamente</td></tr>
+          <tr><td><code>bot.run.failed</code></td><td>Bot crasheó a mitad de ejecución</td></tr>
+        </tbody>
+      </table>
+      <h2>Formato del payload</h2>
+      ${_ce({ tabs: [{ lang: 'JSON', code: '{\n  "event": "lead.created",\n  "tenantId": 1,\n  "occurredAt": 1779418692,\n  "data": {\n    "lead": { "id": 8241, "name": "...", ... }\n  }\n}' }] })}
+      <p>Configura tu webhook URL al crear la app (o actualízala después). También recibirás un <code>webhook_secret</code> mostrado una sola vez — guárdalo para verificar firmas.</p>
+    `,
+  },
+
+  'webhooks-verify': {
+    section: 'webhooks',
+    nav: { es: 'Verificación HMAC', en: 'HMAC verification' },
+    title: { es: 'Verificar webhooks (HMAC)', en: 'Verify webhooks (HMAC)' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Every webhook POST includes <code>X-Wapi-Signature: sha256=...</code> computed from the raw body and your webhook_secret.</p>
+      <h2>Why verify?</h2>
+      <p>Anyone with your webhook URL could POST fake events. Verifying the HMAC proves the call really came from Wapi101.</p>
+      <h2>Algorithm</h2>
+      <p><code>HMAC-SHA256(secret, raw_body)</code>, hex-encoded, prefixed with <code>sha256=</code>.</p>
+      ${_ce({ tabs: [
+        { lang: 'Node.js', code: 'const crypto = require("crypto");\n\nfunction verify(rawBody, signature, secret) {\n  const expected = "sha256=" + crypto\n    .createHmac("sha256", secret)\n    .update(rawBody)\n    .digest("hex");\n  return crypto.timingSafeEqual(\n    Buffer.from(signature),\n    Buffer.from(expected),\n  );\n}\n\n// Express middleware\napp.post("/webhooks/wapi", express.raw({ type: "*/*" }), (req, res) => {\n  const sig = req.headers["x-wapi-signature"];\n  if (!verify(req.body, sig, process.env.WAPI_WEBHOOK_SECRET)) {\n    return res.status(401).send("invalid signature");\n  }\n  const event = JSON.parse(req.body);\n  // ... handle event\n  res.status(200).send("ok");\n});' },
+        { lang: 'Python', code: 'import hmac, hashlib\n\ndef verify(raw_body: bytes, signature: str, secret: str) -> bool:\n    expected = "sha256=" + hmac.new(\n        secret.encode(),\n        raw_body,\n        hashlib.sha256,\n    ).hexdigest()\n    return hmac.compare_digest(signature, expected)\n\n# Flask\n@app.route("/webhooks/wapi", methods=["POST"])\ndef webhook():\n    if not verify(request.get_data(), request.headers["X-Wapi-Signature"], SECRET):\n        return "invalid", 401\n    event = request.json\n    # ... handle event\n    return "ok"' },
+      ] })}
+      <h2>Important</h2>
+      <ul>
+        <li><strong>Verify the RAW body</strong> — not parsed JSON. Whitespace matters.</li>
+        <li>Use <code>timingSafeEqual</code> / <code>compare_digest</code> to prevent timing attacks.</li>
+        <li>Respond with 200 OK as fast as possible. Process async if needed.</li>
+        <li>If you respond with 4xx/5xx, we retry with exponential backoff up to 24h.</li>
+      </ul>
+    ` : `
+      <p class="lead">Cada POST de webhook incluye <code>X-Wapi-Signature: sha256=...</code> calculado del body crudo y tu webhook_secret.</p>
+      <h2>¿Por qué verificar?</h2>
+      <p>Cualquiera con tu webhook URL podría hacer POST de eventos falsos. Verificar el HMAC prueba que la llamada realmente viene de Wapi101.</p>
+      <h2>Algoritmo</h2>
+      <p><code>HMAC-SHA256(secret, raw_body)</code>, en hex, prefijo <code>sha256=</code>.</p>
+      ${_ce({ tabs: [
+        { lang: 'Node.js', code: 'const crypto = require("crypto");\n\nfunction verify(rawBody, signature, secret) {\n  const expected = "sha256=" + crypto\n    .createHmac("sha256", secret)\n    .update(rawBody)\n    .digest("hex");\n  return crypto.timingSafeEqual(\n    Buffer.from(signature),\n    Buffer.from(expected),\n  );\n}\n\n// Middleware Express\napp.post("/webhooks/wapi", express.raw({ type: "*/*" }), (req, res) => {\n  const sig = req.headers["x-wapi-signature"];\n  if (!verify(req.body, sig, process.env.WAPI_WEBHOOK_SECRET)) {\n    return res.status(401).send("invalid signature");\n  }\n  const event = JSON.parse(req.body);\n  // ... manejar evento\n  res.status(200).send("ok");\n});' },
+        { lang: 'Python', code: 'import hmac, hashlib\n\ndef verify(raw_body: bytes, signature: str, secret: str) -> bool:\n    expected = "sha256=" + hmac.new(\n        secret.encode(),\n        raw_body,\n        hashlib.sha256,\n    ).hexdigest()\n    return hmac.compare_digest(signature, expected)\n\n# Flask\n@app.route("/webhooks/wapi", methods=["POST"])\ndef webhook():\n    if not verify(request.get_data(), request.headers["X-Wapi-Signature"], SECRET):\n        return "invalid", 401\n    event = request.json\n    # ... manejar evento\n    return "ok"' },
+      ] })}
+      <h2>Importante</h2>
+      <ul>
+        <li><strong>Verifica el body CRUDO</strong> — no JSON parseado. El whitespace importa.</li>
+        <li>Usa <code>timingSafeEqual</code> / <code>compare_digest</code> para prevenir timing attacks.</li>
+        <li>Responde 200 OK lo más rápido posible. Procesa async si es necesario.</li>
+        <li>Si respondes 4xx/5xx, reintentamos con exponential backoff hasta 24h.</li>
+      </ul>
+    `,
+  },
+
+  // ────── MCP ──────
+  'mcp': {
+    section: 'mcp',
+    nav: { es: 'MCP', en: 'MCP' },
+    title: { es: 'Model Context Protocol', en: 'Model Context Protocol' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">MCP lets you connect Claude, GPT, or any LLM directly to a Wapi101 CRM as a "tool". JSON-RPC 2.0 over HTTP.</p>
+      <h2>What's MCP?</h2>
+      <p>An open protocol from Anthropic for letting AI models call external tools. Wapi101 implements an MCP server so you can ask Claude "show me leads in WAPI101 stage" and it works.</p>
+      <h2>Quickstart</h2>
+      <p>In Settings → IA, enable MCP. You get an endpoint URL + token. Configure your AI client:</p>
+      ${_ce({ tabs: [
+        { lang: 'Claude Desktop', code: '// In claude_desktop_config.json:\n{\n  "mcpServers": {\n    "wapi101": {\n      "url": "https://wapi101.com/api/mcp",\n      "headers": {\n        "Authorization": "Bearer YOUR_MCP_TOKEN"\n      }\n    }\n  }\n}' },
+        { lang: 'Custom client', code: '// JSON-RPC 2.0 over HTTP\nPOST https://wapi101.com/api/mcp\nAuthorization: Bearer YOUR_MCP_TOKEN\nContent-Type: application/json\n\n{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "tools/call",\n  "params": {\n    "name": "list_leads",\n    "arguments": { "stage_id": 140 }\n  }\n}' },
+      ] })}
+      <h2>Available tools</h2>
+      <ul>
+        <li><code>list_leads</code> — query leads by stage, pipeline, tag</li>
+        <li><code>get_lead</code> — full detail of one lead</li>
+        <li><code>create_lead</code> — add new lead</li>
+        <li><code>move_lead</code> — change lead stage</li>
+        <li><code>list_contacts</code> — search contacts</li>
+        <li><code>send_message</code> — send a message to a conversation</li>
+        <li><code>list_appointments</code> — query upcoming appointments</li>
+        <li><code>analytics_summary</code> — basic CRM KPIs</li>
+      </ul>
+      <h2>vs OAuth</h2>
+      <p>OAuth is for apps acting on behalf of users. MCP is for AI clients acting on behalf of ONE specific user (the one who configured it). Both have their use case.</p>
+    ` : `
+      <p class="lead">MCP te permite conectar Claude, GPT, o cualquier LLM directamente a un CRM Wapi101 como una "herramienta". JSON-RPC 2.0 sobre HTTP.</p>
+      <h2>¿Qué es MCP?</h2>
+      <p>Un protocolo abierto de Anthropic para que modelos de IA llamen herramientas externas. Wapi101 implementa un MCP server para que puedas pedirle a Claude "muéstrame los leads en la etapa WAPI101" y funcione.</p>
+      <h2>Quickstart</h2>
+      <p>En Configuración → IA, activa MCP. Obtienes un URL endpoint + token. Configura tu cliente AI:</p>
+      ${_ce({ tabs: [
+        { lang: 'Claude Desktop', code: '// En claude_desktop_config.json:\n{\n  "mcpServers": {\n    "wapi101": {\n      "url": "https://wapi101.com/api/mcp",\n      "headers": {\n        "Authorization": "Bearer YOUR_MCP_TOKEN"\n      }\n    }\n  }\n}' },
+        { lang: 'Cliente custom', code: '// JSON-RPC 2.0 sobre HTTP\nPOST https://wapi101.com/api/mcp\nAuthorization: Bearer YOUR_MCP_TOKEN\nContent-Type: application/json\n\n{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "tools/call",\n  "params": {\n    "name": "list_leads",\n    "arguments": { "stage_id": 140 }\n  }\n}' },
+      ] })}
+      <h2>Tools disponibles</h2>
+      <ul>
+        <li><code>list_leads</code> — consulta leads por etapa, pipeline, tag</li>
+        <li><code>get_lead</code> — detalle completo de un lead</li>
+        <li><code>create_lead</code> — agrega lead nuevo</li>
+        <li><code>move_lead</code> — cambia la etapa de un lead</li>
+        <li><code>list_contacts</code> — busca contactos</li>
+        <li><code>send_message</code> — envía un mensaje a una conversación</li>
+        <li><code>list_appointments</code> — consulta citas próximas</li>
+        <li><code>analytics_summary</code> — KPIs básicos del CRM</li>
+      </ul>
+      <h2>vs OAuth</h2>
+      <p>OAuth es para apps que actúan en nombre de usuarios. MCP es para clientes AI actuando en nombre de UN usuario específico (quien lo configuró). Ambos tienen su caso de uso.</p>
+    `,
+  },
+
+  // ────── RESOURCES ──────
+  'rate-limits': {
+    section: 'resources',
+    nav: { es: 'Rate limits', en: 'Rate limits' },
+    title: { es: 'Rate limits', en: 'Rate limits' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">Each app has a request budget per minute. Default: 600 req/min (10 req/s).</p>
+      <h2>Headers on every response</h2>
+      <table>
+        <thead><tr><th>Header</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>X-RateLimit-Limit</code></td><td>Your max requests per minute</td></tr>
+          <tr><td><code>X-RateLimit-Remaining</code></td><td>How many you have left in the current window</td></tr>
+          <tr><td><code>X-RateLimit-Reset</code></td><td>Seconds until the window resets</td></tr>
+        </tbody>
+      </table>
+      <h2>When you exceed the limit</h2>
+      <p>HTTP <strong>429 Too Many Requests</strong> with body:</p>
+      ${_ce({ tabs: [{ lang: 'JSON', code: '{\n  "error": "Rate limit excedido (600 req/min)",\n  "code": "RATE_LIMIT_EXCEEDED",\n  "retryAfter": 42\n}' }] })}
+      <p>Also includes <code>Retry-After</code> header. Best practice: respect it.</p>
+      <h2>Need more?</h2>
+      <p>Apps in our public marketplace can request higher limits during review. For private apps, contact support.</p>
+    ` : `
+      <p class="lead">Cada app tiene un presupuesto de requests por minuto. Default: 600 req/min (10 req/s).</p>
+      <h2>Headers en cada respuesta</h2>
+      <table>
+        <thead><tr><th>Header</th><th>Significado</th></tr></thead>
+        <tbody>
+          <tr><td><code>X-RateLimit-Limit</code></td><td>Tu máximo de requests por minuto</td></tr>
+          <tr><td><code>X-RateLimit-Remaining</code></td><td>Cuántas te quedan en la ventana actual</td></tr>
+          <tr><td><code>X-RateLimit-Reset</code></td><td>Segundos hasta que la ventana se resetea</td></tr>
+        </tbody>
+      </table>
+      <h2>Cuando excedes el límite</h2>
+      <p>HTTP <strong>429 Too Many Requests</strong> con body:</p>
+      ${_ce({ tabs: [{ lang: 'JSON', code: '{\n  "error": "Rate limit excedido (600 req/min)",\n  "code": "RATE_LIMIT_EXCEEDED",\n  "retryAfter": 42\n}' }] })}
+      <p>También incluye header <code>Retry-After</code>. Mejor práctica: respétalo.</p>
+      <h2>¿Necesitas más?</h2>
+      <p>Apps en nuestro marketplace público pueden pedir límites mayores durante review. Para apps privadas, contacta soporte.</p>
+    `,
+  },
+
+  'errors': {
+    section: 'resources',
+    nav: { es: 'Errores', en: 'Errors' },
+    title: { es: 'Error reference', en: 'Error reference' },
+    body: (lang) => lang === 'en' ? `
+      <p class="lead">All API errors return JSON with <code>error</code>, <code>code</code> and contextual fields.</p>
+      <table>
+        <thead><tr><th>Status</th><th>code</th><th>Cause</th></tr></thead>
+        <tbody>
+          <tr><td>401</td><td><code>UNAUTHENTICATED</code></td><td>Missing or invalid token</td></tr>
+          <tr><td>401</td><td><code>OAUTH_INVALID</code></td><td>OAuth access_token expired or revoked</td></tr>
+          <tr><td>401</td><td><code>OAUTH_ORPHANED</code></td><td>The advisor who authorized the app was deleted</td></tr>
+          <tr><td>403</td><td><code>TENANT_SUSPENDED</code></td><td>The tenant's account is suspended</td></tr>
+          <tr><td>403</td><td><code>SCOPE_MISSING</code></td><td>Your app doesn't have the required scope</td></tr>
+          <tr><td>403</td><td><code>OAUTH_FORBIDDEN</code></td><td>This route is not accessible via OAuth</td></tr>
+          <tr><td>404</td><td>—</td><td>Resource not found</td></tr>
+          <tr><td>409</td><td><code>SLOT_CONFLICT</code></td><td>Appointment conflicts with another</td></tr>
+          <tr><td>429</td><td><code>RATE_LIMIT_EXCEEDED</code></td><td>Too many requests, wait <code>retryAfter</code> seconds</td></tr>
+          <tr><td>400</td><td><code>invalid_grant</code></td><td>OAuth code/refresh expired or already used</td></tr>
+          <tr><td>401</td><td><code>invalid_client</code></td><td>OAuth client_id/secret incorrect</td></tr>
+        </tbody>
+      </table>
+      <h2>Handling 401s</h2>
+      <p>When you receive <code>OAUTH_INVALID</code>, your access_token expired. Refresh it:</p>
+      ${_ce({ tabs: [{ lang: 'Node.js', code: 'async function apiCall(url) {\n  let res = await fetch(url, { headers: { Authorization: `Bearer ${access}` } });\n  if (res.status === 401) {\n    const data = await res.json();\n    if (data.code === "OAUTH_INVALID") {\n      ({ access_token: access, refresh_token: refresh } = await refresh(refresh));\n      // retry once\n      res = await fetch(url, { headers: { Authorization: `Bearer ${access}` } });\n    }\n  }\n  return res.json();\n}' }] })}
+    ` : `
+      <p class="lead">Todos los errores de la API devuelven JSON con <code>error</code>, <code>code</code> y campos contextuales.</p>
+      <table>
+        <thead><tr><th>Status</th><th>code</th><th>Causa</th></tr></thead>
+        <tbody>
+          <tr><td>401</td><td><code>UNAUTHENTICATED</code></td><td>Token ausente o inválido</td></tr>
+          <tr><td>401</td><td><code>OAUTH_INVALID</code></td><td>OAuth access_token expirado o revocado</td></tr>
+          <tr><td>401</td><td><code>OAUTH_ORPHANED</code></td><td>El advisor que autorizó la app fue eliminado</td></tr>
+          <tr><td>403</td><td><code>TENANT_SUSPENDED</code></td><td>La cuenta del tenant está suspendida</td></tr>
+          <tr><td>403</td><td><code>SCOPE_MISSING</code></td><td>Tu app no tiene el scope requerido</td></tr>
+          <tr><td>403</td><td><code>OAUTH_FORBIDDEN</code></td><td>Esta ruta no es accesible vía OAuth</td></tr>
+          <tr><td>404</td><td>—</td><td>Recurso no encontrado</td></tr>
+          <tr><td>409</td><td><code>SLOT_CONFLICT</code></td><td>La cita choca con otra existente</td></tr>
+          <tr><td>429</td><td><code>RATE_LIMIT_EXCEEDED</code></td><td>Demasiadas requests, espera <code>retryAfter</code> segundos</td></tr>
+          <tr><td>400</td><td><code>invalid_grant</code></td><td>OAuth code/refresh expirado o ya usado</td></tr>
+          <tr><td>401</td><td><code>invalid_client</code></td><td>OAuth client_id/secret incorrectos</td></tr>
+        </tbody>
+      </table>
+      <h2>Manejar 401s</h2>
+      <p>Cuando recibes <code>OAUTH_INVALID</code>, tu access_token expiró. Refréscalo:</p>
+      ${_ce({ tabs: [{ lang: 'Node.js', code: 'async function apiCall(url) {\n  let res = await fetch(url, { headers: { Authorization: `Bearer ${access}` } });\n  if (res.status === 401) {\n    const data = await res.json();\n    if (data.code === "OAUTH_INVALID") {\n      ({ access_token: access, refresh_token: refresh } = await refresh(refresh));\n      // reintentar una vez\n      res = await fetch(url, { headers: { Authorization: `Bearer ${access}` } });\n    }\n  }\n  return res.json();\n}' }] })}
+    `,
+  },
+};
+
+// Helper para renderizar endpoint cards
+function _endpoint(method, path, scope, desc) {
+  return `<div class="dp-endpoint">
+    <div class="dp-endpoint-head">
+      <span class="dp-method dp-method-${method.toLowerCase()}">${method}</span>
+      <span class="dp-endpoint-path">${escd(path)}</span>
+      ${scope ? `<span class="dp-endpoint-scope">scope: <code>${escd(scope)}</code></span>` : ''}
+    </div>
+    <p class="dp-endpoint-desc">${escd(desc)}</p>
+  </div>`;
+}
+
+// Estructura del sidebar — secciones agrupadas
+const DOCS_SECTIONS = {
+  es: [
+    { id: 'getting-started', title: 'Empezar', items: ['introduction', 'quickstart'] },
+    { id: 'oauth',           title: 'OAuth 2.0', items: ['oauth-flow', 'refresh-tokens', 'scopes'] },
+    { id: 'api',             title: 'API Reference', items: ['api-leads', 'api-contacts', 'api-messages'] },
+    { id: 'webhooks',        title: 'Webhooks', items: ['webhooks-events', 'webhooks-verify'] },
+    { id: 'mcp',             title: 'MCP (IA)', items: ['mcp'] },
+    { id: 'resources',       title: 'Recursos', items: ['rate-limits', 'errors'] },
+  ],
+  en: [
+    { id: 'getting-started', title: 'Get started', items: ['introduction', 'quickstart'] },
+    { id: 'oauth',           title: 'OAuth 2.0', items: ['oauth-flow', 'refresh-tokens', 'scopes'] },
+    { id: 'api',             title: 'API Reference', items: ['api-leads', 'api-contacts', 'api-messages'] },
+    { id: 'webhooks',        title: 'Webhooks', items: ['webhooks-events', 'webhooks-verify'] },
+    { id: 'mcp',             title: 'MCP (AI)', items: ['mcp'] },
+    { id: 'resources',       title: 'Resources', items: ['rate-limits', 'errors'] },
+  ],
+};
+
+function renderDocsSidebar(currentSlug) {
+  const sections = DOCS_SECTIONS[_lang] || DOCS_SECTIONS.es;
+  return sections.map(sec => `
+    <h4>${escd(sec.title)}</h4>
+    ${sec.items.map(slug => {
+      const doc = DOCS[slug];
+      if (!doc) return '';
+      const name = (doc.nav?.[_lang]) || doc.nav?.es || slug;
+      return `<a href="#/docs/${slug}" class="${slug === currentSlug ? 'is-active' : ''}">${escd(name)}</a>`;
+    }).join('')}`
+  ).join('');
+}
+
+function renderDocsContent(slug) {
+  const doc = DOCS[slug] || DOCS['introduction'];
+  const title = doc.title?.[_lang] || doc.title?.es || '';
+  const body = typeof doc.body === 'function' ? doc.body(_lang) : '';
+  return `<h1>${escd(title)}</h1>${body}`;
+}
+
+function loadDocs(slug) {
+  const target = slug && DOCS[slug] ? slug : 'introduction';
+  document.getElementById('docsSidebar').innerHTML = renderDocsSidebar(target);
+  document.getElementById('docsContent').innerHTML = renderDocsContent(target);
+  // Wire code tabs
+  document.querySelectorAll('.dp-code-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.cb;
+      document.querySelectorAll(`.dp-code-tab[data-cb="${id}"]`).forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      document.querySelectorAll(`[data-cb-pane^="${id}-"]`).forEach(p => p.classList.remove('is-active'));
+      document.querySelector(`[data-cb-pane="${id}-${btn.dataset.pane}"]`)?.classList.add('is-active');
+    });
+  });
+  // Wire copy buttons
+  document.querySelectorAll('.dp-code-copy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.cbCopy;
+      const activePane = document.querySelector(`[data-cb-pane^="${id}-"].is-active`);
+      const text = activePane?.querySelector('code')?.textContent || '';
+      navigator.clipboard.writeText(text);
+      const orig = btn.textContent;
+      btn.textContent = tDoc('copied');
+      setTimeout(() => btn.textContent = orig, 1200);
+    });
+  });
+  // Scroll to top
+  window.scrollTo(0, 0);
+}
 
 // ═════════════ SPA mini ═════════════
 const $ = (id) => document.getElementById(id);
@@ -605,7 +1383,7 @@ async function api(method, path, body) {
 }
 
 function showView(name) {
-  ['Landing', 'Signup', 'Login', 'Dashboard', 'AppDetail'].forEach(v => {
+  ['Landing', 'Docs', 'Signup', 'Login', 'Dashboard', 'AppDetail'].forEach(v => {
     $('view' + v).hidden = (v.toLowerCase() !== name);
   });
 }
@@ -623,6 +1401,11 @@ function route() {
   const hash = location.hash || '#/';
   if (hash.startsWith('#/login'))    return showView('login');
   if (hash.startsWith('#/signup'))   return showView('signup');
+  if (hash.startsWith('#/docs')) {
+    const docMatch = hash.match(/^#\/docs\/([a-z0-9-]+)/);
+    loadDocs(docMatch ? docMatch[1] : 'introduction');
+    return showView('docs');
+  }
   if (hash.startsWith('#/dashboard')) {
     if (!getToken()) { location.hash = '#/login'; return; }
     loadDashboard();

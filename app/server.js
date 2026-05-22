@@ -178,7 +178,7 @@ app.get('/super', (_req, res) => {
 
 // Portal de developers — SPA mini (mismo HTML para todas las rutas hash-based).
 // Sin auth — la auth la maneja el JS del portal contra /api/dev.
-app.get(['/developers', '/developers/*'], (_req, res) => {
+app.get(['/developers', '/developers/*path'], (_req, res) => {
   res.set('Cache-Control', 'no-cache, must-revalidate');
   if (_htmlCache['developers.html']) return res.type('html').send(_htmlCache['developers.html']);
   res.sendFile(path.join(__dirname, 'public', 'developers.html'));

@@ -1131,6 +1131,13 @@ app.listen(config.port, config.host, () => {
   try { require('./src/modules/webhooks-out/service').startDeliveryPoller(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar webhooks-out poller:', err.message);
   }
+  // Iniciar poller de sincronización de nombres Messenger/Instagram.
+  // El endpoint /{psid}?fields=name está bloqueado por Meta sin App Review,
+  // pero /me/conversations?fields=participants SÍ devuelve nombres. Cada 30
+  // min revisamos contactos con placeholder y los actualizamos.
+  try { require('./src/modules/messenger-name-sync/service').startPoller(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar messenger-name-sync poller:', err.message);
+  }
 });
 
 module.exports = { app, config, db };

@@ -13644,6 +13644,65 @@ body.bb-ve-fullscreen-on .bb-ve-fs-btn .bb-ve-fs-ico-compress { display: block; 
 body.bb-ve-fullscreen-on {
   overflow: hidden;
 }
+
+/* ─── Modo Standalone (ventana nueva) ───
+   Cuando body tiene .bot-editor-standalone, oculta TODO menos el bot builder
+   en vista Editable. Es similar al fullscreen pero permanente — el botón
+   "expandir" del editor se oculta porque ya estás en modo dedicado. */
+body.bot-editor-standalone {
+  overflow: hidden;
+}
+body.bot-editor-standalone .nav-bar,
+body.bot-editor-standalone .rh-top-nav,
+body.bot-editor-standalone .mobile-bottom-nav,
+body.bot-editor-standalone .top-mobile-bar,
+body.bot-editor-standalone #rhPushCta,
+body.bot-editor-standalone .impersonation-floating-btn,
+body.bot-editor-standalone #botListView {
+  display: none !important;
+}
+body.bot-editor-standalone .app-shell,
+body.bot-editor-standalone .app-shell > * {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body.bot-editor-standalone .view[data-view-name="bot"],
+body.bot-editor-standalone #botBuilder {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #0e162a;
+  z-index: 9000;
+  overflow: hidden;
+}
+body.bot-editor-standalone .bb-view-tabs,
+body.bot-editor-standalone .bb-builder-header,
+body.bot-editor-standalone .bb-view-content:not([data-view="editable"]) {
+  display: none !important;
+}
+body.bot-editor-standalone .bb-view-content[data-view="editable"] {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-items: stretch !important;
+}
+body.bot-editor-standalone .bb-ve-wrap {
+  height: 100vh !important;
+  min-height: 100vh !important;
+  width: 100vw !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+/* En modo standalone, ocultar el botón "expandir" del canvas — ya estás en
+   modo dedicado, no tiene sentido seguir expandiendo. */
+body.bot-editor-standalone .bb-ve-fs-btn {
+  display: none !important;
+}
 body.bb-ve-fullscreen-on .nav-bar,
 body.bb-ve-fullscreen-on .rh-top-nav,
 body.bb-ve-fullscreen-on .mobile-bottom-nav,

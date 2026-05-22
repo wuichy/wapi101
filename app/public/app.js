@@ -12456,16 +12456,9 @@ function setupBot() {
       fsBtn.dataset.wired = '1';
       fsBtn.addEventListener('click', _bbVeToggleFullscreen);
     }
-    // Auto-entrar a Pantalla Completa la primera vez que se abre Editable
-    // para este bot (window.__bbVeFsAutoTriggered se resetea al cerrar el
-    // builder, así otro bot vuelve a auto-abrir).
-    // Si el user salió a propósito (sessionStorage bbVeFsOptOut), no auto-abrir.
-    if (!window.__bbVeFsAutoTriggered && !sessionStorage.getItem('bbVeFsOptOut')) {
-      window.__bbVeFsAutoTriggered = true;
-      if (!document.body.classList.contains('bb-ve-fullscreen-on')) {
-        setTimeout(() => _bbVeToggleFullscreen(), 50);
-      }
-    }
+    // (Auto-fullscreen removido — ahora el user abre la ventana nueva con
+    // el botón ⬈ esquina sup. derecha cuando quiera. Más control y menos
+    // sorpresivo que activar el overlay automáticamente.)
     _bbVeRenderAll();
     _bbVeFitView();
   }
@@ -12837,16 +12830,39 @@ function setupBot() {
     });
   }
 
+  // El botón "expandir" abre una VENTANA NUEVA con solo el bot builder.
+  // Si el bot no está guardado todavía (no tiene id), avisamos al user.
+  // Si ya existe, abrimos /?bot-editor=ID que activa el modo standalone.
+  // Si estamos ya en modo standalone, el botón se oculta vía CSS.
   function _bbVeToggleFullscreen() {
-    const on = document.body.classList.toggle('bb-ve-fullscreen-on');
-    const btn = document.getElementById('bbVeFsBtn');
-    if (btn) btn.title = on ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa (F)';
-    // Si el user salió a propósito de fullscreen, recordarlo para esta sesión
-    // (no volver a auto-abrirlo cuando entre de nuevo a Editable).
-    if (!on) sessionStorage.setItem('bbVeFsOptOut', '1');
-    else sessionStorage.removeItem('bbVeFsOptOut');
-    // Recentrar viewport tras cambiar el tamaño del canvas
-    setTimeout(() => { try { _bbVeFitView(); } catch (_) {} }, 250);
+    const botId = (typeof currentBot !== 'undefined' && currentBot?.id) || null;
+    if (!botId) {
+      // Bot nuevo sin guardar — caer al modo overlay porque no podemos
+      // abrir ventana nueva con un ID inexistente.
+      const on = document.body.classList.toggle('bb-ve-fullscreen-on');
+      if (!on) sessionStorage.setItem('bbVeFsOptOut', '1');
+      else sessionStorage.removeItem('bbVeFsOptOut');
+      setTimeout(() => { try { _bbVeFitView(); } catch (_) {} }, 250);
+      // Hint para que el user sepa por qué no abrió ventana nueva
+      if (typeof toast === 'function') {
+        toast('Guarda el bot primero para abrirlo en ventana nueva — por ahora se expande aquí.', 'info', 4000);
+      }
+      return;
+    }
+    // Construir URL con bot-editor=ID y abrir ventana nueva
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set('bot-editor', String(botId));
+    const win = window.open(url.toString(), `wapi-bot-${botId}`, 'noopener,popup=yes,width=1400,height=900');
+    if (!win) {
+      // Popup blocker. Fallback al modo overlay y avisar.
+      document.body.classList.add('bb-ve-fullscreen-on');
+      setTimeout(() => { try { _bbVeFitView(); } catch (_) {} }, 250);
+      if (typeof toast === 'function') {
+        toast('Tu navegador bloqueó la ventana nueva. Permite popups para wapi101.com.', 'warning', 5000);
+      }
+    }
   }
 
   function _bbVeSetupInspector() {
@@ -20381,7 +20397,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     const bootParams = new URLSearchParams(location.search);
     const bootView = bootParams.get('view');
     const bootConvoId = bootParams.get('convo');
-    if (bootView === 'chats' && bootConvoId) {
+    const bootBotEditor = bootParams.get('bot-editor');
+
+    if (bootBotEditor) {
+      // Ventana standalone del bot editor — oculta nav/topbar y va directo al
+      // builder en vista Editable. Sin limpiar la URL para que un refresh
+      // restaure el mismo estado.
+      document.body.classList.add('bot-editor-standalone');
+      const botId = Number(bootBotEditor);
+      const bot = (sbBots || []).find(b => b.id === botId);
+      if (bot && typeof openBotBuilder === 'function') {
+        openBotBuilder(bot);
+        // Cambiar a la vista Editable después de que el builder renderice
+        setTimeout(() => {
+          document.querySelector('#botBuilderViewTabs .bb-view-tab[data-view="editable"]')?.click();
+        }, 150);
+      } else {
+        // Bot no encontrado (ID inválido o no cargado todavía)
+        document.body.innerHTML = '<div style="padding:40px;font:14px/1.5 system-ui;color:#475569">Bot no encontrado. <a href="/" style="color:#3b82f6">Volver a Wapi101</a></div>';
+      }
+    } else if (bootView === 'chats' && bootConvoId) {
       showView('chats');
       // Esperar al próximo tick para que el DOM esté renderizado
       setTimeout(() => {

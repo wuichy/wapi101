@@ -17805,7 +17805,11 @@ function setupChatDragDrop() {
 }
 
 function onAttachFileSelected(file, type) {
-  if (!file) return;
+  if (!file) {
+    console.warn('[attach] no file received');
+    return;
+  }
+  console.log(`[attach] file selected: name=${file.name} type=${type} mime=${file.type} size=${file.size}`);
   // Límites por tipo (cliente; el backend re-valida según provider)
   const limits = {
     image:    5  * 1024 * 1024,
@@ -17814,7 +17818,14 @@ function onAttachFileSelected(file, type) {
     document: 100 * 1024 * 1024,
   };
   if (file.size > limits[type]) {
-    toast(`El archivo excede el límite (${(limits[type]/1024/1024).toFixed(0)}MB)`, 'warning');
+    const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+    const limitMb = (limits[type]/1024/1024).toFixed(0);
+    toast(`Archivo muy grande: ${sizeMb}MB · El máximo es ${limitMb}MB para ${type}. Comprime la imagen o usa otra.`, 'warning');
+    return;
+  }
+  // Validación HEIC: WhatsApp no acepta HEIC, hay que convertir
+  if (type === 'image' && /\.(heic|heif)$/i.test(file.name)) {
+    toast('HEIC/HEIF no son compatibles con WhatsApp. Exporta como JPG o PNG primero.', 'warning');
     return;
   }
   const reader = new FileReader();
@@ -17828,6 +17839,10 @@ function onAttachFileSelected(file, type) {
       filename: file.name,
     };
     showAttachPreview();
+  };
+  reader.onerror = (err) => {
+    console.error('[attach] FileReader error:', err);
+    toast('Error leyendo el archivo. Intenta con otro.', 'error');
   };
   reader.readAsDataURL(file);
 }

@@ -971,6 +971,10 @@ app.get('/app/*splat', _sendFile('index.html'));
 // /crm-whatsapp-business, /mejor-crm-latam, etc. También expone /sitemap.xml y /robots.txt.
 mountSafe('/', require('./src/modules/marketing/routes'));
 
+// Blog: /blog (index) y /blog/<slug>. Server-side render por SEO.
+// Los slugs del blog se incluyen automáticamente en el sitemap.xml de marketing.
+mountSafe('/', require('./src/modules/blog/routes'));
+
 // /reset — endpoint de "borra todo lo cacheado" para usuarios atrapados con
 // service workers o cache stale. Manda Clear-Site-Data header que el browser
 // honra borrando cache+cookies+storage+SW para todo el origen, y luego

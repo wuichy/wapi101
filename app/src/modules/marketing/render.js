@@ -386,7 +386,7 @@ function renderPage(page) {
     <div class="top-nav">
       <a href="/#features">Funcionalidades</a>
       <a href="/#pricing">Precios</a>
-      <a href="/crm-whatsapp-business">CRM WhatsApp</a>
+      <a href="/blog">Blog</a>
       <a href="/developers">Developers</a>
       <a href="/signup" class="btn-cta">Probar gratis</a>
     </div>

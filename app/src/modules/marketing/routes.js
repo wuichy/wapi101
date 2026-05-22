@@ -29,6 +29,17 @@ module.exports = function createMarketingRouter(_db) {
     for (const slug of Object.keys(PAGES)) {
       urls.push({ loc: `https://wapi101.com/${slug}`, priority: '0.9', changefreq: 'monthly' });
     }
+    // Blog: index + cada post publicado
+    try {
+      const { listPublishedSlugs } = require('../blog/render');
+      const blogSlugs = listPublishedSlugs();
+      if (blogSlugs.length) {
+        urls.push({ loc: 'https://wapi101.com/blog', priority: '0.8', changefreq: 'weekly' });
+        for (const slug of blogSlugs) {
+          urls.push({ loc: `https://wapi101.com/blog/${slug}`, priority: '0.7', changefreq: 'monthly' });
+        }
+      }
+    } catch (_) {}
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map(u => `  <url>

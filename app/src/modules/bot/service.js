@@ -218,11 +218,30 @@ function _validateBot(db, tenantId, bot) {
 
 function hydrate(db, tenantId, row) {
   const t = tenantId ?? row.tenant_id;
-  const steps = JSON.parse(row.steps || '[]');
+  const dagConv = require('./dag-converter');
+  const rawSteps = JSON.parse(row.steps || '[]');
+
+  // Detectar formato. Si es DAG, convertir a list para compatibilidad con el
+  // engine (que sigue ejecutando arrays secuenciales) Y exponer también el
+  // formato DAG en `dag` para el editor visual.
+  let steps, dag;
+  if (Array.isArray(rawSteps)) {
+    steps = rawSteps;
+    dag = null;
+  } else if (rawSteps && typeof rawSteps === 'object' && Array.isArray(rawSteps.nodes)) {
+    dag = { nodes: rawSteps.nodes, edges: rawSteps.edges || [] };
+    steps = dagConv.dagToList(dag);
+  } else {
+    steps = [];
+    dag = null;
+  }
+
   const obj = {
     ...row,
     enabled: !!row.enabled,
     steps,
+    dag, // null si es formato list, objeto { nodes, edges } si es DAG
+    format: dag ? 'dag' : 'list',
     tags: tagsFor(db, t, row.id),
   };
   obj.issues = _validateBot(db, t, obj);
@@ -254,11 +273,20 @@ function getById(db, tenantId, id) {
   return hydrate(db, tenantId ?? row.tenant_id, row);
 }
 
-function create(db, tenantId, { name, enabled = 0, trigger_type = 'keyword', trigger_value = '', trigger_modes = null, steps = [], tagIds }) {
+// Helper: el caller puede pasar `steps` (array) O `dag` ({nodes, edges}). El
+// que tenga prioridad es `dag` si está presente. Devuelve el JSON a guardar.
+function _serializeBotBody({ steps, dag }) {
+  if (dag && Array.isArray(dag.nodes)) {
+    return JSON.stringify({ nodes: dag.nodes, edges: dag.edges || [] });
+  }
+  return JSON.stringify(Array.isArray(steps) ? steps : []);
+}
+
+function create(db, tenantId, { name, enabled = 0, trigger_type = 'keyword', trigger_value = '', trigger_modes = null, steps = [], dag = null, tagIds }) {
   if (!name || !name.trim()) throw new Error('El nombre es requerido');
   const r = db.prepare(
     'INSERT INTO salsbots (tenant_id, name, enabled, trigger_type, trigger_value, trigger_modes, steps) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(tenantId, name.trim(), enabled ? 1 : 0, trigger_type, trigger_value || '', trigger_modes || null, JSON.stringify(steps));
+  ).run(tenantId, name.trim(), enabled ? 1 : 0, trigger_type, trigger_value || '', trigger_modes || null, _serializeBotBody({ steps, dag }));
   setTags(db, tenantId, r.lastInsertRowid, tagIds);
   return getById(db, tenantId, r.lastInsertRowid);
 }
@@ -266,6 +294,18 @@ function create(db, tenantId, { name, enabled = 0, trigger_type = 'keyword', tri
 function update(db, tenantId, id, patch) {
   const current = getById(db, tenantId, id);
   const next = { ...current, ...patch };
+  // Si el caller mandó `dag`, usamos ese. Si mandó `steps` (array), usamos ese.
+  // Si no mandó ninguno, conservamos el formato actual.
+  let stepsJson;
+  if (patch.dag && Array.isArray(patch.dag.nodes)) {
+    stepsJson = JSON.stringify({ nodes: patch.dag.nodes, edges: patch.dag.edges || [] });
+  } else if (Array.isArray(patch.steps)) {
+    stepsJson = JSON.stringify(patch.steps);
+  } else {
+    // Conservar el formato actual leyendo el JSON raw de la DB
+    const raw = db.prepare('SELECT steps FROM salsbots WHERE id = ? AND tenant_id = ?').get(id, tenantId);
+    stepsJson = raw?.steps || '[]';
+  }
   db.prepare(
     'UPDATE salsbots SET name=?, enabled=?, trigger_type=?, trigger_value=?, trigger_modes=?, steps=?, updated_at=unixepoch() WHERE id=? AND tenant_id=?'
   ).run(
@@ -273,10 +313,8 @@ function update(db, tenantId, id, patch) {
     next.enabled ? 1 : 0,
     next.trigger_type || current.trigger_type,
     next.trigger_value ?? current.trigger_value,
-    // trigger_modes acepta explícito null si pasó null en patch (= "ambos"),
-    // o el JSON string si pasó algo. Si no se pasó en patch, conserva actual.
     patch.trigger_modes !== undefined ? patch.trigger_modes : current.trigger_modes,
-    JSON.stringify(Array.isArray(next.steps) ? next.steps : current.steps),
+    stepsJson,
     id, tenantId
   );
   if (Array.isArray(patch.tagIds)) setTags(db, tenantId, id, patch.tagIds);

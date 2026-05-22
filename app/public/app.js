@@ -625,6 +625,7 @@ const I18N_TRANSLATIONS = {
     'bot.builder.view.list': 'Lista',
     'bot.builder.view.visual': 'Visual',
     'bot.builder.view.code': 'Código',
+    'bot.builder.view.editable': 'Editable',
     'bot.builder.tpl.gallery.btn': 'Ver plantillas',
     'bot.builder.back': 'Bots',
     // Bot trigger — optgroups
@@ -1581,6 +1582,7 @@ const I18N_TRANSLATIONS = {
     'bot.builder.view.list': 'List',
     'bot.builder.view.visual': 'Visual',
     'bot.builder.view.code': 'Code',
+    'bot.builder.view.editable': 'Editable',
     'bot.builder.tpl.gallery.btn': 'See templates',
     'bot.builder.back': 'Bots',
     // Bot trigger — optgroups
@@ -12318,7 +12320,506 @@ function setupBot() {
     if (view === 'code')     bbRenderCodeView();
     if (view === 'indented') bbRenderIndentedView();
     if (view === 'visual')   { bbRenderVisualView(); }
+    if (view === 'editable') { bbVeInit(); }
   }
+
+  // ═════════════════════════════════════════════════════════════════
+  // VISTA "EDITABLE" — Canvas DAG con drag & drop estilo n8n/Kommo
+  // ═════════════════════════════════════════════════════════════════
+  // Trabaja en memoria con un grafo {nodes, edges}. Al guardar el bot,
+  // se persiste como format=dag en steps_json. El hydrate del server
+  // convierte automáticamente entre formatos para el motor.
+  const _bbVe = {
+    nodes: {},    // id → { id, type, x, y, config }
+    edges: [],    // { from, to, branch? }
+    viewport: { x: 0, y: 0, zoom: 1 },
+    selection: null,
+    initialized: false,
+    nextId: 1,
+    spaceDown: false,
+  };
+
+  function _bbVeUid() { _bbVe.nextId++; return 'n_' + Date.now().toString(36) + '_' + _bbVe.nextId; }
+  function _bbVeEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  // Convierte el bot actual (sbSteps + trigger) al formato DAG si aún no lo está
+  function bbVeLoadFromBot() {
+    // Si hay un campo `dag` en el bot (porque hydrate detectó formato dag), usarlo
+    const currentBot = (sbBots || []).find(b => b.id === sbCurrentId);
+    if (currentBot?.dag && Array.isArray(currentBot.dag.nodes)) {
+      _bbVe.nodes = {};
+      currentBot.dag.nodes.forEach(n => { _bbVe.nodes[n.id] = { ...n }; });
+      _bbVe.edges = currentBot.dag.edges.slice();
+      return;
+    }
+    // Convertir el sbSteps actual a DAG en cliente (usando lógica similar al converter)
+    _bbVe.nodes = {};
+    _bbVe.edges = [];
+    // Agregar el trigger como primer nodo
+    const triggerId = _bbVeUid();
+    _bbVe.nodes[triggerId] = {
+      id: triggerId, type: '__trigger__',
+      x: 80, y: 80,
+      config: {
+        trigger_type: sbTriggerType,
+        trigger_value: sbTriggerValue,
+        trigger_modes: sbTriggerModes,
+      },
+    };
+    // Convertir steps a nodes lineales
+    let prevId = triggerId;
+    let y = 80;
+    let x = 420;
+    (sbSteps || []).forEach((step) => {
+      const id = step._id || _bbVeUid();
+      _bbVe.nodes[id] = {
+        id, type: step.type,
+        x: step._x ?? x,
+        y: step._y ?? y,
+        config: step.config || {},
+      };
+      _bbVe.edges.push({ from: prevId, to: id });
+      prevId = id;
+      x += 320;
+      // Si el step tiene branches, sería más complejo. Por ahora, simple lineal.
+    });
+  }
+
+  // Serializa el DAG actual de vuelta a formato list para enviar al server
+  function bbVeSerialize() {
+    // Encontrar el nodo trigger (debe ser único)
+    const triggerNode = Object.values(_bbVe.nodes).find(n => n.type === '__trigger__');
+    if (!triggerNode) return null;
+    // Topological walk desde trigger
+    const outEdges = {};
+    Object.keys(_bbVe.nodes).forEach(id => outEdges[id] = []);
+    _bbVe.edges.forEach(e => outEdges[e.from].push(e));
+    const visited = new Set();
+    const steps = [];
+    function walk(id) {
+      if (visited.has(id)) return;
+      visited.add(id);
+      const n = _bbVe.nodes[id];
+      if (!n || n.type === '__trigger__') {
+        // No incluir trigger en steps, pero seguir
+        for (const e of outEdges[id] || []) walk(e.to);
+        return;
+      }
+      steps.push({ _id: n.id, type: n.type, config: n.config || {}, _x: n.x, _y: n.y });
+      for (const e of outEdges[id] || []) walk(e.to);
+    }
+    walk(triggerNode.id);
+    return { steps, trigger: triggerNode.config };
+  }
+
+  function bbVeInit() {
+    bbVeLoadFromBot();
+    if (!_bbVe.initialized) {
+      _bbVeRenderSidebar();
+      _bbVeSetupCanvas();
+      _bbVeSetupInspector();
+      _bbVe.initialized = true;
+    }
+    _bbVeRenderAll();
+    _bbVeFitView();
+  }
+
+  function _bbVeRenderSidebar() {
+    const root = document.getElementById('bbVeSidebarGroups');
+    if (!root) return;
+    const groups = {
+      messages:     { label: 'Mensajes',  items: ['message','template','ai_reply'] },
+      logic:        { label: 'Lógica',    items: ['wait_response','condition','timer','stop_bot','handover','stop_and_start'] },
+      crm:          { label: 'CRM',       items: ['stage','assign','tag','update_field','create_task'] },
+      appointments: { label: 'Citas',     items: ['book_appointment','cancel_appointment','reschedule_appointment','reminder_timer'] },
+      advanced:     { label: 'Avanzado',  items: ['http'] },
+    };
+    let html = '';
+    for (const [grpKey, grp] of Object.entries(groups)) {
+      html += `<div class="bb-ve-sidebar-group"><h5>${_bbVeEsc(grp.label)}</h5>`;
+      for (const type of grp.items) {
+        const def = BOT_STEP_REGISTRY?.[type];
+        if (!def) continue;
+        const label = (typeof def.label === 'function' ? def.label() : def.label) || type;
+        const icon = def.icon ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${def.icon}</svg>` : '';
+        html += `<div class="bb-ve-step-tpl" draggable="true" data-type="${type}" data-grp="${grpKey}">
+          <div class="bb-ve-step-tpl-ico">${icon}</div>
+          <div class="bb-ve-step-tpl-name">${_bbVeEsc(label)}</div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    root.innerHTML = html;
+    // Wire drag from sidebar
+    root.querySelectorAll('.bb-ve-step-tpl').forEach(el => {
+      el.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', el.dataset.type);
+        el.classList.add('is-dragging');
+      });
+      el.addEventListener('dragend', () => el.classList.remove('is-dragging'));
+    });
+    // Search
+    document.getElementById('bbVeSidebarSearch')?.addEventListener('input', e => {
+      const q = e.target.value.toLowerCase().trim();
+      root.querySelectorAll('.bb-ve-step-tpl').forEach(el => {
+        const name = el.querySelector('.bb-ve-step-tpl-name').textContent.toLowerCase();
+        el.style.display = !q || name.includes(q) ? '' : 'none';
+      });
+    });
+  }
+
+  function _bbVeRenderAll() {
+    _bbVeRenderNodes();
+    _bbVeRenderConnections();
+    _bbVeUpdateMinimap();
+    document.getElementById('bbVeHelper').hidden = Object.keys(_bbVe.nodes).length > 0;
+  }
+
+  function _bbVeRenderNodes() {
+    const layer = document.getElementById('bbVeNodes');
+    if (!layer) return;
+    layer.innerHTML = '';
+    Object.values(_bbVe.nodes).forEach(n => {
+      const isTrigger = n.type === '__trigger__';
+      let def, label, icon, grp;
+      if (isTrigger) {
+        label = 'Disparador';
+        grp = 'trigger';
+        icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/></svg>';
+      } else {
+        def = BOT_STEP_REGISTRY?.[n.type];
+        if (!def) return;
+        label = (typeof def.label === 'function' ? def.label() : def.label) || n.type;
+        icon = def.icon ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${def.icon}</svg>` : '';
+        grp = def.group || 'advanced';
+      }
+      const summary = def?.summary ? def.summary(n.config) : (isTrigger ? `${n.config.trigger_type || ''}` : '');
+      const el = document.createElement('div');
+      el.className = `bb-ve-node grp-${grp} ${_bbVe.selection === n.id ? 'is-selected' : ''}`;
+      el.dataset.id = n.id;
+      el.style.left = n.x + 'px';
+      el.style.top = n.y + 'px';
+      el.innerHTML = `
+        ${isTrigger ? '<div class="bb-ve-trigger-badge">DISPARADOR</div>' : ''}
+        <div class="bb-ve-node-head">
+          <div class="bb-ve-node-icon">${icon}</div>
+          <div style="flex:1;min-width:0">
+            <div class="bb-ve-node-title">${_bbVeEsc(label)}</div>
+            <div class="bb-ve-node-type">${_bbVeEsc(n.type)}</div>
+          </div>
+        </div>
+        <div class="bb-ve-node-body">${summary ? _bbVeEsc(String(summary).slice(0, 80)) : '<span class="bb-ve-node-empty">— configurar —</span>'}</div>
+        ${!isTrigger ? '<div class="bb-ve-port bb-ve-port-in" data-port="in"></div>' : ''}
+        <div class="bb-ve-port bb-ve-port-out" data-port="out"></div>
+      `;
+      layer.appendChild(el);
+      _bbVeWireNode(el, n);
+    });
+  }
+
+  function _bbVeWireNode(el, node) {
+    const head = el.querySelector('.bb-ve-node-head');
+    head.addEventListener('mousedown', e => {
+      if (e.target.classList.contains('bb-ve-port')) return;
+      e.stopPropagation();
+      e.preventDefault();
+      document.getSelection?.()?.removeAllRanges();
+      document.body.style.userSelect = 'none';
+      const startX = e.clientX, startY = e.clientY;
+      const origX = node.x, origY = node.y;
+      _bbVe.selection = node.id;
+      document.querySelectorAll('.bb-ve-node.is-selected').forEach(n => n.classList.remove('is-selected'));
+      el.classList.add('is-selected');
+      _bbVeOpenInspector(node);
+      el.classList.add('is-dragging');
+      let moved = false;
+      let pendingX = origX, pendingY = origY, raf = null;
+      function flush() {
+        raf = null;
+        node.x = pendingX; node.y = pendingY;
+        el.style.left = pendingX + 'px'; el.style.top = pendingY + 'px';
+        _bbVeRenderConnections(); _bbVeUpdateMinimap();
+      }
+      function move(ev) {
+        moved = true;
+        pendingX = origX + (ev.clientX - startX) / _bbVe.viewport.zoom;
+        pendingY = origY + (ev.clientY - startY) / _bbVe.viewport.zoom;
+        if (!raf) raf = requestAnimationFrame(flush);
+      }
+      function up() {
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+        if (raf) { cancelAnimationFrame(raf); flush(); }
+        el.classList.remove('is-dragging');
+        document.body.style.userSelect = '';
+      }
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+    });
+    el.querySelectorAll('.bb-ve-port').forEach(p => {
+      p.addEventListener('mousedown', e => {
+        e.stopPropagation();
+        if (p.dataset.port === 'out') _bbVeStartConnection(node.id, e);
+      });
+    });
+  }
+
+  function _bbVeStartConnection(fromId, ev) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.getElementById('bbVeConnections');
+    const temp = document.createElementNS(ns, 'path');
+    temp.setAttribute('class', 'bb-ve-conn is-temp');
+    svg.appendChild(temp);
+    const from = _bbVe.nodes[fromId];
+    const fx = from.x + 240, fy = from.y + 50;
+    function move(e) {
+      const wrap = document.getElementById('bbVeCanvasWrap').getBoundingClientRect();
+      const wx = (e.clientX - wrap.left - _bbVe.viewport.x) / _bbVe.viewport.zoom;
+      const wy = (e.clientY - wrap.top - _bbVe.viewport.y) / _bbVe.viewport.zoom;
+      temp.setAttribute('d', _bbVeRoute(fx, fy, wx, wy, from, { x: wx, y: wy - 50 }));
+      document.querySelectorAll('.bb-ve-port-in').forEach(p => p.classList.remove('is-target'));
+      const t = document.elementFromPoint(e.clientX, e.clientY);
+      if (t?.classList.contains('bb-ve-port-in')) t.classList.add('is-target');
+    }
+    function up(e) {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      temp.remove();
+      document.querySelectorAll('.bb-ve-port-in').forEach(p => p.classList.remove('is-target'));
+      const t = document.elementFromPoint(e.clientX, e.clientY);
+      if (t?.classList.contains('bb-ve-port-in')) {
+        const toNode = t.closest('.bb-ve-node');
+        if (toNode && toNode.dataset.id !== fromId) {
+          const exists = _bbVe.edges.some(e => e.from === fromId && e.to === toNode.dataset.id);
+          if (!exists) {
+            _bbVe.edges.push({ from: fromId, to: toNode.dataset.id });
+            _bbVeRenderAll();
+          }
+        }
+      }
+    }
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }
+
+  function _bbVeRoute(fx, fy, tx, ty, from, to) {
+    const MARGIN = 20;
+    if (Math.abs(fy - ty) < 2 && tx > fx) return `M ${fx},${fy} L ${tx},${ty}`;
+    if (tx > fx + 8) {
+      const midX = fx + Math.max(MARGIN, (tx - fx) / 2);
+      return `M ${fx},${fy} L ${midX},${fy} L ${midX},${ty} L ${tx},${ty}`;
+    }
+    const goBelow = (fy + ty) / 2 > (from.y + to.y) / 2;
+    const detourY = goBelow ? Math.max(from.y, to.y) + 150 : Math.min(from.y, to.y) - 30;
+    return `M ${fx},${fy} L ${fx+MARGIN},${fy} L ${fx+MARGIN},${detourY} L ${tx-MARGIN},${detourY} L ${tx-MARGIN},${ty} L ${tx},${ty}`;
+  }
+
+  function _bbVeRenderConnections() {
+    const svg = document.getElementById('bbVeConnections');
+    if (!svg) return;
+    Array.from(svg.querySelectorAll('path, g.bb-ve-plus')).forEach(p => p.remove());
+    const ns = 'http://www.w3.org/2000/svg';
+    for (const conn of _bbVe.edges) {
+      const from = _bbVe.nodes[conn.from];
+      const to = _bbVe.nodes[conn.to];
+      if (!from || !to) continue;
+      const fx = from.x + 240, fy = from.y + 50, tx = to.x, ty = to.y + 50;
+      const d = _bbVeRoute(fx, fy, tx, ty, from, to);
+      const hit = document.createElementNS(ns, 'path');
+      hit.setAttribute('class', 'bb-ve-conn-hit'); hit.setAttribute('d', d);
+      hit.addEventListener('click', e => {
+        e.stopPropagation();
+        if (confirm('¿Eliminar esta conexión?')) {
+          _bbVe.edges = _bbVe.edges.filter(c => c !== conn);
+          _bbVeRenderAll();
+        }
+      });
+      svg.appendChild(hit);
+      const p = document.createElementNS(ns, 'path');
+      p.setAttribute('class', 'bb-ve-conn'); p.setAttribute('d', d);
+      p.setAttribute('marker-end', 'url(#bbVeArrow)');
+      svg.appendChild(p);
+    }
+  }
+
+  function _bbVeUpdateMinimap() {
+    const g = document.getElementById('bbVeMinimapNodes');
+    if (!g) return;
+    g.innerHTML = '';
+    const nodes = Object.values(_bbVe.nodes);
+    if (!nodes.length) return;
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    for (const n of nodes) {
+      minX = Math.min(minX, n.x); minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x+240); maxY = Math.max(maxY, n.y+120);
+    }
+    minX-=100; minY-=100; maxX+=100; maxY+=100;
+    const w = maxX-minX, h = maxY-minY;
+    const scale = Math.min(180/w, 110/h);
+    const ox = (180-w*scale)/2, oy = (110-h*scale)/2;
+    for (const n of nodes) {
+      const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      r.setAttribute('class', 'bb-ve-mm-node');
+      r.setAttribute('x', (n.x-minX)*scale + ox);
+      r.setAttribute('y', (n.y-minY)*scale + oy);
+      r.setAttribute('width', 240*scale); r.setAttribute('height', 80*scale);
+      r.setAttribute('rx', 2);
+      g.appendChild(r);
+    }
+  }
+
+  function _bbVeApplyViewport() {
+    const c = document.getElementById('bbVeCanvas');
+    const wrap = document.getElementById('bbVeCanvasWrap');
+    c.style.transform = `translate(${_bbVe.viewport.x}px, ${_bbVe.viewport.y}px) scale(${_bbVe.viewport.zoom})`;
+    wrap.style.backgroundSize = `${24*_bbVe.viewport.zoom}px ${24*_bbVe.viewport.zoom}px`;
+    wrap.style.backgroundPosition = `${_bbVe.viewport.x}px ${_bbVe.viewport.y}px`;
+    document.getElementById('bbVeZoomLabel').textContent = Math.round(_bbVe.viewport.zoom*100) + '%';
+  }
+
+  function _bbVeFitView() {
+    const nodes = Object.values(_bbVe.nodes);
+    if (!nodes.length) { _bbVe.viewport = { x:0, y:0, zoom:1 }; _bbVeApplyViewport(); return; }
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    for (const n of nodes) {
+      minX=Math.min(minX,n.x); minY=Math.min(minY,n.y);
+      maxX=Math.max(maxX,n.x+240); maxY=Math.max(maxY,n.y+120);
+    }
+    const wrap = document.getElementById('bbVeCanvasWrap').getBoundingClientRect();
+    const pad = 60;
+    const z = Math.min(1.2, (wrap.width-pad*2)/(maxX-minX), (wrap.height-pad*2)/(maxY-minY));
+    _bbVe.viewport.zoom = Math.max(0.3, z);
+    _bbVe.viewport.x = (wrap.width - (maxX-minX)*_bbVe.viewport.zoom)/2 - minX*_bbVe.viewport.zoom;
+    _bbVe.viewport.y = (wrap.height - (maxY-minY)*_bbVe.viewport.zoom)/2 - minY*_bbVe.viewport.zoom;
+    _bbVeApplyViewport();
+  }
+
+  function _bbVeSetupCanvas() {
+    const wrap = document.getElementById('bbVeCanvasWrap');
+    // Pan con click+drag en zona vacía
+    wrap.addEventListener('mousedown', e => {
+      if (e.target.closest('.bb-ve-node') || e.target.closest('.bb-ve-controls') || e.target.closest('.bb-ve-minimap')) return;
+      e.preventDefault();
+      _bbVe.selection = null;
+      document.querySelectorAll('.bb-ve-node.is-selected').forEach(n => n.classList.remove('is-selected'));
+      _bbVeCloseInspector();
+      const startX = e.clientX, startY = e.clientY;
+      const origX = _bbVe.viewport.x, origY = _bbVe.viewport.y;
+      let raf = null, pendX = origX, pendY = origY;
+      function flush() { raf = null; _bbVe.viewport.x = pendX; _bbVe.viewport.y = pendY; _bbVeApplyViewport(); }
+      function move(ev) {
+        pendX = origX + (ev.clientX - startX);
+        pendY = origY + (ev.clientY - startY);
+        if (!raf) raf = requestAnimationFrame(flush);
+      }
+      function up() {
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+        if (raf) { cancelAnimationFrame(raf); flush(); }
+      }
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+    });
+    // Wheel: pan natural, zoom con Cmd/Ctrl
+    wrap.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        const wrapRect = wrap.getBoundingClientRect();
+        const px = e.clientX - wrapRect.left, py = e.clientY - wrapRect.top;
+        const z = Math.max(0.3, Math.min(2.5, _bbVe.viewport.zoom * (1 - e.deltaY * 0.002)));
+        const wx = (px - _bbVe.viewport.x) / _bbVe.viewport.zoom;
+        const wy = (py - _bbVe.viewport.y) / _bbVe.viewport.zoom;
+        _bbVe.viewport.zoom = z;
+        _bbVe.viewport.x = px - wx * z;
+        _bbVe.viewport.y = py - wy * z;
+      } else {
+        _bbVe.viewport.x -= e.deltaX;
+        _bbVe.viewport.y -= e.deltaY;
+      }
+      _bbVeApplyViewport();
+    }, { passive: false });
+    // Drop desde sidebar
+    wrap.addEventListener('dragover', e => { e.preventDefault(); });
+    wrap.addEventListener('drop', e => {
+      e.preventDefault();
+      const type = e.dataTransfer.getData('text/plain');
+      if (!type || !BOT_STEP_REGISTRY?.[type]) return;
+      const wrapRect = wrap.getBoundingClientRect();
+      const wx = (e.clientX - wrapRect.left - _bbVe.viewport.x) / _bbVe.viewport.zoom - 120;
+      const wy = (e.clientY - wrapRect.top - _bbVe.viewport.y) / _bbVe.viewport.zoom - 40;
+      const id = _bbVeUid();
+      _bbVe.nodes[id] = { id, type, x: wx, y: wy, config: {} };
+      _bbVe.selection = id;
+      _bbVeRenderAll();
+      _bbVeOpenInspector(_bbVe.nodes[id]);
+    });
+    // Zoom buttons
+    document.getElementById('bbVeZoomIn')?.addEventListener('click', () => { _bbVe.viewport.zoom = Math.min(2.5, _bbVe.viewport.zoom*1.2); _bbVeApplyViewport(); });
+    document.getElementById('bbVeZoomOut')?.addEventListener('click', () => { _bbVe.viewport.zoom = Math.max(0.3, _bbVe.viewport.zoom/1.2); _bbVeApplyViewport(); });
+    document.getElementById('bbVeZoomReset')?.addEventListener('click', () => _bbVeFitView());
+  }
+
+  function _bbVeSetupInspector() {
+    document.getElementById('bbVeInspectorClose')?.addEventListener('click', () => { _bbVe.selection = null; _bbVeCloseInspector(); _bbVeRenderNodes(); });
+    document.getElementById('bbVeDeleteNode')?.addEventListener('click', _bbVeDeleteSelected);
+  }
+
+  function _bbVeOpenInspector(node) {
+    if (!node || node.type === '__trigger__') { _bbVeCloseInspector(); return; }
+    const def = BOT_STEP_REGISTRY?.[node.type];
+    if (!def) return;
+    const insp = document.getElementById('bbVeInspector');
+    document.querySelector('.bb-ve-wrap')?.classList.remove('no-inspector');
+    insp.hidden = false;
+    const label = (typeof def.label === 'function' ? def.label() : def.label) || node.type;
+    document.getElementById('bbVeInspectorIcon').innerHTML = def.icon ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${def.icon}</svg>` : '';
+    document.getElementById('bbVeInspectorName').textContent = label;
+    document.getElementById('bbVeInspectorType').textContent = node.type;
+    const body = document.getElementById('bbVeInspectorBody');
+    // Por simplicidad, mostramos un editor JSON básico — el editor real de cada step
+    // es complejo y vive en otro modal. Esto es para drag/move/connect.
+    body.innerHTML = `
+      <div class="bb-ve-field">
+        <label class="bb-ve-field-label">Config (JSON)</label>
+        <textarea class="bb-ve-textarea" id="bbVeConfigJson">${_bbVeEsc(JSON.stringify(node.config || {}, null, 2))}</textarea>
+        <div style="font-size:11px;color:#94a3b8;line-height:1.5">Edita el JSON o usa la vista <strong>Lista</strong> para editar cada paso con formularios completos.</div>
+      </div>
+    `;
+    document.getElementById('bbVeConfigJson').addEventListener('input', e => {
+      try { node.config = JSON.parse(e.target.value); } catch {}
+    });
+  }
+  function _bbVeCloseInspector() {
+    const insp = document.getElementById('bbVeInspector');
+    if (insp) insp.hidden = true;
+    document.querySelector('.bb-ve-wrap')?.classList.add('no-inspector');
+  }
+
+  function _bbVeDeleteSelected() {
+    if (!_bbVe.selection) return;
+    const id = _bbVe.selection;
+    if (_bbVe.nodes[id]?.type === '__trigger__') { alert('No se puede eliminar el disparador'); return; }
+    const incoming = _bbVe.edges.filter(c => c.to === id);
+    const outgoing = _bbVe.edges.filter(c => c.from === id);
+    _bbVe.edges = _bbVe.edges.filter(c => c.from !== id && c.to !== id);
+    delete _bbVe.nodes[id];
+    // Reconectar predecesores → sucesores
+    for (const inE of incoming) {
+      for (const outE of outgoing) {
+        const exists = _bbVe.edges.some(c => c.from === inE.from && c.to === outE.to);
+        if (!exists && inE.from !== outE.to) _bbVe.edges.push({ from: inE.from, to: outE.to });
+      }
+    }
+    _bbVe.selection = null;
+    _bbVeRenderAll();
+    _bbVeCloseInspector();
+  }
+
+  // Expose para que sbSaveBot pueda extraer el DAG si está en vista editable
+  window._bbVeGetDag = function() {
+    return { nodes: Object.values(_bbVe.nodes).filter(n => n.type !== '__trigger__'), edges: _bbVe.edges };
+  };
+  // Fin de la vista editable
 
   // ─── Visual node graph (rewrite 2026-05-09) ───
   // Top→bottom auto-layout. Branches spread horizontally below parent.

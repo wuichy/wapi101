@@ -1880,6 +1880,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><polyline points="7 6 3 10 7 14"/><polyline points="13 6 17 10 13 14"/></svg>
                 <span data-i18n="bot.builder.view.code">Código</span>
               </button>
+              <button type="button" class="bb-view-tab" data-view="editable">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="7" y="11" width="6" height="6" rx="1"/><path d="M6 9v1M14 9v1M10 11V9"/></svg>
+                <span data-i18n="bot.builder.view.editable">Editable</span>
+              </button>
             </div>
 
             <!-- Vista: Lista -->
@@ -2150,6 +2154,81 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 </button>
               </div>
               <pre class="bb-code-block"><code id="bbCodeContent"></code></pre>
+            </div>
+
+            <!-- Vista: Editable (DAG) — canvas con drag & drop tipo n8n/Kommo -->
+            <div class="bb-view-content" data-view="editable" hidden>
+              <div class="bb-ve-wrap">
+                <!-- Sidebar izquierda: catálogo de tipos -->
+                <aside class="bb-ve-sidebar" id="bbVeSidebar">
+                  <div class="bb-ve-sidebar-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="text" id="bbVeSidebarSearch" placeholder="Buscar paso..."/>
+                  </div>
+                  <div id="bbVeSidebarGroups"><!-- populated by JS --></div>
+                </aside>
+
+                <!-- Canvas central -->
+                <main class="bb-ve-canvas-wrap" id="bbVeCanvasWrap">
+                  <div class="bb-ve-canvas" id="bbVeCanvas">
+                    <svg class="bb-ve-connections" id="bbVeConnections">
+                      <defs>
+                        <marker id="bbVeArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                          <path d="M0,0 L10,5 L0,10 Z" fill="#64748b"/>
+                        </marker>
+                      </defs>
+                    </svg>
+                    <div class="bb-ve-nodes" id="bbVeNodes"></div>
+                    <div class="bb-ve-helper" id="bbVeHelper" hidden>
+                      <h3>Canvas vacío</h3>
+                      <p>Arrastra un disparador desde la izquierda para empezar.</p>
+                    </div>
+                  </div>
+
+                  <!-- Controles zoom esquina inferior izquierda -->
+                  <div class="bb-ve-controls">
+                    <button class="bb-ve-ctrl-btn" id="bbVeZoomIn" title="Zoom in">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    </button>
+                    <button class="bb-ve-ctrl-btn" id="bbVeZoomReset" title="Centrar">
+                      <span id="bbVeZoomLabel">100%</span>
+                    </button>
+                    <button class="bb-ve-ctrl-btn" id="bbVeZoomOut" title="Zoom out">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                    </button>
+                  </div>
+
+                  <!-- Minimap esquina inferior derecha -->
+                  <div class="bb-ve-minimap" id="bbVeMinimap">
+                    <svg viewBox="0 0 200 120">
+                      <rect class="bb-ve-mm-bg" x="0" y="0" width="200" height="120"/>
+                      <g id="bbVeMinimapNodes"></g>
+                      <rect class="bb-ve-mm-viewport" id="bbVeMinimapViewport" fill="none" stroke="#3b82f6" stroke-width="2"/>
+                    </svg>
+                  </div>
+                </main>
+
+                <!-- Inspector lateral derecho -->
+                <aside class="bb-ve-inspector" id="bbVeInspector" hidden>
+                  <div class="bb-ve-inspector-head">
+                    <div class="bb-ve-inspector-title">
+                      <div class="bb-ve-inspector-icon" id="bbVeInspectorIcon"></div>
+                      <div style="flex:1;min-width:0">
+                        <h3 id="bbVeInspectorName">Step</h3>
+                        <div class="bb-ve-inspector-type" id="bbVeInspectorType">step</div>
+                      </div>
+                    </div>
+                    <button class="bb-ve-inspector-close" id="bbVeInspectorClose">✕</button>
+                  </div>
+                  <div class="bb-ve-inspector-body" id="bbVeInspectorBody"></div>
+                  <div class="bb-ve-inspector-foot">
+                    <button class="btn btn--danger-ghost" id="bbVeDeleteNode" style="width:100%">
+                      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 17 6"/><path d="M8 6V4h4v2"/><rect x="5" y="6" width="10" height="11" rx="1"/></svg>
+                      Eliminar paso
+                    </button>
+                  </div>
+                </aside>
+              </div>
             </div>
           </div>
         </div>

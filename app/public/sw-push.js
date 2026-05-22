@@ -45,20 +45,40 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Click en la notificación → abre/enfoca la pestaña al URL del payload
+// Click en la notificación → abre/enfoca la pestaña al URL del payload.
+//
+// Estrategia:
+//   1) Si hay cliente del mismo origen abierto → focus + postMessage con chatId.
+//      El cliente decide en JS: si la app ya está cargada solo cambia de vista,
+//      si no hay vista (caso raro), recarga al URL.
+//   2) Si no hay clientes → abrir nueva ventana al URL completo (deep link).
+//
+// El postMessage evita un reload completo cuando la PWA ya está abierta —
+// experiencia mucho mejor: el chat aparece instantáneamente.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/chat';
+  const data = event.notification.data || {};
+  const targetUrl = data.url || '/chat';
+  const chatId = data.chatId || null;
+
   event.waitUntil((async () => {
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of allClients) {
       const url = new URL(client.url);
       if (url.origin === self.location.origin) {
-        client.focus();
-        if ('navigate' in client) client.navigate(targetUrl).catch(() => {});
+        await client.focus();
+        // Avisamos al cliente que abra la convo SIN reload
+        try {
+          client.postMessage({
+            type: 'notification-click',
+            chatId,
+            url: targetUrl,
+          });
+        } catch (_) {}
         return;
       }
     }
+    // No hay clientes abiertos → abrir nueva ventana con URL completo
     if (self.clients.openWindow) {
       await self.clients.openWindow(targetUrl);
     }

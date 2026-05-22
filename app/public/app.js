@@ -20222,6 +20222,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     applySocialCommentsVisibility(),
     updatePedidosNavVisibility(),
   ]);
+
+  // Deep link de notificación: si la URL trae ?convo=ID&view=chats (push
+  // notification click → cold boot), abrir la convo directamente. Se hace
+  // DESPUÉS de loadConversations() para que la convo ya esté en CONVERSATIONS.
+  try {
+    const bootParams = new URLSearchParams(location.search);
+    const bootView = bootParams.get('view');
+    const bootConvoId = bootParams.get('convo');
+    if (bootView === 'chats' && bootConvoId) {
+      showView('chats');
+      // Esperar al próximo tick para que el DOM esté renderizado
+      setTimeout(() => {
+        openConversation(Number(bootConvoId));
+        // Limpiar query string sin recargar
+        history.replaceState({}, '', location.pathname + location.hash);
+      }, 100);
+    } else if (bootView === 'comments') {
+      showView('comentarios');
+      history.replaceState({}, '', location.pathname + location.hash);
+    } else if (bootView === 'integraciones') {
+      showView('ajustes');
+      setTimeout(() => {
+        document.querySelector('.settings-tab[data-settings="integraciones"]')?.click();
+      }, 100);
+      history.replaceState({}, '', location.pathname + location.hash);
+    }
+  } catch (_) {}
+
   startChatPolling();
   startVersionCheck();
   startTasksDuePolling();
@@ -22332,6 +22360,37 @@ async function registerServiceWorker() {
     // 3) Registrar el SW nuevo
     _swReg = await navigator.serviceWorker.register('/sw-push.js');
     try { await _swReg.update(); } catch (_) {}
+
+    // 4) Listener: cuando el usuario hace click en una notificación, el SW
+    //    nos manda un postMessage con { type: 'notification-click', chatId, url }.
+    //    Si tenemos chatId → abrimos la convo sin recargar (UX instantánea).
+    //    Si solo tenemos URL → fallback: navegamos como deep link.
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const msg = event.data || {};
+      if (msg.type !== 'notification-click') return;
+      try {
+        if (msg.chatId) {
+          // Asegurar que estamos en chats y abrir la convo
+          if (typeof showView === 'function') showView('chats');
+          // Pequeño delay para que el DOM de chats esté listo (sobre todo si
+          // venimos de otra vista). 60ms es suficiente.
+          setTimeout(() => {
+            if (typeof openConversation === 'function') {
+              openConversation(Number(msg.chatId));
+            }
+          }, 60);
+        } else if (msg.url) {
+          // Fallback: parsear URL y aplicar (ej. /?view=comments)
+          try {
+            const u = new URL(msg.url, location.origin);
+            const v = u.searchParams.get('view');
+            if (v === 'comments' && typeof showView === 'function') showView('comentarios');
+          } catch (_) {}
+        }
+      } catch (err) {
+        console.warn('[sw msg] error:', err.message);
+      }
+    });
   } catch (err) {
     console.warn('[sw] register failed:', err.message);
   }

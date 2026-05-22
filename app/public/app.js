@@ -7189,6 +7189,7 @@ async function openExpDetail(id, from = 'expedientes') {
   showView('exp-detail');
   renderExpDetailInfo();
   renderExpDetailBots();
+  renderExpDetailProducts();
   renderExpLeadTagsBar();
   await loadExpDetailConvos();
 
@@ -7356,6 +7357,52 @@ let _botRunsTimer = null;
 
 function _stopBotRunsPolling() {
   if (_botRunsTimer) { clearInterval(_botRunsTimer); _botRunsTimer = null; }
+}
+
+// ─── Productos enviados al lead ──────────────────────────────────────
+// Renderiza la lista de productos del catálogo de WhatsApp que se han
+// enviado a este lead (manualmente desde el chat o automáticamente por bots).
+// El endpoint es /api/catalog/sends/contact/:id (módulo whatsapp-catalog).
+async function renderExpDetailProducts() {
+  const root = document.getElementById('expDetailProducts');
+  if (!root || !EXP_DETAIL) return;
+  const contactId = EXP_DETAIL.contactId;
+  if (!contactId) { root.innerHTML = ''; return; }
+  // Feature gate: solo si el tenant tiene catálogo habilitado
+  const catalogEnabled = (typeof FEATURES !== 'undefined' && FEATURES?.catalog) ||
+                         document.body.dataset.catalog === '1' ||
+                         true; // fallback: si el endpoint funciona, mostramos; si no, queda vacío
+  if (!catalogEnabled) { root.innerHTML = ''; return; }
+
+  try {
+    const data = await api('GET', `/api/catalog/sends/contact/${contactId}`);
+    const items = data?.items || data || [];
+    if (!Array.isArray(items) || !items.length) { root.innerHTML = ''; return; }
+    // Mostrar los últimos 5
+    const recent = items.slice(0, 5);
+    const cards = recent.map(send => {
+      const ts = send.sent_at || send.created_at;
+      const date = ts
+        ? new Date(ts * 1000).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+        : '';
+      const via = send.sent_via === 'bot' ? 'Bot' : (send.sent_via === 'manual' ? 'Manual' : send.sent_via || '');
+      const price = send.price_amount ? ` · $${escapeHtml(String(send.price_amount))}` : '';
+      return `
+        <div class="exp-product-item">
+          <div class="exp-product-name">${escapeHtml(send.name || `Producto #${send.product_id}`)}${price}</div>
+          <div class="exp-product-meta">${escapeHtml(via)} · ${escapeHtml(date)}</div>
+        </div>`;
+    }).join('');
+    root.innerHTML = `
+      <div class="exp-detail-section">
+        <div class="exp-detail-section-title">Productos enviados <span class="exp-detail-count-pill">${items.length}</span></div>
+        <div class="exp-products-list">${cards}</div>
+        ${items.length > 5 ? `<div class="exp-products-more">Y ${items.length - 5} más…</div>` : ''}
+      </div>`;
+  } catch (_) {
+    // Silencioso — el catálogo puede no estar habilitado o no haber sends
+    root.innerHTML = '';
+  }
 }
 
 async function renderExpDetailBots() {
@@ -9066,6 +9113,21 @@ const BOT_STEP_REGISTRY = {
       return `📋 ${tpl.displayName || tpl.name} · ${status}`;
     },
   },
+  send_product: {
+    group: 'Comunicación',
+    label:   { es: 'Enviar producto (Catálogo WhatsApp)', en: 'Send product (WhatsApp Catalog)' },
+    icon:    '<path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>',
+    requires: 'catalog', // feature gate — solo se muestra si el tenant tiene catálogo
+    summary: (step) => {
+      const c = step.config || {};
+      if (!c.productId) return 'Sin producto seleccionado';
+      const list = (typeof _catalogProducts !== 'undefined' ? _catalogProducts : []);
+      const p = list.find(x => x.id == c.productId);
+      if (!p) return `Producto #${c.productId}`;
+      const price = p.price_amount ? ` · $${p.price_amount}` : '';
+      return `🛍 ${p.name}${price}`;
+    },
+  },
   // ─── Flujo / control ───
   timer: {
     group: 'Flujo',
@@ -9857,6 +9919,9 @@ let _botBuilderReturnTo = null;
 
 function openBotBuilder(bot, returnTo = null) {
   _botBuilderReturnTo = returnTo;
+  // Cargar productos del catálogo en background (para el step send_product).
+  // Lazy load: no bloqueamos abrir el builder.
+  try { loadCatalogProductsForBot(); } catch (_) {}
   // Ajustar texto del botón "←" según el origen
   const backBtn = document.getElementById('botBackBtn');
   if (backBtn) {
@@ -10339,6 +10404,36 @@ function buildStepBody(step) {
         ${noApproved}
         ${tpl ? `<div class="sb-tpl-preview">${escHtml((tpl.body || '').slice(0, 200))}${(tpl.body || '').length > 200 ? '…' : ''}</div>` : ''}
         ${phsHtml}`;
+    }
+    case 'send_product': {
+      // Selector de producto del catálogo de WhatsApp Business.
+      // Requiere que el tenant tenga catalog conectado (whatsapp_catalog_enabled).
+      const products = (typeof _catalogProducts !== 'undefined' && Array.isArray(_catalogProducts)) ? _catalogProducts : [];
+      if (!products.length) {
+        return `
+          <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px">El catálogo de WhatsApp aún no tiene productos sincronizados.</p>
+          <p style="font-size:12px;color:#dc2626;margin:0">Ve a <strong>Catálogo</strong> en el menú lateral para conectar y sincronizar tu catálogo de productos.</p>`;
+      }
+      const productOpts = products.map(p =>
+        `<option value="${p.id}" ${c.productId == p.id ? 'selected' : ''}>${escHtml(p.name)}${p.price_amount ? ` — $${p.price_amount}` : ''}</option>`
+      ).join('');
+      const selected = products.find(p => p.id == c.productId);
+      const previewHtml = selected ? `
+        <div class="sb-tpl-preview" style="margin-top:10px">
+          <strong>${escHtml(selected.name)}</strong>
+          ${selected.price_amount ? `<div style="font-size:13px;color:#10b981;margin-top:4px">$${escHtml(String(selected.price_amount))} ${escHtml(selected.price_currency || '')}</div>` : ''}
+          ${selected.description ? `<div style="font-size:12px;color:var(--text-muted);margin-top:6px">${escHtml(selected.description.slice(0, 180))}${selected.description.length > 180 ? '…' : ''}</div>` : ''}
+        </div>` : '';
+      return `
+        <label>Producto a enviar</label>
+        <p style="font-size:11px;color:var(--text-muted);margin:0 0 6px">El producto se envía como tarjeta interactiva con foto, precio y botón "Ver detalles" — WhatsApp Cloud API solamente.</p>
+        <select data-field="productId" data-sid="${sid}">
+          <option value="">— Selecciona un producto —</option>
+          ${productOpts}
+        </select>
+        ${previewHtml}
+        <label style="margin-top:14px">Texto opcional antes del producto</label>
+        <textarea data-field="bodyText" data-sid="${sid}" rows="2" placeholder="Te recomiendo este producto:">${escHtml(c.bodyText || '')}</textarea>`;
     }
     case 'timer': {
       // Backward compat: convert old {amount, unit} to new multi-field format for display
@@ -21097,6 +21192,29 @@ let _tplTab = 'wa_api';
 let _tplItems = [];
 let _tplEditId = null;
 let _tplFilter = '';
+
+// Catálogo: cache global de productos (para selector en step send_product del bot).
+// Se carga lazy en openBotBuilder. No bloquea el boot.
+let _catalogProducts = [];
+async function loadCatalogProductsForBot() {
+  try {
+    // Endpoint del módulo whatsapp-catalog. pageSize max 100 — si hay más
+    // productos, el user buscará por nombre en la UI.
+    const res = await api('GET', '/api/catalog/products?pageSize=100&onlyActive=1');
+    const items = res?.items || res?.products || (Array.isArray(res) ? res : []);
+    _catalogProducts = items.map(p => ({
+      id:             p.id,
+      name:           p.name,
+      retailer_id:    p.retailer_id,
+      price_amount:   p.price_amount,
+      price_currency: p.price_currency,
+      description:    p.description,
+      image_url:      p.image_url,
+    }));
+  } catch (_) {
+    _catalogProducts = [];
+  }
+}
 
 async function loadTemplates() {
   try {

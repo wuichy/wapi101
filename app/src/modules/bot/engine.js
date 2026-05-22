@@ -9,6 +9,9 @@ const activitySvc  = require('../expedients/activity');
 const { sendMessage, sendWhatsAppTemplate } = require('../conversations/sender');
 const apptSvc      = require('../appointments/service');
 const aiSvc        = require('../ai/service');
+// Lazy require para evitar circular dependency (catalog service usa convoSvc)
+let _catalogSvc = null;
+function _getCatalogSvc() { return _catalogSvc || (_catalogSvc = require('../whatsapp-catalog/service')); }
 
 const MS = { segundos: 1000, minutos: 60_000, horas: 3_600_000, 'días': 86_400_000 };
 
@@ -768,6 +771,64 @@ async function executeStep(db, step, ctx) {
       } catch (err) {
         _log('error', `error enviando template: ${err.message}`);
         throw new Error(`Envío de plantilla ${templateId} falló: ${err.message}`);
+      }
+      return false;
+    }
+
+    case 'send_product': {
+      // Envía un producto del catálogo de WhatsApp Business al contacto.
+      // Config: { productId } (string, retailer_id del producto), opcional bodyText.
+      // Requiere que el tenant tenga catálogo conectado e integración WA Cloud API.
+      const productId = String(c.productId || '').trim();
+      if (!productId) {
+        _log('warn', 'send_product: sin productId en config');
+        return false;
+      }
+      // Necesitamos un convoId. Si no hay, intentar crear uno con el WA del tenant
+      // (mismo patrón que template).
+      if (!ctx.convoId) {
+        if (!ctx.contactId) { _log('warn', 'send_product: sin convoId ni contactId'); return false; }
+        const contact = db.prepare(
+          'SELECT id, phone, first_name, last_name FROM contacts WHERE id = ? AND tenant_id = ?'
+        ).get(ctx.contactId, ctx.tenantId);
+        if (!contact?.phone) {
+          _log('warn', `send_product: contacto ${ctx.contactId} sin teléfono — no se puede crear convo`);
+          return false;
+        }
+        const integ = db.prepare(
+          "SELECT id FROM integrations WHERE tenant_id = ? AND provider = 'whatsapp' AND status = 'connected' ORDER BY id LIMIT 1"
+        ).get(ctx.tenantId);
+        if (!integ) {
+          _log('warn', `send_product: tenant ${ctx.tenantId} sin integración WhatsApp activa`);
+          return false;
+        }
+        try {
+          const newConvo = convoSvc.findOrCreate(db, ctx.tenantId, {
+            provider:      'whatsapp',
+            externalId:    contact.phone,
+            integrationId: integ.id,
+            contactId:     contact.id,
+            contactPhone:  contact.phone,
+            contactName:   [contact.first_name, contact.last_name].filter(Boolean).join(' '),
+          });
+          ctx.convoId = newConvo.id;
+        } catch (err) {
+          _log('warn', `send_product: no pude crear convo: ${err.message}`);
+          return false;
+        }
+      }
+      try {
+        await _getCatalogSvc().sendProductToConversation(db, ctx.tenantId, {
+          conversationId: ctx.convoId,
+          productId,
+          contactId:      ctx.contactId,
+          via:            'bot',
+          bodyText:       c.bodyText || undefined,
+        });
+        _log('info', `send_product: producto ${productId} enviado a convo ${ctx.convoId}`);
+      } catch (err) {
+        _log('error', `send_product: ${err.message}`);
+        throw new Error(`Envío de producto ${productId} falló: ${err.message}`);
       }
       return false;
     }

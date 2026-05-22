@@ -17749,59 +17749,102 @@ function _chatDetectAttachType(file) {
 }
 
 function setupChatDragDrop() {
-  const panels = [
-    document.getElementById('rhConvPanel'),
-    // También el panel de chat dentro del detalle de expediente
-    document.querySelector('.exp-detail-right.rh-conversation-panel'),
-  ].filter(Boolean);
+  // Usamos un solo handler global en document, filtrando por target.
+  // Más robusto que múltiples handlers en panels (que pueden no existir al boot
+  // o cambiar de instancia). El handler determina si el drag/drop ocurre sobre
+  // un panel de conversación.
 
-  for (const panel of panels) {
-    // dragover y dragenter: prevenir default + visual highlight
-    let depth = 0;
-    panel.addEventListener('dragenter', e => {
-      // Solo si está arrastrando files (no nodos del builder ni otro drag interno)
-      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
-      e.preventDefault();
-      depth++;
-      panel.classList.add('rh-chat-dragover');
-    });
-    panel.addEventListener('dragover', e => {
-      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
-    });
-    panel.addEventListener('dragleave', e => {
-      depth--;
-      if (depth <= 0) {
-        depth = 0;
-        panel.classList.remove('rh-chat-dragover');
-      }
-    });
-    panel.addEventListener('drop', e => {
-      if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
-      e.preventDefault();
-      depth = 0;
-      panel.classList.remove('rh-chat-dragover');
-      const files = Array.from(e.dataTransfer.files || []);
-      if (!files.length) return;
-      // Verificar que haya una conversación activa
-      if (!ACTIVE_CONVO_ID) {
-        toast('Abre una conversación primero', 'warning');
-        return;
-      }
-      // Verificar que el tipo sea soportado por el provider de la convo
-      const convo = CONVERSATIONS.find(c => c.id === ACTIVE_CONVO_ID);
-      const supported = PROVIDER_MEDIA_SUPPORT[convo?.provider] || PROVIDER_MEDIA_SUPPORT.whatsapp;
-      // Por simplicidad mandamos solo el primer archivo (los pasos siguientes pueden ser uno por uno)
-      const file = files[0];
-      const type = _chatDetectAttachType(file);
-      if (!supported.has(type)) {
-        toast(`Este canal no soporta archivos de tipo "${type}"`, 'error');
-        return;
-      }
-      onAttachFileSelected(file, type);
-    });
+  function _findConvPanel(target) {
+    if (!target || !target.closest) return null;
+    return target.closest('#rhConvPanel') || target.closest('.exp-detail-right.rh-conversation-panel');
   }
+
+  function _hasFiles(dataTransfer) {
+    if (!dataTransfer) return false;
+    // Algunos navegadores (Safari especialmente) reportan types como DOMStringList
+    const types = Array.from(dataTransfer.types || []);
+    return types.includes('Files') || types.includes('application/x-moz-file');
+  }
+
+  let activePanel = null;
+
+  document.addEventListener('dragenter', e => {
+    if (!_hasFiles(e.dataTransfer)) return;
+    const panel = _findConvPanel(e.target);
+    if (!panel) return;
+    e.preventDefault();
+    if (activePanel && activePanel !== panel) activePanel.classList.remove('rh-chat-dragover');
+    activePanel = panel;
+    panel.classList.add('rh-chat-dragover');
+  }, true);
+
+  document.addEventListener('dragover', e => {
+    if (!_hasFiles(e.dataTransfer)) return;
+    const panel = _findConvPanel(e.target);
+    if (!panel) {
+      if (activePanel) { activePanel.classList.remove('rh-chat-dragover'); activePanel = null; }
+      return;
+    }
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    if (activePanel !== panel) {
+      if (activePanel) activePanel.classList.remove('rh-chat-dragover');
+      activePanel = panel;
+      panel.classList.add('rh-chat-dragover');
+    }
+  }, true);
+
+  document.addEventListener('dragleave', e => {
+    // Solo limpiamos si salió de la ventana (relatedTarget null) o si salió del panel
+    if (e.relatedTarget) return;
+    if (activePanel) { activePanel.classList.remove('rh-chat-dragover'); activePanel = null; }
+  }, true);
+
+  document.addEventListener('drop', e => {
+    if (!_hasFiles(e.dataTransfer)) return;
+    const panel = _findConvPanel(e.target);
+    if (!panel) {
+      // Drop fuera del panel — prevenir el default del browser (que abriría el archivo)
+      if (activePanel) { activePanel.classList.remove('rh-chat-dragover'); activePanel = null; }
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    if (activePanel) { activePanel.classList.remove('rh-chat-dragover'); activePanel = null; }
+
+    const files = Array.from(e.dataTransfer.files || []);
+    console.log('[chat-drop] files:', files.map(f => `${f.name} (${f.type || 'no-mime'}, ${f.size}B)`));
+    if (!files.length) {
+      toast('No se detectaron archivos. Intenta de nuevo.', 'warning');
+      return;
+    }
+    if (!ACTIVE_CONVO_ID) {
+      toast('Abre una conversación primero', 'warning');
+      return;
+    }
+    const convo = CONVERSATIONS.find(c => c.id === ACTIVE_CONVO_ID);
+    const supported = PROVIDER_MEDIA_SUPPORT[convo?.provider] || PROVIDER_MEDIA_SUPPORT.whatsapp;
+    const file = files[0];
+    const type = _chatDetectAttachType(file);
+    console.log(`[chat-drop] processing file as type="${type}" (provider=${convo?.provider})`);
+    if (!supported.has(type)) {
+      toast(`Este canal (${convo?.provider}) no soporta archivos tipo "${type}"`, 'error');
+      return;
+    }
+    onAttachFileSelected(file, type);
+  }, true);
+
+  // También: si el browser empieza a renderizar el archivo arrastrado fuera del panel,
+  // prevenir el default para que no abra el archivo en nueva pestaña.
+  window.addEventListener('dragover', e => {
+    if (_hasFiles(e.dataTransfer)) e.preventDefault();
+  });
+  window.addEventListener('drop', e => {
+    if (_hasFiles(e.dataTransfer) && !_findConvPanel(e.target)) {
+      // Drop fuera de zona válida — prevenir default
+      e.preventDefault();
+    }
+  });
 }
 
 function onAttachFileSelected(file, type) {

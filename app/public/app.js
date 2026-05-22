@@ -7337,9 +7337,11 @@ function renderExpDetailInfo() {
     </div>
 
     ${customFields.length ? `
-    <div class="exp-detail-section">
-      <div class="exp-detail-section-title">Campos personalizados</div>
-      ${customFieldsHtml}
+    <div class="exp-detail-section exp-detail-section--custom-fields">
+      <div class="exp-detail-section-title">Campos personalizados <span class="exp-detail-count-pill">${customFields.length}</span></div>
+      <div class="exp-detail-section-scroll">
+        ${customFieldsHtml}
+      </div>
     </div>` : ''}
 
     <div class="exp-detail-actions-bar" id="expDetailActionsBar" hidden>

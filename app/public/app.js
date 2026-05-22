@@ -12437,6 +12437,14 @@ function setupBot() {
       const sidebar = document.getElementById('bbVeSidebarGroups');
       if (sidebar && !sidebar.children.length) _bbVeRenderSidebar();
     }
+    // Garantizar que el botón Pantalla Completa tenga handler (es idempotente
+    // con el flag _wired). Evita "no pasa nada" si el setupCanvas se llamó
+    // antes de que el botón estuviera en el DOM o algo limpió el handler.
+    const fsBtn = document.getElementById('bbVeFsBtn');
+    if (fsBtn && !fsBtn.dataset.wired) {
+      fsBtn.dataset.wired = '1';
+      fsBtn.addEventListener('click', _bbVeToggleFullscreen);
+    }
     // Auto-entrar a Pantalla Completa la primera vez que se abre Editable
     // para este bot (window.__bbVeFsAutoTriggered se resetea al cerrar el
     // builder, así otro bot vuelve a auto-abrir).
@@ -12453,7 +12461,12 @@ function setupBot() {
 
   function _bbVeRenderSidebar() {
     const root = document.getElementById('bbVeSidebarGroups');
-    if (!root) return;
+    if (!root) { console.warn('[bbVe] sidebar root no encontrado'); return; }
+    if (typeof BOT_STEP_REGISTRY === 'undefined' || !BOT_STEP_REGISTRY) {
+      console.warn('[bbVe] BOT_STEP_REGISTRY no disponible aún');
+      return;
+    }
+    const lang = (typeof _botRegistryLang === 'function') ? _botRegistryLang() : 'es';
     const groups = {
       messages:     { label: 'Mensajes',  items: ['message','template','ai_reply'] },
       logic:        { label: 'Lógica',    items: ['wait_response','condition','timer','stop_bot','handover','stop_and_start'] },
@@ -12462,21 +12475,31 @@ function setupBot() {
       advanced:     { label: 'Avanzado',  items: ['http'] },
     };
     let html = '';
+    let totalItems = 0;
     for (const [grpKey, grp] of Object.entries(groups)) {
-      html += `<div class="bb-ve-sidebar-group"><h5>${_bbVeEsc(grp.label)}</h5>`;
+      let groupHtml = '';
       for (const type of grp.items) {
-        const def = BOT_STEP_REGISTRY?.[type];
+        const def = BOT_STEP_REGISTRY[type];
         if (!def) continue;
-        const label = (typeof def.label === 'function' ? def.label() : def.label) || type;
+        // label puede ser: string | function | { es, en } objeto
+        let label;
+        if (typeof def.label === 'function') label = def.label();
+        else if (typeof def.label === 'string') label = def.label;
+        else if (def.label && typeof def.label === 'object') label = def.label[lang] || def.label.es || type;
+        else label = type;
         const icon = def.icon ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${def.icon}</svg>` : '';
-        html += `<div class="bb-ve-step-tpl" draggable="true" data-type="${type}" data-grp="${grpKey}">
+        groupHtml += `<div class="bb-ve-step-tpl" draggable="true" data-type="${type}" data-grp="${grpKey}">
           <div class="bb-ve-step-tpl-ico">${icon}</div>
           <div class="bb-ve-step-tpl-name">${_bbVeEsc(label)}</div>
         </div>`;
+        totalItems++;
       }
-      html += '</div>';
+      if (groupHtml) {
+        html += `<div class="bb-ve-sidebar-group"><h5>${_bbVeEsc(grp.label)}</h5>${groupHtml}</div>`;
+      }
     }
     root.innerHTML = html;
+    console.log(`[bbVe] sidebar rendered: ${totalItems} steps en ${Object.keys(groups).length} grupos`);
     // Wire drag from sidebar
     root.querySelectorAll('.bb-ve-step-tpl').forEach(el => {
       el.addEventListener('dragstart', e => {

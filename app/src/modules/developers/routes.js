@@ -158,5 +158,22 @@ module.exports = function createDevelopersRouter(db) {
     res.json({ items });
   });
 
+  // ─── Webhook deliveries ──────────────────────────────────────────────
+  const webhooksOut = require('../webhooks-out/service');
+
+  router.get('/apps/:id/deliveries', devAuth(db), (req, res) => {
+    const items = webhooksOut.listDeliveries(db, Number(req.params.id), req.devAccount.id, { limit: Number(req.query.limit) || 50 });
+    res.json({ items });
+  });
+
+  router.post('/deliveries/:id/replay', devAuth(db), (req, res) => {
+    try {
+      const r = webhooksOut.replayDelivery(db, Number(req.params.id), req.devAccount.id);
+      res.json(r);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   return router;
 };

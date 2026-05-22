@@ -1123,6 +1123,10 @@ app.listen(config.port, config.host, () => {
   try { require('./src/modules/whatsapp-catalog/service').startCatalogSyncPoller(db, 60 * 60 * 1000); } catch (err) {
     console.warn('[boot] no se pudo iniciar wa-catalog sync poller:', err.message);
   }
+  // Iniciar poller de webhooks outgoing a apps (developers platform)
+  try { require('./src/modules/webhooks-out/service').startDeliveryPoller(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar webhooks-out poller:', err.message);
+  }
 });
 
 module.exports = { app, config, db };

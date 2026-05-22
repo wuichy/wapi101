@@ -194,6 +194,14 @@ function book(db, tenantId, { contactId, expedientId, convoId, advisorId, offset
     contactId, expedientId, convoId, appointmentId, startsAt,
   });
 
+  // Webhook out: appointment.created
+  try {
+    require('../webhooks-out/service').emit(db, {
+      tenantId, eventType: 'appointment.created',
+      data: { appointment: { id: appointmentId, contactId, expedientId, advisorId, startsAt, endsAt, durationMin: dur } },
+    });
+  } catch (_) {}
+
   return {
     id: appointmentId,
     startsAt,
@@ -230,6 +238,15 @@ function cancelLatest(db, tenantId, contactId) {
        SET status = 'cancelled', cancelled_at = unixepoch(), cancelled_by = 'system', updated_at = unixepoch()
      WHERE id = ?
   `).run(appt.id);
+
+  // Webhook out: appointment.cancelled
+  try {
+    require('../webhooks-out/service').emit(db, {
+      tenantId, eventType: 'appointment.cancelled',
+      data: { appointment: { id: appt.id, contactId: appt.contact_id, expedientId: appt.expedient_id, startsAt: appt.starts_at } },
+    });
+  } catch (_) {}
+
   return { ...appt, fecha: _fmtDate(appt.starts_at), hora: _fmtTime(appt.starts_at) };
 }
 
@@ -260,6 +277,18 @@ function reschedule(db, tenantId, { contactId, expedientId, convoId, advisorId, 
   scheduleRemindersFromRecentBotRun(db, tenantId, {
     contactId, expedientId, convoId, appointmentId, startsAt,
   });
+
+  // Webhook out: appointment.rescheduled (cita previa quedó marcada existing.id)
+  try {
+    require('../webhooks-out/service').emit(db, {
+      tenantId,
+      eventType: 'appointment.rescheduled',
+      data: {
+        appointment: { id: appointmentId, contactId, expedientId, advisorId, startsAt, endsAt, durationMin: dur },
+        previousId:  existing?.id || null,
+      },
+    });
+  } catch (_) {}
 
   return {
     id: appointmentId,
@@ -399,6 +428,14 @@ function bookManual(db, tenantId, { contactId, expedientId, convoId, advisorId, 
   scheduleRemindersFromRecentBotRun(db, tenantId, {
     contactId, expedientId, convoId, appointmentId, startsAt,
   });
+
+  // Webhook out: appointment.created (vía bookManual)
+  try {
+    require('../webhooks-out/service').emit(db, {
+      tenantId, eventType: 'appointment.created',
+      data: { appointment: { id: appointmentId, contactId, expedientId, advisorId, startsAt, endsAt, durationMin: dur } },
+    });
+  } catch (_) {}
 
   return {
     id:       appointmentId,

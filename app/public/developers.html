@@ -547,6 +547,7 @@ const I18N = {
     'detail.installs.help': 'Cuando alguien autorice tu app vía OAuth, aparecerá aquí.',
     'detail.submit': 'Enviar a revisión',
     'detail.delete': 'Eliminar',
+    'detail.deliveries': 'Webhook deliveries',
   },
   en: {
     'nav.docs': 'Docs', 'nav.dashboard': 'Dashboard',
@@ -609,6 +610,7 @@ const I18N = {
     'detail.installs.help': 'When someone authorizes your app via OAuth, it will appear here.',
     'detail.submit': 'Submit for review',
     'detail.delete': 'Delete',
+    'detail.deliveries': 'Webhook deliveries',
   },
 };
 let _lang = localStorage.getItem('wapi_dev_lang') || (navigator.language.startsWith('en') ? 'en' : 'es');
@@ -1545,10 +1547,71 @@ async function loadAppDetail(id) {
       <div class="dp-detail-section">
         <h3>${t('detail.installs')} (${app.install_count || 0})</h3>
         <p style="color:var(--text-muted);font-size:13px">${t('detail.installs.help')}</p>
+      </div>
+      <div class="dp-detail-section">
+        <h3>${t('detail.deliveries') || 'Webhook deliveries'}</h3>
+        <div id="deliveriesContainer">
+          <p style="color:var(--text-muted);font-size:13px">Cargando…</p>
+        </div>
       </div>`;
+    // Cargar deliveries
+    loadDeliveries(app.id);
   } catch (err) {
     root.innerHTML = '<p style="color:#fca5a5">Error: ' + esc(err.message) + '</p>';
   }
+}
+
+async function loadDeliveries(appId) {
+  const root = document.getElementById('deliveriesContainer');
+  if (!root) return;
+  try {
+    const { items } = await api('GET', `/apps/${appId}/deliveries`);
+    if (!items.length) {
+      root.innerHTML = `<p style="color:var(--text-muted);font-size:13px">${_lang === 'en' ? 'No webhook deliveries yet. They appear when an event fires and your app has a webhook URL configured.' : 'Sin webhook deliveries todavía. Aparecen cuando se dispara un evento y tu app tiene webhook URL configurada.'}</p>`;
+      return;
+    }
+    root.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase">
+            <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Evento</th>
+            <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Status</th>
+            <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Intentos</th>
+            <th style="padding:6px 8px;border-bottom:1px solid var(--border)">HTTP</th>
+            <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Cuándo</th>
+            <th style="padding:6px 8px;border-bottom:1px solid var(--border)"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(d => {
+            const statusColor = d.status === 'sent' ? '#22c55e' : d.status === 'pending' ? '#fbbf24' : d.status === 'failed' ? '#f97316' : '#ef4444';
+            const canReplay = d.status === 'failed' || d.status === 'giving_up';
+            return `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:8px"><code style="font-size:11px">${esc(d.event_type)}</code></td>
+                <td style="padding:8px;color:${statusColor};font-weight:600">${esc(d.status)}</td>
+                <td style="padding:8px">${d.attempts}</td>
+                <td style="padding:8px;font-family:'JetBrains Mono',monospace">${d.last_status_code || '—'}</td>
+                <td style="padding:8px;color:var(--text-muted)">${esc(new Date(d.created_at * 1000).toLocaleString())}</td>
+                <td style="padding:8px;text-align:right">
+                  ${canReplay ? `<button class="dp-btn dp-btn-ghost" style="padding:4px 10px;font-size:11px" onclick="replayDelivery(${d.id}, ${appId})">Replay</button>` : ''}
+                </td>
+              </tr>
+              ${d.last_error ? `<tr><td colspan="6" style="padding:0 8px 8px 8px"><div style="background:rgba(239,68,68,.08);border-radius:6px;padding:6px 10px;font-size:11px;color:#fca5a5">Error: ${esc(d.last_error)}</div></td></tr>` : ''}
+            `;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch (err) {
+    root.innerHTML = `<p style="color:#fca5a5;font-size:13px">Error: ${esc(err.message)}</p>`;
+  }
+}
+
+async function replayDelivery(deliveryId, appId) {
+  try {
+    await api('POST', `/deliveries/${deliveryId}/replay`);
+    loadDeliveries(appId);
+  } catch (err) { alert(err.message); }
 }
 
 async function submitApp(id) {

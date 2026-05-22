@@ -249,7 +249,16 @@ function create(db, tenantId, { contactId, pipelineId, stageId, name, value = 0,
 
   setTags(db, t, id, tags);
   setCustomFieldValues(db, t, id, fieldValues);
-  return getById(db, t, id);
+  const fullLead = getById(db, t, id);
+
+  // Webhook out: emit lead.created
+  try {
+    require('../webhooks-out/service').emit(db, {
+      tenantId: t, eventType: 'lead.created', data: { lead: fullLead },
+    });
+  } catch (_) { /* no bloquear si webhooks falla */ }
+
+  return fullLead;
 }
 
 function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fieldValues, contactId, contactName, contactFirstName, contactLastName, contactPhone, contactEmail, assignedAdvisorId }) {
@@ -324,7 +333,22 @@ function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fiel
   if (Array.isArray(tags)) setTags(db, t, id, tags);
   if (fieldValues && typeof fieldValues === 'object') setCustomFieldValues(db, t, id, fieldValues);
 
-  return getById(db, t, id);
+  const fullLead = getById(db, t, id);
+
+  // Webhook out: emit lead.updated (siempre) + lead.stage_changed (si cambió etapa)
+  try {
+    const wh = require('../webhooks-out/service');
+    wh.emit(db, { tenantId: t, eventType: 'lead.updated', data: { lead: fullLead } });
+    if (stageId !== undefined && stageId !== row.stage_id) {
+      wh.emit(db, {
+        tenantId:  t,
+        eventType: 'lead.stage_changed',
+        data: { lead: fullLead, fromStageId: row.stage_id, toStageId: stageId },
+      });
+    }
+  } catch (_) { /* no bloquear */ }
+
+  return fullLead;
 }
 
 function remove(db, tenantId, id, advisor) {

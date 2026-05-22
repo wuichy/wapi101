@@ -1385,6 +1385,25 @@ async function executeStep(db, step, ctx) {
       // 1) Enviar notificación in-app al asesor para que abra el modal
       // 2) Continuar al siguiente step inmediatamente
       // El modal en el frontend (pipeline drop) es quien crea la cita.
+      //
+      // Dedup: si el contacto ya tiene una cita futura programada, detener
+      // el bot completo aquí (return true). Evita que arrastrar el lead 2
+      // veces a la misma etapa dispare 2 veces "tu cita ha sido agendada"
+      // y duplique el recordatorio.
+      if (ctx.contactId) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const futureAppt = db.prepare(`
+          SELECT id, starts_at FROM appointments
+           WHERE contact_id = ? AND tenant_id = ?
+             AND status IN ('scheduled','confirmed')
+             AND starts_at > ?
+           ORDER BY starts_at ASC LIMIT 1
+        `).get(ctx.contactId, ctx.tenantId, nowSec);
+        if (futureAppt) {
+          _log('info', `book_appointment: contacto ${ctx.contactId} ya tiene cita futura (id=${futureAppt.id}) — bot stop para evitar duplicado`);
+          return true; // stop bot
+        }
+      }
       try {
         const notifSvc = require('../notifications/service');
         // Obtener asesor destino: el asignado al lead, o el que configuró el step

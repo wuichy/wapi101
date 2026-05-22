@@ -13002,6 +13002,35 @@ function setupBot() {
   window._bbVeGetDag = function() {
     return { nodes: Object.values(_bbVe.nodes).filter(n => n.type !== '__trigger__'), edges: _bbVe.edges };
   };
+  // Sincroniza el estado del DAG editado a las variables globales sbSteps
+  // y al trigger card. Se llama justo antes del save del bot cuando la vista
+  // activa es Editable, para que los cambios visuales se persistan.
+  window._bbVeSyncToSbSteps = function() {
+    const serialized = bbVeSerialize();
+    if (!serialized) return;
+    // sbSteps queda con la representación lineal del walk topológico desde
+    // el trigger. Cada step preserva su _id, type, config, _x, _y.
+    if (Array.isArray(serialized.steps)) {
+      // Usamos la variable global sbSteps (declarada arriba en este mismo
+      // archivo). Aquí asumimos que sbSteps es var/let escapable desde este
+      // closure — si no, fallback a window.sbSteps.
+      try {
+        if (typeof sbSteps !== 'undefined') {
+          // Reemplazar el contenido manteniendo la misma referencia (por si
+          // hay listeners que la usan)
+          sbSteps.length = 0;
+          for (const s of serialized.steps) sbSteps.push(s);
+        } else if (Array.isArray(window.sbSteps)) {
+          window.sbSteps.length = 0;
+          for (const s of serialized.steps) window.sbSteps.push(s);
+        }
+      } catch (_) {}
+    }
+    // El trigger se edita en la trigger card que ya está movida al inspector
+    // (cuando el user hace click en el nodo Trigger). Su estado (sbTriggerType,
+    // sbTriggerValue) ya está en el DOM, no necesita sync extra — el handler
+    // de Save lo lee directo del DOM.
+  };
   // Fin de la vista editable
 
   // ─── Visual node graph (rewrite 2026-05-09) ───
@@ -13675,6 +13704,16 @@ function setupBot() {
   });
 
   document.getElementById('botBuilderSave')?.addEventListener('click', async () => {
+    // Si el user editó en vista Editable (DAG), sincronizar sbSteps con el
+    // estado actual del DAG antes de armar el payload. Sin esto, los cambios
+    // hechos en el canvas se perderían al guardar.
+    try {
+      const activeView = document.querySelector('#botBuilderViewTabs .bb-view-tab.is-active')?.dataset.view;
+      if (activeView === 'editable' && typeof window._bbVeSyncToSbSteps === 'function') {
+        window._bbVeSyncToSbSteps();
+      }
+    } catch (_) {}
+
     const name = document.getElementById('botBuilderName').value.trim();
     if (!name) { toast('Escribe un nombre para el bot', 'error'); return; }
     const enabled = document.getElementById('botBuilderEnabled').checked ? 1 : 0;

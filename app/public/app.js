@@ -12329,6 +12329,17 @@ function setupBot() {
     if (view !== 'editable' && document.body.classList.contains('bb-ve-fullscreen-on')) {
       document.body.classList.remove('bb-ve-fullscreen-on');
     }
+    // Si salimos de Editable y la trigger card está atrapada en el inspector,
+    // devolverla a su lugar original (importante para que List/Visual funcionen).
+    if (view !== 'editable') {
+      const inspBody = document.getElementById('bbVeInspectorBody');
+      const card = inspBody?.querySelector('.sb-trigger-card');
+      const placeholder = document.querySelector('[data-bb-ve-trig-placeholder="1"]');
+      if (card && placeholder?.parentNode) {
+        placeholder.parentNode.insertBefore(card, placeholder);
+        placeholder.remove();
+      }
+    }
     if (view === 'code')     bbRenderCodeView();
     if (view === 'indented') bbRenderIndentedView();
     if (view === 'visual')   { bbRenderVisualView(); }
@@ -12844,19 +12855,30 @@ function setupBot() {
   }
 
   function _bbVeOpenInspector(node) {
-    if (!node || node.type === '__trigger__') { _bbVeCloseInspector(); return; }
+    if (!node) { _bbVeCloseInspector(); return; }
+
+    // ─── Trigger node: editor inline reusando la sb-trigger-card ───
+    if (node.type === '__trigger__') {
+      _bbVeOpenTriggerInline(node);
+      return;
+    }
+
     const def = BOT_STEP_REGISTRY?.[node.type];
     if (!def) return;
     const insp = document.getElementById('bbVeInspector');
     document.querySelector('.bb-ve-wrap')?.classList.remove('no-inspector');
     insp.hidden = false;
-    const label = (typeof def.label === 'function' ? def.label() : def.label) || node.type;
+    const lang = (typeof _botRegistryLang === 'function') ? _botRegistryLang() : 'es';
+    let label;
+    if (typeof def.label === 'function') label = def.label();
+    else if (typeof def.label === 'string') label = def.label;
+    else if (def.label && typeof def.label === 'object') label = def.label[lang] || def.label.es || node.type;
+    else label = node.type;
     document.getElementById('bbVeInspectorIcon').innerHTML = def.icon ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${def.icon}</svg>` : '';
     document.getElementById('bbVeInspectorName').textContent = label;
     document.getElementById('bbVeInspectorType').textContent = node.type;
+    document.getElementById('bbVeDeleteNode').style.display = '';
     const body = document.getElementById('bbVeInspectorBody');
-    // Por simplicidad, mostramos un editor JSON básico — el editor real de cada step
-    // es complejo y vive en otro modal. Esto es para drag/move/connect.
     body.innerHTML = `
       <div class="bb-ve-field">
         <label class="bb-ve-field-label">Config (JSON)</label>
@@ -12868,10 +12890,62 @@ function setupBot() {
       try { node.config = JSON.parse(e.target.value); } catch {}
     });
   }
+
+  // Estado del trigger inline (para regresar la card a su lugar al cerrar)
+  let _bbVeTrigOrigParent = null;
+  let _bbVeTrigPlaceholder = null;
+
+  function _bbVeOpenTriggerInline(triggerNode) {
+    const insp = document.getElementById('bbVeInspector');
+    if (!insp) return;
+    // Mover la trigger card (sbTriggerType + widgets) al inspector body
+    const card = document.getElementById('sbTriggerType')?.closest('.sb-trigger-card');
+    const body = document.getElementById('bbVeInspectorBody');
+    if (!card || !body) return;
+
+    // Si ya está en el body, no re-mover
+    if (!body.contains(card)) {
+      _bbVeTrigOrigParent = card.parentNode;
+      _bbVeTrigPlaceholder = document.createElement('div');
+      _bbVeTrigPlaceholder.style.display = 'none';
+      _bbVeTrigPlaceholder.dataset.bbVeTrigPlaceholder = '1';
+      _bbVeTrigOrigParent.insertBefore(_bbVeTrigPlaceholder, card);
+      body.innerHTML = '';
+      body.appendChild(card);
+    }
+
+    // Header
+    document.getElementById('bbVeInspectorIcon').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 3 21 12 3 21 3 3"/></svg>';
+    document.getElementById('bbVeInspectorName').textContent = 'Disparador';
+    document.getElementById('bbVeInspectorType').textContent = 'trigger';
+    // Ocultar botón eliminar (no se puede borrar el trigger)
+    const delBtn = document.getElementById('bbVeDeleteNode');
+    if (delBtn) delBtn.style.display = 'none';
+
+    document.querySelector('.bb-ve-wrap')?.classList.remove('no-inspector');
+    insp.hidden = false;
+  }
+
+  // Devuelve la trigger card a su lugar original cuando se cierra el inspector
+  function _bbVeReturnTriggerCard() {
+    if (!_bbVeTrigOrigParent || !_bbVeTrigPlaceholder) return;
+    const card = document.getElementById('sbTriggerType')?.closest('.sb-trigger-card');
+    if (card && _bbVeTrigOrigParent && _bbVeTrigPlaceholder.parentNode) {
+      _bbVeTrigOrigParent.insertBefore(card, _bbVeTrigPlaceholder);
+      _bbVeTrigPlaceholder.remove();
+    }
+    _bbVeTrigOrigParent = null;
+    _bbVeTrigPlaceholder = null;
+  }
+
   function _bbVeCloseInspector() {
+    _bbVeReturnTriggerCard();
     const insp = document.getElementById('bbVeInspector');
     if (insp) insp.hidden = true;
     document.querySelector('.bb-ve-wrap')?.classList.add('no-inspector');
+    // Re-mostrar el botón eliminar para el próximo step
+    const delBtn = document.getElementById('bbVeDeleteNode');
+    if (delBtn) delBtn.style.display = '';
   }
 
   function _bbVeDeleteSelected() {

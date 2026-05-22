@@ -23,12 +23,13 @@ const { isPlaceholderName } = require('../conversations/service');
 const REFRESH_INTERVAL_SECS = 7 * 86400; // 7 días
 
 function _shouldRefresh(db, contactId) {
-  const c = db.prepare('SELECT avatar_url, avatar_updated_at, name FROM contacts WHERE id = ?').get(contactId);
+  const c = db.prepare('SELECT avatar_url, avatar_updated_at, first_name, last_name FROM contacts WHERE id = ?').get(contactId);
   if (!c) return { refresh: false };
   const needAvatar = !c.avatar_url || !c.avatar_updated_at ||
     c.avatar_updated_at < (Math.floor(Date.now() / 1000) - REFRESH_INTERVAL_SECS);
-  const needName = isPlaceholderName(c.name);
-  return { refresh: needAvatar || needName, needAvatar, needName, currentName: c.name };
+  const currentName = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
+  const needName = isPlaceholderName(currentName);
+  return { refresh: needAvatar || needName, needAvatar, needName, currentName };
 }
 
 function _accessTokenFor(integration) {
@@ -99,19 +100,15 @@ function syncAvatarAsync(db, tenantId, contactId, provider, externalId, integrat
       if (profile.avatarUrl) {
         customerSvc.setAvatar(db, tenantId, contactId, profile.avatarUrl);
       }
-      // Nombre: solo si el actual es placeholder y el real no es vacío
+      // Nombre: solo si el actual es placeholder y el real no es vacío.
+      // La tabla guarda first_name + last_name por separado.
       if (profile.name && isPlaceholderName(check.currentName)) {
         try {
-          db.prepare('UPDATE contacts SET name = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
-            .run(profile.name, contactId, tenantId);
-          // Reflejar también en conversations.contact_name si existe ese campo
-          // y tiene placeholder. Esto evita que el chat liste "Contacto Messenger 4003"
-          // hasta el próximo refresh.
-          try {
-            db.prepare(`UPDATE conversations SET contact_name = ?
-                        WHERE contact_id = ? AND tenant_id = ?`)
-              .run(profile.name, contactId, tenantId);
-          } catch (_) {}
+          const parts = profile.name.trim().split(/\s+/);
+          const first = parts[0] || profile.name;
+          const last  = parts.slice(1).join(' ') || null;
+          db.prepare('UPDATE contacts SET first_name = ?, last_name = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+            .run(first, last, contactId, tenantId);
         } catch (err) {
           console.warn(`[avatar ${provider}] update name fail: ${err.message}`);
         }

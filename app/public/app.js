@@ -18594,29 +18594,25 @@ function _rhToast(msg, type = 'success') {
 }
 
 // ═══════ Bootstrap ═══════
-// Detectar si estamos en /chat (vista personal del asesor)
-window.PERSONAL_MODE = (window.location.pathname === '/chat' || window.location.pathname === '/chat/');
+// /chat eliminado 2026-05-22 — la vista personal-chat ya no existe. Dejamos
+// PERSONAL_MODE = false permanente para que el código condicional (if PERSONAL_MODE)
+// quede inactivo sin romper nada. Borrar el código muerto en un cleanup futuro.
+window.PERSONAL_MODE = false;
 window.PERSONAL_SHOW_HIDDEN = false;
 
 // PWA Guard: si la app corre en modo standalone (PWA instalada) y el manifest
 // cargado es manifest-chat.json (PWA de Chat), forzar que estemos en /chat.
-// Esto cubre el caso iOS donde reabrir la PWA puede caer en /app por restoración
-// de estado del SPA. La verificación se hace antes de cualquier otra cosa.
+// PWA scope guard: si por algún motivo cargamos en /chat (legacy) o fuera de /app,
+// forzar /app. /chat fue eliminado 2026-05-22 — el redirect del server cubre el
+// caso de navegación normal, esto cubre el caso PWA standalone con estado restaurado.
 (function _pwaScopeGuard() {
   try {
     const isStandalone =
       window.matchMedia?.('(display-mode: standalone)').matches ||
       window.navigator.standalone === true; // iOS Safari
     if (!isStandalone) return;
-    const manifestHref = document.querySelector('link[rel="manifest"]')?.href || '';
-    const isChatPwa = manifestHref.includes('manifest-chat.json');
-    const isCrmPwa  = manifestHref.endsWith('/manifest.json');
     const path = window.location.pathname;
-    if (isChatPwa && !path.startsWith('/chat')) {
-      // Estamos en la PWA de Chat pero el SPA cargó en otra ruta → forzar /chat
-      window.location.replace('/chat?source=pwa');
-    } else if (isCrmPwa && path.startsWith('/chat')) {
-      // PWA del CRM pero por algún motivo entramos en /chat → forzar /app
+    if (path.startsWith('/chat')) {
       window.location.replace('/app?source=pwa');
     }
   } catch (_) { /* ignorar errores del guard */ }

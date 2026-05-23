@@ -40,7 +40,7 @@ self.addEventListener('push', (event) => {
     badge: payload.badge || '/icons/icon-192.png',
     tag: payload.tag || 'wapi101',
     renotify: true,
-    data: { url: payload.url || '/chat', chatId: payload.chatId || null },
+    data: { url: payload.url || '/app', chatId: payload.chatId || null },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
@@ -58,7 +58,7 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
-  const targetUrl = data.url || '/chat';
+  const targetUrl = data.url || '/app';
   const chatId = data.chatId || null;
 
   event.waitUntil((async () => {

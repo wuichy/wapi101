@@ -26461,6 +26461,236 @@ function renderPedidosOrders() {
 function openApp(slug) {
   if (slug === 'reelance-woocommerce')    openWooModal();
   if (slug === 'reelance-abandoned-cart') openAbandonedCartModal();
+  if (slug === 'reelance-ia')             openReelanceIaModal();
+}
+
+// ── Reelance IA App Modal ────────────────────────────────────────────────────
+// Modal dinámico para configurar la integración con la tienda Next.js
+// (reelance.mx). Incluye: token, pipelines/stages para órdenes y carritos,
+// bots opcionales, log de últimos eventos, regenerar token.
+async function openReelanceIaModal() {
+  // Si ya existe (re-abrir), solo mostrar
+  let modal = document.getElementById('reelanceIaAppModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'reelanceIaAppModal';
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width:780px; max-height:90vh; overflow-y:auto">
+        <header class="modal-header">
+          <h2 style="display:flex;align-items:center;gap:10px;margin:0">
+            <span style="font-size:22px">🤖</span> Reelance IA
+          </h2>
+          <button class="modal-close" onclick="closeReelanceIaModal()">×</button>
+        </header>
+        <div class="modal-body" id="reelanceIaBody" style="padding:20px">
+          <div style="color:#64748b">Cargando…</div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  modal.hidden = false;
+  await _renderReelanceIaBody();
+}
+
+function closeReelanceIaModal() {
+  const m = document.getElementById('reelanceIaAppModal');
+  if (m) m.hidden = true;
+}
+
+async function _renderReelanceIaBody() {
+  const body = document.getElementById('reelanceIaBody');
+  if (!body) return;
+  try {
+    const [cfg, eventsRes] = await Promise.all([
+      api('GET', '/api/apps/reelance-ia/config'),
+      api('GET', '/api/apps/reelance-ia/events?limit=15').catch(() => ({ items: [] })),
+    ]);
+    // Pipelines & stages disponibles (vienen de PIPELINES global cargado al boot)
+    const pipelines = (typeof PIPELINES !== 'undefined' && Array.isArray(PIPELINES)) ? PIPELINES : [];
+    const bots = (typeof sbBots !== 'undefined' && Array.isArray(sbBots)) ? sbBots : [];
+
+    const stagesFor = (pipelineId) => {
+      const p = pipelines.find(x => x.id == pipelineId);
+      return (p?.stages || []);
+    };
+
+    const pipelineOpts = (selectedId) =>
+      `<option value="">— Selecciona pipeline —</option>` +
+      pipelines.map(p => `<option value="${p.id}" ${p.id == selectedId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+
+    const stageOpts = (pipelineId, selectedId) =>
+      `<option value="">— Selecciona etapa —</option>` +
+      stagesFor(pipelineId).map(s => `<option value="${s.id}" ${s.id == selectedId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+
+    const botOpts = (selectedId) =>
+      `<option value="">— Sin bot (opcional) —</option>` +
+      bots.filter(b => b.enabled).map(b => `<option value="${b.id}" ${b.id == selectedId ? 'selected' : ''}>${escapeHtml(b.name)}</option>`).join('');
+
+    body.innerHTML = `
+      <p style="margin:0 0 16px;color:#475569;font-size:13px">
+        Sincroniza tu tienda <strong>reelance.mx</strong> (Next.js + Prisma) con Wapi101.
+        Pega el token en el <code>.env</code> de tu tienda y configura a qué pipeline
+        van las órdenes y carritos abandonados.
+      </p>
+
+      <div class="form-section" style="background:#f8fafc;padding:14px;border-radius:10px;margin-bottom:18px">
+        <label style="font-weight:600;font-size:12px;color:#334155;text-transform:uppercase;letter-spacing:.05em">Token Bearer</label>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input type="text" id="riaToken" value="${escapeHtml(cfg.token || '')}" readonly
+            style="flex:1;font-family:monospace;font-size:12px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;background:#fff"/>
+          <button class="btn btn--ghost btn--sm" onclick="_riaCopyToken()">📋 Copiar</button>
+          <button class="btn btn--danger-ghost btn--sm" onclick="_riaRegenerateToken()">🔄 Regenerar</button>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#64748b">
+          Variables a pegar en <code>.env.local</code> de tu tienda:
+          <pre style="background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;font-size:11px;margin:6px 0 0;overflow-x:auto">WAPI101_BASE_URL=https://wapi101.com/api/apps/reelance-ia
+WAPI101_TOKEN=${escapeHtml(cfg.token || '')}
+WAPI101_ENABLED=true</pre>
+        </div>
+      </div>
+
+      <div class="form-section" style="margin-bottom:18px">
+        <h4 style="margin:0 0 10px;font-size:14px">📦 Órdenes</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <label style="font-size:12px;color:#475569">
+            Pipeline
+            <select id="riaOrderPipeline" onchange="_riaPipelineChanged('order')" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+              ${pipelineOpts(cfg.order_pipeline_id)}
+            </select>
+          </label>
+          <label style="font-size:12px;color:#475569">
+            Etapa al crearse
+            <select id="riaOrderStage" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+              ${stageOpts(cfg.order_pipeline_id, cfg.order_stage_id)}
+            </select>
+          </label>
+        </div>
+        <label style="font-size:12px;color:#475569;display:block;margin-top:10px">
+          Bot opcional al crearse orden (confirmación, tracking, etc.)
+          <select id="riaOrderBot" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+            ${botOpts(cfg.order_bot_id)}
+          </select>
+        </label>
+      </div>
+
+      <div class="form-section" style="margin-bottom:18px">
+        <h4 style="margin:0 0 10px;font-size:14px">🛒 Carritos abandonados</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <label style="font-size:12px;color:#475569">
+            Pipeline
+            <select id="riaAbandonedPipeline" onchange="_riaPipelineChanged('abandoned')" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+              ${pipelineOpts(cfg.abandoned_pipeline_id)}
+            </select>
+          </label>
+          <label style="font-size:12px;color:#475569">
+            Etapa al abandonarse
+            <select id="riaAbandonedStage" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+              ${stageOpts(cfg.abandoned_pipeline_id, cfg.abandoned_stage_id)}
+            </select>
+          </label>
+        </div>
+        <label style="font-size:12px;color:#475569;display:block;margin-top:10px">
+          Bot de recuperación (manda plantilla WhatsApp al cliente)
+          <select id="riaAbandonedBot" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+            ${botOpts(cfg.abandoned_bot_id)}
+          </select>
+        </label>
+      </div>
+
+      <div class="form-section" style="margin-bottom:18px">
+        <label style="font-size:12px;color:#475569">
+          URL de tu tienda (informativo)
+          <input type="url" id="riaSiteUrl" value="${escapeHtml(cfg.site_url || '')}" placeholder="https://reelance.mx"
+            style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px"/>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:#334155">
+          <input type="checkbox" id="riaEnabled" ${cfg.enabled ? 'checked' : ''}/>
+          App habilitada (procesa webhooks)
+        </label>
+      </div>
+
+      <div class="form-section" style="margin-bottom:18px">
+        <h4 style="margin:0 0 10px;font-size:14px">📋 Últimos eventos recibidos</h4>
+        <div id="riaEventsList" style="max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px">
+          ${_riaRenderEvents(eventsRes.items || [])}
+        </div>
+      </div>
+
+      <footer style="display:flex;gap:10px;justify-content:flex-end;padding-top:14px;border-top:1px solid #e2e8f0">
+        <button class="btn btn--ghost" onclick="closeReelanceIaModal()">Cancelar</button>
+        <button class="btn btn--primary" onclick="_riaSaveConfig()">Guardar configuración</button>
+      </footer>
+    `;
+  } catch (err) {
+    body.innerHTML = `<div style="color:#dc2626;padding:20px">Error cargando config: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function _riaRenderEvents(items) {
+  if (!items.length) {
+    return '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px">Aún no llegan eventos desde la tienda.<br><span style="font-size:11px">Cuando configures el token y se cree una orden, aparecerá aquí.</span></div>';
+  }
+  return items.map(e => {
+    const dt = e.processed_at ? new Date(e.processed_at * 1000).toLocaleString('es-MX', {month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+    const icon = e.event_type === 'order' ? '📦' : '🛒';
+    const status = e.external_status ? `<span style="background:#eff6ff;color:#2563eb;padding:1px 6px;border-radius:99px;font-size:10px">${escapeHtml(e.external_status)}</span>` : '';
+    const errBadge = e.error ? `<span style="background:#fef2f2;color:#dc2626;padding:1px 6px;border-radius:99px;font-size:10px">${escapeHtml(e.error)}</span>` : '';
+    return `<div style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-size:12px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        ${icon} <strong>${e.event_type === 'order' ? 'Orden' : 'Carrito'}</strong>
+        <code style="color:#64748b">#${escapeHtml(e.external_id.slice(-8))}</code>
+        ${status} ${errBadge}
+      </div>
+      <div style="color:#94a3b8;font-size:11px">${escapeHtml(dt)}</div>
+    </div>`;
+  }).join('');
+}
+
+function _riaCopyToken() {
+  const input = document.getElementById('riaToken');
+  if (!input) return;
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => {
+    toast('Token copiado al portapapeles', 'success');
+  }).catch(() => toast('Copia manual: ' + input.value.slice(0,20) + '...', 'info'));
+}
+
+async function _riaRegenerateToken() {
+  if (!confirm('¿Regenerar el token? La tienda dejará de poder mandar webhooks hasta que actualices el token en su .env.')) return;
+  try {
+    const r = await api('POST', '/api/apps/reelance-ia/regenerate-token');
+    document.getElementById('riaToken').value = r.token;
+    toast('Token regenerado. Actualízalo en el .env de tu tienda.', 'success', 5000);
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
+}
+
+function _riaPipelineChanged(which) {
+  const pipelines = (typeof PIPELINES !== 'undefined' && Array.isArray(PIPELINES)) ? PIPELINES : [];
+  const pipelineSelect = document.getElementById(which === 'order' ? 'riaOrderPipeline' : 'riaAbandonedPipeline');
+  const stageSelect = document.getElementById(which === 'order' ? 'riaOrderStage' : 'riaAbandonedStage');
+  if (!pipelineSelect || !stageSelect) return;
+  const p = pipelines.find(x => x.id == pipelineSelect.value);
+  const stages = p?.stages || [];
+  stageSelect.innerHTML = '<option value="">— Selecciona etapa —</option>' +
+    stages.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+}
+
+async function _riaSaveConfig() {
+  const payload = {
+    site_url:               document.getElementById('riaSiteUrl').value.trim() || null,
+    enabled:                document.getElementById('riaEnabled').checked ? 1 : 0,
+    order_pipeline_id:      Number(document.getElementById('riaOrderPipeline').value) || null,
+    order_stage_id:         Number(document.getElementById('riaOrderStage').value) || null,
+    abandoned_pipeline_id:  Number(document.getElementById('riaAbandonedPipeline').value) || null,
+    abandoned_stage_id:     Number(document.getElementById('riaAbandonedStage').value) || null,
+    order_bot_id:           Number(document.getElementById('riaOrderBot').value) || null,
+    abandoned_bot_id:       Number(document.getElementById('riaAbandonedBot').value) || null,
+  };
+  try {
+    await api('PUT', '/api/apps/reelance-ia/config', payload);
+    toast('Configuración guardada', 'success');
+  } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 
 // ── Woo App Modal ────────────────────────────────────────────────────────────

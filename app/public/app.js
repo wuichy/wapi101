@@ -26710,6 +26710,7 @@ async function _riaSaveConfig() {
   try {
     await api('PUT', '/api/apps/reelance-ia/config', payload);
     toast('Configuración guardada', 'success');
+    closeReelanceIaModal();
   } catch (err) { toast('Error: ' + err.message, 'error'); }
 }
 

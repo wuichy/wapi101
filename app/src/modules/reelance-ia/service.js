@@ -166,6 +166,20 @@ function _logEvent(db, { tenantId, eventType, externalId, externalStatus, payloa
   } catch (e) { /* silenciar — el log no debe romper el flow */ }
 }
 
+// ¿Este (eventType, externalId, status) ya se procesó exitosamente antes?
+// Sirve para idempotencia: si la tienda reenvía el mismo evento, no
+// re-disparamos el bot (evita mensajes duplicados al cliente).
+function _alreadyProcessed(db, tenantId, eventType, externalId, externalStatus) {
+  if (!externalId) return false;
+  const row = db.prepare(`
+    SELECT id, error FROM reelance_ia_events
+    WHERE tenant_id = ? AND event_type = ? AND external_id = ? AND external_status = ?
+    LIMIT 1
+  `).get(tenantId, eventType, externalId, externalStatus || null);
+  // Solo consideramos "ya procesado" si no falló — si tuvo error, vale reintentar
+  return !!(row && !row.error);
+}
+
 // ─── Handler: webhook de Order ────────────────────────────────────────
 //
 // Payload esperado desde la tienda Next.js (Prisma Order model):
@@ -191,6 +205,12 @@ function processOrderEvent(db, tenantId, payload) {
   if (!externalId) {
     _logEvent(db, { tenantId, eventType: 'order', externalId: '_', externalStatus: payload.status, payload, error: 'missing-id' });
     return { error: 'missing-id' };
+  }
+
+  // Idempotencia: si ya procesamos este (order, externalId, status) exitosamente,
+  // no re-disparamos bots (evita mensajes duplicados al cliente).
+  if (_alreadyProcessed(db, tenantId, 'order', externalId, payload.status)) {
+    return { skipped: 'already-processed' };
   }
 
   // Extraer datos de customer
@@ -262,6 +282,12 @@ function processAbandonedCartEvent(db, tenantId, payload) {
   if (!externalId) {
     _logEvent(db, { tenantId, eventType: 'abandoned_cart', externalId: '_', externalStatus: payload.status, payload, error: 'missing-id' });
     return { error: 'missing-id' };
+  }
+
+  // Idempotencia: si ya procesamos este (cart, externalId, status) exitosamente,
+  // no re-disparamos bots (evita doble mensaje WhatsApp al cliente).
+  if (_alreadyProcessed(db, tenantId, 'abandoned_cart', externalId, payload.status)) {
+    return { skipped: 'already-processed' };
   }
 
   try {

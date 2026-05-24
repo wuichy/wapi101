@@ -131,6 +131,17 @@ app.use('/webhooks/woo', wooWebhookRouter(db));
 // Check de inactividad WooCommerce cada hora (arranca 5min después del boot)
 setTimeout(() => { checkWooInactivity(db); setInterval(() => checkWooInactivity(db), 60 * 60 * 1000); }, 5 * 60 * 1000);
 
+// Reelance IA webhooks (autenticados por bearer token en header).
+// Va ANTES del authMiddleware general para que sea público (token-based).
+// La tienda Next.js (reelance.mx) hace POST a /api/apps/reelance-ia/order
+// y /api/apps/reelance-ia/abandoned-cart. Auth: Bearer {token único por tenant}.
+try {
+  const { webhookRouter: reelanceIaWebhookRouter } = require('./src/modules/reelance-ia/routes');
+  app.use('/api/apps/reelance-ia', reelanceIaWebhookRouter(db));
+} catch (err) {
+  console.warn('[boot] reelance-ia webhook routes not mounted:', err.message);
+}
+
 // ─── Cache-busting de assets ─────────────────────────────────────────────
 // Problema: en cada deploy, navegadores (especialmente iOS Safari, Cloudflare,
 // SW PWA) sirven app.js/styles.css cacheados → la app aparece en blanco o con
@@ -864,6 +875,15 @@ mountSafe('/api/catalog',            require('./src/modules/whatsapp-catalog/rou
 mountSafe('/api/data-center',        require('./src/modules/data-center/routes'));
 const { authRouter: wooAuthRouter }  = require('./src/modules/woo/routes');
 app.use('/api/apps/woo', wooAuthRouter(db));
+// App Reelance IA — endpoints PRIVADOS (config), van DESPUÉS de authMiddleware
+// (que ya está aplicado al prefijo /api desde arriba). Los webhooks públicos
+// se montan ANTES, ver línea ~130.
+try {
+  const { authRouter: reelanceIaAuthRouter } = require('./src/modules/reelance-ia/routes');
+  app.use('/api/apps/reelance-ia', reelanceIaAuthRouter(db));
+} catch (err) {
+  console.warn('[boot] reelance-ia auth routes not mounted:', err.message);
+}
 
 // Arrancar el worker de bulk jobs (corre cada 1s en background).
 // Si el server se reinicia con jobs 'running', los re-encola al boot.

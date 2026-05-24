@@ -26315,7 +26315,10 @@ async function updatePedidosNavVisibility() {
   try {
     const data = await api('GET', '/api/apps');
     const wooApp = (data.apps || []).find(a => a.slug === 'reelance-woocommerce');
-    const isInstalled = !!(wooApp?.installed);
+    const iaApp  = (data.apps || []).find(a => a.slug === 'reelance-ia');
+    // Mostrar el tab "Pedidos" si tiene cualquiera de las 2 apps de tienda
+    // instaladas (WooCommerce o Reelance IA).
+    const isInstalled = !!(wooApp?.installed) || !!(iaApp?.installed);
     const navEl = document.getElementById('navPedidos');
     if (navEl) navEl.hidden = !isInstalled;
   } catch (e) {
@@ -26394,16 +26397,26 @@ async function loadPedidosView(page = _pedidosPage) {
   const isFirstLoad = !listEl || !listEl.querySelector('.woo-order-card');
   if (listEl && isFirstLoad) listEl.innerHTML = '<p class="woo-empty">Cargando pedidos...</p>';
   try {
-    const [ordersData] = await Promise.all([
-      api('GET', `/api/apps/woo/orders?page=${page}&limit=25`),
+    const [ordersData, reelanceIaData] = await Promise.all([
+      api('GET', `/api/apps/woo/orders?page=${page}&limit=25`).catch(() => ({ orders: [], page: 1, pages: 1 })),
+      // Reelance IA (tienda Next.js) — también muestra órdenes aquí.
+      // Misma shape que WooCommerce, agregadas con `source: 'reelance-ia'`.
+      api('GET', `/api/apps/reelance-ia/orders?page=${page}&limit=25`).catch(() => ({ orders: [], page: 1, pages: 1 })),
       loadWooCarriers(),
       loadWooOrderStatuses(),
       // Asegurar que _wooHasCredentials esté actualizado
       api('GET', '/api/apps/woo/config').then(cfg => { _wooHasCredentials = !!(cfg?.hasCredentials); }).catch(() => {}),
     ]);
-    _wooOrders      = ordersData.orders || [];
+    // Mezclar órdenes de WooCommerce + Reelance IA en una sola lista, ordenadas
+    // por fecha descendente. Cada orden tiene `source: 'woo' | 'reelance-ia'`.
+    const wooOrders = (ordersData.orders || []).map(o => ({ ...o, source: o.source || 'woo' }));
+    const iaOrders  = (reelanceIaData.orders || []);
+    _wooOrders = [...wooOrders, ...iaOrders].sort((a, b) =>
+      (Number(b.wc_order_date) || Number(b.processed_at) || 0) -
+      (Number(a.wc_order_date) || Number(a.processed_at) || 0)
+    );
     _pedidosPage    = ordersData.page  || 1;
-    _pedidosPages   = ordersData.pages || 1;
+    _pedidosPages   = Math.max(ordersData.pages || 1, reelanceIaData.pages || 1);
     renderPedidosOrders();
   } catch (e) {
     if (listEl) listEl.innerHTML = '<p class="woo-empty">Error al cargar pedidos. Verifica la configuración de WooCommerce.</p>';

@@ -85,6 +85,80 @@ function authRouter(db) {
     res.json({ items: rows });
   });
 
+  // GET /orders — lista órdenes de Reelance IA (parsea el payload de eventos
+  // tipo 'order' y aplica dedup por external_id manteniendo el último status).
+  // Misma shape que /api/apps/woo/orders para compat con el tab Orders.
+  router.get('/orders', (req, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Number(req.query.limit) || 25, 100);
+    const offset = (page - 1) * limit;
+
+    // Traemos eventos de tipo 'order' del tenant. Como pueden haber varios
+    // eventos del mismo external_id (por updates), tomamos solo el más
+    // reciente de cada uno.
+    const rows = db.prepare(`
+      SELECT e.* FROM reelance_ia_events e
+      WHERE e.tenant_id = ? AND e.event_type = 'order'
+        AND e.processed_at = (
+          SELECT MAX(processed_at) FROM reelance_ia_events
+          WHERE tenant_id = e.tenant_id AND event_type = 'order'
+            AND external_id = e.external_id
+        )
+      ORDER BY e.processed_at DESC LIMIT ? OFFSET ?
+    `).all(req.tenantId, limit, offset);
+
+    const totalRow = db.prepare(`
+      SELECT COUNT(DISTINCT external_id) AS n FROM reelance_ia_events
+      WHERE tenant_id = ? AND event_type = 'order'
+    `).get(req.tenantId);
+    const total = totalRow?.n || 0;
+    const pages = Math.max(1, Math.ceil(total / limit));
+
+    // Parsear payload y armar shape compatible con woo orders
+    const orders = rows.map(r => {
+      let payload = {};
+      try { payload = JSON.parse(r.payload || '{}'); } catch (_) {}
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      return {
+        id:              r.id,
+        source:          'reelance-ia',
+        external_id:     r.external_id,
+        wc_id:           null,
+        order_number:    payload.id ? `#${String(payload.id).slice(-8)}` : `#${r.id}`,
+        customer_name:   payload.customerName || '',
+        customer_email:  payload.email || '',
+        customer_phone:  payload.phone || '',
+        shipping_address: payload.shippingAddress || '',
+        shipping_city:   payload.shippingCity || '',
+        shipping_state:  payload.shippingState || '',
+        shipping_zip:    payload.shippingZip || '',
+        total:           payload.totalCents ? (payload.totalCents / 100).toFixed(2) : '0.00',
+        currency:        payload.currency || 'MXN',
+        status:          (r.external_status || payload.status || 'unknown').toLowerCase(),
+        payment_provider: payload.paymentProvider || null,
+        tracking_carrier: payload.trackingCarrier || null,
+        tracking_number:  payload.trackingNumber || null,
+        tracking_url:     payload.trackingUrl || null,
+        utm_source:      payload.utmSource || null,
+        utm_medium:      payload.utmMedium || null,
+        utm_campaign:    payload.utmCampaign || null,
+        line_items:      items.map(i => ({
+          name:     i.productName || '',
+          quantity: i.quantity || 0,
+          total:    i.totalCents ? (i.totalCents / 100).toFixed(2) : '0.00',
+          product_id: i.productId || null,
+        })),
+        contact_id:      r.contact_id,
+        lead_id:         r.lead_id,
+        wc_order_date:   r.processed_at,
+        processed_at:    r.processed_at,
+        error:           r.error,
+      };
+    });
+
+    res.json({ orders, page, pages, total });
+  });
+
   return router;
 }
 

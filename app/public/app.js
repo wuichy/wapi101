@@ -26502,13 +26502,20 @@ async function _renderReelanceIaBody() {
   const body = document.getElementById('reelanceIaBody');
   if (!body) return;
   try {
-    const [cfg, eventsRes] = await Promise.all([
+    // Cargar config + eventos + pipelines + bots en paralelo. Pedir pipelines
+    // y bots del API directamente (no de globales) para evitar race condition
+    // si el modal abre antes de que esos globals se carguen al boot.
+    const [cfg, eventsRes, pipelinesRes, botsRes] = await Promise.all([
       api('GET', '/api/apps/reelance-ia/config'),
       api('GET', '/api/apps/reelance-ia/events?limit=15').catch(() => ({ items: [] })),
+      api('GET', '/api/pipelines').catch(() => ({ items: [] })),
+      api('GET', '/api/bots').catch(() => ({ items: [] })),
     ]);
-    // Pipelines & stages disponibles (vienen de PIPELINES global cargado al boot)
-    const pipelines = (typeof PIPELINES !== 'undefined' && Array.isArray(PIPELINES)) ? PIPELINES : [];
-    const bots = (typeof sbBots !== 'undefined' && Array.isArray(sbBots)) ? sbBots : [];
+    // Normalizar shape — algunos endpoints devuelven {items: [...]}, otros [..]
+    const pipelines = Array.isArray(pipelinesRes) ? pipelinesRes : (pipelinesRes.items || pipelinesRes.pipelines || []);
+    const bots = Array.isArray(botsRes) ? botsRes : (botsRes.items || botsRes.bots || []);
+    // Cache para _riaPipelineChanged (cuando user cambia pipeline, refrescar stages)
+    window._riaCache = { pipelines, bots };
 
     const stagesFor = (pipelineId) => {
       const p = pipelines.find(x => x.id == pipelineId);
@@ -26666,7 +26673,7 @@ async function _riaRegenerateToken() {
 }
 
 function _riaPipelineChanged(which) {
-  const pipelines = (typeof PIPELINES !== 'undefined' && Array.isArray(PIPELINES)) ? PIPELINES : [];
+  const pipelines = (window._riaCache?.pipelines) || [];
   const pipelineSelect = document.getElementById(which === 'order' ? 'riaOrderPipeline' : 'riaAbandonedPipeline');
   const stageSelect = document.getElementById(which === 'order' ? 'riaOrderStage' : 'riaAbandonedStage');
   if (!pipelineSelect || !stageSelect) return;

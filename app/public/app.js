@@ -22636,15 +22636,21 @@ function setupTemplates() {
       return;
     }
 
-    const id = Number(e.target.dataset.id);
+    // Bug previo: el handler usaba e.target.classList.contains(...) pero los
+    // botones contienen un <svg> adentro. Click sobre el SVG hacía que
+    // e.target fuera el SVG (no el button) → ninguna clase matcheaba →
+    // los botones "no hacían nada". Fix con closest() para subir al button.
+    const btn = e.target.closest('button[data-id]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
     if (!id) return;
-    if (e.target.classList.contains('tpl-edit-btn')) {
+    if (btn.classList.contains('tpl-edit-btn')) {
       const tmpl = _tplItems.find(t => t.id === id);
       if (tmpl) openTplModal(tmpl);
-    } else if (e.target.classList.contains('tpl-clone-btn')) {
+    } else if (btn.classList.contains('tpl-clone-btn')) {
       const tmpl = _tplItems.find(t => t.id === id);
       if (tmpl) duplicateCurrentTemplate(tmpl);
-    } else if (e.target.classList.contains('tpl-del-btn')) {
+    } else if (btn.classList.contains('tpl-del-btn')) {
       if (!confirm('¿Eliminar esta plantilla?')) return;
       try {
         await api('DELETE', `/api/templates/${id}`);
@@ -22654,9 +22660,9 @@ function setupTemplates() {
         loadSalsbots().catch(() => {});
         toast('Plantilla eliminada', 'success');
       } catch (e) { toast(e.message, 'error'); }
-    } else if (e.target.classList.contains('tpl-submit-btn')) {
+    } else if (btn.classList.contains('tpl-submit-btn')) {
       await submitTplToMeta(id);
-    } else if (e.target.classList.contains('tpl-sync-btn')) {
+    } else if (btn.classList.contains('tpl-sync-btn')) {
       await syncTplFromMeta(id);
     }
   });

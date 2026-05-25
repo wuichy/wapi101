@@ -2710,6 +2710,9 @@ async function openConversation(convoId) {
   // Activar tracker para el nuevo chat
   _trackChatScroll(convoId);
 
+  // Selector de canal (si hay 2+ integraciones WA)
+  try { renderChannelSelector('rhChannelSelectWrap', convo); } catch (_) {}
+
   // Salir del empty state
   document.getElementById('rhConvPanel')?.classList.remove('rh-empty');
 
@@ -7988,6 +7991,12 @@ async function selectExpDetailConvo(convoId) {
   if (si) si.value = '';
   renderExpDetailConvoTabs();
   updateExpDetailBotToggle(null);
+
+  // Selector de canal en el composer del lead detail
+  try {
+    const expConvo = (EXP_DETAIL_CONVOS || []).find(c => c.id === convoId);
+    renderChannelSelector('expDetailChannelSelectWrap', expConvo);
+  } catch (_) {}
 
   // Mark read
   api('PATCH', `/api/conversations/${convoId}/read`).catch(() => {});
@@ -18384,7 +18393,29 @@ function setupReplyForm() {
     if (textarea) { textarea.value = ''; textarea.style.height = 'auto'; }
 
     try {
-      const msg = await api('POST', `/api/conversations/${convoId}/messages`, { body });
+      // Si el user eligió un canal distinto al de la conversación actual,
+      // usar cross-channel-send. Sino, ruta normal de la convo.
+      const selectedIntId = Number(window._rhSelectedChannelId || 0);
+      const useCrossChannel = selectedIntId && convo && selectedIntId !== convo.integrationId && selectedIntId !== convo.integration_id;
+      let msg;
+      if (useCrossChannel) {
+        const r = await api('POST', '/api/conversations/cross-channel-send', {
+          contactId:     convo.contactId || convo.contact_id,
+          integrationId: selectedIntId,
+          body,
+        });
+        msg = r.message;
+        // Si se creó nueva convo, abrirla
+        if (r.created && r.conversation?.id) {
+          await loadConversations();
+          openConversation(r.conversation.id);
+          toast('Mensaje enviado por otro canal · conversación nueva abierta', 'success');
+          return;
+        }
+        toast('Mensaje enviado por canal alterno', 'success');
+      } else {
+        msg = await api('POST', `/api/conversations/${convoId}/messages`, { body });
+      }
       CHAT_MESSAGES.push(msg);
       renderMessages();
       // Actualizar preview en la lista
@@ -18396,6 +18427,91 @@ function setupReplyForm() {
       isSending = false;
     }
   });
+}
+
+// ─── Selector de canal de envío (WhatsApp API vs Lite) ────────────────────
+// Caché global de integraciones del tenant (cargadas con loadIntegrations).
+// Cuando abres una conversación, mostramos un selector pequeño junto al
+// composer SOLO si hay 2+ integraciones de WhatsApp disponibles.
+//
+// El selector permite enviar el próximo mensaje por otro canal sin tener
+// que cambiar de conversación. Usa el endpoint POST /cross-channel-send.
+
+window._rhSelectedChannelId = null;
+
+function _whatsappIntegrationsConnected() {
+  if (typeof INTEGRATIONS === 'undefined' || !Array.isArray(INTEGRATIONS)) return [];
+  // INTEGRATIONS suele ser un array de providers con .integrations[] adentro
+  const flat = INTEGRATIONS.flatMap(p => p.integrations || []);
+  return flat.filter(i =>
+    (i.providerKey === 'whatsapp' || i.providerKey === 'whatsapp-lite' || i.provider === 'whatsapp' || i.provider === 'whatsapp-lite')
+    && (i.status === 'connected' || i.status === 'active' || !i.status)
+  );
+}
+
+// Renderiza el selector de canal en el slot correspondiente. Llamar al
+// abrir conversación o al refrescar el panel de chat / lead detail.
+function renderChannelSelector(slotId, currentConvo) {
+  const slot = document.getElementById(slotId);
+  if (!slot) return;
+  const integrations = _whatsappIntegrationsConnected();
+  // No mostrar si solo hay 1 (o ninguno) — el current ya está implícito
+  if (integrations.length < 2) {
+    slot.hidden = true;
+    slot.innerHTML = '';
+    window._rhSelectedChannelId = null;
+    return;
+  }
+  const currentIntegId = currentConvo?.integrationId || currentConvo?.integration_id || null;
+  // Default: la integración de la convo actual
+  window._rhSelectedChannelId = currentIntegId;
+
+  const label = (i) => {
+    const provLabel = (i.providerKey === 'whatsapp-lite' || i.provider === 'whatsapp-lite') ? 'WhatsApp Lite' : 'WhatsApp API';
+    const num = i.externalId || i.external_id || i.phoneNumber || '';
+    return num ? `${provLabel} · ${num}` : provLabel;
+  };
+  const ico = (i) => {
+    const isLite = (i.providerKey === 'whatsapp-lite' || i.provider === 'whatsapp-lite');
+    return isLite ? '📱' : '☁️';
+  };
+
+  const current = integrations.find(i => i.id === currentIntegId) || integrations[0];
+  slot.hidden = false;
+  slot.innerHTML = `
+    <button type="button" class="rh-channel-select-btn" id="${slotId}_btn" title="Canal de envío">
+      <span class="rh-channel-ico">${ico(current)}</span>
+      <span class="rh-channel-label">${escapeHtml(label(current))}</span>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><polyline points="6 8 10 12 14 8"/></svg>
+    </button>
+    <div class="rh-channel-menu" id="${slotId}_menu" hidden>
+      ${integrations.map(i => `
+        <button type="button" class="rh-channel-option ${i.id === window._rhSelectedChannelId ? 'is-selected' : ''}" data-int-id="${i.id}">
+          <span class="rh-channel-ico">${ico(i)}</span>
+          <span>${escapeHtml(label(i))}</span>
+          ${i.id === window._rhSelectedChannelId ? '<span class="rh-channel-check">✓</span>' : ''}
+        </button>
+      `).join('')}
+    </div>`;
+
+  // Wire interacciones
+  const btn = document.getElementById(slotId + '_btn');
+  const menu = document.getElementById(slotId + '_menu');
+  btn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+  });
+  menu?.querySelectorAll('.rh-channel-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const intId = Number(opt.dataset.intId);
+      window._rhSelectedChannelId = intId;
+      menu.hidden = true;
+      // Re-render para reflejar la nueva selección
+      renderChannelSelector(slotId, currentConvo);
+    });
+  });
+  // Cerrar al click fuera
+  document.addEventListener('click', () => { if (menu) menu.hidden = true; }, { once: true });
 }
 
 // ─── Poll for new messages ───

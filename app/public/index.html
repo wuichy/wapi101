@@ -18,7 +18,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=3" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png?v=3" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260522m" />
+  <link rel="stylesheet" href="/styles.css?v=20260525a" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -484,6 +484,8 @@
                       <input type="file" id="rhAttachAudioInput" accept="audio/*,.mp3,.ogg,.aac,.m4a,.opus" hidden />
                       <input type="file" id="rhAttachDocInput" accept="*/*" hidden />
                     </div>
+                    <!-- Selector de canal de envío (WA API vs Lite) — se renderiza dinámico si hay 2+ integraciones -->
+                    <div class="rh-channel-select-wrap" id="rhChannelSelectWrap" hidden></div>
                     <button type="button" class="rh-icon-button rh-tpl-trigger" id="rhTplTrigger" data-i18n-title="chat.compose.tpl.title" title="Plantillas">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                     </button>
@@ -1045,6 +1047,8 @@
                       </button>
                     </div>
                   </div>
+                  <!-- Selector de canal de envío para el chat del lead detail -->
+                  <div class="rh-channel-select-wrap" id="expDetailChannelSelectWrap" hidden></div>
                   <button type="button" class="rh-icon-button rh-tpl-trigger" id="expDetailTplTrigger" title="Plantillas">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                   </button>
@@ -4232,7 +4236,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=20260522m"></script>
+  <script src="/app.js?v=20260525a"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

@@ -317,5 +317,81 @@ module.exports = function createConversationsRouter(db) {
     }
   });
 
+  // POST /cross-channel-send
+  // Manda un mensaje al contacto usando UNA integración específica (no
+  // necesariamente la de la conversación actual). Si el contacto NO tiene
+  // convo con esa integración, la crea. Si SÍ tiene, manda ahí.
+  //
+  // Body: { contactId, integrationId, body }
+  // Response: { message, conversation, created } — created=true si la convo
+  // se creó nueva, false si reutilizó una existente.
+  router.post('/cross-channel-send', async (req, res) => {
+    const { contactId, integrationId, body } = req.body || {};
+    if (!contactId)     return res.status(400).json({ error: 'contactId requerido' });
+    if (!integrationId) return res.status(400).json({ error: 'integrationId requerido' });
+    if (!body || !body.trim()) return res.status(400).json({ error: 'body vacío' });
+
+    // Validar contacto pertenece al tenant
+    const contact = db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(contactId, req.tenantId);
+    if (!contact) return res.status(404).json({ error: 'contacto no encontrado' });
+
+    // Validar integración pertenece al tenant y está conectada
+    const integ = db.prepare("SELECT * FROM integrations WHERE id = ? AND tenant_id = ? AND status = 'connected'").get(integrationId, req.tenantId);
+    if (!integ) return res.status(404).json({ error: 'integración no encontrada o desconectada' });
+
+    // Buscar convo existente del contacto con esa integración
+    let convo = db.prepare(`
+      SELECT * FROM conversations
+      WHERE tenant_id = ? AND contact_id = ? AND integration_id = ?
+      ORDER BY id DESC LIMIT 1
+    `).get(req.tenantId, contactId, integrationId);
+    let created = false;
+
+    if (!convo) {
+      // Necesitamos un external_id para crear la convo. Para WhatsApp es el
+      // teléfono del contacto. Para Messenger/IG/Telegram el contacto debe
+      // haber escrito antes (no podemos iniciar conversación si no nos
+      // dieron permiso vía mensaje previo en ese canal).
+      const waProviders = ['whatsapp', 'whatsapp-lite'];
+      if (!waProviders.includes(integ.provider)) {
+        return res.status(400).json({
+          error: `No se puede iniciar conversación en ${integ.provider} sin mensaje previo del contacto`,
+          errorCode: 'PROVIDER_REQUIRES_INBOUND',
+        });
+      }
+      if (!contact.phone) {
+        return res.status(400).json({ error: 'el contacto no tiene teléfono' });
+      }
+      try {
+        convo = svc.findOrCreate(db, req.tenantId, {
+          provider:      integ.provider,
+          externalId:    contact.phone,
+          integrationId: integ.id,
+          contactId:     contact.id,
+          contactPhone:  contact.phone,
+          contactName:   [contact.first_name, contact.last_name].filter(Boolean).join(' '),
+        });
+        created = true;
+      } catch (err) {
+        return res.status(500).json({ error: 'error creando conversación: ' + err.message });
+      }
+    }
+
+    try {
+      const externalMsgId = await sendMessage(db, convo, body.trim());
+      const msg = svc.addMessage(db, req.tenantId, convo.id, {
+        externalId: externalMsgId,
+        direction:  'outgoing',
+        provider:   convo.provider,
+        body:       body.trim(),
+        status:     'sent',
+      });
+      res.json({ message: msg, conversation: convo, created });
+    } catch (err) {
+      console.error('[conversations] cross-channel send error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 };

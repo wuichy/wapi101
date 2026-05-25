@@ -3086,9 +3086,12 @@ function renderMessages() {
     const isLastIncoming = dir === 'incoming' && idx === lastIncomingIdx;
     const footExtra = isLastIncoming && isWhatsapp ? wa24Html('whatsapp', m.createdAt) : '';
     const statusIco = msgStatusHtml(m);
+    // Icono del provider por el que entró/salió el mensaje (compacto, gris)
+    const msgProvider = m.provider || activeConvo?.provider || '';
+    const provIco = msgProvider ? `<span class="rh-msg-provider" title="${escapeHtml(_providerLabel(msgProvider))}">${_providerIcon(msgProvider, 11)}</span>` : '';
     const footContent = dir === 'incoming'
-      ? `Contacto · <span class="rh-message-meta">${fmtMsgTime(m.createdAt)}</span>${footExtra}`
-      : `<span class="rh-message-meta">${fmtMsgTime(m.createdAt)}${statusIco ? ' ' + statusIco : ''}</span>`;
+      ? `Contacto · <span class="rh-message-meta">${fmtMsgTime(m.createdAt)}${provIco ? ' ' + provIco : ''}</span>${footExtra}`
+      : `<span class="rh-message-meta">${fmtMsgTime(m.createdAt)}${provIco ? ' ' + provIco : ''}${statusIco ? ' ' + statusIco : ''}</span>`;
     const bubbleClass = (dir === 'outgoing' && m.status === 'failed') ? 'rh-bubble is-failed' : 'rh-bubble';
     const errLine = (dir === 'outgoing' && m.status === 'failed' && m.errorReason)
       ? `<div class="rh-msg-error">⚠ ${escapeHtml(translateErrorReason(m.errorReason))}</div>` : '';
@@ -8120,9 +8123,12 @@ function renderExpDetailMessages() {
     const isLastIncoming = item === lastIncomingItem;
     const footExtra = isLastIncoming && isWhatsappExp ? wa24Html('whatsapp', item.createdAt) : '';
     const statusIco = msgStatusHtml(item);
+    // Icono del provider del mensaje (canal por el que entró/salió)
+    const msgProvider = item.provider || expConvo?.provider || '';
+    const provIco = msgProvider ? `<span class="rh-msg-provider" title="${escapeHtml(_providerLabel(msgProvider))}">${_providerIcon(msgProvider, 11)}</span>` : '';
     const footContent = dir === 'incoming'
-      ? `Contacto · <span class="rh-message-meta">${fmtMsgTime(item.createdAt)}</span>${footExtra}`
-      : `<span class="rh-message-meta">${fmtMsgTime(item.createdAt)}${statusIco ? ' ' + statusIco : ''}</span>`;
+      ? `Contacto · <span class="rh-message-meta">${fmtMsgTime(item.createdAt)}${provIco ? ' ' + provIco : ''}</span>${footExtra}`
+      : `<span class="rh-message-meta">${fmtMsgTime(item.createdAt)}${provIco ? ' ' + provIco : ''}${statusIco ? ' ' + statusIco : ''}</span>`;
     const bubbleClass = (dir === 'outgoing' && item.status === 'failed') ? 'rh-bubble is-failed' : 'rh-bubble';
     const errLine = (dir === 'outgoing' && item.status === 'failed' && item.errorReason)
       ? `<div class="rh-msg-error">⚠ ${escapeHtml(translateErrorReason(item.errorReason))}</div>` : '';
@@ -18429,19 +18435,54 @@ function setupReplyForm() {
   });
 }
 
+// ─── Provider icons (SVG outline, estilo Lucide) ──────────────────────────
+// Iconos pequeños que indican qué canal se usó. Se muestran en:
+//   - Selector compacto en el composer (un solo icono visible)
+//   - Footer de cada mensaje (junto al timestamp)
+function _providerIcon(providerKey, size = 12) {
+  const k = String(providerKey || '').toLowerCase();
+  const attrs = `viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}"`;
+  if (k === 'whatsapp' || k === 'whatsapp-api' || k === 'whatsapp_api') {
+    // Cloud (WhatsApp Cloud API)
+    return `<svg ${attrs}><path d="M17.5 19a4.5 4.5 0 1 0-1.5-8.74A6 6 0 0 0 4 11a5 5 0 0 0 1 8h12.5z"/></svg>`;
+  }
+  if (k === 'whatsapp-lite' || k === 'whatsapp_lite') {
+    // Smartphone (WhatsApp Lite / Web)
+    return `<svg ${attrs}><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>`;
+  }
+  if (k === 'messenger' || k === 'facebook') {
+    // Speech bubble (Messenger)
+    return `<svg ${attrs}><path d="M12 2C6.5 2 2 6.1 2 11.2c0 2.9 1.5 5.5 3.8 7.2v3.6l3.5-1.9c.9.3 1.8.4 2.7.4 5.5 0 10-4.1 10-9.2C22 6.1 17.5 2 12 2z"/></svg>`;
+  }
+  if (k === 'instagram') {
+    return `<svg ${attrs}><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>`;
+  }
+  if (k === 'telegram') {
+    return `<svg ${attrs}><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
+  }
+  // Default: chat bubble genérico
+  return `<svg ${attrs}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+}
+
+function _providerLabel(providerKey) {
+  const k = String(providerKey || '').toLowerCase();
+  if (k === 'whatsapp' || k === 'whatsapp-api' || k === 'whatsapp_api') return 'WhatsApp API';
+  if (k === 'whatsapp-lite' || k === 'whatsapp_lite') return 'WhatsApp Lite';
+  if (k === 'messenger' || k === 'facebook') return 'Messenger';
+  if (k === 'instagram') return 'Instagram';
+  if (k === 'telegram') return 'Telegram';
+  return providerKey || '';
+}
+
 // ─── Selector de canal de envío (WhatsApp API vs Lite) ────────────────────
-// Caché global de integraciones del tenant (cargadas con loadIntegrations).
-// Cuando abres una conversación, mostramos un selector pequeño junto al
-// composer SOLO si hay 2+ integraciones de WhatsApp disponibles.
-//
-// El selector permite enviar el próximo mensaje por otro canal sin tener
-// que cambiar de conversación. Usa el endpoint POST /cross-channel-send.
+// Compacto: solo icono + chevron. Click → dropdown con detalle completo.
+// Se muestra solo si hay 2+ integraciones WhatsApp connected del tenant.
+// Variable global window._rhSelectedChannelId guarda la elección actual.
 
 window._rhSelectedChannelId = null;
 
 function _whatsappIntegrationsConnected() {
   if (typeof INTEGRATIONS === 'undefined' || !Array.isArray(INTEGRATIONS)) return [];
-  // INTEGRATIONS suele ser un array de providers con .integrations[] adentro
   const flat = INTEGRATIONS.flatMap(p => p.integrations || []);
   return flat.filter(i =>
     (i.providerKey === 'whatsapp' || i.providerKey === 'whatsapp-lite' || i.provider === 'whatsapp' || i.provider === 'whatsapp-lite')
@@ -18449,13 +18490,10 @@ function _whatsappIntegrationsConnected() {
   );
 }
 
-// Renderiza el selector de canal en el slot correspondiente. Llamar al
-// abrir conversación o al refrescar el panel de chat / lead detail.
 function renderChannelSelector(slotId, currentConvo) {
   const slot = document.getElementById(slotId);
   if (!slot) return;
   const integrations = _whatsappIntegrationsConnected();
-  // No mostrar si solo hay 1 (o ninguno) — el current ya está implícito
   if (integrations.length < 2) {
     slot.hidden = true;
     slot.innerHTML = '';
@@ -18463,38 +18501,32 @@ function renderChannelSelector(slotId, currentConvo) {
     return;
   }
   const currentIntegId = currentConvo?.integrationId || currentConvo?.integration_id || null;
-  // Default: la integración de la convo actual
   window._rhSelectedChannelId = currentIntegId;
 
   const label = (i) => {
-    const provLabel = (i.providerKey === 'whatsapp-lite' || i.provider === 'whatsapp-lite') ? 'WhatsApp Lite' : 'WhatsApp API';
+    const provLabel = _providerLabel(i.providerKey || i.provider);
     const num = i.externalId || i.external_id || i.phoneNumber || '';
     return num ? `${provLabel} · ${num}` : provLabel;
   };
-  const ico = (i) => {
-    const isLite = (i.providerKey === 'whatsapp-lite' || i.provider === 'whatsapp-lite');
-    return isLite ? '📱' : '☁️';
-  };
+  const providerOf = (i) => i.providerKey || i.provider || 'whatsapp';
 
   const current = integrations.find(i => i.id === currentIntegId) || integrations[0];
   slot.hidden = false;
   slot.innerHTML = `
-    <button type="button" class="rh-channel-select-btn" id="${slotId}_btn" title="Canal de envío">
-      <span class="rh-channel-ico">${ico(current)}</span>
-      <span class="rh-channel-label">${escapeHtml(label(current))}</span>
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><polyline points="6 8 10 12 14 8"/></svg>
+    <button type="button" class="rh-channel-mini-btn" id="${slotId}_btn" title="Canal: ${escapeHtml(label(current))}">
+      <span class="rh-channel-mini-ico">${_providerIcon(providerOf(current), 14)}</span>
+      <svg class="rh-channel-mini-chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="8" height="8"><polyline points="6 8 10 12 14 8"/></svg>
     </button>
     <div class="rh-channel-menu" id="${slotId}_menu" hidden>
       ${integrations.map(i => `
         <button type="button" class="rh-channel-option ${i.id === window._rhSelectedChannelId ? 'is-selected' : ''}" data-int-id="${i.id}">
-          <span class="rh-channel-ico">${ico(i)}</span>
+          <span class="rh-channel-ico">${_providerIcon(providerOf(i), 14)}</span>
           <span>${escapeHtml(label(i))}</span>
           ${i.id === window._rhSelectedChannelId ? '<span class="rh-channel-check">✓</span>' : ''}
         </button>
       `).join('')}
     </div>`;
 
-  // Wire interacciones
   const btn = document.getElementById(slotId + '_btn');
   const menu = document.getElementById(slotId + '_menu');
   btn?.addEventListener('click', (e) => {
@@ -18506,11 +18538,9 @@ function renderChannelSelector(slotId, currentConvo) {
       const intId = Number(opt.dataset.intId);
       window._rhSelectedChannelId = intId;
       menu.hidden = true;
-      // Re-render para reflejar la nueva selección
       renderChannelSelector(slotId, currentConvo);
     });
   });
-  // Cerrar al click fuera
   document.addEventListener('click', () => { if (menu) menu.hidden = true; }, { once: true });
 }
 

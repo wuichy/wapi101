@@ -4578,35 +4578,33 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .rh-attach-option:hover { background: var(--bg, #f8fafc); }
 
-/* ─── Selector de canal de envío en el composer ─── */
+/* ─── Selector de canal de envío en el composer (compacto) ─── */
 .rh-channel-select-wrap {
   position: relative;
   display: inline-flex;
   align-items: center;
 }
-.rh-channel-select-btn {
-  display: flex;
+/* Versión compacta: solo icono + chevron diminuto (28x24, mismo size que rh-icon-button) */
+.rh-channel-mini-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #334155;
-  font-size: 12px;
-  font-family: inherit;
+  gap: 2px;
+  padding: 4px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--rh-muted, #94a3b8);
   cursor: pointer;
-  transition: background .15s, border-color .15s;
-  max-width: 220px;
+  transition: background .15s, color .15s, border-color .15s;
+  height: 28px;
 }
-.rh-channel-select-btn:hover { background: #e2e8f0; border-color: #94a3b8; }
-.rh-channel-select-btn .rh-channel-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
+.rh-channel-mini-btn:hover {
+  background: var(--bg-soft, #f1f5f9);
+  color: var(--text, #0f172a);
+  border-color: var(--rh-border, #e2e8f0);
 }
-.rh-channel-select-btn .rh-channel-ico { font-size: 14px; line-height: 1; flex-shrink: 0; }
+.rh-channel-mini-btn .rh-channel-mini-ico { display: inline-flex; }
+.rh-channel-mini-btn .rh-channel-mini-chev { opacity: .6; }
 .rh-channel-menu {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -4641,6 +4639,18 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .rh-channel-option.is-selected { background: #eff6ff; color: #2563eb; font-weight: 600; }
 .rh-channel-option .rh-channel-ico { font-size: 14px; line-height: 1; }
 .rh-channel-option .rh-channel-check { margin-left: auto; color: #10b981; }
+
+/* Icono del provider junto al timestamp en cada mensaje (sutil, gris) */
+.rh-msg-provider {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 4px;
+  opacity: 0.65;
+  line-height: 0;
+}
+.rh-msg-provider svg { display: block; }
+.rh-msg-provider:hover { opacity: 1; }
 .rh-attach-option:hover .rh-attach-ico {
   background: var(--accent, #2563eb);
   color: #fff;

@@ -24594,6 +24594,13 @@ function openKbModal(id = null) {
     contentInput.value = '';
     deleteBtn.hidden = true;
   }
+  // Reset del upload UI cada vez que se abre el modal
+  if (typeof kbClearFileUI === 'function') kbClearFileUI();
+  const fileInput = document.getElementById('kbFileInput');
+  if (fileInput) fileInput.value = '';
+  // Actualizar contador
+  contentInput.dispatchEvent(new Event('input'));
+
   document.getElementById('kbModal').hidden = false;
   setTimeout(() => titleInput.focus(), 50);
 }
@@ -24641,16 +24648,169 @@ async function deleteKb() {
 function setupKnowledgeBase() {
   document.getElementById('kbAddBtn')?.addEventListener('click', () => openKbModal(null));
   document.getElementById('kbCancelBtn')?.addEventListener('click', closeKbModal);
+  document.getElementById('kbCancelBtn2')?.addEventListener('click', closeKbModal);
   document.getElementById('kbDeleteBtn')?.addEventListener('click', deleteKb);
   document.getElementById('kbForm')?.addEventListener('submit', (e) => { e.preventDefault(); saveKb(); });
   document.getElementById('kbModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'kbModal') closeKbModal();
   });
 
+  // ─── Upload de archivos para la KB ───
+  const zone   = document.getElementById('kbUploadZone');
+  const input  = document.getElementById('kbFileInput');
+  const linkBtn = document.getElementById('kbUploadLinkBtn');
+  const removeBtn = document.getElementById('kbUploadRemove');
+  if (zone && input) {
+    linkBtn?.addEventListener('click', () => input.click());
+    zone.addEventListener('click', (e) => {
+      // Solo dispara el picker si NO clickearon en el botón de remove o el link
+      if (e.target.closest('.kb-upload-link, .kb-upload-remove, .kb-upload-file')) return;
+      input.click();
+    });
+    input.addEventListener('change', (e) => {
+      if (e.target.files[0]) kbHandleFile(e.target.files[0]);
+    });
+    removeBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      kbClearFileUI();
+      input.value = '';
+    });
+    // Drag & drop
+    ['dragenter', 'dragover'].forEach(ev => {
+      zone.addEventListener(ev, (e) => {
+        e.preventDefault(); e.stopPropagation();
+        zone.classList.add('is-dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+      zone.addEventListener(ev, (e) => {
+        e.preventDefault(); e.stopPropagation();
+        zone.classList.remove('is-dragover');
+      });
+    });
+    zone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (file) kbHandleFile(file);
+    });
+  }
+
+  // Contador de caracteres en el textarea
+  document.getElementById('kbContent')?.addEventListener('input', (e) => {
+    const n = e.target.value.length;
+    const c = document.getElementById('kbCharCounter');
+    if (c) {
+      c.textContent = `${n.toLocaleString()} caracteres`;
+      c.classList.toggle('is-large', n > 8000);
+      c.classList.toggle('is-huge', n > 20000);
+    }
+  });
+
   // Cargar al entrar al tab IA dentro de Configuración (cuando se active)
   // Por ahora cargamos al abrir Configuración por primera vez
   document.querySelectorAll('.nav-item[data-view="ajustes"]').forEach(n => {
     n.addEventListener('click', () => setTimeout(loadKnowledgeSources, 100));
+  });
+}
+
+// ─── Manejo del archivo subido ─────────────────────────────────────
+const KB_MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+async function kbHandleFile(file) {
+  if (!file) return;
+  if (file.size > KB_MAX_FILE_BYTES) {
+    alert(`El archivo es muy grande (${(file.size/1024/1024).toFixed(1)} MB). Máximo 5 MB.`);
+    return;
+  }
+
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const sizeKb = file.size / 1024;
+  const sizeLabel = sizeKb > 1024 ? `${(sizeKb/1024).toFixed(1)} MB` : `${Math.round(sizeKb)} KB`;
+
+  // Mostrar archivo en UI
+  document.getElementById('kbUploadFileName').textContent = file.name;
+  document.getElementById('kbUploadFileSize').textContent = sizeLabel;
+  document.getElementById('kbUploadFile').hidden = false;
+
+  // Auto-fill del título si está vacío
+  const titleEl = document.getElementById('kbTitle');
+  if (titleEl && !titleEl.value.trim()) {
+    titleEl.value = file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+  }
+
+  // Extraer texto según la extensión
+  let text = '';
+  try {
+    if (['md', 'markdown', 'txt', 'csv', 'json'].includes(ext)) {
+      text = await file.text();
+    } else if (['html', 'htm'].includes(ext)) {
+      const raw = await file.text();
+      // Quitar tags HTML básico
+      const doc = new DOMParser().parseFromString(raw, 'text/html');
+      text = doc.body?.textContent?.trim().replace(/\n{3,}/g, '\n\n') || raw;
+    } else if (ext === 'pdf') {
+      text = await kbExtractPdf(file);
+    } else if (ext === 'docx') {
+      text = await kbExtractDocx(file);
+    } else {
+      alert('Formato no soportado: .' + ext);
+      kbClearFileUI();
+      return;
+    }
+  } catch (err) {
+    alert('Error leyendo el archivo: ' + err.message);
+    kbClearFileUI();
+    return;
+  }
+
+  // Pegar el texto en el textarea (preserva lo que ya había, separado)
+  const ta = document.getElementById('kbContent');
+  if (ta) {
+    const existing = ta.value.trim();
+    ta.value = existing ? `${existing}\n\n${text}` : text;
+    ta.dispatchEvent(new Event('input')); // actualiza el contador
+  }
+}
+
+function kbClearFileUI() {
+  document.getElementById('kbUploadFile').hidden = true;
+  document.getElementById('kbUploadFileName').textContent = '';
+  document.getElementById('kbUploadFileSize').textContent = '';
+}
+
+// ─── Extractor PDF (lazy load de pdf.js) ───
+async function kbExtractPdf(file) {
+  if (!window.pdfjsLib) {
+    await kbLoadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js');
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
+  }
+  const buf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+  let out = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    out += content.items.map(it => it.str).join(' ') + '\n\n';
+  }
+  return out.trim();
+}
+
+// ─── Extractor DOCX (lazy load de mammoth) ───
+async function kbExtractDocx(file) {
+  if (!window.mammoth) {
+    await kbLoadScript('https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js');
+  }
+  const buf = await file.arrayBuffer();
+  const result = await window.mammoth.extractRawText({ arrayBuffer: buf });
+  return result.value || '';
+}
+
+function kbLoadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+    document.head.appendChild(s);
   });
 }
 if (document.readyState === 'loading') {

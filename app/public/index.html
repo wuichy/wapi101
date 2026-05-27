@@ -2859,38 +2859,72 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               </div>
 
               <!-- Modal Fuente de Conocimiento -->
-              <div class="modal-bg" id="kbModal" hidden>
-                <div class="modal" style="max-width:640px">
-                  <h3 id="kbModalTitle">Nueva fuente</h3>
-                  <form id="kbForm">
-                    <div class="form-row">
-                      <label>Título <span style="color:#ef4444">*</span></label>
-                      <input type="text" id="kbTitle" placeholder="Ej. Catálogo de productos 2026" required maxlength="120">
-                    </div>
-                    <div class="form-row">
-                      <label>Categoría</label>
-                      <input type="text" id="kbCategory" placeholder="Ej. Productos, Políticas, FAQ, Tono de voz" maxlength="60" list="kbCategoryList">
-                      <datalist id="kbCategoryList">
-                        <option value="Productos">
-                        <option value="Políticas">
-                        <option value="FAQ">
-                        <option value="Tono de voz">
-                        <option value="Empresa">
-                        <option value="Servicios">
-                        <option value="Precios">
-                        <option value="Envíos">
-                      </datalist>
-                    </div>
-                    <div class="form-row">
-                      <label>Contenido <span style="color:#ef4444">*</span></label>
-                      <textarea id="kbContent" rows="10" placeholder="Texto que la IA usará como contexto. Cuanto más específico mejor: incluye precios, plazos, políticas, ejemplos de respuesta, etc." required></textarea>
-                    </div>
-                    <div class="modal-actions">
-                      <button type="button" class="btn btn--danger-ghost" id="kbDeleteBtn" hidden>Eliminar</button>
-                      <button type="button" class="btn btn--ghost" id="kbCancelBtn">Cancelar</button>
-                      <button type="submit" class="btn btn--primary">Guardar</button>
-                    </div>
-                  </form>
+              <div class="modal-backdrop" id="kbModal" hidden>
+                <div class="modal-box modal-card--lg">
+                  <header class="modal-header">
+                    <h2 id="kbModalTitle">Nueva fuente</h2>
+                    <button type="button" class="modal-close" id="kbCancelBtn" aria-label="Cerrar">×</button>
+                  </header>
+                  <div class="modal-body">
+                    <form id="kbForm">
+                      <!-- ─── Zona de subida de archivo ─── -->
+                      <div class="kb-upload-zone" id="kbUploadZone">
+                        <input type="file" id="kbFileInput" accept=".md,.markdown,.txt,.html,.htm,.csv,.json,.pdf,.docx" hidden>
+                        <div class="kb-upload-icon">
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                          </svg>
+                        </div>
+                        <div class="kb-upload-text">
+                          <strong>Arrastra un archivo aquí</strong>
+                          <span>o <button type="button" class="kb-upload-link" id="kbUploadLinkBtn">selecciónalo</button></span>
+                          <small>Soporta .md · .txt · .html · .csv · .json · .pdf · .docx (máx. 5MB)</small>
+                        </div>
+                        <div class="kb-upload-file" id="kbUploadFile" hidden>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                          <span id="kbUploadFileName">archivo.md</span>
+                          <span class="kb-upload-file-size" id="kbUploadFileSize"></span>
+                          <button type="button" class="kb-upload-remove" id="kbUploadRemove" title="Quitar archivo">×</button>
+                        </div>
+                      </div>
+
+                      <div class="kb-divider"><span>o escribe a mano</span></div>
+
+                      <div class="form-row">
+                        <label>Título <span class="kb-required">*</span></label>
+                        <input type="text" id="kbTitle" class="form-input" placeholder="Ej. Catálogo de productos 2026" required maxlength="120">
+                      </div>
+                      <div class="form-row">
+                        <label>Categoría</label>
+                        <input type="text" id="kbCategory" class="form-input" placeholder="Ej. Productos, Políticas, FAQ, Tono de voz" maxlength="60" list="kbCategoryList">
+                        <datalist id="kbCategoryList">
+                          <option value="Productos">
+                          <option value="Políticas">
+                          <option value="FAQ">
+                          <option value="Tono de voz">
+                          <option value="Empresa">
+                          <option value="Servicios">
+                          <option value="Precios">
+                          <option value="Envíos">
+                          <option value="Garantías">
+                          <option value="Promociones">
+                        </datalist>
+                      </div>
+                      <div class="form-row">
+                        <label>Contenido <span class="kb-required">*</span></label>
+                        <textarea id="kbContent" class="form-input" rows="10" placeholder="Texto que la IA usará como contexto. Cuanto más específico mejor: incluye precios, plazos, políticas, ejemplos de respuesta, etc." required></textarea>
+                        <small class="kb-char-counter" id="kbCharCounter">0 caracteres</small>
+                      </div>
+                    </form>
+                  </div>
+                  <footer class="modal-footer">
+                    <button type="button" class="btn btn--danger-ghost" id="kbDeleteBtn" hidden>Eliminar</button>
+                    <div style="flex:1"></div>
+                    <button type="button" class="btn" id="kbCancelBtn2">Cancelar</button>
+                    <button type="submit" form="kbForm" class="btn btn--primary" id="kbSaveBtn">Guardar</button>
+                  </footer>
                 </div>
               </div>
 
@@ -4354,7 +4388,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script src="/app.js?v=20260527b"></script>
+  <script src="/app.js?v=20260527c"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

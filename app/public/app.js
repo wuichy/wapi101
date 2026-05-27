@@ -28334,9 +28334,43 @@ async function hybridSaveSettings() {
 function hybridSettingsInit() {
   if (window.__hybridInited) return;
   window.__hybridInited = true;
-  document.getElementById('hybridEnabledChk')?.addEventListener('change', hybridUpdateSubOptionsVisibility);
+  document.getElementById('hybridEnabledChk')?.addEventListener('change', async (e) => {
+    hybridUpdateSubOptionsVisibility();
+    // Si el user está PRENDIENDO el coordinador, advertir sobre bots incompatibles
+    if (e.target.checked) {
+      await hybridCheckIncompatibleBots();
+    }
+  });
   document.getElementById('btnSaveHybrid')?.addEventListener('click', hybridSaveSettings);
   hybridLoadSettings();
+}
+
+// Detecta bots con trigger 'always' y muestra modal de advertencia
+async function hybridCheckIncompatibleBots() {
+  try {
+    const r = await fetch('/api/ia-hybrid/incompatible-bots', { headers: authHeaders() });
+    if (!r.ok) return;
+    const data = await r.json();
+    const bots = data.items || [];
+    if (!bots.length) return; // nada que hacer
+
+    const list = bots.map(b => `  • ${b.name} (ID ${b.id})`).join('\n');
+    const msg = `⚠️ Atención: tienes ${bots.length} bot${bots.length===1?'':'s'} con trigger "Cualquier mensaje" que chocan con el Coordinador.\n\nEstos bots se disparan con TODOS los mensajes entrantes, por lo que la IA nunca tendría su turno:\n\n${list}\n\n¿Quieres que los desactive automáticamente? Podrás reactivarlos después con un trigger más específico.`;
+
+    if (confirm(msg)) {
+      const dr = await fetch('/api/ia-hybrid/disable-incompatible-bots', {
+        method: 'POST', headers: authHeaders(),
+      });
+      if (dr.ok) {
+        const dd = await dr.json();
+        alert(`✓ Desactivados ${dd.disabled} bots. Ya puedes guardar la configuración.`);
+      }
+    } else {
+      alert('Ok, los dejo activos. Pero recuerda: mientras esos bots estén activos con trigger "Cualquier mensaje", la IA NO va a poder responder.');
+    }
+  } catch (err) {
+    console.warn('[hybrid] check incompatible bots:', err);
+  }
 }
 
 // Hook: cuando se abre la pestaña IA en settings, init.

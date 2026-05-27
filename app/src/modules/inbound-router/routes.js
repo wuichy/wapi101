@@ -18,6 +18,29 @@ module.exports = function createRouter(db) {
   const router = express.Router();
   router.use(express.json({ limit: '256kb' }));
 
+  // ─── Preflight check: ¿qué bots chocan con el coordinador? ──────
+  // Devuelve los bots con trigger_type='always' que serían incompatibles
+  // si el coordinador se activa. Frontend lo usa para mostrar advertencia.
+  router.get('/incompatible-bots', (req, res) => {
+    const rows = db.prepare(`
+      SELECT id, name, trigger_type, enabled
+      FROM salsbots
+      WHERE tenant_id = ? AND trigger_type = 'always' AND enabled = 1
+      ORDER BY id
+    `).all(req.tenantId);
+    res.json({ items: rows });
+  });
+
+  // ─── Aplicar incompatibilidad: deshabilitar bots 'always' ───────
+  // Frontend lo llama después de confirmar el modal de advertencia.
+  router.post('/disable-incompatible-bots', (req, res) => {
+    const result = db.prepare(`
+      UPDATE salsbots SET enabled = 0
+      WHERE tenant_id = ? AND trigger_type = 'always' AND enabled = 1
+    `).run(req.tenantId);
+    res.json({ ok: true, disabled: result.changes });
+  });
+
   // ─── Settings del tenant (toggles) ──────────────────────────────
   router.get('/settings', (req, res) => {
     const row = db.prepare(`

@@ -24736,11 +24736,23 @@ function setupKnowledgeBase() {
     }
   });
 
-  // Cargar al entrar al tab IA dentro de Configuración (cuando se active)
-  // Por ahora cargamos al abrir Configuración por primera vez
+  // Cargar al entrar al tab Configuración…
   document.querySelectorAll('.nav-item[data-view="ajustes"]').forEach(n => {
     n.addEventListener('click', () => setTimeout(loadKnowledgeSources, 100));
   });
+  // …y también cuando navegan al sub-tab "IA" dentro de Configuración
+  // (esto cubre el caso de recargar la página estando ya en Settings → IA)
+  document.querySelectorAll('.settings-tab[data-settings="ia"]').forEach(n => {
+    n.addEventListener('click', () => setTimeout(loadKnowledgeSources, 100));
+  });
+  // Carga inicial si el sub-tab IA ya está visible al cargar la página
+  // (por ejemplo, después de un Cmd+Shift+R en Settings → IA)
+  setTimeout(() => {
+    const iaPane = document.querySelector('.settings-pane[data-settings="ia"]');
+    if (iaPane && !iaPane.hidden && iaPane.offsetParent !== null) {
+      loadKnowledgeSources();
+    }
+  }, 500);
 }
 
 // ─── Manejo del archivo subido ─────────────────────────────────────

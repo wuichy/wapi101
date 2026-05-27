@@ -64,14 +64,27 @@ function _cachePut(db, tenantId, msgHash, botId, confidence) {
 }
 
 // ─── Matcher tradicional (fallback) ──────────────────────────────────
+// Respeta trigger_match_mode: 'any' (default) / 'all' / 'exact'
 function _matchKeyword(bots, messageBody) {
   if (!messageBody) return null;
   const body = messageBody.toLowerCase();
   for (const bot of bots) {
     if (bot.trigger_type !== 'keyword') continue;
-    const keywords = String(bot.trigger_value || '')
-      .split(/[\n|,]/).map(k => k.toLowerCase().trim()).filter(Boolean);
-    if (keywords.some(k => body.includes(k))) return bot.id;
+    const raw = String(bot.trigger_value || '').trim();
+    if (!raw) continue;
+    const mode = bot.trigger_match_mode || 'any';
+
+    if (mode === 'exact') {
+      if (body.includes(raw.toLowerCase())) return bot.id;
+      continue;
+    }
+    const keywords = raw.split(/[\n|,]/).map(k => k.toLowerCase().trim()).filter(Boolean);
+    if (!keywords.length) continue;
+    if (mode === 'all') {
+      if (keywords.every(k => body.includes(k))) return bot.id;
+    } else {
+      if (keywords.some(k => body.includes(k))) return bot.id;
+    }
   }
   return null;
 }

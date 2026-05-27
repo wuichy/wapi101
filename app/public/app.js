@@ -10014,6 +10014,8 @@ function openBotBuilder(bot, returnTo = null) {
   document.getElementById('botBuilderEnabled').checked = bot ? bot.enabled : false;
   document.getElementById('sbTriggerType').value = bot ? bot.trigger_type : 'keyword';
   document.getElementById('sbTriggerValue').value = bot ? (bot.trigger_value || '') : '';
+  // Inicializar UI de chips + modo de match para trigger keyword
+  try { kwChipsInit(bot ? (bot.trigger_value || '') : '', bot?.trigger_match_mode || 'any'); } catch (_) {}
 
   // Reset a vista Lista al abrir el builder (la vista Código es read-only y confunde si se queda activa)
   document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(t => {
@@ -12322,11 +12324,15 @@ function setupBot() {
   function bbBuildBotJSON() {
     const trigger_type = document.getElementById('sbTriggerType')?.value || 'keyword';
     const trigger_value = bbReadTriggerValue(trigger_type);
+    // Modo de match para trigger keyword (default 'any' para retrocompat)
+    const modeEl = document.querySelector('input[name="sbKwMode"]:checked');
+    const trigger_match_mode = (trigger_type === 'keyword' && modeEl) ? modeEl.value : 'any';
     return {
       name:         document.getElementById('botBuilderName')?.value?.trim() || '',
       enabled:      document.getElementById('botBuilderEnabled')?.checked ? 1 : 0,
       trigger_type,
       trigger_value,
+      trigger_match_mode,
       tags:         (typeof sbTagIds !== 'undefined' && Array.isArray(sbTagIds)) ? sbTagIds : [],
       steps:        (typeof collectAllSteps === 'function')
         ? collectAllSteps().map(({ _id, ...rest }) => rest)
@@ -28566,3 +28572,118 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Hook: openConversation() llama directamente a hybridStartConvoWatch(convoId)
 // (inyectado en la función openConversation arriba en el archivo).
+
+// ─────────────────────────────────────────────────────────────────────
+// Trigger keyword: chips visuales + sincronización con textarea oculto
+// ─────────────────────────────────────────────────────────────────────
+const KW = { chips: [] };
+
+function kwChipsInit(initialValue, mode) {
+  const container = document.getElementById('sbKwChipsContainer');
+  const chipsHost = document.getElementById('sbKwChips');
+  const input     = document.getElementById('sbKwChipsInput');
+  const hidden    = document.getElementById('sbTriggerValue');
+  if (!container || !chipsHost || !input || !hidden) return;
+
+  // Reset chips
+  KW.chips = [];
+  if (initialValue) {
+    // Parsear: separar por , o salto de línea, conservar espacios internos
+    const raw = String(initialValue).trim();
+    KW.chips = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  }
+  kwChipsRender();
+  kwChipsSyncHidden();
+
+  // Modo de match
+  const m = ['any', 'all', 'exact'].includes(mode) ? mode : 'any';
+  const radio = document.querySelector(`input[name="sbKwMode"][value="${m}"]`);
+  if (radio) radio.checked = true;
+
+  // Bind eventos solo una vez (guardar flag en el container)
+  if (!container.__kwBound) {
+    container.__kwBound = true;
+
+    // Click en cualquier parte del container → focus input
+    container.addEventListener('click', (e) => {
+      if (e.target.closest('.sb-kw-chip-remove')) return;
+      input.focus();
+    });
+
+    // Eliminar chip por click en X
+    chipsHost.addEventListener('click', (e) => {
+      const btn = e.target.closest('.sb-kw-chip-remove');
+      if (!btn) return;
+      const idx = Number(btn.dataset.idx);
+      if (!isNaN(idx)) {
+        KW.chips.splice(idx, 1);
+        kwChipsRender();
+        kwChipsSyncHidden();
+      }
+    });
+
+    // Enter o coma → agregar chip
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',' ) {
+        e.preventDefault();
+        kwChipsAddFromInput();
+      } else if (e.key === 'Backspace' && input.value === '' && KW.chips.length) {
+        // Backspace en input vacío → eliminar último chip
+        KW.chips.pop();
+        kwChipsRender();
+        kwChipsSyncHidden();
+      }
+    });
+
+    // Blur → guardar lo escrito como chip si hay texto
+    input.addEventListener('blur', () => {
+      kwChipsAddFromInput();
+    });
+
+    // Cambio en radio de modo → no requiere acción especial (se lee al guardar)
+  }
+}
+
+function kwChipsAddFromInput() {
+  const input = document.getElementById('sbKwChipsInput');
+  if (!input) return;
+  const v = (input.value || '').trim();
+  if (!v) return;
+  // No agregar duplicado
+  if (!KW.chips.includes(v)) {
+    KW.chips.push(v);
+  }
+  input.value = '';
+  kwChipsRender();
+  kwChipsSyncHidden();
+}
+
+function kwChipsRender() {
+  const host = document.getElementById('sbKwChips');
+  if (!host) return;
+  host.innerHTML = KW.chips.map((c, i) => `
+    <span class="sb-kw-chip">
+      ${escHtml(c)}
+      <button type="button" class="sb-kw-chip-remove" data-idx="${i}" title="Quitar" aria-label="Quitar">×</button>
+    </span>
+  `).join('');
+}
+
+function kwChipsSyncHidden() {
+  // Sincroniza el textarea oculto que el resto del builder lee
+  const hidden = document.getElementById('sbTriggerValue');
+  if (!hidden) return;
+  hidden.value = KW.chips.join(', ');
+  // Dispara input event por si alguien lo escucha
+  hidden.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Show/hide el wrap de keyword cuando se cambia el dropdown del trigger
+(function _wireKwShowHide() {
+  document.addEventListener('change', (e) => {
+    if (e.target?.id !== 'sbTriggerType') return;
+    const wrap = document.getElementById('sbTriggerKeywordWrap');
+    if (!wrap) return;
+    wrap.hidden = e.target.value !== 'keyword';
+  });
+})();

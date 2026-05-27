@@ -1958,7 +1958,31 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                     <option value="scheduled_field" data-i18n="bot.trigger.scheduled_field">Antes/después de un campo de fecha</option>
                   </optgroup>
                 </select>
-                <textarea id="sbTriggerValue" rows="2" placeholder='Una palabra clave por línea. El bot dispara si el mensaje contiene cualquiera.&#10;p.ej.&#10;quiero mi cupon&#10;ya pagué' style="resize:vertical;font-family:inherit"></textarea>
+                <!-- Wrapper para keyword trigger con chips + modo -->
+                <div id="sbTriggerKeywordWrap">
+                  <!-- Chips visuales — cada keyword se ve como pill -->
+                  <div id="sbKwChipsContainer" class="sb-kw-chips" tabindex="0">
+                    <div id="sbKwChips"></div>
+                    <input type="text" id="sbKwChipsInput" placeholder='Escribe una palabra y Enter (o coma)' />
+                  </div>
+                  <!-- Modo de coincidencia -->
+                  <div class="sb-kw-mode">
+                    <label class="sb-kw-mode-opt">
+                      <input type="radio" name="sbKwMode" value="any" checked>
+                      <span><strong>Cualquiera</strong><small>el mensaje contiene <em>al menos una</em> palabra (default)</small></span>
+                    </label>
+                    <label class="sb-kw-mode-opt">
+                      <input type="radio" name="sbKwMode" value="all">
+                      <span><strong>Todas</strong><small>el mensaje contiene <em>todas</em> las palabras (en cualquier orden)</small></span>
+                    </label>
+                    <label class="sb-kw-mode-opt">
+                      <input type="radio" name="sbKwMode" value="exact">
+                      <span><strong>Frase exacta</strong><small>el mensaje contiene la <em>frase tal cual</em> está escrita</small></span>
+                    </label>
+                  </div>
+                  <!-- Textarea oculto (sync con chips) — preserva compat con código existente -->
+                  <textarea id="sbTriggerValue" hidden></textarea>
+                </div>
                 <div id="sbTriggerNoResponseWrap" hidden style="display:flex;align-items:center;gap:8px;margin-top:6px">
                   <span style="font-size:13px;color:var(--text-muted)">Disparar después de</span>
                   <input type="number" id="sbTriggerNoRespAmount" min="1" value="24" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:6px" />
@@ -4388,7 +4412,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script src="/app.js?v=20260527j"></script>
+  <script src="/app.js?v=20260527k"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

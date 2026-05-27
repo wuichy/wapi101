@@ -109,6 +109,38 @@ function resumeRun(db, runId) {
  * triggerMessage  — call after an incoming message is stored.
  * Fires bots with trigger_type = 'keyword' or 'always'.
  */
+// Evalúa el trigger keyword de un bot contra el body de un mensaje.
+// Devuelve el texto matched (string) o null si no match.
+// Compartido entre triggerMessage y bot-matcher para consistencia.
+function _matchKeywordTrigger(bot, messageBody) {
+  const raw = (bot.trigger_value || '').trim();
+  if (!raw) return null;
+  const body = (messageBody || '').toLowerCase();
+  if (!body) return null;
+  const mode = bot.trigger_match_mode || 'any';
+
+  // Modo 'exact': la frase completa (incluido espacios) tal como fue ingresada.
+  if (mode === 'exact') {
+    const phrase = raw.toLowerCase();
+    return body.includes(phrase) ? raw : null;
+  }
+
+  const keywords = raw
+    .split(/[\n|,]/)
+    .map(k => k.toLowerCase().trim())
+    .filter(Boolean);
+  if (!keywords.length) return null;
+
+  // Modo 'all': debe contener TODAS las palabras (en cualquier orden)
+  if (mode === 'all') {
+    const allMatch = keywords.every(k => body.includes(k));
+    return allMatch ? keywords.join(' ') : null;
+  }
+
+  // Default 'any': contiene al menos UNA
+  return keywords.find(k => body.includes(k)) || null;
+}
+
 function triggerMessage(db, { convoId, contactId, messageBody, provider, integrationId }) {
   const tenantId = _tenantFromContact(db, contactId);
   if (!tenantId) { _log('warn', `triggerMessage: contacto ${contactId} sin tenant — abortando`); return; }
@@ -117,17 +149,12 @@ function triggerMessage(db, { convoId, contactId, messageBody, provider, integra
     if (bot.trigger_type === 'always') {
       runAsync(db, bot, { convoId, contactId, messageBody, provider, integrationId, tenantId });
     } else if (bot.trigger_type === 'keyword') {
-      // trigger_value puede ser una sola keyword o varias separadas por
-      // \n, | o coma. Dispara si el mensaje contiene CUALQUIERA. El keyword
-      // que matched se pasa en ctx.matchedKeyword para que steps lo usen.
-      const raw = (bot.trigger_value || '').trim();
-      const keywords = raw
-        .split(/[\n|,]/)
-        .map(k => k.toLowerCase().trim())
-        .filter(Boolean);
-      if (!keywords.length) continue;
-      const body = (messageBody || '').toLowerCase();
-      const matched = keywords.find(k => body.includes(k));
+      // trigger_value: lista de palabras separadas por \n, | o coma.
+      // trigger_match_mode: 'any' (default) / 'all' / 'exact'
+      //   - any:   mensaje contiene ALGUNA de las palabras (OR)
+      //   - all:   mensaje contiene TODAS las palabras (AND, en cualquier orden)
+      //   - exact: mensaje contiene la frase exacta tal como se ingresó
+      const matched = _matchKeywordTrigger(bot, messageBody);
       if (matched) {
         runAsync(db, bot, {
           convoId, contactId, messageBody, provider, integrationId, tenantId,

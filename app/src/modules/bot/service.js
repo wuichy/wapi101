@@ -282,11 +282,12 @@ function _serializeBotBody({ steps, dag }) {
   return JSON.stringify(Array.isArray(steps) ? steps : []);
 }
 
-function create(db, tenantId, { name, enabled = 0, trigger_type = 'keyword', trigger_value = '', trigger_modes = null, steps = [], dag = null, tagIds }) {
+function create(db, tenantId, { name, enabled = 0, trigger_type = 'keyword', trigger_value = '', trigger_match_mode = 'any', trigger_modes = null, steps = [], dag = null, tagIds }) {
   if (!name || !name.trim()) throw new Error('El nombre es requerido');
+  if (!['any', 'all', 'exact'].includes(trigger_match_mode)) trigger_match_mode = 'any';
   const r = db.prepare(
-    'INSERT INTO salsbots (tenant_id, name, enabled, trigger_type, trigger_value, trigger_modes, steps) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(tenantId, name.trim(), enabled ? 1 : 0, trigger_type, trigger_value || '', trigger_modes || null, _serializeBotBody({ steps, dag }));
+    'INSERT INTO salsbots (tenant_id, name, enabled, trigger_type, trigger_value, trigger_match_mode, trigger_modes, steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(tenantId, name.trim(), enabled ? 1 : 0, trigger_type, trigger_value || '', trigger_match_mode, trigger_modes || null, _serializeBotBody({ steps, dag }));
   setTags(db, tenantId, r.lastInsertRowid, tagIds);
   return getById(db, tenantId, r.lastInsertRowid);
 }
@@ -306,13 +307,19 @@ function update(db, tenantId, id, patch) {
     const raw = db.prepare('SELECT steps FROM salsbots WHERE id = ? AND tenant_id = ?').get(id, tenantId);
     stepsJson = raw?.steps || '[]';
   }
+  // trigger_match_mode: validar contra whitelist
+  let triggerMatchMode = patch.trigger_match_mode !== undefined
+    ? patch.trigger_match_mode
+    : (current.trigger_match_mode || 'any');
+  if (!['any', 'all', 'exact'].includes(triggerMatchMode)) triggerMatchMode = 'any';
   db.prepare(
-    'UPDATE salsbots SET name=?, enabled=?, trigger_type=?, trigger_value=?, trigger_modes=?, steps=?, updated_at=unixepoch() WHERE id=? AND tenant_id=?'
+    'UPDATE salsbots SET name=?, enabled=?, trigger_type=?, trigger_value=?, trigger_match_mode=?, trigger_modes=?, steps=?, updated_at=unixepoch() WHERE id=? AND tenant_id=?'
   ).run(
     (next.name || '').trim() || current.name,
     next.enabled ? 1 : 0,
     next.trigger_type || current.trigger_type,
     next.trigger_value ?? current.trigger_value,
+    triggerMatchMode,
     patch.trigger_modes !== undefined ? patch.trigger_modes : current.trigger_modes,
     stepsJson,
     id, tenantId

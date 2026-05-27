@@ -342,7 +342,7 @@ function _mapMessageRow(m) {
   };
 }
 
-function addMessage(db, tenantId, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt }) {
+function addMessage(db, tenantId, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt, byAdvisor = false }) {
   const t = tenantId ?? _tenantFromConvo(db, conversationId);
   if (!t) throw new Error('Conversación no encontrada');
 
@@ -374,6 +374,15 @@ function addMessage(db, tenantId, conversationId, { externalId, direction, provi
       SET last_message = ?, last_message_at = ?
       WHERE id = ? AND tenant_id = ?
     `).run((body || '').slice(0, 200), ts, conversationId, t);
+  }
+
+  // Inbound Router (híbrido): si el msg saliente lo mandó un asesor (no un
+  // bot), arranca la "ventana humano" para que IA y bots no contesten encima.
+  if (direction === 'outgoing' && byAdvisor) {
+    try {
+      db.prepare(`UPDATE conversations SET last_human_msg_at = ? WHERE id = ? AND tenant_id = ?`)
+        .run(ts, conversationId, t);
+    } catch (_) { /* col missing en DBs muy viejas → ignorar */ }
   }
 
   const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);

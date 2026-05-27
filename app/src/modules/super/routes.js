@@ -75,6 +75,15 @@ module.exports = function createSuperRouter(db) {
   // ─── Endpoints protegidos ───
   router.use(superAuth(db));
 
+  // Live Support — co-browsing (rrweb). Sub-router montado bajo /live-support.
+  // Hereda superAuth porque va después del router.use(superAuth(db)) de arriba.
+  try {
+    const { superRouter: liveSupportSuperRouter } = require('../live-support/routes');
+    router.use('/live-support', liveSupportSuperRouter(db));
+  } catch (err) {
+    console.warn('[super] live-support routes not mounted:', err.message);
+  }
+
   router.get('/me', (req, res) => {
     res.json({ superAdmin: req.superAdmin });
   });

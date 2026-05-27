@@ -156,6 +156,7 @@ module.exports = function createConversationsRouter(db) {
         provider:   'whatsapp',
         body:       result.renderedBody,
         status:     'sent',
+        byAdvisor:  true,
       });
       res.json(msg);
     } catch (err) {
@@ -283,6 +284,7 @@ module.exports = function createConversationsRouter(db) {
         body:       caption || '',
         mediaUrl:   localUrl,
         status:     'sent',
+        byAdvisor:  true,
       });
       res.json(msg);
     } catch (err) {
@@ -308,6 +310,7 @@ module.exports = function createConversationsRouter(db) {
         provider:   convo.provider,
         body:       body.trim(),
         status:     'sent',
+        byAdvisor:  true,
       });
 
       res.json(msg);
@@ -385,6 +388,7 @@ module.exports = function createConversationsRouter(db) {
         provider:   convo.provider,
         body:       body.trim(),
         status:     'sent',
+        byAdvisor:  true,
       });
       res.json({ message: msg, conversation: convo, created });
     } catch (err) {

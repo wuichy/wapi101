@@ -871,6 +871,7 @@ mountSafe('/api/apps',               require('./src/modules/apps/routes'));
 mountSafe('/api/jobs',               require('./src/modules/jobs/routes'));
 mountSafe('/api/backups',            require('./src/modules/backups/routes'));
 mountSafe('/api/mcp',                require('./src/modules/mcp/routes'));
+mountSafe('/api/ia-hybrid',          require('./src/modules/inbound-router/routes'));
 mountSafe('/api/catalog',            require('./src/modules/whatsapp-catalog/routes'));
 mountSafe('/api/data-center',        require('./src/modules/data-center/routes'));
 const { authRouter: wooAuthRouter }  = require('./src/modules/woo/routes');
@@ -883,6 +884,18 @@ try {
   app.use('/api/apps/reelance-ia', reelanceIaAuthRouter(db));
 } catch (err) {
   console.warn('[boot] reelance-ia auth routes not mounted:', err.message);
+}
+
+// Live Support — co-browsing (rrweb). Endpoints del cliente bajo /api/live-support
+// (requieren sesión Wapi101). Los endpoints del super-admin van bajo /super/live-support
+// y se montan dentro de super/routes.js para heredar superAuth.
+try {
+  const { authRouter: liveSupportAuthRouter } = require('./src/modules/live-support/routes');
+  app.use('/api/live-support', liveSupportAuthRouter(db));
+  // Arrancar timer de limpieza de sesiones stale (5 min sin actividad)
+  require('./src/modules/live-support/service').startCleanupTimer(db);
+} catch (err) {
+  console.warn('[boot] live-support routes not mounted:', err.message);
 }
 
 // Arrancar el worker de bulk jobs (corre cada 1s en background).
@@ -1098,6 +1111,10 @@ app.listen(config.port, config.host, () => {
   // (scheduled_one_time / scheduled_daily / scheduled_field).
   try { require('./src/modules/bot/engine').startScheduledPoller(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar scheduled poller:', err.message);
+  }
+  // Inbound Router (híbrido IA+bots) — cleanup periódico del cache del matcher
+  try { require('./src/modules/inbound-router/service').startCleanupTimer(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar inbound-router cleanup:', err.message);
   }
   // Iniciar poller IMAP para integraciones de email
   try { require('./src/modules/email/poller').start(db); } catch (err) {

@@ -19,6 +19,7 @@ const { decryptJson } = require('../../security/crypto');
 const convoSvc = require('../conversations/service');
 const expedientSvc = require('../expedients/service');
 const botEngine = require('../bot/engine');
+const inboundRouter = require('../inbound-router/service');
 const pushSvc = require('../notifications/service');
 const avatarsSvc = require('../customers/avatars');
 
@@ -383,7 +384,7 @@ module.exports = function createWebhooksRouter(db) {
 
             ensureExpedient(tenantId, convo.contact_id, routing);
 
-            botEngine.triggerMessage(db, {
+            inboundRouter.handleInboundMessage(db, {
               convoId:       convo.id,
               contactId:     convo.contact_id,
               messageBody:   body,
@@ -677,7 +678,7 @@ module.exports = function createWebhooksRouter(db) {
           // Sync avatar (fire-and-forget) si no tiene foto o lleva > 7 días
           avatarsSvc.syncAvatarAsync(db, tenantId, convo.contact_id, 'messenger', senderId, integration);
 
-          botEngine.triggerMessage(db, {
+          inboundRouter.handleInboundMessage(db, {
             convoId:       convo.id,
             contactId:     convo.contact_id,
             messageBody:   body,
@@ -726,7 +727,7 @@ module.exports = function createWebhooksRouter(db) {
           // Sync avatar (fire-and-forget) si no tiene foto o lleva > 7 días
           avatarsSvc.syncAvatarAsync(db, tenantId, convo.contact_id, 'instagram', senderId, integration);
 
-          botEngine.triggerMessage(db, {
+          inboundRouter.handleInboundMessage(db, {
             convoId:       convo.id,
             contactId:     convo.contact_id,
             messageBody:   body,
@@ -876,7 +877,7 @@ module.exports = function createWebhooksRouter(db) {
 
       ensureExpedient(tenantId, convo.contact_id, routing);
 
-      botEngine.triggerMessage(db, {
+      inboundRouter.handleInboundMessage(db, {
         convoId:       convo.id,
         contactId:     convo.contact_id,
         messageBody:   body,

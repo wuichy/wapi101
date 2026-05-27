@@ -2706,6 +2706,9 @@ async function openConversation(convoId) {
   ACTIVE_CONVO_ID = convoId;
   _lastMsgsSignature = null; // forzar render al cambiar de chat
   _pendingChatRestore = true; // primer renderMessages debe usar memoria, no wasAtBottom
+
+  // Híbrido IA+Bots: arrancar el watch del owner badge para esta conversación.
+  try { if (typeof hybridStartConvoWatch === 'function') hybridStartConvoWatch(convoId); } catch (_) {}
   const convo = CONVERSATIONS.find((c) => c.id === convoId);
   // Activar tracker para el nuevo chat
   _trackChatScroll(convoId);
@@ -5159,7 +5162,7 @@ function setupSettingsTabs() {
       if (target === 'papelera') loadTrash();
       if (target === 'respaldos') loadBackups();
       if (target === 'tokens-maquina') loadMachineTokens();
-      if (target === 'reportes') loadReports();
+      if (target === 'reportes') { loadReports(); liveSupportInit(); }
       if (target === 'negocio') loadBusinessHours();
       if (target === 'suscripcion') loadBilling();
       if (target === 'ia') loadAISettings();
@@ -10714,20 +10717,42 @@ function buildStepBody(step) {
             </select>
           </div>
         </div>
-        <p style="font-size:11px;color:var(--text-muted);margin:4px 0 12px">
-          El bot pausa aquí y espera al siguiente mensaje del lead. Si no responde en este tiempo, ejecuta la acción de abajo.
-        </p>
+
+        <!-- Diagrama del árbol bifurcado: ayuda a entender qué pasa por cada rama -->
+        <div class="sb-wait-tree-diagram">
+          <div class="sb-wait-tree-head">El bot pausa aquí. El árbol se separa según lo que pase:</div>
+          <div class="sb-wait-tree-branches">
+            <div class="sb-wait-tree-branch sb-wait-tree-branch--reply">
+              <div class="sb-wait-tree-branch-icon">💬</div>
+              <div>
+                <strong>Si el cliente responde antes</strong>
+                <span>Se ejecuta la rama "<em>Respondió</em>" del flujo. La IA queda silenciada mientras el wait sigue activo.</span>
+              </div>
+            </div>
+            <div class="sb-wait-tree-branch sb-wait-tree-branch--timeout">
+              <div class="sb-wait-tree-branch-icon">⏱</div>
+              <div>
+                <strong>Si pasa el tiempo sin respuesta</strong>
+                <span>Se ejecuta la rama "<em>Timeout</em>" del flujo (acción configurable abajo).</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <label style="margin-bottom:6px">Si pasa el tiempo sin respuesta:</label>
         <div class="sb-wait-ontimeout">
           <label class="sb-radio-row">
             <input type="radio" name="ontimeout-${sid}" data-field="onTimeout" data-sid="${sid}" value="continue" ${onTimeout==='continue'?'checked':''} />
-            <span>Continuar al siguiente paso</span>
+            <span>Continuar al siguiente paso (recomendado)</span>
           </label>
           <label class="sb-radio-row">
             <input type="radio" name="ontimeout-${sid}" data-field="onTimeout" data-sid="${sid}" value="stop" ${onTimeout==='stop'?'checked':''} />
             <span>Terminar bot</span>
           </label>
-        </div>`;
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin:8px 0 0;padding:8px 10px;background:var(--bg-soft,#f6f7f7);border-radius:6px">
+          💡 <strong>Tip serum pestañas:</strong> usa 30 segundos aquí + "Continuar" + agrega un mensaje "¿algo más en que te pueda ayudar?" como paso siguiente. Si el cliente escribe antes de los 30s, se cancela el envío automático y la IA o el bot que matchee toma el control.
+        </p>`;
     }
     case 'book_appointment':
       return `
@@ -27791,3 +27816,444 @@ document.addEventListener('DOMContentLoaded', () => {
   mo.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class', 'style'] });
   sync();
 })();
+
+// ─────────────────────────────────────────────────────────────────────
+// Live Support — Co-browsing con rrweb
+// ─────────────────────────────────────────────────────────────────────
+//
+// Permite al cliente compartir su pantalla con un super-admin que lo está
+// guiando por teléfono. La grabación se hace con rrweb (capture incremental
+// del DOM, mouse, scroll, input) y se envía en batches de 200ms al backend,
+// que la fan-out por SSE al viewer del admin.
+//
+// Estado global del cliente (solo uno a la vez)
+const LS = {
+  active:       false,
+  token:        null,
+  startedAt:    null,
+  eventCount:   0,
+  stopRecording: null,    // función para detener rrweb.record
+  flushTimer:   null,
+  buffer:       [],
+  pollTimer:    null,
+  rrwebLoaded:  false,
+};
+
+const LS_RRWEB_URL = 'https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.18/dist/rrweb.min.js';
+
+function liveSupportInit() {
+  // Idempotente — bind handlers solo una vez.
+  if (window.__lsInited) {
+    // Refresh status por si hubo cambio (otra pestaña, etc)
+    lsRefreshStatus();
+    return;
+  }
+  window.__lsInited = true;
+
+  document.getElementById('lsStartBtn')?.addEventListener('click', lsStart);
+  document.getElementById('lsEndBtn')?.addEventListener('click', () => lsEnd('client_ended'));
+
+  // Cerrar modal de código
+  document.querySelectorAll('[data-close-ls-code]').forEach(el => {
+    el.addEventListener('click', () => {
+      document.getElementById('lsCodeModal').hidden = true;
+    });
+  });
+
+  lsRefreshStatus();
+}
+
+async function lsRefreshStatus() {
+  try {
+    const r = await fetch('/api/live-support/status', { headers: authHeaders() });
+    const data = await r.json();
+    if (data.active && data.session) {
+      LS.active     = true;
+      LS.token      = data.session.token;
+      LS.startedAt  = data.session.started_at;
+      LS.eventCount = data.session.event_count || 0;
+      lsRenderActive();
+      // Si el server dice que está activa pero no estamos grabando localmente,
+      // significa que la página se recargó — terminamos la sesión vieja porque
+      // ya no tenemos el contexto en el browser.
+      if (!LS.stopRecording) {
+        try { await lsCallEnd(LS.token); } catch (_) {}
+        lsReset();
+      }
+    } else {
+      lsRenderIdle();
+    }
+  } catch (err) {
+    console.warn('[live-support] status check failed:', err);
+  }
+}
+
+async function lsStart() {
+  const btn = document.getElementById('lsStartBtn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = 'Cargando…';
+
+  try {
+    // 1) Cargar rrweb (lazy)
+    if (!LS.rrwebLoaded) {
+      await lsLoadRrweb();
+      LS.rrwebLoaded = true;
+    }
+
+    // 2) Pedir sesión al backend
+    const r = await fetch('/api/live-support/start', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body:    JSON.stringify({}),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.token) throw new Error(data.error || 'No se pudo iniciar');
+
+    LS.active     = true;
+    LS.token      = data.token;
+    LS.startedAt  = data.startedAt;
+    LS.eventCount = 0;
+    LS.buffer     = [];
+
+    // 3) Empezar a grabar con rrweb
+    LS.stopRecording = window.rrweb.record({
+      emit(event) {
+        LS.buffer.push(event);
+      },
+      // No grabar inputs sensibles (passwords ya están enmascarados por defecto)
+      maskAllInputs: false,
+      maskInputOptions: { password: true },
+      // Slim DOM — no graba script, comments
+      slimDOMOptions: { script: true, comment: true, headFavicon: true },
+      // Sampling para mouse — cada 50ms en lugar de cada movimiento (baja CPU)
+      sampling: { mousemove: 50, mouseInteraction: true, scroll: 150, input: 'last' },
+      checkoutEveryNms: 5 * 60 * 1000, // full snapshot cada 5min como recovery
+    });
+
+    // 4) Flush buffer cada 250ms
+    LS.flushTimer = setInterval(lsFlush, 250);
+
+    // 5) Mostrar modal con el código
+    const big = document.getElementById('lsCodeBig');
+    if (big) big.textContent = data.token;
+    const modal = document.getElementById('lsCodeModal');
+    if (modal) modal.hidden = false;
+
+    lsRenderActive();
+    lsStartStatsPoll();
+    lsShowGlobalBanner();
+  } catch (err) {
+    alert('Error: ' + (err.message || err));
+    lsReset();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Compartir mi sesión';
+  }
+}
+
+function lsFlush() {
+  if (!LS.active || !LS.token || !LS.buffer.length) return;
+  const batch = LS.buffer.splice(0, LS.buffer.length);
+  // POST sin await — fire and forget. Si falla, los próximos eventos llegan.
+  fetch(`/api/live-support/${LS.token}/events`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body:    JSON.stringify({ events: batch }),
+    keepalive: true,
+  }).then(r => r.json()).then(data => {
+    if (data && data.eventCount) LS.eventCount = data.eventCount;
+  }).catch(_ => {});
+}
+
+async function lsEnd(reason) {
+  if (!LS.token) return;
+  const t = LS.token;
+  // Flush último batch
+  lsFlush();
+  try {
+    await lsCallEnd(t);
+  } catch (_) {}
+  lsReset();
+  lsRenderIdle();
+}
+
+async function lsCallEnd(token) {
+  return fetch('/api/live-support/end', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body:    JSON.stringify({ token }),
+    keepalive: true,
+  });
+}
+
+function lsReset() {
+  if (LS.stopRecording) { try { LS.stopRecording(); } catch (_) {} }
+  if (LS.flushTimer)    clearInterval(LS.flushTimer);
+  if (LS.pollTimer)     clearInterval(LS.pollTimer);
+  LS.active = false;
+  LS.token = null;
+  LS.startedAt = null;
+  LS.eventCount = 0;
+  LS.buffer = [];
+  LS.stopRecording = null;
+  LS.flushTimer = null;
+  LS.pollTimer = null;
+  lsHideGlobalBanner();
+}
+
+function lsRenderIdle() {
+  const card = document.getElementById('liveSupportCard');
+  if (!card) return;
+  document.getElementById('lsStartBtn').hidden = false;
+  document.getElementById('lsEndBtn').hidden = true;
+  document.getElementById('lsActiveBanner').hidden = true;
+}
+
+function lsRenderActive() {
+  const card = document.getElementById('liveSupportCard');
+  if (!card) return;
+  document.getElementById('lsStartBtn').hidden = true;
+  document.getElementById('lsEndBtn').hidden = false;
+  const banner = document.getElementById('lsActiveBanner');
+  banner.hidden = false;
+  document.getElementById('lsActiveCode').textContent = LS.token || '—';
+  lsUpdateStats();
+}
+
+function lsUpdateStats() {
+  const el = document.getElementById('lsActiveStats');
+  if (!el) return;
+  const elapsed = LS.startedAt ? Math.floor(Date.now() / 1000 - LS.startedAt) : 0;
+  const mm = Math.floor(elapsed / 60);
+  const ss = String(elapsed % 60).padStart(2, '0');
+  el.textContent = `${LS.eventCount} eventos · ${mm}:${ss}`;
+}
+
+function lsStartStatsPoll() {
+  if (LS.pollTimer) clearInterval(LS.pollTimer);
+  LS.pollTimer = setInterval(lsUpdateStats, 1000);
+}
+
+function lsShowGlobalBanner() {
+  if (document.getElementById('lsGlobalBanner')) return;
+  const el = document.createElement('div');
+  el.id = 'lsGlobalBanner';
+  el.className = 'ls-global-banner';
+  el.innerHTML = `
+    <span class="ls-rec-dot" style="background:#fff"></span>
+    <span>Compartiendo pantalla en vivo — Código: <strong style="font-family:ui-monospace,monospace;letter-spacing:1px">${LS.token}</strong></span>
+    <button type="button" id="lsGlobalEndBtn">Terminar</button>
+  `;
+  document.body.appendChild(el);
+  document.getElementById('lsGlobalEndBtn').addEventListener('click', () => lsEnd('client_ended'));
+}
+
+function lsHideGlobalBanner() {
+  document.getElementById('lsGlobalBanner')?.remove();
+}
+
+function lsLoadRrweb() {
+  return new Promise((resolve, reject) => {
+    if (window.rrweb) return resolve();
+    const s = document.createElement('script');
+    s.src = LS_RRWEB_URL;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('No se pudo cargar rrweb'));
+    document.head.appendChild(s);
+  });
+}
+
+// Si la pestaña se cierra mientras hay sesión activa, manda end con keepalive
+window.addEventListener('beforeunload', () => {
+  if (LS.active && LS.token) {
+    lsFlush();
+    // navigator.sendBeacon es la forma confiable de mandar al unload
+    try {
+      const blob = new Blob([JSON.stringify({ token: LS.token })], { type: 'application/json' });
+      navigator.sendBeacon('/api/live-support/end', blob);
+    } catch (_) {}
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Híbrido IA + Bots — UI Settings + Chat owner badge
+// ─────────────────────────────────────────────────────────────────────
+const HY = {
+  settingsLoaded: false,
+  currentConvoState: null,
+  refreshTimer: null,
+};
+
+// ─── Settings → IA: card "Coordinación Bots + IA" ───
+async function hybridLoadSettings() {
+  try {
+    const r = await fetch('/api/ia-hybrid/settings', { headers: authHeaders() });
+    if (!r.ok) return;
+    const cfg = await r.json();
+    document.getElementById('hybridEnabledChk').checked   = !!cfg.ia_hybrid_enabled;
+    document.getElementById('hybridMatcherChk').checked   = !!cfg.ia_matcher_enabled;
+    document.getElementById('hybridFallbackChk').checked  = !!cfg.ia_fallback_enabled;
+    document.getElementById('hybridTakeoverWindow').value = cfg.human_takeover_window_min || 15;
+    hybridUpdateSubOptionsVisibility();
+    HY.settingsLoaded = true;
+  } catch (err) {
+    console.warn('[hybrid] load settings:', err);
+  }
+}
+
+function hybridUpdateSubOptionsVisibility() {
+  const enabled = document.getElementById('hybridEnabledChk').checked;
+  const sub = document.getElementById('hybridSubOptions');
+  if (sub) sub.style.opacity = enabled ? '1' : '0.5';
+  if (sub) sub.style.pointerEvents = enabled ? '' : 'none';
+}
+
+async function hybridSaveSettings() {
+  const body = {
+    hybridEnabled:     document.getElementById('hybridEnabledChk').checked,
+    matcherEnabled:    document.getElementById('hybridMatcherChk').checked,
+    fallbackEnabled:   document.getElementById('hybridFallbackChk').checked,
+    takeoverWindowMin: Number(document.getElementById('hybridTakeoverWindow').value) || 15,
+  };
+  const status = document.getElementById('hybridSaveStatus');
+  status.textContent = 'Guardando…';
+  try {
+    const r = await fetch('/api/ia-hybrid/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || 'error');
+    status.textContent = '✓ Guardado';
+    setTimeout(() => { status.textContent = ''; }, 2500);
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+  }
+}
+
+// Init handlers de la card híbrida
+function hybridSettingsInit() {
+  if (window.__hybridInited) return;
+  window.__hybridInited = true;
+  document.getElementById('hybridEnabledChk')?.addEventListener('change', hybridUpdateSubOptionsVisibility);
+  document.getElementById('btnSaveHybrid')?.addEventListener('click', hybridSaveSettings);
+  hybridLoadSettings();
+}
+
+// Hook: cuando se abre la pestaña IA en settings, init.
+(function hookIAtab() {
+  // Lo enganchamos al sistema de tabs ya existente — al cambiar a "ia" llamamos init.
+  document.addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-settings="ia"]');
+    if (tab) setTimeout(hybridSettingsInit, 80);
+  });
+})();
+
+// ─── Chat owner badge ───
+function hybridStartConvoWatch(convoId) {
+  hybridStopConvoWatch();
+  if (!convoId) return;
+  hybridRefreshOwner(convoId);
+  HY.refreshTimer = setInterval(() => hybridRefreshOwner(convoId), 20_000);
+}
+
+function hybridStopConvoWatch() {
+  if (HY.refreshTimer) { clearInterval(HY.refreshTimer); HY.refreshTimer = null; }
+  const badge = document.getElementById('rhOwnerBadge');
+  if (badge) badge.hidden = true;
+}
+
+async function hybridRefreshOwner(convoId) {
+  if (!convoId) return;
+  try {
+    const r = await fetch(`/api/ia-hybrid/conversations/${convoId}/state`, { headers: authHeaders() });
+    if (!r.ok) {
+      // Si el endpoint falla (tenant sin híbrido o lo que sea), oculta el badge silenciosamente
+      const badge = document.getElementById('rhOwnerBadge');
+      if (badge) badge.hidden = true;
+      return;
+    }
+    const state = await r.json();
+    HY.currentConvoState = { ...state, convoId };
+    hybridRenderOwnerBadge(state);
+  } catch (err) {
+    console.warn('[hybrid] state:', err);
+  }
+}
+
+function hybridRenderOwnerBadge(state) {
+  const badge = document.getElementById('rhOwnerBadge');
+  if (!badge) return;
+
+  // ¿Hybrid activo? Si no, no mostrar badge en este tenant.
+  // Para saberlo, miramos si el endpoint devolvió ai_mode (lo devuelve si la tabla tiene la columna).
+  // Si no hay híbrido, escondemos.
+  // (No hay flag explícito en /state, pero asumimos que si llegó la respuesta OK, hay híbrido)
+  badge.hidden = false;
+  badge.dataset.owner = state.owner || 'idle';
+
+  const labels = {
+    human:       'Modo humano',
+    human_lock:  'Modo humano (bloqueado)',
+    bot_running: 'Bot en curso',
+    ai_active:   'IA disponible',
+    idle:        'Sin actividad',
+  };
+  document.getElementById('rhOwnerLabel').textContent = labels[state.owner] || state.owner;
+
+  let meta = '';
+  if (state.owner === 'human' && state.humanMinLeft) {
+    meta = `vuelve a IA en ${state.humanMinLeft} min`;
+  } else if (state.owner === 'human_lock') {
+    meta = state.humanTakeoverUntil ? `lock hasta ${new Date(state.humanTakeoverUntil*1000).toLocaleTimeString()}` : 'lock permanente';
+  } else if (state.owner === 'bot_running' && state.activeBotWait) {
+    meta = `bot esperando (${state.activeBotWait.wait_kind || 'response'})`;
+  }
+  document.getElementById('rhOwnerMeta').textContent = meta;
+
+  // Botones según el estado
+  const giveBack = document.getElementById('rhOwnerGiveBack');
+  const takeOver = document.getElementById('rhOwnerTakeOver');
+  giveBack.hidden = !(state.owner === 'human' || state.owner === 'human_lock');
+  takeOver.textContent = (state.owner === 'human_lock') ? 'Modo humano ON' : 'Tomar control';
+}
+
+// Handlers de botones
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('rhOwnerGiveBack')?.addEventListener('click', async () => {
+    if (!HY.currentConvoState) return;
+    const r = await fetch(`/api/ia-hybrid/conversations/${HY.currentConvoState.convoId}/give-back`, {
+      method: 'POST', headers: authHeaders(),
+    });
+    if (r.ok) hybridRefreshOwner(HY.currentConvoState.convoId);
+  });
+
+  document.getElementById('rhOwnerTakeOver')?.addEventListener('click', async () => {
+    if (!HY.currentConvoState) return;
+    // Si ya está en human_lock, desbloquea
+    if (HY.currentConvoState.owner === 'human_lock') {
+      await fetch(`/api/ia-hybrid/conversations/${HY.currentConvoState.convoId}/ai-mode`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ mode: 'auto' }),
+      });
+    } else {
+      await fetch(`/api/ia-hybrid/conversations/${HY.currentConvoState.convoId}/take-over`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({}), // sin duration = lock permanente
+      });
+    }
+    hybridRefreshOwner(HY.currentConvoState.convoId);
+  });
+
+  // Atajo Cmd/Ctrl+Shift+I → devolver a IA
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'i') {
+      const btn = document.getElementById('rhOwnerGiveBack');
+      if (btn && !btn.hidden) { e.preventDefault(); btn.click(); }
+    }
+  });
+});
+
+// Hook: openConversation() llama directamente a hybridStartConvoWatch(convoId)
+// (inyectado en la función openConversation arriba en el archivo).

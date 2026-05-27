@@ -2302,4 +2302,6 @@ module.exports = {
   resumeWait, resumeWaitsForContact, startWaitTimeoutPoller,
   // Recordatorios de citas:
   startReminderJobPoller,
+  // Expuesto para el inbound-router (matcher de bots):
+  enabledBots,
 };

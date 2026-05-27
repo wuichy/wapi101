@@ -8,6 +8,7 @@ const manager = require('./manager');
 const convoSvc = require('../../conversations/service');
 const expedientSvc = require('../../expedients/service');
 const botEngine = require('../../bot/engine');
+const inboundRouter = require('../../inbound-router/service');
 const pushSvc = require('../../notifications/service');
 const customerSvc = require('../../customers/service');
 
@@ -88,7 +89,7 @@ function init(db) {
 
         ensureExpedient(db, tenantId, convo.contact_id, routing);
 
-        botEngine.triggerMessage(db, {
+        inboundRouter.handleInboundMessage(db, {
           convoId:       convo.id,
           contactId:     convo.contact_id,
           messageBody:   payload.body,

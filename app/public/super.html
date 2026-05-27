@@ -639,6 +639,11 @@
         <span>Reportes</span>
         <span id="srBadge" class="sr-badge" hidden></span>
       </a>
+      <a class="sa-nav-item" data-section="live-support">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/></svg>
+        <span>Live Support</span>
+        <span id="lsActiveBadge" class="sr-badge" hidden></span>
+      </a>
       <a class="sa-nav-item" data-section="health">
         <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         <span>Salud</span>
@@ -738,6 +743,53 @@
         <div class="empty-state" id="srEmpty" hidden>No hay reportes que coincidan con el filtro.</div>
       </div>
     </section>
+
+    <!-- Section: Live Support -->
+    <section data-section-pane="live-support" hidden>
+      <div class="sa-page-head">
+        <h1 class="sa-page-title">Live Support</h1>
+      </div>
+      <p class="sa-page-sub">Sesiones en vivo de clientes que compartieron su pantalla. Pega el código que te dieron por teléfono, o entra a una sesión activa de la lista.</p>
+
+      <!-- Entry: código por teléfono -->
+      <div class="sa-card" style="padding:20px 24px;max-width:520px;margin-bottom:20px">
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="text" id="lsCodeInput" placeholder="XQ7-K42" maxlength="7"
+                 style="flex:1;padding:10px 14px;font-family:ui-monospace,monospace;font-size:18px;letter-spacing:3px;text-align:center;border:1px solid #ccc;border-radius:8px;text-transform:uppercase">
+          <button class="sa-btn" id="lsCodeJoinBtn" style="padding:10px 18px">Entrar</button>
+        </div>
+        <p style="margin:10px 0 0;font-size:12px;color:#888">El cliente te dictó este código por teléfono</p>
+      </div>
+
+      <!-- Lista de sesiones activas -->
+      <div class="sa-card" style="padding:18px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <h3 style="margin:0;font-size:14px">Sesiones activas</h3>
+          <button class="sa-btn sa-btn--ghost" id="lsRefreshBtn" style="padding:4px 10px;font-size:12px">Actualizar</button>
+        </div>
+        <div id="lsActiveList" class="ls-active-list" style="padding:0">
+          <div style="color:#888;font-size:13px;padding:8px 0">Cargando…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Viewer modal: ocupa toda la pantalla cuando entras a una sesión -->
+    <div id="lsViewerWrap" class="ls-viewer-wrap" hidden style="position:fixed;inset:0;z-index:9999">
+      <div class="ls-viewer-bar">
+        <div>
+          <span class="ls-viewer-title" id="lsViewerTitle">—</span>
+          <span class="ls-viewer-meta" id="lsViewerMeta"></span>
+        </div>
+        <div class="ls-viewer-spacer"></div>
+        <span class="ls-viewer-meta" id="lsViewerStats">0 eventos</span>
+        <button class="sa-btn sa-btn--danger" id="lsViewerEndBtn" style="background:#a02525;color:#fff;border:none">Terminar sesión</button>
+        <button class="sa-btn" id="lsViewerCloseBtn">Cerrar viewer</button>
+      </div>
+      <div class="ls-viewer-stage">
+        <div class="ls-viewer-status" id="lsViewerStatus">Conectando…</div>
+        <div class="ls-viewer-iframe-host" id="lsViewerHost"></div>
+      </div>
+    </div>
 
     <!-- Section: Email / SMTP -->
     <section data-section-pane="email" hidden>
@@ -1010,7 +1062,7 @@ $('logoutBtn').addEventListener('click', async () => {
 });
 
 // ── Navegación entre secciones ──
-const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', reports: 'Reportes', health: 'Salud del sistema', email: 'Email / SMTP' };
+const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', reports: 'Reportes', 'live-support': 'Live Support', health: 'Salud del sistema', email: 'Email / SMTP' };
 $('saNav').addEventListener('click', (e) => {
   const item = e.target.closest('[data-section]');
   if (!item) return;
@@ -1027,6 +1079,7 @@ function switchSection(name) {
   $('saTopbarTitle').textContent = SECTION_TITLES[name] || name;
   if (name === 'reports') loadReports();
   if (name === 'email')   loadEmailConfig();
+  if (name === 'live-support') lsAdminInit();
 }
 
 // ──────────── Reportes (cross-tenant) ────────────
@@ -1573,6 +1626,256 @@ $('smtpTestBtn').addEventListener('click', async () => {
 });
 
 init();
+
+// ─────────────────────────────────────────────────────────────────────
+// Live Support — Viewer (super-admin)
+// ─────────────────────────────────────────────────────────────────────
+const LSA = {
+  inited:     false,
+  pollTimer:  null,
+  rrwebLoaded:false,
+  replayer:   null,
+  eventSource:null,
+  token:      null,
+  startedAt:  null,
+  eventCount: 0,
+  statsTimer: null,
+};
+
+const LSA_RRWEB_URL = 'https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.18/dist/rrweb.min.js';
+
+function lsAdminInit() {
+  if (!LSA.inited) {
+    LSA.inited = true;
+    $('lsRefreshBtn').addEventListener('click', lsLoadActive);
+    $('lsCodeJoinBtn').addEventListener('click', () => {
+      const v = $('lsCodeInput').value.trim().toUpperCase();
+      if (v) lsOpenViewer(v);
+    });
+    $('lsCodeInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') $('lsCodeJoinBtn').click();
+    });
+    $('lsViewerCloseBtn').addEventListener('click', lsCloseViewer);
+    $('lsViewerEndBtn').addEventListener('click', lsAdminEnd);
+    // Poll de sesiones activas cada 15s
+    LSA.pollTimer = setInterval(lsLoadActive, 15_000);
+  }
+  lsLoadActive();
+}
+
+async function lsLoadActive() {
+  try {
+    const data = await api('GET', '/live-support/active');
+    const items = data.items || [];
+    const badge = $('lsActiveBadge');
+    if (items.length > 0) {
+      badge.hidden = false;
+      badge.textContent = items.length;
+    } else {
+      badge.hidden = true;
+    }
+    const root = $('lsActiveList');
+    if (!items.length) {
+      root.innerHTML = '<div style="color:#888;font-size:13px;padding:8px 0">No hay sesiones activas. Cuando un cliente comparta su pantalla, aparecerá aquí.</div>';
+      return;
+    }
+    root.innerHTML = items.map(s => {
+      const elapsed = Math.floor(Date.now()/1000 - s.started_at);
+      const mm = Math.floor(elapsed/60);
+      const ss = String(elapsed%60).padStart(2,'0');
+      return `
+        <div class="ls-active-row">
+          <span class="ls-active-code">${escapeHtml(s.token)}</span>
+          <div class="ls-active-info">
+            <div class="ls-active-tenant">${escapeHtml(s.tenant_name || 'Tenant #' + s.tenant_id)}</div>
+            <div class="ls-active-meta">${escapeHtml(s.client_label || '—')} · ${s.event_count || 0} eventos · ${mm}:${ss}</div>
+          </div>
+          <button class="sa-btn" data-ls-open="${escapeHtml(s.token)}">Ver pantalla</button>
+        </div>
+      `;
+    }).join('');
+    root.querySelectorAll('[data-ls-open]').forEach(b => {
+      b.addEventListener('click', () => lsOpenViewer(b.dataset.lsOpen));
+    });
+  } catch (err) {
+    console.error('lsLoadActive', err);
+  }
+}
+
+async function lsOpenViewer(token) {
+  if (!token) return;
+  LSA.token = token;
+  $('lsViewerTitle').textContent = `Sesión ${token}`;
+  $('lsViewerMeta').textContent = '';
+  $('lsViewerStatus').textContent = 'Cargando rrweb…';
+  $('lsViewerStatus').hidden = false;
+  $('lsViewerHost').innerHTML = '';
+  $('lsViewerWrap').hidden = false;
+
+  try {
+    // Cargar rrweb (replay)
+    if (!LSA.rrwebLoaded) {
+      await lsaLoadScript(LSA_RRWEB_URL);
+      LSA.rrwebLoaded = true;
+    }
+  } catch (err) {
+    $('lsViewerStatus').textContent = 'Error cargando rrweb: ' + err.message;
+    return;
+  }
+
+  $('lsViewerStatus').textContent = 'Conectando al stream…';
+  // EventSource no soporta headers — usamos fetch + ReadableStream para
+  // poder enviar el Bearer token del super-admin.
+  lsaStartStream(token, localStorage.getItem(TOKEN_KEY));
+}
+
+async function lsaStartStream(token, authToken) {
+  let buffer = '';
+  let allEvents = [];
+  const host = $('lsViewerHost');
+  LSA.eventCount = 0;
+  LSA.startedAt = null;
+
+  try {
+    const resp = await fetch(`/super/live-support/${encodeURIComponent(token)}/stream`, {
+      headers: { 'Authorization': 'Bearer ' + authToken },
+    });
+    if (!resp.ok) {
+      $('lsViewerStatus').textContent = 'No se pudo conectar: ' + resp.status;
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    LSA.eventSource = { cancel: () => { try { reader.cancel(); } catch(_){} } };
+
+    function processChunk(chunk) {
+      buffer += chunk;
+      // Parsear eventos SSE — separados por \n\n
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const raw = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (!raw.trim() || raw.startsWith(':')) continue;
+        let eventName = 'message';
+        let dataLines = [];
+        for (const line of raw.split('\n')) {
+          if (line.startsWith('event:')) eventName = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+        }
+        const data = dataLines.join('\n');
+        handleSseEvent(eventName, data);
+      }
+    }
+
+    function handleSseEvent(name, data) {
+      if (name === 'end') {
+        $('lsViewerStatus').textContent = 'Sesión terminada por el cliente';
+        $('lsViewerStatus').hidden = false;
+        return;
+      }
+      if (name === 'meta') {
+        try {
+          const meta = JSON.parse(data);
+          LSA.startedAt = meta.startedAt;
+          $('lsViewerMeta').textContent = ` · ${meta.clientLabel || ''} · iniciada ${new Date(meta.startedAt * 1000).toLocaleTimeString()}`;
+          if (!LSA.statsTimer) LSA.statsTimer = setInterval(lsaUpdateStats, 1000);
+        } catch (_) {}
+        return;
+      }
+      if (name === 'error') {
+        $('lsViewerStatus').textContent = 'Error: ' + data;
+        return;
+      }
+      // message default — array de eventos rrweb
+      let events;
+      try { events = JSON.parse(data); } catch (_) { return; }
+      if (!Array.isArray(events) || !events.length) return;
+
+      LSA.eventCount += events.length;
+
+      if (!LSA.replayer) {
+        // Necesitamos al menos snapshot inicial (type 2) para empezar replay
+        const hasSnapshot = allEvents.concat(events).some(e => e.type === 2);
+        allEvents = allEvents.concat(events);
+        if (hasSnapshot) {
+          // Inicializar el replayer en modo "live"
+          $('lsViewerStatus').hidden = true;
+          host.innerHTML = '';
+          LSA.replayer = new window.rrweb.Replayer(allEvents, {
+            root: host,
+            liveMode: true,
+            insertStyleRules: [
+              // Cursor rojo grande sobre la pantalla del cliente
+              '.replayer-mouse { width:20px !important; height:20px !important; background:#ff2020 !important; border:2px solid #fff !important; box-shadow:0 0 0 2px rgba(255,32,32,0.5),0 2px 8px rgba(0,0,0,0.3) !important; opacity:0.95 !important; }',
+              '.replayer-mouse-tail { stroke:rgba(255,32,32,0.6) !important; stroke-width:3 !important; }',
+            ],
+            showWarning: false,
+            mouseTail: { duration: 800, lineCap: 'round', lineWidth: 3, strokeStyle: 'rgba(255,32,32,0.6)' },
+          });
+          // Arranca el live replay desde el primer timestamp
+          LSA.replayer.startLive(allEvents[0]?.timestamp);
+        }
+      } else {
+        // Stream de eventos en vivo — addEvent uno por uno
+        for (const ev of events) {
+          try { LSA.replayer.addEvent(ev); } catch (e) { console.warn('addEvent', e); }
+        }
+      }
+    }
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        $('lsViewerStatus').textContent = 'Stream cerrado';
+        $('lsViewerStatus').hidden = false;
+        break;
+      }
+      processChunk(decoder.decode(value, { stream: true }));
+    }
+  } catch (err) {
+    console.error('[ls-viewer] stream error', err);
+    $('lsViewerStatus').textContent = 'Error de stream: ' + err.message;
+    $('lsViewerStatus').hidden = false;
+  }
+}
+
+function lsaUpdateStats() {
+  if (!LSA.startedAt) return;
+  const elapsed = Math.floor(Date.now()/1000 - LSA.startedAt);
+  const mm = Math.floor(elapsed/60);
+  const ss = String(elapsed%60).padStart(2,'0');
+  $('lsViewerStats').textContent = `${LSA.eventCount} eventos · ${mm}:${ss}`;
+}
+
+function lsCloseViewer() {
+  $('lsViewerWrap').hidden = true;
+  if (LSA.eventSource) { try { LSA.eventSource.cancel(); } catch (_) {} LSA.eventSource = null; }
+  if (LSA.replayer) { try { LSA.replayer.destroy?.(); } catch (_) {} LSA.replayer = null; }
+  if (LSA.statsTimer) { clearInterval(LSA.statsTimer); LSA.statsTimer = null; }
+  LSA.token = null;
+}
+
+async function lsAdminEnd() {
+  if (!LSA.token) return;
+  if (!confirm('¿Terminar la sesión del cliente? Su grabación se detendrá.')) return;
+  try {
+    await api('POST', `/live-support/${LSA.token}/end`, {});
+  } catch (err) {
+    alert('Error al terminar: ' + err.message);
+  }
+  lsCloseViewer();
+  lsLoadActive();
+}
+
+function lsaLoadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+    document.head.appendChild(s);
+  });
+}
 </script>
 </body>
 </html>

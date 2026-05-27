@@ -410,6 +410,18 @@
                 </div>
               </header>
 
+              <!-- Badge de owner híbrido — visible solo si tenant tiene ia_hybrid_enabled.
+                   Muestra quién lleva la conversación: humano, bot, IA o idle, y botones rápidos. -->
+              <div class="rh-owner-badge" id="rhOwnerBadge" hidden>
+                <span class="rh-owner-icon" id="rhOwnerIcon"></span>
+                <span class="rh-owner-label" id="rhOwnerLabel">—</span>
+                <span class="rh-owner-meta" id="rhOwnerMeta"></span>
+                <div class="rh-owner-actions">
+                  <button type="button" class="rh-owner-btn" id="rhOwnerGiveBack" hidden title="Devolver el control a la IA inmediatamente (Cmd+Shift+I)">Devolver a IA</button>
+                  <button type="button" class="rh-owner-btn" id="rhOwnerTakeOver" title="Bloquear IA y bots permanentemente">Tomar control</button>
+                </div>
+              </div>
+
               <section class="rh-messages" id="rhMessages"><!-- JS: empty state o mensajes --></section>
 
               <!-- Panel lateral de info (toggle con botón "i") -->
@@ -2882,6 +2894,60 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 </div>
               </div>
 
+              <!-- ─── Coordinación Bots + IA (Híbrido) ─── -->
+              <div class="settings-card ia-hybrid-card">
+                <h3>Coordinación Bots + IA</h3>
+                <p class="settings-note">Activa el "Router" que coordina quién contesta cada mensaje: el bot indicado, la IA libre o tú (modo humano). Sin esto, los bots y la IA pueden chocar y responder al mismo tiempo.</p>
+
+                <div class="hybrid-toggle-row">
+                  <label class="hybrid-toggle">
+                    <input type="checkbox" id="hybridEnabledChk">
+                    <span class="hybrid-toggle-slider"></span>
+                    <div class="hybrid-toggle-text">
+                      <strong>Activar coordinador</strong>
+                      <small>Aplica reglas en orden: humano → bot esperando → match de bot → IA libre.</small>
+                    </div>
+                  </label>
+                </div>
+
+                <div id="hybridSubOptions" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+                  <div class="hybrid-toggle-row">
+                    <label class="hybrid-toggle">
+                      <input type="checkbox" id="hybridMatcherChk">
+                      <span class="hybrid-toggle-slider"></span>
+                      <div class="hybrid-toggle-text">
+                        <strong>Matcher IA para triggers</strong>
+                        <small>Usa la IA (Haiku) para detectar variaciones del texto. Ej: "ola me intersa la alopesia" matcheará el bot de "información alopecia". Cuesta centavos de API.</small>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div class="hybrid-toggle-row">
+                    <label class="hybrid-toggle">
+                      <input type="checkbox" id="hybridFallbackChk">
+                      <span class="hybrid-toggle-slider"></span>
+                      <div class="hybrid-toggle-text">
+                        <strong>IA contesta cuando ningún bot match</strong>
+                        <small>Si el cliente escribe algo que no dispara ningún bot, la IA responde libre. Si lo apagas, no responde nadie.</small>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div style="margin-top:14px">
+                    <label class="form-field">
+                      <span>Ventana de "modo humano" (minutos)</span>
+                      <input type="number" id="hybridTakeoverWindow" min="1" max="1440" value="15" style="max-width:120px">
+                    </label>
+                    <small class="settings-note" style="display:block;margin-top:6px">Cuando tú o un asesor escribe en una conversación, la IA y los bots se quedan callados durante este tiempo (en minutos). Cada nuevo mensaje tuyo reinicia el contador.</small>
+                  </div>
+                </div>
+
+                <div class="settings-actions" style="margin-top:14px">
+                  <button class="btn btn--primary" id="btnSaveHybrid">Guardar coordinación</button>
+                  <span id="hybridSaveStatus" style="font-size:13px;align-self:center"></span>
+                </div>
+              </div>
+
               <div class="settings-card">
                 <h3 data-i18n="ia.behavior">Comportamiento</h3>
                 <div class="form-grid">
@@ -3443,6 +3509,56 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   <p>Reporta bugs, sugerencias o problemas de diseño con texto, fotos o videos. Los administradores los reciben y responden.</p>
                 </div>
                 <button class="btn btn--primary" id="reportNewBtn" data-i18n="report.new">+ Nuevo reporte</button>
+              </div>
+
+              <!-- ─── Live Support: Compartir mi pantalla ─── -->
+              <div class="live-support-card" id="liveSupportCard">
+                <div class="ls-head">
+                  <div class="ls-icon" aria-hidden="true">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                      <line x1="8" y1="21" x2="16" y2="21"/>
+                      <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                  </div>
+                  <div class="ls-text">
+                    <h3>Compartir mi pantalla con soporte</h3>
+                    <p>Si estás hablando con un administrador por teléfono y necesitas que vea lo que estás haciendo, comparte tu sesión en vivo. Recibirás un código corto (ej. <code>XQ7-K42</code>) que le dictarás.</p>
+                  </div>
+                </div>
+                <div class="ls-actions">
+                  <button class="btn btn--primary" id="lsStartBtn">Compartir mi sesión</button>
+                  <button class="btn" id="lsEndBtn" hidden>Terminar sesión</button>
+                </div>
+                <!-- Banner persistente cuando hay sesión activa -->
+                <div class="ls-active-banner" id="lsActiveBanner" hidden>
+                  <div class="ls-rec">
+                    <span class="ls-rec-dot"></span>
+                    <span>Compartiendo en vivo</span>
+                  </div>
+                  <div class="ls-code-display">
+                    Tu código: <strong id="lsActiveCode">—</strong>
+                  </div>
+                  <div class="ls-stats" id="lsActiveStats">0 eventos · 0s</div>
+                </div>
+              </div>
+
+              <!-- Modal: código de sesión recién creado -->
+              <div class="modal-backdrop" id="lsCodeModal" hidden>
+                <div class="modal-box" style="max-width:480px;text-align:center">
+                  <header class="modal-header">
+                    <h2>Comparte este código</h2>
+                    <button class="modal-close" data-close-ls-code>×</button>
+                  </header>
+                  <div class="modal-body" style="padding:30px 20px">
+                    <p style="margin-bottom:18px">Lee este código al administrador por teléfono:</p>
+                    <div class="ls-code-big" id="lsCodeBig">XQ7-K42</div>
+                    <p style="margin-top:24px;font-size:13px;color:var(--text-muted)">Tu pantalla se comparte solo mientras tengas esta sesión activa. Puedes terminarla en cualquier momento desde el botón "Terminar sesión".</p>
+                  </div>
+                  <footer class="modal-footer">
+                    <button class="btn btn--primary" data-close-ls-code>Entendido</button>
+                  </footer>
+                </div>
               </div>
 
               <!-- Filtros de status (solo admin ve todos) -->
@@ -4236,7 +4352,9 @@ Ana, , ana@hotmail.com, 5551112222</pre>
     </div>
   </div>
 
-  <script src="/app.js?v=20260525b"></script>
+  <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
+       cliente arranca una sesión (lazy via dynamic import en app.js). -->
+  <script src="/app.js?v=20260527b"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

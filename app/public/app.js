@@ -9822,6 +9822,16 @@ function botRowTagsHtml(bot) {
   return `<span class="bot-row-tags">${bot.tags.map(t => `<span class="bot-tag-pill" style="--tag-color:${escHtml(t.color)};${tplTagPillStyle(t.color)}"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</span>`).join('')}</span>`;
 }
 
+// Badge "⚠️ Incompatible con coordinador" para bots con trigger=always
+// cuando el tenant tiene el híbrido activo. Si el coordinador está apagado,
+// devuelve string vacío (no se muestra nada).
+function botHybridIncompatibleBadge(b) {
+  if (!HY?.hybridEnabled) return '';
+  if (b.trigger_type !== 'always') return '';
+  if (!b.enabled) return ''; // ya está apagado, no es problema
+  return ` <span class="bot-incompatible-badge" title="Este bot tiene trigger 'Cualquier mensaje' y choca con el Coordinador IA+Bots. La IA nunca podrá responder en conversaciones donde este bot esté activo. Cambia el trigger o desactívalo.">⚠️ Incompatible con coordinador</span>`;
+}
+
 function renderBotList() {
   const list = document.getElementById('botList');
   const empty = document.getElementById('botEmpty');
@@ -9894,7 +9904,7 @@ function renderBotList() {
               <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2.5" cy="2.5" r="1.5"/><circle cx="7.5" cy="2.5" r="1.5"/><circle cx="2.5" cy="7" r="1.5"/><circle cx="7.5" cy="7" r="1.5"/><circle cx="2.5" cy="11.5" r="1.5"/><circle cx="7.5" cy="11.5" r="1.5"/></svg>
             </span>` : ''}
           <div class="bot-row-name-wrap">
-            <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}${botIssuesBadgeHtml(b)}</div>
+            <div class="bot-row-name">${escHtml(b.name)}${botRowTagsHtml(b)}${botIssuesBadgeHtml(b)}${botHybridIncompatibleBadge(b)}</div>
             ${b.created_at ? `<div class="bot-row-date">${t('bot.row.created').replace('{date}', escHtml(formatBotDate(b.created_at)))}</div>` : ''}
           </div>
           <div class="bot-row-trigger">${botTriggerHtml(b)}</div>
@@ -28293,7 +28303,27 @@ const HY = {
   settingsLoaded: false,
   currentConvoState: null,
   refreshTimer: null,
+  // Flag global cacheado del coordinador (usado por la lista de bots para
+  // mostrar el badge "incompatible" en bots con trigger='always').
+  hybridEnabled: false,
 };
+
+// Actualiza HY.hybridEnabled y re-renderiza la lista de bots si está visible.
+async function hybridRefreshFlag() {
+  try {
+    const r = await fetch('/api/ia-hybrid/settings', { headers: authHeaders() });
+    if (!r.ok) return;
+    const cfg = await r.json();
+    const newVal = !!cfg.ia_hybrid_enabled;
+    if (newVal !== HY.hybridEnabled) {
+      HY.hybridEnabled = newVal;
+      // Re-renderizar bot list para mostrar/ocultar badges incompatibles
+      if (typeof renderBotList === 'function' && Array.isArray(window.sbBots) && sbBots.length) {
+        try { renderBotList(); } catch (_) {}
+      }
+    }
+  } catch (_) {}
+}
 
 // ─── Settings → IA: card "Coordinación Bots + IA" ───
 async function hybridLoadSettings() {
@@ -28391,6 +28421,27 @@ async function hybridCheckIncompatibleBots() {
   document.addEventListener('click', (e) => {
     const tab = e.target.closest('[data-settings="ia"]');
     if (tab) setTimeout(hybridSettingsInit, 80);
+  });
+  // Carga inicial si el sub-tab IA ya está visible al cargar la página
+  // (cubre el caso de Cmd+Shift+R en Settings → IA — antes los handlers
+  // nunca se enganchaban porque nunca había click en el tab).
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
+      const iaPane = document.querySelector('.settings-pane[data-settings="ia"]');
+      if (iaPane && !iaPane.hidden && iaPane.offsetParent !== null) hybridSettingsInit();
+    }, 600));
+  } else {
+    setTimeout(() => {
+      const iaPane = document.querySelector('.settings-pane[data-settings="ia"]');
+      if (iaPane && !iaPane.hidden && iaPane.offsetParent !== null) hybridSettingsInit();
+    }, 600);
+  }
+  // También refrescar el flag al entrar al tab Bot (para que la lista
+  // muestre badges incompatibles correctamente sin requerir abrir Settings).
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.nav-item[data-view="bots"]')) {
+      setTimeout(hybridRefreshFlag, 300);
+    }
   });
 })();
 

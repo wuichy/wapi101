@@ -14570,3 +14570,21 @@ body.bb-ve-fullscreen-on .bb-ve-wrap {
   color: #ef4444;
 }
 .kb-item-delete:active { transform: scale(0.95); }
+
+/* ─── Badge "Incompatible con coordinador" en lista de bots ─── */
+.bot-incompatible-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  margin-left: 6px;
+  white-space: nowrap;
+  cursor: help;
+}
+.bot-incompatible-badge:hover { background: #fee2e2; }

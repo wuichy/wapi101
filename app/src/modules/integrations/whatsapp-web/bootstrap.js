@@ -99,8 +99,14 @@ function init(db) {
 
         const senderName = payload.pushName || convo.contact_first_name || `+${payload.externalId}`;
         const preview = (payload.body || '📎 Adjunto').slice(0, 140);
+        // Si la convo está marcada urgente (handover disparado), prefijar 🚨
+        let isUrgent = false;
+        try {
+          const row = db.prepare('SELECT is_urgent FROM conversations WHERE id = ?').get(convo.id);
+          isUrgent = !!(row && row.is_urgent);
+        } catch (_) {}
         pushSvc.sendToAll(db, tenantId, {
-          title: senderName,
+          title: isUrgent ? `🚨 ${senderName}` : senderName,
           body:  preview,
           tag:   `chat-${convo.id}`,
           url:   `/?view=chats&convo=${convo.id}`,

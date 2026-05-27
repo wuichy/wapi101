@@ -378,9 +378,10 @@ function addMessage(db, tenantId, conversationId, { externalId, direction, provi
 
   // Inbound Router (híbrido): si el msg saliente lo mandó un asesor (no un
   // bot), arranca la "ventana humano" para que IA y bots no contesten encima.
+  // Y limpia is_urgent (el asesor ya tomó la conversación → 🚨 desaparece).
   if (direction === 'outgoing' && byAdvisor) {
     try {
-      db.prepare(`UPDATE conversations SET last_human_msg_at = ? WHERE id = ? AND tenant_id = ?`)
+      db.prepare(`UPDATE conversations SET last_human_msg_at = ?, is_urgent = 0 WHERE id = ? AND tenant_id = ?`)
         .run(ts, conversationId, t);
     } catch (_) { /* col missing en DBs muy viejas → ignorar */ }
   }

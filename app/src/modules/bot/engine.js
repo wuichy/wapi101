@@ -1233,11 +1233,18 @@ async function executeStep(db, step, ctx) {
       const tagToAdd        = (c.addTag || '').trim();
       const noteText        = (c.note   || '').trim();
 
-      // 1) Pausar el bot para esta conversación
+      // 1) Pausar el bot para esta conversación + marcar urgente + lock IA
       if (ctx.convoId) {
         try {
           convoSvc.setBotPaused(db, null, ctx.convoId, true);
-          _log('info', `handover: bot pausado en conversación ${ctx.convoId}`);
+          // Marca la convo como urgente → próximas notifs de msgs entrantes
+          // se prefijan con 🚨 para que el asesor las distinga del resto.
+          // Y pone ai_mode='human_lock' → IA del coordinador queda silenciada
+          // hasta que el asesor responda (lo cual limpia el lock + urgent).
+          db.prepare(
+            `UPDATE conversations SET is_urgent = 1, ai_mode = 'human_lock' WHERE id = ?`
+          ).run(ctx.convoId);
+          _log('info', `handover: bot pausado + urgent + ai_mode=human_lock en convo ${ctx.convoId}`);
         } catch (e) {
           _log('error', `handover: error pausando bot: ${e.message}`);
         }

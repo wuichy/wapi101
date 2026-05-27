@@ -31,8 +31,18 @@ function pushIncomingMessage(db, tenantId, convo, body, senderName) {
   try {
     const preview = (body || '📎 Adjunto').slice(0, 140);
     const name = senderName || `#${convo.id}`;
+    // Si la conversación está marcada como urgente (bot disparó handover),
+    // prefijar el título con 🚨 para que el asesor vea de un vistazo que
+    // requiere atención inmediata. La marca se limpia cuando el asesor
+    // contesta (ver conversations/service.js addMessage byAdvisor=true).
+    let isUrgent = false;
+    try {
+      const row = db.prepare('SELECT is_urgent FROM conversations WHERE id = ?').get(convo.id);
+      isUrgent = !!(row && row.is_urgent);
+    } catch (_) {}
+    const title = isUrgent ? `🚨 ${name}` : name;
     pushSvc.sendToAll(db, tenantId, {
-      title: name,
+      title,
       body:  preview,
       tag:   `chat-${convo.id}`,
       url:   `/?view=chats&convo=${convo.id}`,

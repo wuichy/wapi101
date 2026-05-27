@@ -28001,6 +28001,13 @@ const LS = {
 
 const LS_RRWEB_URL = 'https://cdn.jsdelivr.net/npm/rrweb@2.0.0-alpha.18/dist/rrweb.min.js';
 
+// Helper de auth headers — usa getToken() existente del proyecto.
+// Compartido por Live Support (LS) y por el card Híbrido IA+Bots (HY).
+function authHeaders() {
+  const t = (typeof getToken === 'function') ? getToken() : (localStorage.getItem('rh_token') || '');
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 function liveSupportInit() {
   // Idempotente — bind handlers solo una vez.
   if (window.__lsInited) {

@@ -9822,13 +9822,12 @@ function botRowTagsHtml(bot) {
   return `<span class="bot-row-tags">${bot.tags.map(t => `<span class="bot-tag-pill" style="--tag-color:${escHtml(t.color)};${tplTagPillStyle(t.color)}"><span class="bot-tag-dot" style="background:${escHtml(t.color)}"></span>${escHtml(t.name)}</span>`).join('')}</span>`;
 }
 
-// Badge "⚠️ Incompatible con coordinador" para bots con trigger=always
-// cuando el tenant tiene el híbrido activo. Si el coordinador está apagado,
-// devuelve string vacío (no se muestra nada).
+// Badge "⚠️ Incompatible con coordinador" para bots marcados desde el backend.
+// El backend pone b.hybrid_incompatible=true cuando el tenant tiene el coordinador
+// activo + bot trigger='always' + enabled=1. Esto es determinístico: no depende
+// de fetches async ni de orden de carga.
 function botHybridIncompatibleBadge(b) {
-  if (!HY?.hybridEnabled) return '';
-  if (b.trigger_type !== 'always') return '';
-  if (!b.enabled) return ''; // ya está apagado, no es problema
+  if (!b.hybrid_incompatible) return '';
   return ` <span class="bot-incompatible-badge" title="Este bot tiene trigger 'Cualquier mensaje' y choca con el Coordinador IA+Bots. La IA nunca podrá responder en conversaciones donde este bot esté activo. Cambia el trigger o desactívalo.">⚠️ Incompatible con coordinador</span>`;
 }
 

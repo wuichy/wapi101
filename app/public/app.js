@@ -28314,16 +28314,31 @@ async function hybridRefreshFlag() {
     const r = await fetch('/api/ia-hybrid/settings', { headers: authHeaders() });
     if (!r.ok) return;
     const cfg = await r.json();
-    const newVal = !!cfg.ia_hybrid_enabled;
-    if (newVal !== HY.hybridEnabled) {
-      HY.hybridEnabled = newVal;
-      // Re-renderizar bot list para mostrar/ocultar badges incompatibles
-      if (typeof renderBotList === 'function' && Array.isArray(window.sbBots) && sbBots.length) {
-        try { renderBotList(); } catch (_) {}
-      }
+    HY.hybridEnabled = !!cfg.ia_hybrid_enabled;
+    // Re-renderizar bot list si el DOM lo tiene visible. No nos preocupa el
+    // "cambió o no" — re-render es barato y asegura que el badge aparezca.
+    if (typeof renderBotList === 'function' && document.getElementById('botList')) {
+      try { renderBotList(); } catch (_) {}
     }
   } catch (_) {}
 }
+
+// Carga el flag UNA vez al boot del JS. Esto cubre los casos donde el user
+// llega a la vista Bot sin pasar por Settings ni clickear el nav (recarga
+// directa, deeplink, etc.). Después es responsabilidad de hybridSettings
+// mantenerlo sincronizado.
+(function _initHybridFlagOnce() {
+  const tryLoad = () => {
+    // Solo si hay token (user logueado); de lo contrario, abortar.
+    if (typeof getToken === 'function' && !getToken()) return;
+    hybridRefreshFlag();
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(tryLoad, 800));
+  } else {
+    setTimeout(tryLoad, 800);
+  }
+})();
 
 // ─── Settings → IA: card "Coordinación Bots + IA" ───
 async function hybridLoadSettings() {

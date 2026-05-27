@@ -14544,3 +14544,29 @@ body.bb-ve-fullscreen-on .bb-ve-wrap {
 }
 .kb-char-counter.is-large { color: #ff9800; }
 .kb-char-counter.is-huge  { color: #ef4444; }
+
+/* ─── KB list: botón eliminar + contador chars ─── */
+.kb-item-head { display: flex; align-items: center; gap: 8px; }
+.kb-item-chars {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.kb-item-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.kb-item-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+.kb-item-delete:active { transform: scale(0.95); }

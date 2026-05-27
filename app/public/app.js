@@ -24547,12 +24547,22 @@ function renderKbList() {
       <div class="kb-item-head">
         <span class="kb-item-title">${escapeHtml(s.title)}</span>
         ${s.category ? `<span class="kb-item-cat">${escapeHtml(s.category)}</span>` : ''}
+        <span class="kb-item-chars" title="Tamaño">${(s.content || '').length.toLocaleString()} chars</span>
         <span class="kb-item-toggle ${s.active ? 'is-on' : ''}" data-kb-toggle="${s.id}" title="${s.active ? 'Activa (IA la usa)' : 'Desactivada (IA la ignora)'}"></span>
+        <button type="button" class="kb-item-delete" data-kb-delete="${s.id}" title="Eliminar fuente" aria-label="Eliminar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+        </button>
       </div>
       <div class="kb-item-content">${escapeHtml(s.content || '')}</div>
     </div>
   `).join('');
 
+  // Toggle activa/desactiva
   root.querySelectorAll('[data-kb-toggle]').forEach(el => {
     el.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -24562,11 +24572,32 @@ function renderKbList() {
       try {
         await api('PATCH', `/api/ai-knowledge/${id}`, { active: !item.active });
         await loadKnowledgeSources();
-      } catch (err) { toast(err.message, 'error'); }
+      } catch (err) { (typeof toast === 'function' ? toast : alert)(err.message); }
     });
   });
+
+  // Botón papelera → eliminar con confirmación
+  root.querySelectorAll('[data-kb-delete]').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = Number(el.dataset.kbDelete);
+      const item = _kbItems.find(x => x.id === id);
+      if (!item) return;
+      if (!confirm(`¿Eliminar la fuente "${item.title}"?\n\nLa IA dejará de usar esta información.`)) return;
+      try {
+        await api('DELETE', `/api/ai-knowledge/${id}`);
+        await loadKnowledgeSources();
+      } catch (err) { (typeof toast === 'function' ? toast : alert)('Error al eliminar: ' + err.message); }
+    });
+  });
+
+  // Click en el item (no en toggle ni delete) → abre modal de editar
   root.querySelectorAll('[data-kb-id]').forEach(el => {
-    el.addEventListener('click', () => openKbModal(Number(el.dataset.kbId)));
+    el.addEventListener('click', (e) => {
+      // Si el click vino de un control hijo, no abrir
+      if (e.target.closest('[data-kb-toggle], [data-kb-delete]')) return;
+      openKbModal(Number(el.dataset.kbId));
+    });
   });
 }
 

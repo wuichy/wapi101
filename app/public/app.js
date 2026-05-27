@@ -28687,3 +28687,168 @@ function kwChipsSyncHidden() {
     wrap.hidden = e.target.value !== 'keyword';
   });
 })();
+
+// ─────────────────────────────────────────────────────────────────────
+// Card de consumo IA en Settings → IA
+// ─────────────────────────────────────────────────────────────────────
+const KIND_LABELS = {
+  matcher:  'Matcher de triggers',
+  fallback: 'IA fallback (respuestas libres)',
+  ai_reply: 'Bot step ai_reply',
+  copilot:  'Copiloto (sugerencias)',
+  other:    'Otros',
+};
+
+async function aiCreditLoad() {
+  const root = document.getElementById('aiCreditStats');
+  if (!root) return;
+  try {
+    const r = await fetch('/api/ia-hybrid/usage', { headers: authHeaders() });
+    if (!r.ok) {
+      root.innerHTML = `<div style="color:#ef4444;padding:14px 4px">Error cargando usage</div>`;
+      return;
+    }
+    const s = await r.json();
+    aiCreditRender(s);
+  } catch (err) {
+    root.innerHTML = `<div style="color:#ef4444;padding:14px 4px">Error: ${err.message}</div>`;
+  }
+}
+
+function aiCreditRender(s) {
+  const root = document.getElementById('aiCreditStats');
+  if (!root) return;
+
+  const pct = s.loaded > 0 ? Math.min(100, (s.consumedSinceLoad / s.loaded) * 100) : 0;
+  const remaining = Math.max(0, s.loaded - s.consumedSinceLoad);
+  let barClass = '';
+  if (pct >= 80) barClass = 'is-danger';
+  else if (pct >= 50) barClass = 'is-warn';
+
+  // Alerta si restante < threshold
+  let alertHtml = '';
+  if (s.loaded > 0 && remaining < (s.alertThreshold || 0)) {
+    alertHtml = `<div class="ai-credit-alert">⚠️ Te quedan solo $${remaining.toFixed(2)} USD. Recarga en <a href="https://console.anthropic.com" target="_blank" style="color:inherit;text-decoration:underline">console.anthropic.com</a> y actualiza el saldo aquí.</div>`;
+  } else if (pct >= 75 && s.loaded > 0) {
+    alertHtml = `<div class="ai-credit-alert is-warn">Has usado el ${pct.toFixed(0)}% de tu saldo. Considera recargar pronto.</div>`;
+  }
+
+  const loadedDate = s.loadedAt
+    ? new Date(s.loadedAt * 1000).toLocaleDateString('es-MX', { day:'numeric', month:'short', year:'numeric' })
+    : '—';
+
+  const noCredit = s.loaded <= 0;
+
+  const breakdownByKind = s.byKind.length
+    ? s.byKind.map(k => `
+      <div class="ai-credit-breakdown-row">
+        <span>${KIND_LABELS[k.kind] || k.kind}</span>
+        <span>$${(k.cost || 0).toFixed(4)} · ${(k.tokens || 0).toLocaleString()} tok</span>
+      </div>
+    `).join('')
+    : `<div style="font-size:12px;color:var(--text-muted);padding:8px 0">Sin llamadas este mes</div>`;
+
+  const breakdownByModel = s.byModel.length
+    ? s.byModel.map(m => `
+      <div class="ai-credit-breakdown-row">
+        <span>${m.model || 'desconocido'}</span>
+        <span>$${(m.cost || 0).toFixed(4)} · ${(m.calls || 0)} llamadas</span>
+      </div>
+    `).join('')
+    : `<div style="font-size:12px;color:var(--text-muted);padding:8px 0">Sin llamadas este mes</div>`;
+
+  root.innerHTML = `
+    ${alertHtml}
+    <div class="ai-credit-row">
+      <div class="ai-credit-stat">
+        <div class="ai-credit-stat-label">Saldo cargado</div>
+        <div class="ai-credit-stat-value">$${s.loaded.toFixed(2)}</div>
+        <div class="ai-credit-stat-foot">${noCredit ? 'Sin configurar' : 'desde ' + loadedDate}</div>
+      </div>
+      <div class="ai-credit-stat">
+        <div class="ai-credit-stat-label">Consumido</div>
+        <div class="ai-credit-stat-value">$${s.consumedSinceLoad.toFixed(4)}</div>
+        <div class="ai-credit-stat-foot">${s.month.calls || 0} llamadas este mes</div>
+      </div>
+      <div class="ai-credit-stat">
+        <div class="ai-credit-stat-label">Restante (est.)</div>
+        <div class="ai-credit-stat-value" style="color:${remaining < (s.alertThreshold || 5) ? '#ef4444' : '#10b981'}">$${remaining.toFixed(2)}</div>
+        <div class="ai-credit-stat-foot">${noCredit ? 'configura tu saldo' : `${pct.toFixed(1)}% usado`}</div>
+      </div>
+    </div>
+
+    ${!noCredit ? `<div class="ai-credit-bar-wrap"><div class="ai-credit-bar ${barClass}" style="width:${pct.toFixed(1)}%"></div></div>` : ''}
+
+    <div class="ai-credit-breakdown">
+      <div class="ai-credit-breakdown-block">
+        <strong>Por uso (este mes)</strong>
+        ${breakdownByKind}
+      </div>
+      <div class="ai-credit-breakdown-block">
+        <strong>Por modelo (este mes)</strong>
+        ${breakdownByModel}
+      </div>
+    </div>
+
+    <div class="ai-credit-actions">
+      <button type="button" class="btn btn--primary" id="aiCreditUpdateBtn">${noCredit ? 'Configurar saldo' : 'Actualizar saldo'}</button>
+      <button type="button" class="btn" id="aiCreditAlertBtn">Alerta: $${(s.alertThreshold || 5).toFixed(2)}</button>
+      <a href="https://console.anthropic.com" target="_blank" style="font-size:12px;color:var(--text-muted);margin-left:auto">Ver saldo real ↗</a>
+    </div>
+  `;
+
+  // Bind buttons
+  document.getElementById('aiCreditUpdateBtn')?.addEventListener('click', () => aiCreditPromptUpdate(s.loaded));
+  document.getElementById('aiCreditAlertBtn')?.addEventListener('click', () => aiCreditPromptAlert(s.alertThreshold));
+}
+
+async function aiCreditPromptUpdate(current) {
+  const v = prompt('¿Cuánto saldo tienes en console.anthropic.com? (USD)\n\nIngresa el monto actual, no lo que recargaste.\nEjemplo: 19.90', current > 0 ? current.toFixed(2) : '');
+  if (v === null) return;
+  const num = parseFloat(v.replace(',', '.'));
+  if (isNaN(num) || num < 0) { alert('Monto inválido'); return; }
+  try {
+    const r = await fetch('/api/ia-hybrid/credit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ loadedUsd: num }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || 'error');
+    aiCreditLoad();
+  } catch (err) { alert('Error: ' + err.message); }
+}
+
+async function aiCreditPromptAlert(current) {
+  const v = prompt('Alertar cuando el restante baje de... (USD)\n\nEjemplo: 5 = avisa cuando queden menos de $5', String(current || 5));
+  if (v === null) return;
+  const num = parseFloat(v.replace(',', '.'));
+  if (isNaN(num) || num < 0) { alert('Monto inválido'); return; }
+  try {
+    const r = await fetch('/api/ia-hybrid/credit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ alertThreshold: num }),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || 'error');
+    aiCreditLoad();
+  } catch (err) { alert('Error: ' + err.message); }
+}
+
+// Hook: carga la card al entrar al sub-tab IA
+(function _hookAiCredit() {
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-settings="ia"]')) setTimeout(aiCreditLoad, 120);
+  });
+  // Boot: si ya estoy en IA al cargar la página
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(() => {
+      const pane = document.querySelector('.settings-pane[data-settings="ia"]');
+      if (pane && !pane.hidden && pane.offsetParent !== null) aiCreditLoad();
+    }, 700));
+  } else {
+    setTimeout(() => {
+      const pane = document.querySelector('.settings-pane[data-settings="ia"]');
+      if (pane && !pane.hidden && pane.offsetParent !== null) aiCreditLoad();
+    }, 700);
+  }
+})();

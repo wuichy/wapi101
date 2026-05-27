@@ -1694,7 +1694,7 @@ async function executeStep(db, step, ctx) {
           knowledge ? `Fuentes de conocimiento:\n${knowledge}` : '',
         ].filter(Boolean).join('\n\n');
 
-        const reply = await aiSvc.callAI(settings, systemPrompt, history.length ? history : [{ role: 'user', content: ctx.messageBody || '' }]);
+        const reply = await aiSvc.callAI(settings, systemPrompt, history.length ? history : [{ role: 'user', content: ctx.messageBody || '' }], { db, tenantId: ctx.tenantId, kind: 'ai_reply' });
         if (!reply || !reply.trim()) return false;
 
         const convo = convoSvc.getById(db, null, ctx.convoId);

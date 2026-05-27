@@ -400,7 +400,8 @@ async function _triggerAiFallback(db, args) {
     const reply = await aiSvc.callAI(
       settings,
       systemPrompt,
-      history.length ? history : [{ role: 'user', content: args.messageBody || '' }]
+      history.length ? history : [{ role: 'user', content: args.messageBody || '' }],
+      { db, tenantId, kind: 'fallback' }
     );
     if (!reply || !reply.trim()) return;
 

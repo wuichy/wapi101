@@ -164,6 +164,30 @@ module.exports = function createRouter(db) {
     res.json({ ok: true });
   });
 
+  // ─── Consumo / saldo de IA ──────────────────────────────────────
+  router.get('/usage', (req, res) => {
+    try {
+      const aiSvc = require('../ai/service');
+      res.json(aiSvc.getUsageStats(db, req.tenantId));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post('/credit', (req, res) => {
+    try {
+      const { loadedUsd, alertThreshold } = req.body || {};
+      const aiSvc = require('../ai/service');
+      aiSvc.setCredit(db, req.tenantId, {
+        loadedUsd:      typeof loadedUsd === 'number' ? loadedUsd : undefined,
+        alertThreshold: typeof alertThreshold === 'number' ? alertThreshold : undefined,
+      });
+      res.json({ ok: true, stats: aiSvc.getUsageStats(db, req.tenantId) });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── Telemetría reciente (debug) ────────────────────────────────
   router.get('/logs', (req, res) => {
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));

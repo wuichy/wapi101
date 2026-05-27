@@ -119,7 +119,7 @@ o si nada match:
 {"bot_id": null, "confidence": 0.0}`;
 }
 
-async function _callMatcherLLM(settings, bots, messageBody) {
+async function _callMatcherLLM(settings, bots, messageBody, trackCtx) {
   const systemPrompt = _buildSystemPrompt(bots);
   // Override del modelo a Haiku siempre (más barato que el modelo por default
   // del tenant que puede ser Sonnet/Opus para respuestas conversacionales)
@@ -131,7 +131,7 @@ async function _callMatcherLLM(settings, bots, messageBody) {
   };
   const raw = await aiSvc.callAI(matchSettings, systemPrompt, [
     { role: 'user', content: `Mensaje del cliente: "${messageBody}"` },
-  ]);
+  ], trackCtx);
   // Parsear JSON. A veces el LLM agrega texto antes/después aunque le pidamos
   // que no — extraemos el JSON con regex defensiva.
   const jsonMatch = String(raw).match(/\{[^{}]*\}/);
@@ -189,7 +189,7 @@ async function matchSemantic(db, { tenantId, messageBody, bots }) {
 
   // ── 3) LLM ──
   try {
-    const { botId, confidence } = await _callMatcherLLM(settings, matchableBots, messageBody);
+    const { botId, confidence } = await _callMatcherLLM(settings, matchableBots, messageBody, { db, tenantId, kind: 'matcher' });
     // Validar que el botId devuelto SÍ esté en nuestra lista (defensa contra
     // hallucinations del LLM).
     const validBotId = matchableBots.some(b => b.id === botId) ? botId : null;

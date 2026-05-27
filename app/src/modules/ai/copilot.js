@@ -153,7 +153,7 @@ async function callAIWithTools(settings, systemPrompt, messages, tools) {
 
   // Google y Ollama: sin tool calling nativo → solo texto
   const { callAI } = require('./service');
-  const text = await callAI(settings, systemPrompt, messages.filter(m => typeof m.content === 'string'));
+  const text = await callAI(settings, systemPrompt, messages.filter(m => typeof m.content === 'string'), { db, tenantId, kind: 'copilot' });
   return { stopReason: 'end_turn', text, rawContent: text, toolCalls: [] };
 }
 

@@ -95,11 +95,67 @@ function _isHumanActive(convo, cfg) {
 
 // ─── Paso 2 + 2.5: ¿hay bot waits activos? ───────────────────────────
 function _activeWaits(db, contactId) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT id, run_id, bot_id, wait_step_id, wait_kind, on_message_behavior, branch_step_id
     FROM bot_run_waits
     WHERE contact_id = ? AND status = 'waiting'
   `).all(contactId);
+  // Resolver el wait_kind REAL leyendo el step del bot. Esto cubre el caso
+  // de waits viejos (pre-migration 087) que tienen wait_kind='response' por
+  // default pero realmente son timers según el step del bot — sino, el
+  // router se atoraría delegando al engine que rechaza el resume.
+  return rows.map(w => ({ ...w, wait_kind: _resolveActualWaitKind(db, w) }));
+}
+
+function _resolveActualWaitKind(db, wait) {
+  // Si ya está marcado explícitamente, respetar
+  if (wait.wait_kind === 'timer' || wait.wait_kind === 'scheduled') return wait.wait_kind;
+  // Si no, leer el step real del bot y verificar su tipo
+  try {
+    const bot = db.prepare('SELECT steps FROM salsbots WHERE id=?').get(wait.bot_id);
+    if (!bot) return 'response';
+    const steps = JSON.parse(bot.steps || '[]');
+    const step = _findStepRecursive(steps, wait.wait_step_id);
+    if (!step) return 'response';
+    if (step.type === 'timer') return 'timer';
+    return 'response';
+  } catch (_) {
+    return 'response';
+  }
+}
+
+function _findStepRecursive(steps, stepId) {
+  if (!Array.isArray(steps)) return null;
+  for (const s of steps) {
+    if (!s || typeof s !== 'object') continue;
+    if (s._id === stepId) return s;
+    // Buscar dentro de branches del wait_response y branch step
+    if (s.config?.branches) {
+      for (const k of Object.keys(s.config.branches)) {
+        const found = _findStepRecursive(s.config.branches[k], stepId);
+        if (found) return found;
+      }
+    }
+    // Buscar dentro de cases del branch v2
+    if (Array.isArray(s.config?.cases)) {
+      for (const c of s.config.cases) {
+        const found = _findStepRecursive(c.steps, stepId);
+        if (found) return found;
+      }
+    }
+    if (Array.isArray(s.config?.default)) {
+      const found = _findStepRecursive(s.config.default, stepId);
+      if (found) return found;
+    }
+    // Buscar dentro de reminders del reminder_timer
+    if (Array.isArray(s.config?.reminders)) {
+      for (const r of s.config.reminders) {
+        const found = _findStepRecursive(r?.steps, stepId);
+        if (found) return found;
+      }
+    }
+  }
+  return null;
 }
 
 // ─── Entry point principal ───────────────────────────────────────────

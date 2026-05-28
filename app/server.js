@@ -886,6 +886,13 @@ try {
   console.warn('[boot] reelance-ia auth routes not mounted:', err.message);
 }
 
+// Reelance IA — poller de carritos abandonados pendientes (wait_minutes)
+try {
+  require('./src/modules/reelance-ia/service').startAbandonedCartPoller(db);
+} catch (err) {
+  console.warn('[boot] reelance-ia abandoned cart poller no iniciado:', err.message);
+}
+
 // Live Support — co-browsing (rrweb). Endpoints del cliente bajo /api/live-support
 // (requieren sesión Wapi101). Los endpoints del super-admin van bajo /super/live-support
 // y se montan dentro de super/routes.js para heredar superAuth.

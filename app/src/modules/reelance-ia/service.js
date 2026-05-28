@@ -49,6 +49,7 @@ function updateConfig(db, tenantId, patch) {
     'order_pipeline_id', 'order_stage_id',
     'abandoned_pipeline_id', 'abandoned_stage_id',
     'order_bot_id', 'abandoned_bot_id',
+    'abandoned_tag', 'abandoned_wait_minutes', 'abandoned_dedupe_hours',
   ];
   const sets = [];
   const args = [];
@@ -321,12 +322,105 @@ function processAbandonedCartEvent(db, tenantId, payload) {
       payload, contactId: contact.id, leadId: lead?.id,
     });
 
-    // Disparar bot solo cuando entra a status='abandoned' (no en 'active' ni en 'recovered')
-    if (payload.status === 'abandoned' && cfg.abandoned_bot_id) {
-      _fireBot(db, tenantId, cfg.abandoned_bot_id, contact.id, lead?.id, { source: 'reelance-ia.abandoned_cart', cart: payload });
+    // Si el carrito pasa a 'recovered' o 'converted', cancela cualquier
+    // envío pendiente en la queue (el cliente ya compró → no spam).
+    if (payload.status === 'recovered' || payload.status === 'converted') {
+      try {
+        db.prepare(`
+          UPDATE reelance_ia_abandoned_queue
+          SET status = 'cancelled', cancelled_reason = 'order_completed'
+          WHERE tenant_id = ? AND external_id = ? AND status = 'pending'
+        `).run(tenantId, externalId);
+      } catch (_) { /* tabla puede no existir en DBs viejas */ }
+      return { ok: true, contactId: contact.id, leadId: lead?.id || null, recovered: true };
     }
 
-    return { ok: true, contactId: contact.id, leadId: lead?.id || null };
+    // Solo procesamos status='abandoned' para envío de mensaje
+    if (payload.status !== 'abandoned') {
+      return { ok: true, contactId: contact.id, leadId: lead?.id || null, status: payload.status };
+    }
+
+    // Aplicar etiqueta configurada al contacto (si está activa la app)
+    if (cfg.abandoned_tag) {
+      try {
+        db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag, tenant_id) VALUES (?, ?, ?)')
+          .run(contact.id, cfg.abandoned_tag, tenantId);
+      } catch (_) { /* silenciar — tag puede no aplicar */ }
+    }
+
+    // Anti-spam: si al mismo contacto ya se le envió un msg de carrito
+    // abandonado en las últimas X horas, no mandar otro (configurable).
+    const dedupeHours = Number(cfg.abandoned_dedupe_hours ?? 24);
+    if (dedupeHours > 0) {
+      try {
+        const recent = db.prepare(`
+          SELECT id FROM reelance_ia_abandoned_queue
+          WHERE tenant_id = ? AND contact_id = ?
+            AND status = 'sent' AND sent_at > unixepoch() - (? * 3600)
+          LIMIT 1
+        `).get(tenantId, contact.id, dedupeHours);
+        if (recent) {
+          // Marca registro nuevo como cancelado por dedupe para que quede traza
+          db.prepare(`
+            INSERT INTO reelance_ia_abandoned_queue
+              (tenant_id, external_id, contact_id, lead_id, customer_phone, customer_name,
+               cart_total, payload_json, bot_id, status, scheduled_at, cancelled_reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cancelled', unixepoch(), 'dedupe')
+          `).run(tenantId, externalId, contact.id, lead?.id || null,
+                 payload.phone || null, payload.name || null,
+                 payload.totalCents ? payload.totalCents / 100 : null,
+                 JSON.stringify(payload).slice(0, 8000),
+                 cfg.abandoned_bot_id || null);
+          return { ok: true, contactId: contact.id, leadId: lead?.id || null, dedupe: true };
+        }
+      } catch (_) { /* silenciar */ }
+    }
+
+    // Tiempo de espera antes de mandar el mensaje
+    const waitMinutes = Number(cfg.abandoned_wait_minutes ?? 60);
+    const scheduledAt = Math.floor(Date.now() / 1000) + (waitMinutes * 60);
+
+    if (waitMinutes <= 0) {
+      // Envío inmediato (comportamiento legacy si user pone 0)
+      if (cfg.abandoned_bot_id) {
+        _fireBot(db, tenantId, cfg.abandoned_bot_id, contact.id, lead?.id, { source: 'reelance-ia.abandoned_cart', cart: payload });
+      }
+      // Igual lo registramos en la queue como sent
+      try {
+        db.prepare(`
+          INSERT INTO reelance_ia_abandoned_queue
+            (tenant_id, external_id, contact_id, lead_id, customer_phone, customer_name,
+             cart_total, payload_json, bot_id, status, scheduled_at, sent_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sent', unixepoch(), unixepoch())
+        `).run(tenantId, externalId, contact.id, lead?.id || null,
+               payload.phone || null, payload.name || null,
+               payload.totalCents ? payload.totalCents / 100 : null,
+               JSON.stringify(payload).slice(0, 8000),
+               cfg.abandoned_bot_id || null);
+      } catch (_) {}
+    } else {
+      // Encolar para envío diferido. El poller lo dispara cuando llegue el tiempo.
+      try {
+        db.prepare(`
+          INSERT INTO reelance_ia_abandoned_queue
+            (tenant_id, external_id, contact_id, lead_id, customer_phone, customer_name,
+             cart_total, payload_json, bot_id, status, scheduled_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        `).run(tenantId, externalId, contact.id, lead?.id || null,
+               payload.phone || null, payload.name || null,
+               payload.totalCents ? payload.totalCents / 100 : null,
+               JSON.stringify(payload).slice(0, 8000),
+               cfg.abandoned_bot_id || null,
+               scheduledAt);
+      } catch (err) {
+        console.error('[reelance-ia] queue insert failed:', err.message);
+      }
+    }
+
+    return {
+      ok: true, contactId: contact.id, leadId: lead?.id || null,
+      scheduledAt, waitMinutes,
+    };
   } catch (err) {
     _logEvent(db, { tenantId, eventType: 'abandoned_cart', externalId, externalStatus: payload.status, payload, error: err.message });
     throw err;
@@ -345,6 +439,57 @@ function _fireBot(db, tenantId, botId, contactId, leadId, ctx) {
   } catch (_) { /* silenciar — bot opcional */ }
 }
 
+// ─── Poller de carritos abandonados pendientes ──────────────────────
+// Cada minuto revisa la queue y dispara los carritos cuyo wait_minutes
+// ya se cumplió. Si el cliente recuperó el carrito antes (status pasó
+// a 'recovered' o 'converted'), processAbandonedCartEvent ya marcó el
+// registro como cancelled y no se dispara.
+function _dispatchPendingAbandonedCarts(db) {
+  let rows;
+  try {
+    rows = db.prepare(`
+      SELECT id, tenant_id, external_id, contact_id, lead_id, bot_id, payload_json
+      FROM reelance_ia_abandoned_queue
+      WHERE status = 'pending' AND scheduled_at <= unixepoch()
+      ORDER BY scheduled_at ASC LIMIT 20
+    `).all();
+  } catch (_) { return; /* tabla no existe (DB vieja) */ }
+
+  for (const row of rows) {
+    let payload = {};
+    try { payload = JSON.parse(row.payload_json || '{}'); } catch (_) {}
+
+    try {
+      if (row.bot_id) {
+        _fireBot(db, row.tenant_id, row.bot_id, row.contact_id, row.lead_id, {
+          source: 'reelance-ia.abandoned_cart.delayed',
+          cart: payload,
+        });
+      }
+      db.prepare(`
+        UPDATE reelance_ia_abandoned_queue
+        SET status = 'sent', sent_at = unixepoch() WHERE id = ?
+      `).run(row.id);
+      console.log(`[reelance-ia] abandoned cart ${row.external_id} → bot ${row.bot_id} (contact ${row.contact_id})`);
+    } catch (err) {
+      db.prepare(`
+        UPDATE reelance_ia_abandoned_queue
+        SET status = 'failed', error = ? WHERE id = ?
+      `).run(err.message.slice(0, 500), row.id);
+      console.error('[reelance-ia] dispatch failed:', err.message);
+    }
+  }
+}
+
+function startAbandonedCartPoller(db) {
+  // Tick cada 60s (mismo intervalo que el woo abandoned cart poller).
+  setInterval(() => {
+    try { _dispatchPendingAbandonedCarts(db); }
+    catch (e) { console.error('[reelance-ia poller] tick error:', e.message); }
+  }, 60_000);
+  console.log('[reelance-ia] abandoned cart poller iniciado (cada 60s)');
+}
+
 module.exports = {
   generateToken,
   getConfigByToken,
@@ -354,4 +499,5 @@ module.exports = {
   regenerateToken,
   processOrderEvent,
   processAbandonedCartEvent,
+  startAbandonedCartPoller,
 };

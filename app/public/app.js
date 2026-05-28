@@ -27021,6 +27021,28 @@ WAPI101_ENABLED=true</pre>
             ${botOpts(cfg.abandoned_bot_id)}
           </select>
         </label>
+
+        <label style="font-size:12px;color:#475569;display:block;margin-top:12px">
+          🏷️ Etiqueta para el lead
+          <input type="text" id="riaAbandonedTag" value="${escapeHtml(cfg.abandoned_tag || '')}" placeholder="Ej: carrito-abandonado"
+            style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px"/>
+          <small style="display:block;margin-top:4px;color:#64748b;font-size:11px">Se agrega al contacto cuando se envía el mensaje. Útil para filtrar leads.</small>
+        </label>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+          <label style="font-size:12px;color:#475569">
+            ⏳ Esperar antes de enviar (minutos)
+            <input type="number" id="riaAbandonedWait" min="0" max="1440" value="${cfg.abandoned_wait_minutes ?? 60}"
+              style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px"/>
+            <small style="display:block;margin-top:4px;color:#64748b;font-size:11px">Tiempo entre el abandono y el mensaje. Si compran antes, NO se envía. Default: 60.</small>
+          </label>
+          <label style="font-size:12px;color:#475569">
+            🚫 Ventana anti-spam (horas)
+            <input type="number" id="riaAbandonedDedupe" min="0" max="720" value="${cfg.abandoned_dedupe_hours ?? 24}"
+              style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px"/>
+            <small style="display:block;margin-top:4px;color:#64748b;font-size:11px">Si ya se le mandó msg en este tiempo, no se manda otro aunque deje nuevo carrito. Default: 24.</small>
+          </label>
+        </div>
       </div>
 
       <div class="form-section" style="margin-bottom:18px">
@@ -27111,6 +27133,9 @@ async function _riaSaveConfig() {
     abandoned_stage_id:     Number(document.getElementById('riaAbandonedStage').value) || null,
     order_bot_id:           Number(document.getElementById('riaOrderBot').value) || null,
     abandoned_bot_id:       Number(document.getElementById('riaAbandonedBot').value) || null,
+    abandoned_tag:          document.getElementById('riaAbandonedTag')?.value.trim() || null,
+    abandoned_wait_minutes: Number(document.getElementById('riaAbandonedWait')?.value) || 0,
+    abandoned_dedupe_hours: Number(document.getElementById('riaAbandonedDedupe')?.value) || 0,
   };
   try {
     await api('PUT', '/api/apps/reelance-ia/config', payload);

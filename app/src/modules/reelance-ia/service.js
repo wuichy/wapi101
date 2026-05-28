@@ -87,60 +87,112 @@ function _normalizePhone(phone) {
   return '+' + digits;
 }
 
-// Crea o encuentra un contacto por email (primero) o teléfono (fallback)
+// ¿El nombre actual del contacto parece "test/garbage data"? Permite
+// sobrescribir info vieja cuando llegan datos reales de una orden/carrito.
+// Heurísticas: muy corto, repeticiones de la misma letra, "asdf"/"qwer",
+// o nombres que empiezan con "Contacto " (fallback de creación).
+function _looksLikeTestData(name) {
+  if (!name) return true;
+  const s = String(name).trim().toLowerCase();
+  if (s.length < 2) return true;
+  if (s.startsWith('contacto')) return true;
+  if (/^(asd|qwe|test|prueba|xxx|aaa)/i.test(s)) return true;
+  // Solo una letra repetida (ej "aaaaa")
+  if (/^(.)\1+$/.test(s)) return true;
+  return false;
+}
+
+// ¿El teléfono parece test data? (muy corto, todos iguales, etc.)
+function _looksLikeTestPhone(phone) {
+  if (!phone) return true;
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length < 8) return true;
+  if (/^(\d)\1+$/.test(digits)) return true; // todos iguales
+  if (/^123/.test(digits) && digits.length < 12) return true; // 1231231, etc.
+  return false;
+}
+
+// Crea o encuentra un contacto. Estrategia de matching:
+//   1) Por phone normalizado (E.164) — el más confiable
+//   2) Por últimos 10 dígitos del phone (fuzzy)
+//   3) Por email (solo si phone no matcheó NADA)
+// Razón: el email puede compartirse entre contactos o quedar viejo. El
+// phone es único por contacto en WhatsApp.
 function _findOrCreateContact(db, tenantId, { email, phone, firstName, lastName }) {
   let contact = null;
-  if (email) {
-    contact = db.prepare('SELECT * FROM contacts WHERE email = ? AND tenant_id = ? LIMIT 1').get(email, tenantId);
-  }
-  if (!contact && phone) {
-    const normPhone = _normalizePhone(phone);
-    if (normPhone) {
-      contact = db.prepare('SELECT * FROM contacts WHERE phone = ? AND tenant_id = ? LIMIT 1').get(normPhone, tenantId);
-      if (!contact) {
-        // Fuzzy match: últimos 10 dígitos
-        const last10 = normPhone.replace(/\D/g, '').slice(-10);
-        if (last10.length === 10) {
-          contact = db.prepare(
-            "SELECT * FROM contacts WHERE SUBSTR(REPLACE(REPLACE(REPLACE(phone,'+',''),'-',''),' ',''), -10) = ? AND tenant_id = ? LIMIT 1"
-          ).get(last10, tenantId);
-        }
+  const normPhone = _normalizePhone(phone);
+
+  // ── 1) MATCH POR PHONE (más confiable) ──────────────────────────────
+  if (normPhone) {
+    contact = db.prepare('SELECT * FROM contacts WHERE phone = ? AND tenant_id = ? LIMIT 1').get(normPhone, tenantId);
+    if (!contact) {
+      const last10 = normPhone.replace(/\D/g, '').slice(-10);
+      if (last10.length === 10) {
+        contact = db.prepare(
+          "SELECT * FROM contacts WHERE SUBSTR(REPLACE(REPLACE(REPLACE(phone,'+',''),'-',''),' ',''), -10) = ? AND tenant_id = ? LIMIT 1"
+        ).get(last10, tenantId);
       }
     }
   }
+
+  // ── 2) Fallback: match por email — pero SOLO si ese contacto NO tiene
+  //      un phone distinto al del payload. Si el contacto matcheado por
+  //      email tiene phone diferente, es otra persona compartiendo email
+  //      (o un test viejo) — no lo usemos.
+  if (!contact && email) {
+    const byEmail = db.prepare('SELECT * FROM contacts WHERE email = ? AND tenant_id = ? LIMIT 1').get(email, tenantId);
+    if (byEmail) {
+      if (!normPhone || !byEmail.phone || _looksLikeTestPhone(byEmail.phone)) {
+        // Sin phone en payload, sin phone en contacto, o phone del contacto
+        // es obvio test — match seguro.
+        contact = byEmail;
+      } else {
+        const byEmailDigits = String(byEmail.phone).replace(/\D/g, '').slice(-10);
+        const payloadDigits = normPhone.replace(/\D/g, '').slice(-10);
+        if (byEmailDigits === payloadDigits) contact = byEmail;
+        // Si los últimos 10 dígitos del phone no coinciden, NO usar este
+        // contacto — es otra persona / dato viejo.
+      }
+    }
+  }
+
+  // ── 3) CREAR si no encontramos nada ─────────────────────────────────
   if (!contact) {
-    const normPhone = _normalizePhone(phone);
     const first = firstName || (email ? email.split('@')[0] : null) || 'Contacto Reelance';
     const last  = lastName || null;
     const result = db.prepare(
       'INSERT INTO contacts (tenant_id, first_name, last_name, email, phone) VALUES (?, ?, ?, ?, ?)'
     ).run(tenantId, first, last, email || null, normPhone);
-    contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(result.lastInsertRowid);
-  } else {
-    // Actualizar nombre/email/teléfono si vienen mejores datos
-    const updates = [];
-    const args = [];
-    if (email && !contact.email) { updates.push('email = ?'); args.push(email); }
-    if (firstName && (!contact.first_name || contact.first_name.startsWith('Contacto'))) {
-      updates.push('first_name = ?');
-      args.push(firstName);
-    }
-    if (lastName && !contact.last_name) { updates.push('last_name = ?'); args.push(lastName); }
-    if (phone && !contact.phone) {
-      const normPhone = _normalizePhone(phone);
-      if (normPhone) { updates.push('phone = ?'); args.push(normPhone); }
-    }
-    if (updates.length) {
-      args.push(contact.id);
-      db.prepare(`UPDATE contacts SET ${updates.join(', ')}, updated_at = unixepoch() WHERE id = ?`).run(...args);
-      contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
-    }
+    return db.prepare('SELECT * FROM contacts WHERE id = ?').get(result.lastInsertRowid);
+  }
+
+  // ── 4) ACTUALIZAR contacto existente con info "mejor" ───────────────
+  // Sobrescribir si el campo actual está vacío O parece test data.
+  const updates = [];
+  const args = [];
+  if (email && (!contact.email || _looksLikeTestData(contact.email))) {
+    updates.push('email = ?'); args.push(email);
+  }
+  if (firstName && (!contact.first_name || _looksLikeTestData(contact.first_name))) {
+    updates.push('first_name = ?'); args.push(firstName);
+  }
+  if (lastName && (!contact.last_name || _looksLikeTestData(contact.last_name))) {
+    updates.push('last_name = ?'); args.push(lastName);
+  }
+  if (normPhone && (!contact.phone || _looksLikeTestPhone(contact.phone))) {
+    updates.push('phone = ?'); args.push(normPhone);
+  }
+  if (updates.length) {
+    args.push(contact.id);
+    db.prepare(`UPDATE contacts SET ${updates.join(', ')}, updated_at = unixepoch() WHERE id = ?`).run(...args);
+    contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(contact.id);
   }
   return contact;
 }
 
 // Crea o encuentra lead para el contacto en el pipeline/stage configurado.
-// Si ya hay lead activo en ese pipeline, lo reusa.
+// Si ya hay lead en ese pipeline, lo reusa y mueve al stage configurado
+// (comportamiento "cliente ya existe → mover a etapa correcta").
 function _findOrCreateLead(db, tenantId, { contactId, pipelineId, stageId, name, value }) {
   if (!pipelineId || !stageId) return null;
   // En Wapi101 la tabla se llama 'expedients' (no 'leads'). Nombre legacy
@@ -156,8 +208,35 @@ function _findOrCreateLead(db, tenantId, { contactId, pipelineId, stageId, name,
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(tenantId, contactId, pipelineId, stageId, name || null, value || 0);
     lead = db.prepare('SELECT * FROM expedients WHERE id = ?').get(result.lastInsertRowid);
+  } else if (Number(lead.stage_id) !== Number(stageId)) {
+    // Lead existe en este pipeline pero en otro stage → mover al stage configurado.
+    db.prepare(`
+      UPDATE expedients SET stage_id = ?, stage_entered_at = unixepoch(), updated_at = unixepoch()
+      WHERE id = ?
+    `).run(stageId, lead.id);
+    lead = db.prepare('SELECT * FROM expedients WHERE id = ?').get(lead.id);
   }
   return lead;
+}
+
+// Resuelve placeholders en el nombre de la etiqueta.
+// Soporta: {order_id}, {order_short}, {customer_name}, {phone}, {email}
+// Ejemplos:
+//   cfg.order_tag = "{order_id}"           → "ms7bqsu9"  (8 chars cortos)
+//   cfg.order_tag = "Orden {order_short}"  → "Orden ms7bqsu9"
+//   cfg.order_tag = "Comprador"            → "Comprador" (literal, sin {})
+function _resolveTagTemplate(tag, payload) {
+  if (!tag) return null;
+  const id = String(payload?.id || '');
+  const shortId = id ? id.slice(-8) : '';
+  return String(tag)
+    .replace(/\{order_id\}/gi, shortId)
+    .replace(/\{order_short\}/gi, shortId)
+    .replace(/\{cart_id\}/gi, shortId)
+    .replace(/\{customer_name\}/gi, payload?.customerName || payload?.name || '')
+    .replace(/\{phone\}/gi, payload?.phone || '')
+    .replace(/\{email\}/gi, payload?.email || '')
+    .trim() || null;
 }
 
 // Aplica una etiqueta al contacto y/o al lead según target.
@@ -283,6 +362,13 @@ function processOrderEvent(db, tenantId, payload) {
     return { skipped: 'already-processed' };
   }
 
+  // Guard: sin phone NI email no podemos identificar al cliente.
+  // Loguear y skip (evita crear "Contacto Reelance" basura).
+  if (!payload.phone && !payload.email) {
+    _logEvent(db, { tenantId, eventType: 'order', externalId, externalStatus: payload.status, payload, error: 'no-contact-info' });
+    return { skipped: 'no-contact-info' };
+  }
+
   // Extraer datos de customer
   const customerName = (payload.customerName || '').trim();
   const [firstName, ...rest] = customerName.split(/\s+/);
@@ -318,11 +404,13 @@ function processOrderEvent(db, tenantId, payload) {
       payload, contactId: contact.id, leadId: lead?.id,
     });
 
-    // Aplicar etiqueta configurada (a contact, lead, o both según target)
-    if (cfg.order_tag) {
+    // Aplicar etiqueta configurada (a contact, lead, o both según target).
+    // El nombre soporta placeholders — ej "{order_id}" → "ms7bqsu9".
+    const resolvedOrderTag = _resolveTagTemplate(cfg.order_tag, payload);
+    if (resolvedOrderTag) {
       _applyTag(db, {
         tenantId, contactId: contact.id, leadId: lead?.id,
-        tagName: cfg.order_tag,
+        tagName: resolvedOrderTag,
         target: cfg.order_tag_target || 'contact',
       });
     }
@@ -497,6 +585,14 @@ function processAbandonedCartEvent(db, tenantId, payload) {
     return { skipped: 'already-processed' };
   }
 
+  // Guard: sin phone NI email no podemos identificar al cliente.
+  // Carritos de visitantes anónimos (sin login) no deben crear "Contacto
+  // Reelance" basura.
+  if (!payload.phone && !payload.email) {
+    _logEvent(db, { tenantId, eventType: 'abandoned_cart', externalId, externalStatus: payload.status, payload, error: 'no-contact-info' });
+    return { skipped: 'no-contact-info' };
+  }
+
   try {
     const contact = _findOrCreateContact(db, tenantId, {
       email: payload.email,
@@ -544,11 +640,13 @@ function processAbandonedCartEvent(db, tenantId, payload) {
       return { ok: true, contactId: contact.id, leadId: lead?.id || null, status: payload.status };
     }
 
-    // Aplicar etiqueta configurada (a contact, lead, o both según target)
-    if (cfg.abandoned_tag) {
+    // Aplicar etiqueta configurada (a contact, lead, o both según target).
+    // Soporta placeholders — ej "{cart_id}" → "e5pc057v".
+    const resolvedAbandonedTag = _resolveTagTemplate(cfg.abandoned_tag, payload);
+    if (resolvedAbandonedTag) {
       _applyTag(db, {
         tenantId, contactId: contact.id, leadId: lead?.id,
-        tagName: cfg.abandoned_tag,
+        tagName: resolvedAbandonedTag,
         target: cfg.abandoned_tag_target || 'contact',
       });
     }

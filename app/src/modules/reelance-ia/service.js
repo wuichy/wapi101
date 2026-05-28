@@ -50,6 +50,7 @@ function updateConfig(db, tenantId, patch) {
     'abandoned_pipeline_id', 'abandoned_stage_id',
     'order_bot_id', 'abandoned_bot_id',
     'abandoned_tag', 'abandoned_wait_minutes', 'abandoned_dedupe_hours',
+    'products_json', 'pipeline_rules',
   ];
   const sets = [];
   const args = [];
@@ -256,11 +257,127 @@ function processOrderEvent(db, tenantId, payload) {
       _fireBot(db, tenantId, cfg.order_bot_id, contact.id, lead?.id, { source: 'reelance-ia.order', order: payload });
     }
 
+    // Ruteo a pipeline por duración del producto.
+    // Solo se aplica si:
+    //   - La orden viene con tracking (carrier + number) → cliente la marcó completada
+    //   - status es 'COMPLETED' o 'FULFILLED' (paquete confirmado en camino)
+    //   - Hay productos configurados con duration_days
+    //   - Hay reglas de pipeline_rules configuradas
+    const hasTracking = (payload.trackingCarrier && payload.trackingNumber);
+    const statusReady = ['COMPLETED', 'FULFILLED'].includes(payload.status);
+    if (lead && hasTracking && statusReady) {
+      try {
+        _routeOrderToPipeline(db, tenantId, lead, payload, cfg);
+      } catch (err) {
+        console.error('[reelance-ia] route order failed:', err.message);
+      }
+    }
+
     return { ok: true, contactId: contact.id, leadId: lead?.id || null };
   } catch (err) {
     _logEvent(db, { tenantId, eventType: 'order', externalId, externalStatus: payload.status, payload, error: err.message });
     throw err;
   }
+}
+
+// ─── Ruteo a pipeline por duración (mismo mecanismo que Woo) ─────────
+// Calcula maxDays a partir de los productos comprados y busca la regla
+// de pipeline_rules que más se acerque (la mayor que no exceda maxDays).
+// Mueve el lead al pipeline destino, mata bots anteriores y dispara los
+// del nuevo stage (triggerPipelineStage activa los bots MES 1:1, etc.).
+function _routeOrderToPipeline(db, tenantId, lead, payload, cfg) {
+  const productDefs = _safeJsonParse(cfg.products_json, []);
+  const rules       = _safeJsonParse(cfg.pipeline_rules, []);
+  if (!productDefs.length || !rules.length) return;
+
+  const items = payload.items || [];
+  if (!items.length) return;
+
+  // Calcular maxDays — duración del producto más larga × cantidad
+  let maxDays = 0;
+  for (const item of items) {
+    const name = String(item.productName || '').toLowerCase().trim();
+    const def  = productDefs.find(p => String(p.name || '').toLowerCase().trim() === name);
+    if (def && def.duration_days) {
+      const effective = Number(def.duration_days) * (Number(item.quantity) || 1);
+      if (effective > maxDays) maxDays = effective;
+    }
+  }
+  if (maxDays <= 0) {
+    console.log(`[reelance-ia] order ${payload.id} sin productos configurados — no se rutea`);
+    return;
+  }
+
+  // Buscar regla con duration_days más alta que no exceda maxDays.
+  // Si todas las reglas exceden, usar la menor (fallback).
+  const sorted = [...rules].sort((a, b) => Number(b.duration_days) - Number(a.duration_days));
+  const rule = sorted.find(r => Number(r.duration_days) <= maxDays) || sorted[sorted.length - 1];
+  if (!rule || !rule.pipeline_id || !rule.stage_id) return;
+
+  // Verificar que pipeline y stage existen
+  const pipeline = db.prepare('SELECT id FROM pipelines WHERE id = ? AND tenant_id = ?').get(rule.pipeline_id, tenantId);
+  const stage    = db.prepare('SELECT id FROM stages WHERE id = ? AND pipeline_id = ?').get(rule.stage_id, rule.pipeline_id);
+  if (!pipeline || !stage) {
+    console.warn(`[reelance-ia] Regla de ${maxDays}d apunta a pipeline/stage inexistente (tenant ${tenantId})`);
+    return;
+  }
+
+  const prevPipelineId = lead.pipeline_id;
+  const prevStageId    = lead.stage_id;
+
+  // Si ya está en el pipeline destino, no mover (evita re-disparar bots)
+  if (Number(prevPipelineId) === Number(rule.pipeline_id) && Number(prevStageId) === Number(rule.stage_id)) {
+    return;
+  }
+
+  // Matar bots activos del contacto antes de mover (evita choque)
+  try {
+    const botEngine = require('../bot/engine');
+    if (typeof botEngine.killAllForContact === 'function') {
+      botEngine.killAllForContact(db, lead.contact_id, tenantId);
+    }
+  } catch (_) {}
+
+  // Mover el lead
+  db.prepare(`
+    UPDATE expedients SET pipeline_id = ?, stage_id = ?, updated_at = unixepoch(), stage_entered_at = unixepoch()
+    WHERE id = ?
+  `).run(rule.pipeline_id, rule.stage_id, lead.id);
+
+  // Guardar tracking en custom fields (paqueteria + número de rastreo)
+  try {
+    const utilsSvc = require('../expedients/customFields');
+    if (typeof utilsSvc?.fill === 'function') {
+      if (payload.trackingCarrier) utilsSvc.fill(db, tenantId, lead.id, 'Paqueteria', payload.trackingCarrier);
+      if (payload.trackingNumber)  utilsSvc.fill(db, tenantId, lead.id, 'Número de Rastreo:', payload.trackingNumber);
+    }
+  } catch (_) { /* opcional */ }
+
+  // Disparar bots de salida + entrada
+  try {
+    const botEngine = require('../bot/engine');
+    if (prevStageId && typeof botEngine.triggerPipelineStageLeave === 'function') {
+      botEngine.triggerPipelineStageLeave(db, {
+        expedientId: lead.id, contactId: lead.contact_id,
+        pipelineId: prevPipelineId, stageId: prevStageId,
+      });
+    }
+    if (typeof botEngine.triggerPipelineStage === 'function') {
+      botEngine.triggerPipelineStage(db, {
+        expedientId: lead.id, contactId: lead.contact_id,
+        pipelineId: rule.pipeline_id, stageId: rule.stage_id,
+        eventType: 'moved',
+      });
+    }
+    console.log(`[reelance-ia] lead #${lead.id} (${maxDays}d) → pipeline ${rule.pipeline_id} stage ${rule.stage_id}`);
+  } catch (e) {
+    console.error('[reelance-ia] error disparando bots de pipeline:', e.message);
+  }
+}
+
+function _safeJsonParse(s, fallback) {
+  try { return JSON.parse(s || JSON.stringify(fallback)); }
+  catch { return fallback; }
 }
 
 // ─── Handler: webhook de AbandonedCart ────────────────────────────────

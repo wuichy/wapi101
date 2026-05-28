@@ -273,9 +273,33 @@ async function _resolveAndDispatch(db, args, { tenantId, useMatcherIA, aiSilence
       reason: `trigger match (${matchResult.source}, conf ${matchResult.confidence?.toFixed?.(2) || '?'})`,
       botId: matchResult.botId, matcherUsed: useMatcherIA, matcherMs,
     });
-    // Dejamos que triggerMessage haga el trabajo — aunque iterará todos los
-    // bots, los triggers idénticos al matcher van a ganar como deben.
-    botEngine.triggerMessage(db, args);
+    // Ejecutar DIRECTAMENTE el bot ganador con runAsync (no triggerMessage).
+    // Razón: triggerMessage re-evalúa con substring tradicional, lo que falla
+    // cuando el matcher IA matcheó por intent semántico (frases distintas a
+    // las keywords del trigger). Saltamos esa re-evaluación porque el matcher
+    // ya tomó la decisión autoritativa.
+    try {
+      const bots = botEngine.enabledBots(db, tenantId);
+      const bot = bots.find(b => b.id === matchResult.botId);
+      if (bot) {
+        botEngine.runAsync(db, bot, {
+          convoId: args.convoId,
+          contactId: args.contactId,
+          messageBody: args.messageBody,
+          provider: args.provider,
+          integrationId: args.integrationId,
+          tenantId,
+          matchedKeyword: matchResult.source === 'llm' ? '(matcher-IA)' : (args.messageBody || ''),
+        });
+      } else {
+        // Si por alguna razón el bot no se encuentra (deshabilitado entre
+        // matcher y dispatch), caer al motor tradicional.
+        botEngine.triggerMessage(db, args);
+      }
+    } catch (err) {
+      console.error('[inbound-router] runAsync error:', err);
+      botEngine.triggerMessage(db, args);
+    }
     return;
   }
 

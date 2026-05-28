@@ -2338,4 +2338,5 @@ module.exports = {
   startReminderJobPoller,
   // Expuesto para el inbound-router (matcher de bots):
   enabledBots,
+  runAsync,
 };

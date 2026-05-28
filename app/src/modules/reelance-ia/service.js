@@ -49,8 +49,9 @@ function updateConfig(db, tenantId, patch) {
     'order_pipeline_id', 'order_stage_id',
     'abandoned_pipeline_id', 'abandoned_stage_id',
     'order_bot_id', 'abandoned_bot_id',
-    'abandoned_tag', 'abandoned_wait_minutes', 'abandoned_dedupe_hours',
+    'abandoned_tag', 'abandoned_tag_target', 'abandoned_wait_minutes', 'abandoned_dedupe_hours',
     'abandoned_template_id',
+    'order_tag', 'order_tag_target', 'order_template_id',
     'products_json', 'pipeline_rules',
   ];
   const sets = [];
@@ -159,6 +160,70 @@ function _findOrCreateLead(db, tenantId, { contactId, pipelineId, stageId, name,
   return lead;
 }
 
+// Aplica una etiqueta al contacto y/o al lead según target.
+// target: 'contact' (default) | 'lead' | 'both'
+function _applyTag(db, { tenantId, contactId, leadId, tagName, target }) {
+  if (!tagName) return;
+  const t = (target || 'contact').toLowerCase();
+  if ((t === 'contact' || t === 'both') && contactId) {
+    try {
+      // contact_tags no tiene tenant_id en su schema (legacy) — solo (contact_id, tag)
+      db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag) VALUES (?, ?)')
+        .run(contactId, tagName);
+    } catch (_) {}
+  }
+  if ((t === 'lead' || t === 'both') && leadId) {
+    try {
+      db.prepare('INSERT OR IGNORE INTO expedient_tags (expedient_id, tag) VALUES (?, ?)')
+        .run(leadId, tagName);
+    } catch (_) {}
+  }
+}
+
+// Envía una plantilla WhatsApp API. Compartido por órdenes y carritos.
+// kind: 'order' | 'abandoned_cart' — solo para logging y placeholders.
+async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phone, templateId, payload, kind }) {
+  if (!templateId || !phone) return;
+  const convoSvc = require('../conversations/service');
+  const sender   = require('../conversations/sender');
+
+  const externalId = String(phone).replace(/\D/g, '');
+  const waIntegration = db.prepare(
+    "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
+  ).get(tenantId);
+  if (!waIntegration) throw new Error('sin integración whatsapp connected');
+
+  const convo = convoSvc.findOrCreate(db, tenantId, {
+    provider:      'whatsapp',
+    externalId,
+    contactPhone:  phone,
+    contactName:   contactName || null,
+    contactId:     contactId || null,
+    integrationId: waIntegration.id,
+  });
+
+  const firstName = (contactName || '').split(/\s+/)[0] || 'Cliente';
+  // Placeholders comunes:
+  //   {{1}} = nombre del cliente
+  //   {{2}} = URL (recovery para abandoned_cart, tracking_url para order)
+  //   {{3}} = total
+  const manualValues = [
+    firstName,
+    kind === 'abandoned_cart' ? (payload.recoveryUrl || payload.cartUrl || '') : (payload.trackingUrl || ''),
+    payload.totalCents ? String(Math.round(payload.totalCents / 100)) : '',
+  ];
+
+  const result = await sender.sendWhatsAppTemplate(db, convo, templateId, manualValues, { autoFallback: true });
+  convoSvc.addMessage(db, tenantId, convo.id, {
+    externalId: result.externalId,
+    direction:  'outgoing',
+    provider:   'whatsapp',
+    body:       result.renderedBody,
+    status:     'sent',
+  });
+  return result;
+}
+
 function _logEvent(db, { tenantId, eventType, externalId, externalStatus, payload, contactId, leadId, error }) {
   try {
     db.prepare(`
@@ -253,8 +318,29 @@ function processOrderEvent(db, tenantId, payload) {
       payload, contactId: contact.id, leadId: lead?.id,
     });
 
-    // Disparar bot opcional (sin esperar)
-    if (cfg.order_bot_id) {
+    // Aplicar etiqueta configurada (a contact, lead, o both según target)
+    if (cfg.order_tag) {
+      _applyTag(db, {
+        tenantId, contactId: contact.id, leadId: lead?.id,
+        tagName: cfg.order_tag,
+        target: cfg.order_tag_target || 'contact',
+      });
+    }
+
+    // Prioridad: plantilla WA API > bot.
+    // Las órdenes pueden estar fuera de ventana 24h (cliente compró pero no
+    // nos escribió), por eso template es más confiable.
+    if (cfg.order_template_id) {
+      _sendTemplateMessage(db, {
+        tenantId,
+        contactId:   contact.id,
+        contactName: customerName || null,
+        phone:       payload.phone || null,
+        templateId:  cfg.order_template_id,
+        payload,
+        kind: 'order',
+      }).catch(err => console.error('[reelance-ia] order template send failed:', err.message));
+    } else if (cfg.order_bot_id) {
       _fireBot(db, tenantId, cfg.order_bot_id, contact.id, lead?.id, { source: 'reelance-ia.order', order: payload });
     }
 
@@ -458,12 +544,13 @@ function processAbandonedCartEvent(db, tenantId, payload) {
       return { ok: true, contactId: contact.id, leadId: lead?.id || null, status: payload.status };
     }
 
-    // Aplicar etiqueta configurada al contacto (si está activa la app)
+    // Aplicar etiqueta configurada (a contact, lead, o both según target)
     if (cfg.abandoned_tag) {
-      try {
-        db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag, tenant_id) VALUES (?, ?, ?)')
-          .run(contact.id, cfg.abandoned_tag, tenantId);
-      } catch (_) { /* silenciar — tag puede no aplicar */ }
+      _applyTag(db, {
+        tenantId, contactId: contact.id, leadId: lead?.id,
+        tagName: cfg.abandoned_tag,
+        target: cfg.abandoned_tag_target || 'contact',
+      });
     }
 
     // Anti-spam: si al mismo contacto ya se le envió un msg de carrito
@@ -613,52 +700,18 @@ async function _dispatchPendingAbandonedCarts(db) {
   }
 }
 
-// Envía la plantilla WhatsApp API al teléfono del carrito abandonado.
-// Mismo patrón que woo abandoned_cart poller:
-// 1. Busca integración WhatsApp del tenant
-// 2. Find-or-create conversación
-// 3. sendWhatsAppTemplate con manualValues [firstName, cart_url, cart_total]
-// 4. Registra el msg saliente en la conversación
+// Wrapper que adapta el row del queue al _sendTemplateMessage compartido
 async function _sendAbandonedTemplate(db, row, payload, templateId) {
-  const convoSvc = require('../conversations/service');
-  const sender   = require('../conversations/sender');
-
   const phone = row.customer_phone || payload.phone || '';
   if (!phone) throw new Error('sin teléfono');
-
-  const externalId = phone.replace(/\D/g, '');
-  const waIntegration = db.prepare(
-    "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
-  ).get(row.tenant_id);
-  if (!waIntegration) throw new Error('sin integración whatsapp connected');
-
-  const convo = convoSvc.findOrCreate(db, row.tenant_id, {
-    provider:      'whatsapp',
-    externalId,
-    contactPhone:  phone,
-    contactName:   row.customer_name || null,
-    contactId:     row.contact_id || null,
-    integrationId: waIntegration.id,
-  });
-
-  // Valores estándar para los placeholders {{1}}, {{2}}, {{3}} del template.
-  // El user define la plantilla con los placeholders que quiera; aquí pasamos
-  // los 3 más útiles: nombre, URL del carrito, total. Si la plantilla tiene
-  // menos placeholders, se ignoran los extras.
-  const firstName = (row.customer_name || '').split(/\s+/)[0] || 'Cliente';
-  const manualValues = [
-    firstName,
-    payload.recoveryUrl || payload.cartUrl || '',
-    payload.totalCents ? String(Math.round(payload.totalCents / 100)) : '',
-  ];
-
-  const result = await sender.sendWhatsAppTemplate(db, convo, templateId, manualValues, { autoFallback: true });
-  convoSvc.addMessage(db, row.tenant_id, convo.id, {
-    externalId: result.externalId,
-    direction:  'outgoing',
-    provider:   'whatsapp',
-    body:       result.renderedBody,
-    status:     'sent',
+  return _sendTemplateMessage(db, {
+    tenantId:    row.tenant_id,
+    contactId:   row.contact_id,
+    contactName: row.customer_name,
+    phone,
+    templateId,
+    payload,
+    kind: 'abandoned_cart',
   });
 }
 

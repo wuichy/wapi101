@@ -74,6 +74,37 @@ function authRouter(db) {
     res.json({ token: newToken });
   });
 
+  // Lista etiquetas existentes en el tenant — contact_tags + expedient_tags
+  // unificadas. Frontend las usa para autocompletar en el selector de etiquetas.
+  router.get('/tags-suggestions', (req, res) => {
+    try {
+      const contactTags = db.prepare(`
+        SELECT DISTINCT t.tag AS name, 'contact' AS source
+        FROM contact_tags t JOIN contacts c ON c.id = t.contact_id
+        WHERE c.tenant_id = ? AND t.tag != ''
+      `).all(req.tenantId);
+      const leadTags = db.prepare(`
+        SELECT DISTINCT t.tag AS name, 'lead' AS source
+        FROM expedient_tags t JOIN expedients e ON e.id = t.expedient_id
+        WHERE e.tenant_id = ? AND t.tag != ''
+      `).all(req.tenantId);
+      // Mergear y deduplicar — si una etiqueta existe en ambos, indicar 'both'
+      const map = new Map();
+      for (const t of [...contactTags, ...leadTags]) {
+        const existing = map.get(t.name);
+        if (existing && existing.source !== t.source) {
+          map.set(t.name, { name: t.name, source: 'both' });
+        } else if (!existing) {
+          map.set(t.name, t);
+        }
+      }
+      const items = [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+      res.json({ items });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   router.get('/events', (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     const rows = db.prepare(`

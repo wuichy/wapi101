@@ -26923,19 +26923,21 @@ async function _renderReelanceIaBody() {
     // Cargar config + eventos + pipelines + bots en paralelo. Pedir pipelines
     // y bots del API directamente (no de globales) para evitar race condition
     // si el modal abre antes de que esos globals se carguen al boot.
-    const [cfg, eventsRes, pipelinesRes, botsRes, templatesRes] = await Promise.all([
+    const [cfg, eventsRes, pipelinesRes, botsRes, templatesRes, tagsRes] = await Promise.all([
       api('GET', '/api/apps/reelance-ia/config'),
       api('GET', '/api/apps/reelance-ia/events?limit=15').catch(() => ({ items: [] })),
       api('GET', '/api/pipelines').catch(() => ({ items: [] })),
       api('GET', '/api/bot').catch(() => ({ items: [] })),
       api('GET', '/api/templates').catch(() => ({ items: [] })),
+      api('GET', '/api/apps/reelance-ia/tags-suggestions').catch(() => ({ items: [] })),
     ]);
     // Normalizar shape — algunos endpoints devuelven {items: [...]}, otros [..]
     const pipelines = Array.isArray(pipelinesRes) ? pipelinesRes : (pipelinesRes.items || pipelinesRes.pipelines || []);
     const bots = Array.isArray(botsRes) ? botsRes : (botsRes.items || botsRes.bots || []);
     const templates = Array.isArray(templatesRes) ? templatesRes : (templatesRes.items || []);
+    const tagSuggestions = Array.isArray(tagsRes) ? tagsRes : (tagsRes.items || []);
     // Cache para _riaPipelineChanged (cuando user cambia pipeline, refrescar stages)
-    window._riaCache = { pipelines, bots, templates };
+    window._riaCache = { pipelines, bots, templates, tagSuggestions };
 
     const stagesFor = (pipelineId) => {
       const p = pipelines.find(x => x.id == pipelineId);
@@ -26961,7 +26963,35 @@ async function _renderReelanceIaBody() {
         .filter(t => t.provider === 'whatsapp' && (t.wa_status === 'approved' || t.wa_status === 'APPROVED'))
         .map(t => `<option value="${t.id}" ${t.id == selectedId ? 'selected' : ''}>${escapeHtml(t.name)} (${escapeHtml(t.wa_language || t.language || 'es')})</option>`).join('');
 
+    // Widget tag selector con autocompletar + radios para target (contact/lead/both)
+    const tagListHtml = `<datalist id="riaTagsList">${tagSuggestions.map(t => `<option value="${escapeHtml(t.name)}">`).join('')}</datalist>`;
+    const tagWidget = (idPrefix, currentName, currentTarget) => {
+      const target = (currentTarget || 'contact').toLowerCase();
+      return `
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+          <input type="text" id="${idPrefix}TagName" value="${escapeHtml(currentName || '')}" list="riaTagsList"
+            placeholder="Escribe o elige una etiqueta existente"
+            style="flex:1;padding:7px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px"/>
+        </div>
+        <div style="display:flex;gap:14px;margin-top:6px;font-size:12px;color:#475569">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="${idPrefix}TagTarget" value="contact" ${target==='contact'?'checked':''}/>
+            🧑 Solo contacto
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="${idPrefix}TagTarget" value="lead" ${target==='lead'?'checked':''}/>
+            📋 Solo lead
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="radio" name="${idPrefix}TagTarget" value="both" ${target==='both'?'checked':''}/>
+            🔗 Ambos
+          </label>
+        </div>
+      `;
+    };
+
     body.innerHTML = `
+      ${tagListHtml}
       <p style="margin:0 0 16px;color:#475569;font-size:13px">
         Sincroniza tu tienda <strong>reelance.mx</strong> (Next.js + Prisma) con Wapi101.
         Pega el token en el <code>.env</code> de tu tienda y configura a qué pipeline
@@ -27001,11 +27031,27 @@ WAPI101_ENABLED=true</pre>
           </label>
         </div>
         <label style="font-size:12px;color:#475569;display:block;margin-top:10px">
-          Bot opcional al crearse orden (confirmación, tracking, etc.)
+          📨 Plantilla WhatsApp API al crearse orden (recomendado)
+          <select id="riaOrderTemplate" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+            ${templateOpts(cfg.order_template_id)}
+          </select>
+          <small style="display:block;margin-top:4px;color:#64748b;font-size:11px">
+            El cliente puede estar fuera de la ventana 24h. Si configuras una, tiene <strong>prioridad sobre el bot</strong>.
+            Placeholders: <code>{{1}}</code>=nombre, <code>{{2}}</code>=URL tracking, <code>{{3}}</code>=total.
+          </small>
+        </label>
+
+        <label style="font-size:12px;color:#475569;display:block;margin-top:10px">
+          🤖 Bot opcional (fallback)
           <select id="riaOrderBot" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
             ${botOpts(cfg.order_bot_id)}
           </select>
         </label>
+
+        <label style="font-size:12px;color:#475569;display:block;margin-top:12px">
+          🏷️ Etiqueta al crearse orden
+        </label>
+        ${tagWidget('riaOrder', cfg.order_tag, cfg.order_tag_target)}
       </div>
 
       <div class="form-section" style="margin-bottom:18px">
@@ -27047,11 +27093,9 @@ WAPI101_ENABLED=true</pre>
         </label>
 
         <label style="font-size:12px;color:#475569;display:block;margin-top:12px">
-          🏷️ Etiqueta para el lead
-          <input type="text" id="riaAbandonedTag" value="${escapeHtml(cfg.abandoned_tag || '')}" placeholder="Ej: carrito-abandonado"
-            style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px"/>
-          <small style="display:block;margin-top:4px;color:#64748b;font-size:11px">Se agrega al contacto cuando se envía el mensaje. Útil para filtrar leads.</small>
+          🏷️ Etiqueta al detectarse carrito abandonado
         </label>
+        ${tagWidget('riaAbandoned', cfg.abandoned_tag, cfg.abandoned_tag_target)}
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
           <label style="font-size:12px;color:#475569">
@@ -27291,9 +27335,13 @@ async function _riaSaveConfig() {
     abandoned_pipeline_id:  Number(document.getElementById('riaAbandonedPipeline').value) || null,
     abandoned_stage_id:     Number(document.getElementById('riaAbandonedStage').value) || null,
     order_bot_id:           Number(document.getElementById('riaOrderBot').value) || null,
+    order_template_id:      Number(document.getElementById('riaOrderTemplate')?.value) || null,
+    order_tag:              document.getElementById('riaOrderTagName')?.value.trim() || null,
+    order_tag_target:       document.querySelector('input[name="riaOrderTagTarget"]:checked')?.value || 'contact',
     abandoned_bot_id:       Number(document.getElementById('riaAbandonedBot').value) || null,
     abandoned_template_id:  Number(document.getElementById('riaAbandonedTemplate')?.value) || null,
-    abandoned_tag:          document.getElementById('riaAbandonedTag')?.value.trim() || null,
+    abandoned_tag:          document.getElementById('riaAbandonedTagName')?.value.trim() || null,
+    abandoned_tag_target:   document.querySelector('input[name="riaAbandonedTagTarget"]:checked')?.value || 'contact',
     abandoned_wait_minutes: Number(document.getElementById('riaAbandonedWait')?.value) || 0,
     abandoned_dedupe_hours: Number(document.getElementById('riaAbandonedDedupe')?.value) || 0,
     products_json:          JSON.stringify(_riaCollectProducts()),

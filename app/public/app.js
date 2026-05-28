@@ -27057,6 +27057,30 @@ WAPI101_ENABLED=true</pre>
         </label>
       </div>
 
+      <!-- ─── Productos y duración (días de tratamiento) ─── -->
+      <div class="form-section" style="margin-bottom:18px">
+        <h4 style="margin:0 0 6px;font-size:14px">🧴 Productos y duración del tratamiento</h4>
+        <p style="margin:0 0 10px;font-size:12px;color:#64748b">
+          Cada producto tiene una duración en días. Cuando llega una orden con tracking, se suma la duración y se mueve el lead al pipeline correcto.
+        </p>
+        <div id="riaProductsTable" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+          ${_riaRenderProductsTable(_riaSafeJson(cfg.products_json, []))}
+        </div>
+        <button type="button" class="btn btn--ghost btn--sm" onclick="_riaAddProductRow()" style="margin-top:8px;font-size:12px">+ Agregar producto</button>
+      </div>
+
+      <!-- ─── Reglas de ruteo por duración ─── -->
+      <div class="form-section" style="margin-bottom:18px">
+        <h4 style="margin:0 0 6px;font-size:14px">🎯 Reglas de ruteo a pipeline</h4>
+        <p style="margin:0 0 10px;font-size:12px;color:#64748b">
+          Según la duración total del tratamiento (suma de productos), el lead se mueve a este pipeline + etapa. Se busca la regla cuya duración no exceda el total.
+        </p>
+        <div id="riaRulesTable" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+          ${_riaRenderRulesTable(_riaSafeJson(cfg.pipeline_rules, []), pipelines)}
+        </div>
+        <button type="button" class="btn btn--ghost btn--sm" onclick="_riaAddRuleRow()" style="margin-top:8px;font-size:12px">+ Agregar regla</button>
+      </div>
+
       <div class="form-section" style="margin-bottom:18px">
         <h4 style="margin:0 0 10px;font-size:14px">📋 Últimos eventos recibidos</h4>
         <div id="riaEventsList" style="max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px">
@@ -27092,6 +27116,117 @@ function _riaRenderEvents(items) {
       <div style="color:#94a3b8;font-size:11px">${escapeHtml(dt)}</div>
     </div>`;
   }).join('');
+}
+
+// ─── Helpers para productos + reglas (UI tabla editable) ─────────
+function _riaSafeJson(s, fallback) {
+  try {
+    const v = typeof s === 'string' ? JSON.parse(s) : s;
+    return Array.isArray(v) ? v : (fallback || []);
+  } catch { return fallback || []; }
+}
+
+function _riaRenderProductsTable(products) {
+  const header = `
+    <div style="display:grid;grid-template-columns:1fr 100px 40px;gap:8px;padding:8px 12px;background:#f8fafc;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0">
+      <div>Nombre del producto</div>
+      <div style="text-align:center">Días</div>
+      <div></div>
+    </div>`;
+  if (!products.length) {
+    return header + `<div style="padding:16px;text-align:center;color:#94a3b8;font-size:12px">Sin productos. Agrega el primero.</div>`;
+  }
+  const rows = products.map((p, i) => `
+    <div class="ria-prod-row" data-idx="${i}" style="display:grid;grid-template-columns:1fr 100px 40px;gap:8px;padding:6px 12px;align-items:center;border-bottom:1px solid #f1f5f9">
+      <input type="text" data-field="name" value="${escapeHtml(p.name || '')}" placeholder="Loción Hombre"
+        style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px"/>
+      <input type="number" data-field="duration_days" value="${Number(p.duration_days) || 30}" min="1" max="365"
+        style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;text-align:center"/>
+      <button type="button" onclick="_riaRemoveProductRow(${i})" title="Eliminar"
+        style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px">×</button>
+    </div>`).join('');
+  return header + rows;
+}
+
+function _riaRenderRulesTable(rules, pipelines) {
+  const header = `
+    <div style="display:grid;grid-template-columns:80px 1fr 1fr 40px;gap:8px;padding:8px 12px;background:#f8fafc;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e2e8f0">
+      <div style="text-align:center">Días</div>
+      <div>Pipeline destino</div>
+      <div>Etapa destino</div>
+      <div></div>
+    </div>`;
+  if (!rules.length) {
+    return header + `<div style="padding:16px;text-align:center;color:#94a3b8;font-size:12px">Sin reglas. Agrega la primera.</div>`;
+  }
+  const pipeOpts = (selectedId) =>
+    `<option value="">— Pipeline —</option>` +
+    pipelines.map(p => `<option value="${p.id}" ${p.id == selectedId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+
+  const rows = rules.map((r, i) => {
+    const pipe = pipelines.find(p => Number(p.id) === Number(r.pipeline_id));
+    const stages = pipe?.stages || [];
+    const stageOpts = `<option value="">— Etapa —</option>` +
+      stages.map(s => `<option value="${s.id}" ${s.id == r.stage_id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+    return `
+      <div class="ria-rule-row" data-idx="${i}" style="display:grid;grid-template-columns:80px 1fr 1fr 40px;gap:8px;padding:6px 12px;align-items:center;border-bottom:1px solid #f1f5f9">
+        <input type="number" data-field="duration_days" value="${Number(r.duration_days) || 30}" min="1" max="3650"
+          style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;text-align:center"/>
+        <select data-field="pipeline_id" onchange="_riaPipelineChangedForRule(${i})"
+          style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">${pipeOpts(r.pipeline_id)}</select>
+        <select data-field="stage_id"
+          style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">${stageOpts}</select>
+        <button type="button" onclick="_riaRemoveRuleRow(${i})" title="Eliminar"
+          style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:18px">×</button>
+      </div>`;
+  }).join('');
+  return header + rows;
+}
+
+// Lee del DOM las filas actuales y devuelve arrays serializables
+function _riaCollectProducts() {
+  const rows = document.querySelectorAll('#riaProductsTable .ria-prod-row');
+  return [...rows].map(row => ({
+    name: row.querySelector('[data-field="name"]').value.trim(),
+    duration_days: Number(row.querySelector('[data-field="duration_days"]').value) || 30,
+  })).filter(p => p.name);
+}
+function _riaCollectRules() {
+  const rows = document.querySelectorAll('#riaRulesTable .ria-rule-row');
+  return [...rows].map(row => ({
+    duration_days: Number(row.querySelector('[data-field="duration_days"]').value) || 30,
+    pipeline_id: Number(row.querySelector('[data-field="pipeline_id"]').value) || null,
+    stage_id: Number(row.querySelector('[data-field="stage_id"]').value) || null,
+  })).filter(r => r.pipeline_id && r.stage_id);
+}
+
+function _riaAddProductRow() {
+  const current = _riaCollectProducts();
+  current.push({ name: '', duration_days: 30 });
+  document.getElementById('riaProductsTable').innerHTML = _riaRenderProductsTable(current);
+}
+function _riaRemoveProductRow(idx) {
+  const current = _riaCollectProducts();
+  current.splice(idx, 1);
+  document.getElementById('riaProductsTable').innerHTML = _riaRenderProductsTable(current);
+}
+function _riaAddRuleRow() {
+  const current = _riaCollectRules();
+  current.push({ duration_days: 30, pipeline_id: null, stage_id: null });
+  const pipelines = (window._riaCache && window._riaCache.pipelines) || [];
+  document.getElementById('riaRulesTable').innerHTML = _riaRenderRulesTable(current, pipelines);
+}
+function _riaRemoveRuleRow(idx) {
+  const current = _riaCollectRules();
+  current.splice(idx, 1);
+  const pipelines = (window._riaCache && window._riaCache.pipelines) || [];
+  document.getElementById('riaRulesTable').innerHTML = _riaRenderRulesTable(current, pipelines);
+}
+// Cuando cambia el pipeline de una regla, refresca el select de stages
+function _riaPipelineChangedForRule(idx) {
+  const current = _riaCollectRules();
+  const pipelines = (window._riaCache && window._riaCache.pipelines) || [];
+  document.getElementById('riaRulesTable').innerHTML = _riaRenderRulesTable(current, pipelines);
 }
 
 function _riaCopyToken() {
@@ -27136,6 +27271,8 @@ async function _riaSaveConfig() {
     abandoned_tag:          document.getElementById('riaAbandonedTag')?.value.trim() || null,
     abandoned_wait_minutes: Number(document.getElementById('riaAbandonedWait')?.value) || 0,
     abandoned_dedupe_hours: Number(document.getElementById('riaAbandonedDedupe')?.value) || 0,
+    products_json:          JSON.stringify(_riaCollectProducts()),
+    pipeline_rules:         JSON.stringify(_riaCollectRules()),
   };
   try {
     await api('PUT', '/api/apps/reelance-ia/config', payload);

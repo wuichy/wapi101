@@ -50,6 +50,7 @@ function updateConfig(db, tenantId, patch) {
     'abandoned_pipeline_id', 'abandoned_stage_id',
     'order_bot_id', 'abandoned_bot_id',
     'abandoned_tag', 'abandoned_wait_minutes', 'abandoned_dedupe_hours',
+    'abandoned_template_id',
     'products_json', 'pipeline_rules',
   ];
   const sets = [];
@@ -561,11 +562,12 @@ function _fireBot(db, tenantId, botId, contactId, leadId, ctx) {
 // ya se cumplió. Si el cliente recuperó el carrito antes (status pasó
 // a 'recovered' o 'converted'), processAbandonedCartEvent ya marcó el
 // registro como cancelled y no se dispara.
-function _dispatchPendingAbandonedCarts(db) {
+async function _dispatchPendingAbandonedCarts(db) {
   let rows;
   try {
     rows = db.prepare(`
-      SELECT id, tenant_id, external_id, contact_id, lead_id, bot_id, payload_json
+      SELECT id, tenant_id, external_id, contact_id, lead_id, bot_id,
+             customer_phone, customer_name, payload_json
       FROM reelance_ia_abandoned_queue
       WHERE status = 'pending' AND scheduled_at <= unixepoch()
       ORDER BY scheduled_at ASC LIMIT 20
@@ -577,32 +579,95 @@ function _dispatchPendingAbandonedCarts(db) {
     try { payload = JSON.parse(row.payload_json || '{}'); } catch (_) {}
 
     try {
-      if (row.bot_id) {
+      const cfg = getConfigByTenant(db, row.tenant_id);
+      let dispatchedAs = 'none';
+
+      // Prioridad: template_id sobre bot_id (templates funcionan fuera de
+      // ventana 24h de WA — los bots con msgs libres no).
+      if (cfg && cfg.abandoned_template_id) {
+        await _sendAbandonedTemplate(db, row, payload, cfg.abandoned_template_id);
+        dispatchedAs = `template ${cfg.abandoned_template_id}`;
+      } else if (row.bot_id) {
         _fireBot(db, row.tenant_id, row.bot_id, row.contact_id, row.lead_id, {
           source: 'reelance-ia.abandoned_cart.delayed',
           cart: payload,
         });
+        dispatchedAs = `bot ${row.bot_id}`;
+      } else {
+        // Ni bot ni template configurado → no se manda nada, queda en log
+        dispatchedAs = 'skipped (sin bot ni template)';
       }
+
       db.prepare(`
         UPDATE reelance_ia_abandoned_queue
         SET status = 'sent', sent_at = unixepoch() WHERE id = ?
       `).run(row.id);
-      console.log(`[reelance-ia] abandoned cart ${row.external_id} → bot ${row.bot_id} (contact ${row.contact_id})`);
+      console.log(`[reelance-ia] abandoned cart ${row.external_id} → ${dispatchedAs} (contact ${row.contact_id})`);
     } catch (err) {
       db.prepare(`
         UPDATE reelance_ia_abandoned_queue
         SET status = 'failed', error = ? WHERE id = ?
-      `).run(err.message.slice(0, 500), row.id);
+      `).run((err.message || String(err)).slice(0, 500), row.id);
       console.error('[reelance-ia] dispatch failed:', err.message);
     }
   }
 }
 
+// Envía la plantilla WhatsApp API al teléfono del carrito abandonado.
+// Mismo patrón que woo abandoned_cart poller:
+// 1. Busca integración WhatsApp del tenant
+// 2. Find-or-create conversación
+// 3. sendWhatsAppTemplate con manualValues [firstName, cart_url, cart_total]
+// 4. Registra el msg saliente en la conversación
+async function _sendAbandonedTemplate(db, row, payload, templateId) {
+  const convoSvc = require('../conversations/service');
+  const sender   = require('../conversations/sender');
+
+  const phone = row.customer_phone || payload.phone || '';
+  if (!phone) throw new Error('sin teléfono');
+
+  const externalId = phone.replace(/\D/g, '');
+  const waIntegration = db.prepare(
+    "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
+  ).get(row.tenant_id);
+  if (!waIntegration) throw new Error('sin integración whatsapp connected');
+
+  const convo = convoSvc.findOrCreate(db, row.tenant_id, {
+    provider:      'whatsapp',
+    externalId,
+    contactPhone:  phone,
+    contactName:   row.customer_name || null,
+    contactId:     row.contact_id || null,
+    integrationId: waIntegration.id,
+  });
+
+  // Valores estándar para los placeholders {{1}}, {{2}}, {{3}} del template.
+  // El user define la plantilla con los placeholders que quiera; aquí pasamos
+  // los 3 más útiles: nombre, URL del carrito, total. Si la plantilla tiene
+  // menos placeholders, se ignoran los extras.
+  const firstName = (row.customer_name || '').split(/\s+/)[0] || 'Cliente';
+  const manualValues = [
+    firstName,
+    payload.recoveryUrl || payload.cartUrl || '',
+    payload.totalCents ? String(Math.round(payload.totalCents / 100)) : '',
+  ];
+
+  const result = await sender.sendWhatsAppTemplate(db, convo, templateId, manualValues, { autoFallback: true });
+  convoSvc.addMessage(db, row.tenant_id, convo.id, {
+    externalId: result.externalId,
+    direction:  'outgoing',
+    provider:   'whatsapp',
+    body:       result.renderedBody,
+    status:     'sent',
+  });
+}
+
 function startAbandonedCartPoller(db) {
   // Tick cada 60s (mismo intervalo que el woo abandoned cart poller).
   setInterval(() => {
-    try { _dispatchPendingAbandonedCarts(db); }
-    catch (e) { console.error('[reelance-ia poller] tick error:', e.message); }
+    _dispatchPendingAbandonedCarts(db).catch(e =>
+      console.error('[reelance-ia poller] tick error:', e.message)
+    );
   }, 60_000);
   console.log('[reelance-ia] abandoned cart poller iniciado (cada 60s)');
 }

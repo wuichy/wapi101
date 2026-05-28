@@ -26923,17 +26923,19 @@ async function _renderReelanceIaBody() {
     // Cargar config + eventos + pipelines + bots en paralelo. Pedir pipelines
     // y bots del API directamente (no de globales) para evitar race condition
     // si el modal abre antes de que esos globals se carguen al boot.
-    const [cfg, eventsRes, pipelinesRes, botsRes] = await Promise.all([
+    const [cfg, eventsRes, pipelinesRes, botsRes, templatesRes] = await Promise.all([
       api('GET', '/api/apps/reelance-ia/config'),
       api('GET', '/api/apps/reelance-ia/events?limit=15').catch(() => ({ items: [] })),
       api('GET', '/api/pipelines').catch(() => ({ items: [] })),
       api('GET', '/api/bot').catch(() => ({ items: [] })),
+      api('GET', '/api/templates').catch(() => ({ items: [] })),
     ]);
     // Normalizar shape — algunos endpoints devuelven {items: [...]}, otros [..]
     const pipelines = Array.isArray(pipelinesRes) ? pipelinesRes : (pipelinesRes.items || pipelinesRes.pipelines || []);
     const bots = Array.isArray(botsRes) ? botsRes : (botsRes.items || botsRes.bots || []);
+    const templates = Array.isArray(templatesRes) ? templatesRes : (templatesRes.items || []);
     // Cache para _riaPipelineChanged (cuando user cambia pipeline, refrescar stages)
-    window._riaCache = { pipelines, bots };
+    window._riaCache = { pipelines, bots, templates };
 
     const stagesFor = (pipelineId) => {
       const p = pipelines.find(x => x.id == pipelineId);
@@ -26951,6 +26953,13 @@ async function _renderReelanceIaBody() {
     const botOpts = (selectedId) =>
       `<option value="">— Sin bot (opcional) —</option>` +
       bots.filter(b => b.enabled).map(b => `<option value="${b.id}" ${b.id == selectedId ? 'selected' : ''}>${escapeHtml(b.name)}</option>`).join('');
+
+    // Solo plantillas APROBADAS de WhatsApp API (no Lite ni Cloud no-approved)
+    const templateOpts = (selectedId) =>
+      `<option value="">— Sin plantilla (usar bot) —</option>` +
+      templates
+        .filter(t => t.provider === 'whatsapp' && (t.wa_status === 'approved' || t.wa_status === 'APPROVED'))
+        .map(t => `<option value="${t.id}" ${t.id == selectedId ? 'selected' : ''}>${escapeHtml(t.name)} (${escapeHtml(t.wa_language || t.language || 'es')})</option>`).join('');
 
     body.innerHTML = `
       <p style="margin:0 0 16px;color:#475569;font-size:13px">
@@ -27016,10 +27025,25 @@ WAPI101_ENABLED=true</pre>
           </label>
         </div>
         <label style="font-size:12px;color:#475569;display:block;margin-top:10px">
-          Bot de recuperación (manda plantilla WhatsApp al cliente)
+          📨 Plantilla WhatsApp API (recomendado)
+          <select id="riaAbandonedTemplate" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+            ${templateOpts(cfg.abandoned_template_id)}
+          </select>
+          <small style="display:block;margin-top:4px;color:#64748b;font-size:11px">
+            Como el cliente puede estar fuera de la ventana 24h, solo plantillas pre-aprobadas funcionan.
+            Si configuras una, tiene <strong>prioridad sobre el bot</strong>.
+            Placeholders del template: <code>{{1}}</code>=nombre, <code>{{2}}</code>=URL carrito, <code>{{3}}</code>=total.
+          </small>
+        </label>
+
+        <label style="font-size:12px;color:#475569;display:block;margin-top:10px">
+          🤖 Bot de recuperación (fallback opcional)
           <select id="riaAbandonedBot" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
             ${botOpts(cfg.abandoned_bot_id)}
           </select>
+          <small style="display:block;margin-top:4px;color:#64748b;font-size:11px">
+            Solo se usa si NO configuras plantilla. Útil si el cliente ya nos escribió recientemente.
+          </small>
         </label>
 
         <label style="font-size:12px;color:#475569;display:block;margin-top:12px">
@@ -27268,6 +27292,7 @@ async function _riaSaveConfig() {
     abandoned_stage_id:     Number(document.getElementById('riaAbandonedStage').value) || null,
     order_bot_id:           Number(document.getElementById('riaOrderBot').value) || null,
     abandoned_bot_id:       Number(document.getElementById('riaAbandonedBot').value) || null,
+    abandoned_template_id:  Number(document.getElementById('riaAbandonedTemplate')?.value) || null,
     abandoned_tag:          document.getElementById('riaAbandonedTag')?.value.trim() || null,
     abandoned_wait_minutes: Number(document.getElementById('riaAbandonedWait')?.value) || 0,
     abandoned_dedupe_hours: Number(document.getElementById('riaAbandonedDedupe')?.value) || 0,

@@ -219,6 +219,19 @@ function _findOrCreateLead(db, tenantId, { contactId, pipelineId, stageId, name,
   return lead;
 }
 
+// Formato dd/MM/yyyy en TZ America/Mexico_City. Usado para nombres de
+// lead ("Luis Melchor 28/05/2026") — consistente con leads importados
+// históricamente desde Kommo.
+function _formatDateMx(isoOrDate) {
+  const d = isoOrDate ? new Date(isoOrDate) : new Date();
+  if (isNaN(d.getTime())) return '';
+  const fmt = new Intl.DateTimeFormat('es-MX', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    timeZone: 'America/Mexico_City',
+  });
+  return fmt.format(d);
+}
+
 // Resuelve placeholders en el nombre de la etiqueta.
 // Soporta: {order_id}, {order_short}, {customer_name}, {phone}, {email}
 // Ejemplos:
@@ -385,7 +398,12 @@ function processOrderEvent(db, tenantId, payload) {
     // Crear lead solo si tenemos pipeline configurado para órdenes
     let lead = null;
     if (cfg.order_pipeline_id && cfg.order_stage_id) {
-      const leadName = `Orden #${externalId.slice(-8)}`;
+      // Nombre del lead = "Nombre Apellido dd/MM/yyyy" (formato consistente
+      // con leads viejos importados de Kommo, ej "Paola Rello 19/05/2026").
+      // Fallback al order id corto si no hay nombre del cliente.
+      const leadName = customerName
+        ? `${customerName} ${_formatDateMx(payload.createdAt)}`
+        : `Orden #${externalId.slice(-8)}`;
       const totalMxn = payload.totalCents ? Math.round(payload.totalCents / 100) : 0;
       lead = _findOrCreateLead(db, tenantId, {
         contactId: contact.id,

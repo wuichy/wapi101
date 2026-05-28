@@ -26927,7 +26927,7 @@ async function _renderReelanceIaBody() {
       api('GET', '/api/apps/reelance-ia/config'),
       api('GET', '/api/apps/reelance-ia/events?limit=15').catch(() => ({ items: [] })),
       api('GET', '/api/pipelines').catch(() => ({ items: [] })),
-      api('GET', '/api/bots').catch(() => ({ items: [] })),
+      api('GET', '/api/bot').catch(() => ({ items: [] })),
     ]);
     // Normalizar shape — algunos endpoints devuelven {items: [...]}, otros [..]
     const pipelines = Array.isArray(pipelinesRes) ? pipelinesRes : (pipelinesRes.items || pipelinesRes.pipelines || []);

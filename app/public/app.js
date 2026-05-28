@@ -26956,12 +26956,17 @@ async function _renderReelanceIaBody() {
       `<option value="">— Sin bot (opcional) —</option>` +
       bots.filter(b => b.enabled).map(b => `<option value="${b.id}" ${b.id == selectedId ? 'selected' : ''}>${escapeHtml(b.name)}</option>`).join('');
 
-    // Solo plantillas APROBADAS de WhatsApp API (no Lite ni Cloud no-approved)
+    // Solo plantillas APROBADAS de WhatsApp API (no Lite ni Cloud no-approved).
+    // El endpoint devuelve type='wa_api' y waStatus='approved' (camelCase).
     const templateOpts = (selectedId) =>
       `<option value="">— Sin plantilla (usar bot) —</option>` +
       templates
-        .filter(t => t.provider === 'whatsapp' && (t.wa_status === 'approved' || t.wa_status === 'APPROVED'))
-        .map(t => `<option value="${t.id}" ${t.id == selectedId ? 'selected' : ''}>${escapeHtml(t.name)} (${escapeHtml(t.wa_language || t.language || 'es')})</option>`).join('');
+        .filter(t => t.type === 'wa_api' && String(t.waStatus || '').toLowerCase() === 'approved')
+        .map(t => {
+          const label = t.displayName || t.name || '(sin nombre)';
+          const lang  = t.language || 'es';
+          return `<option value="${t.id}" ${t.id == selectedId ? 'selected' : ''}>${escapeHtml(label)} (${escapeHtml(lang)})</option>`;
+        }).join('');
 
     // Widget tag selector con autocompletar + radios para target (contact/lead/both)
     const tagListHtml = `<datalist id="riaTagsList">${tagSuggestions.map(t => `<option value="${escapeHtml(t.name)}">`).join('')}</datalist>`;

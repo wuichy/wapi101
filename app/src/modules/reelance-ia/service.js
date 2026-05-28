@@ -139,17 +139,19 @@ function _findOrCreateContact(db, tenantId, { email, phone, firstName, lastName 
 // Si ya hay lead activo en ese pipeline, lo reusa.
 function _findOrCreateLead(db, tenantId, { contactId, pipelineId, stageId, name, value }) {
   if (!pipelineId || !stageId) return null;
+  // En Wapi101 la tabla se llama 'expedients' (no 'leads'). Nombre legacy
+  // por compatibilidad con la rama de Wapi pre-2024.
   let lead = db.prepare(`
-    SELECT * FROM leads
+    SELECT * FROM expedients
     WHERE contact_id = ? AND pipeline_id = ? AND tenant_id = ?
     ORDER BY created_at DESC LIMIT 1
   `).get(contactId, pipelineId, tenantId);
   if (!lead) {
     const result = db.prepare(`
-      INSERT INTO leads (tenant_id, contact_id, pipeline_id, stage_id, name, value)
+      INSERT INTO expedients (tenant_id, contact_id, pipeline_id, stage_id, name, value)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(tenantId, contactId, pipelineId, stageId, name || null, value || 0);
-    lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(result.lastInsertRowid);
+    lead = db.prepare('SELECT * FROM expedients WHERE id = ?').get(result.lastInsertRowid);
   }
   return lead;
 }

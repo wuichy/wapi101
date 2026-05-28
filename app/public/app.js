@@ -9827,8 +9827,18 @@ function botRowTagsHtml(bot) {
 // activo + bot trigger='always' + enabled=1. Esto es determinístico: no depende
 // de fetches async ni de orden de carga.
 function botHybridIncompatibleBadge(b) {
-  if (!b.hybrid_incompatible) return '';
-  return ` <span class="bot-incompatible-badge" title="Este bot tiene trigger 'Cualquier mensaje' y choca con el Coordinador IA+Bots. La IA nunca podrá responder en conversaciones donde este bot esté activo. Cambia el trigger o desactívalo.">⚠️ Incompatible con coordinador</span>`;
+  let html = '';
+  if (b.hybrid_incompatible) {
+    html += ` <span class="bot-incompatible-badge" title="Este bot tiene trigger 'Cualquier mensaje' y choca con el Coordinador IA+Bots. La IA nunca podrá responder en conversaciones donde este bot esté activo. Cambia el trigger o desactívalo.">⚠️ Incompatible con coordinador</span>`;
+  }
+  // Conflictos de keywords con otros bots (análisis estático sin IA)
+  if (Array.isArray(b.keyword_conflicts) && b.keyword_conflicts.length) {
+    const names = b.keyword_conflicts.map(c => `"${c.name}"`).join(', ');
+    const shared = b.keyword_conflicts.flatMap(c => c.sharedKeywords).slice(0, 6);
+    const tip = `Comparte palabras clave con: ${names}\nPalabras compartidas: ${shared.join(', ')}\nCualquier mensaje que contenga estas palabras podría disparar cualquiera de los bots — pueden chocar.`;
+    html += ` <span class="bot-conflict-badge" data-bot-conflict-id="${b.id}" title="${escHtml(tip)}">🟠 Choca con ${b.keyword_conflicts.length} bot${b.keyword_conflicts.length>1?'s':''}</span>`;
+  }
+  return html;
 }
 
 function renderBotList() {

@@ -218,13 +218,22 @@ module.exports = function createBotRouter(db) {
   router.get('/', (req, res) => {
     const items = service.list(db, req.tenantId);
     // Marcar bots incompatibles con el coordinador del híbrido IA+Bots.
-    // Un bot es incompatible si: hybrid activo + trigger='always' + enabled.
-    // Esto es DETERMINISTA: el frontend solo lee b.hybrid_incompatible sin
-    // depender de fetches async ni flags globales que pueden no cargar.
     const tenant = db.prepare('SELECT ia_hybrid_enabled FROM tenants WHERE id=?').get(req.tenantId);
     const hybridOn = !!(tenant && tenant.ia_hybrid_enabled);
     for (const b of items) {
       b.hybrid_incompatible = hybridOn && b.trigger_type === 'always' && !!b.enabled;
+    }
+    // Detectar conflictos entre bots keyword (sin IA, análisis estático de
+    // sus triggers). Marca cada bot con keyword_conflicts: array de bots
+    // con los que comparte palabras clave.
+    try {
+      const conflictSvc = require('../bot-conflicts/service');
+      const conflictsMap = conflictSvc.detectConflicts(db, req.tenantId);
+      for (const b of items) {
+        b.keyword_conflicts = conflictsMap[b.id] || [];
+      }
+    } catch (err) {
+      console.warn('[bot-conflicts] detection failed:', err.message);
     }
     res.json({ items });
   });

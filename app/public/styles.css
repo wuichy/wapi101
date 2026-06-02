@@ -10129,6 +10129,16 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   padding: 4px 8px;
   border-radius: 4px;
 }
+.sb-tpl-branches-hint {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #78350f;
+}
 /* Editor de ramas por botón QUICK_REPLY */
 .sb-tpl-branches {
   margin-top: 14px;

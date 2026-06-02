@@ -10876,7 +10876,14 @@ function buildStepBody(step) {
       let branchesHtml = '';
       if (tpl && Array.isArray(tpl.buttons) && tpl.buttons.length) {
         const quickReplyBtns = tpl.buttons.filter(b => b && (b.type === 'QUICK_REPLY') && b.text);
-        if (quickReplyBtns.length) {
+        const urlOrPhoneBtns = tpl.buttons.filter(b => b && (b.type === 'URL' || b.type === 'PHONE_NUMBER') && b.text);
+        if (!quickReplyBtns.length && urlOrPhoneBtns.length) {
+          const btnList = urlOrPhoneBtns.map(b => `"${escHtml(b.text)}" (${b.type === 'URL' ? '🔗 enlace' : '📞 teléfono'})`).join(', ');
+          branchesHtml = `
+            <div class="sb-tpl-branches-hint">
+              <strong>ℹ️ Sin ramas configurables</strong> — esta plantilla tiene ${btnList}. Los botones URL/teléfono abren el navegador/marcador del cliente y no generan respuesta al chat, por eso no pueden ramificar el bot. Para ramificar, crea una plantilla con botones <strong>QUICK_REPLY</strong> (ej. "Sí quiero" / "No gracias") en Plantillas → Nueva → tipo "WA API" → agregar botones de respuesta rápida.
+            </div>`;
+        } else if (quickReplyBtns.length) {
           const branches = (c.button_branches && typeof c.button_branches === 'object') ? c.button_branches : {};
           const other    = (c.other_branches  && typeof c.other_branches  === 'object') ? c.other_branches  : {};
           const renderBranchEditor = (key, steps, isOther) => {

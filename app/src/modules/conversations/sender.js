@@ -43,6 +43,18 @@ async function _safeJson(res) {
   }
 }
 
+// ── WhatsApp Cloud API: normalizar el destinatario MX a +52 (sin el "1") ──────
+// México moderno usa +52 + 10 dígitos. Algunos contactos quedaron guardados como
+// +521XXXXXXXXXX (formato viejo) y WhatsApp los rechaza con "número sin WhatsApp
+// activo". Quitamos ese "1" SOLO al enviar (no tocamos cómo se guarda ni el
+// matching de conversaciones). Números de otros países quedan intactos.
+function waCloudRecipient(extId) {
+  const hadPlus = String(extId || '').trim().startsWith('+');
+  let d = String(extId || '').replace(/\D/g, '');
+  if (d.length === 13 && d.startsWith('521')) d = '52' + d.slice(3); // 5219512348533 → 529512348533
+  return hadPlus ? '+' + d : d;
+}
+
 async function sendMessage(db, convo, text) {
   convo = _normalizeConvo(convo);
   if (convo.provider === 'whatsapp')        return sendWhatsApp(db, convo, text);
@@ -113,7 +125,7 @@ async function sendWhatsApp(db, convo, text) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
-      to: convo.externalId,
+      to: waCloudRecipient(convo.externalId),
       type: 'text',
       text: { body: text },
     }),
@@ -170,7 +182,7 @@ async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, captio
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
-      to: convo.externalId,
+      to: waCloudRecipient(convo.externalId),
       type: typeKey,
       [typeKey]: mediaPayload,
     }),
@@ -189,13 +201,38 @@ async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, captio
 // Cuando autoFallback=true (caso típico: bot disparando template Manual), si no
 // hay valor manual usa first_name del contacto en vez de devolver vacío. Esto
 // evita que un bot reviente porque el placeholder Manual no tiene valor pre-cargado.
-function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = false) {
+function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = false, ctx = {}) {
   if (ph?.contactField) {
-    if (ph.contactField === 'first_name')  return contact?.first_name || '';
-    if (ph.contactField === 'last_name')   return contact?.last_name || '';
-    if (ph.contactField === 'full_name')   return [contact?.first_name, contact?.last_name].filter(Boolean).join(' ');
-    if (ph.contactField === 'phone')       return contact?.phone || '';
-    if (ph.contactField === 'email')       return contact?.email || '';
+    const cf = ph.contactField;
+    if (cf === 'first_name')  return contact?.first_name || '';
+    if (cf === 'last_name')   return contact?.last_name || '';
+    if (cf === 'full_name')   return [contact?.first_name, contact?.last_name].filter(Boolean).join(' ');
+    if (cf === 'phone')       return contact?.phone || '';
+    if (cf === 'email')       return contact?.email || '';
+
+    // Valor monetario del lead (expedients.value)
+    if (cf === 'lead_value' && ctx.db && ctx.leadId) {
+      try {
+        const row = ctx.db.prepare('SELECT value FROM expedients WHERE id = ?').get(ctx.leadId);
+        if (row?.value != null) return String(row.value);
+      } catch (_) { /* noop */ }
+    }
+
+    // Custom fields: cf:<id> = contacto, lf:<id> = lead (expedient)
+    const m = cf.match(/^(cf|lf):(\d+)$/);
+    if (m && ctx.db) {
+      const entity   = m[1] === 'cf' ? 'contact' : 'expedient';
+      const fieldId  = Number(m[2]);
+      const recordId = entity === 'contact' ? contact?.id : ctx.leadId;
+      if (recordId) {
+        try {
+          const row = ctx.db.prepare(
+            'SELECT value FROM custom_field_values WHERE entity=? AND record_id=? AND field_id=?'
+          ).get(entity, recordId, fieldId);
+          if (row?.value) return row.value;
+        } catch (_) { /* tabla puede no existir en setups viejos */ }
+      }
+    }
   }
   const manual = manualValues?.[idx];
   if (manual !== undefined && manual !== null && manual !== '') return manual;
@@ -206,7 +243,7 @@ function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = fals
 // Envía una plantilla wa_api APROBADA al cliente.
 //   templateId    → id en message_templates de la plantilla a enviar
 //   manualValues  → array (index = placeholder N-1) con valores para los Manual
-async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { autoFallback = false } = {}) {
+async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { autoFallback = false, leadId = null } = {}) {
   convo = _normalizeConvo(convo);
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
 
@@ -245,7 +282,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
     const params = [];
     for (let i = 0; i < max; i++) {
       const ph = Array.isArray(tpl.bodyPlaceholders) ? tpl.bodyPlaceholders[i] : null;
-      const value = _resolvePlaceholder(ph, contact, manualValues, i, autoFallback);
+      const value = _resolvePlaceholder(ph, contact, manualValues, i, autoFallback, { db, leadId });
       if (!value) {
         throw new Error(`Falta el valor para placeholder {{${i + 1}}} (${ph?.label || 'sin nombre'}). ${ph?.contactField ? 'El contacto no tiene ese campo.' : 'Es Manual — provee el valor al enviar.'}`);
       }
@@ -260,7 +297,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
 
   const payload = {
     messaging_product: 'whatsapp',
-    to: convo.externalId,
+    to: waCloudRecipient(convo.externalId),
     type: 'template',
     template: {
       name: tpl.name,

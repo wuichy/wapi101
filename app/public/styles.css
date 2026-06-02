@@ -7549,7 +7549,8 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;          /* Lead panel scroll fix — scroll all the side */
+  overflow-x: hidden;
   background: var(--surface);
 }
 
@@ -7560,6 +7561,10 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   gap: 8px;
+  position: sticky;          /* Lead panel scroll fix — topbar fijo arriba */
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
 }
 
 .exp-detail-back {
@@ -7569,9 +7574,8 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 
 .exp-detail-info {
-  flex: 1;
-  overflow-y: auto;
-  padding: 18px 14px 28px;
+  /* Lead panel scroll fix — el scroll vive en .exp-detail-left ahora */
+  padding: 18px 14px 14px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -14798,3 +14802,38 @@ body.bb-ve-fullscreen-on .bb-ve-wrap {
   cursor: help;
 }
 .bot-conflict-badge:hover { background: #ffedd5; }
+.bulk-job-bar-pause {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-right: 4px;
+  transition: background .15s;
+}
+.bulk-job-bar-pause:hover { background: rgba(255,255,255,0.12); }
+.bulk-job-bar-pause.is-paused { background: rgba(34,197,94,0.25); border-color: rgba(34,197,94,0.6); }
+.kb-item-download {
+  background: transparent;
+  border: 1px solid var(--border, #e5e7eb);
+  color: #3b82f6;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-right: 4px;
+  transition: all .15s;
+}
+.kb-item-download:hover { background: #dbeafe; border-color: #3b82f6; }

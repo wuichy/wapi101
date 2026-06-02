@@ -2199,6 +2199,7 @@ function toast(message, kind = "info", duration = 3500) {
 // ═══════ Chats — conectado al backend ═══════
 let CONVERSATIONS = [];
 let ACTIVE_CONVO_ID = null;
+let _activeGroupConvoIds = null;  // si el contacto tiene varias convos WA, sus ids (timeline unificado)
 let CHAT_MESSAGES = [];
 let CHAT_FILTER_PROVIDER = '';
 let CHAT_FILTER_UNREAD = false;
@@ -2580,8 +2581,17 @@ let _pendingChatRestore = false;  // se activa al abrir chat, baja después del 
 
 async function loadMessages(convoId) {
   try {
-    const data = await api('GET', `/api/conversations/${convoId}/messages`);
-    const next = data.items || [];
+    let next;
+    if (_activeGroupConvoIds && _activeGroupConvoIds.length > 1) {
+      // Timeline unificado: mergear mensajes de todas las convos del contacto
+      const results = await Promise.all(_activeGroupConvoIds.map(id =>
+        api('GET', `/api/conversations/${id}/messages`).then(d => d.items || []).catch(() => [])
+      ));
+      next = results.flat().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    } else {
+      const data = await api('GET', `/api/conversations/${convoId}/messages`);
+      next = data.items || [];
+    }
     const sig = _msgsSignature(next);
     const same = sig === _lastMsgsSignature;
     CHAT_MESSAGES = next;
@@ -2594,6 +2604,56 @@ async function loadMessages(convoId) {
   }
 }
 
+// ─── Helpers de identidad de canal WhatsApp ───
+// Devuelve el número/etiqueta legible de una integración por su id (para
+// distinguir entre múltiples números de WhatsApp API/Lite).
+function _integrationLabel(integrationId) {
+  if (!integrationId || typeof INTEGRATIONS === 'undefined' || !Array.isArray(INTEGRATIONS)) return '';
+  const all = INTEGRATIONS.flatMap(p => p.integrations || []);
+  const integ = all.find(i => i.id === integrationId);
+  if (!integ) return '';
+  let label = integ.displayName || integ.externalId || integ.external_id || '';
+  return String(label).replace(/^WhatsApp\s+/i, '').trim();  // quitar prefijo "WhatsApp "
+}
+function _waChannelShort(provider) {
+  if (provider === 'whatsapp') return 'API';
+  if (provider === 'whatsapp-lite') return 'Lite';
+  return provider;
+}
+// Logo bonito de WhatsApp (burbuja, verde oficial #25D366)
+function _whatsappLogoIcon(size = 13) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="#25D366" style="vertical-align:-2px"><path d="M17.6 6.3A7.85 7.85 0 0 0 12 4a7.9 7.9 0 0 0-6.84 11.86L4 20l4.23-1.1A7.9 7.9 0 0 0 12 19.9a7.9 7.9 0 0 0 5.6-13.6zM12 18.56c-1.18 0-2.34-.32-3.35-.92l-.24-.14-2.49.65.66-2.43-.16-.25A6.56 6.56 0 1 1 12 18.56zm3.6-4.92c-.2-.1-1.17-.58-1.35-.64-.18-.07-.31-.1-.44.1s-.5.64-.62.77c-.11.13-.23.15-.43.05a5.4 5.4 0 0 1-1.59-.98 6 6 0 0 1-1.1-1.37c-.11-.2-.01-.3.09-.4l.3-.35c.1-.12.13-.2.2-.34.06-.13.03-.25-.02-.35l-.6-1.45c-.16-.38-.32-.33-.44-.33l-.37-.01c-.13 0-.34.05-.52.25s-.69.67-.69 1.64.71 1.9.81 2.04c.1.13 1.4 2.13 3.39 2.98.47.2.84.33 1.13.42.47.15.9.13 1.24.08.38-.06 1.17-.48 1.33-.94.17-.46.17-.85.12-.94-.05-.08-.18-.13-.38-.23z"/></svg>`;
+}
+
+// Agrupa las conversaciones WhatsApp (API + Lite) del MISMO contacto en UNA
+// sola entrada del inbox (la más reciente como cara). Otros canales no se
+// agrupan. La entrada lleva _groupConvoIds y _groupProviders para el timeline
+// unificado al abrirla. CONVERSATIONS viene ordenado desc, así que la primera
+// del grupo es la más reciente.
+function _collapseConvosByContact(convos) {
+  const WA = new Set(['whatsapp', 'whatsapp-lite']);
+  const seen = new Map();
+  const result = [];
+  for (const c of convos) {
+    if (!WA.has(c.provider) || !c.contactId) { result.push(c); continue; }
+    const chMeta = { provider: c.provider, integrationId: c.integrationId || c.integration_id, lastIncomingAt: c.lastIncomingAt };
+    if (seen.has(c.contactId)) {
+      const entry = result[seen.get(c.contactId)];
+      entry._groupConvoIds.push(c.id);
+      if (!entry._groupProviders.includes(c.provider)) entry._groupProviders.push(c.provider);
+      entry._groupChannels.push(chMeta);
+      entry.unreadCount = (entry.unreadCount || 0) + (c.unreadCount || 0);
+      if (c.provider === 'whatsapp') entry._apiLastIncomingAt = c.lastIncomingAt;
+    } else {
+      const entry = { ...c, _groupConvoIds: [c.id], _groupProviders: [c.provider], _groupChannels: [chMeta] };
+      if (c.provider === 'whatsapp') entry._apiLastIncomingAt = c.lastIncomingAt;
+      seen.set(c.contactId, result.length);
+      result.push(entry);
+    }
+  }
+  return result;
+}
+
 function renderChatList() {
   const root = document.getElementById("rhChatList");
   if (!root) return;
@@ -2601,7 +2661,7 @@ function renderChatList() {
   // Filtros aplicados localmente. Los filtros de servidor (search, unread,
   // provider) ya vienen pre-filtrados en CONVERSATIONS; pinned se filtra acá
   // porque el backend no expone ?pinned=1 todavía.
-  const list = CHAT_FILTER_PINNED ? CONVERSATIONS.filter(c => c.pinned) : CONVERSATIONS;
+  const list = _collapseConvosByContact(CHAT_FILTER_PINNED ? CONVERSATIONS.filter(c => c.pinned) : CONVERSATIONS);
 
   // Actualizar contador de pill "Fijados"
   const pillPinned = document.getElementById('pillCountPinned');
@@ -2652,13 +2712,25 @@ function renderChatList() {
         <p class="rh-chat-phone">${escapeHtml(c.phone || c.contactPhone || '')}</p>
         <p class="rh-chat-preview">${escapeHtml(c.lastMessage || '')}</p>
         <div class="rh-chat-badges">
-          <span class="rh-chat-origin">
-            <span class="rh-channel-badge">
-              <span class="rh-channel-dot rh-channel-${c.provider}"></span>
-              ${escapeHtml(PROVIDER_LABEL[c.provider] || c.provider)}
-            </span>
-          </span>
-          ${wa24Html(c.provider, c.lastIncomingAt)}
+          ${(() => {
+            const isWA = (pr) => pr === 'whatsapp' || pr === 'whatsapp-lite';
+            // Multi-canal WhatsApp (grupo unificado): un badge por canal con
+            // logo WhatsApp + tipo (API/Lite) + número de la integración.
+            if (c._groupChannels && c._groupChannels.length > 1) {
+              return c._groupChannels.map(ch => {
+                const num = _integrationLabel(ch.integrationId);
+                const win = ch.provider === 'whatsapp' ? wa24Html('whatsapp', ch.lastIncomingAt) : '';
+                return `<span class="rh-chat-origin"><span class="rh-channel-badge">${_whatsappLogoIcon(13)} ${_waChannelShort(ch.provider)}${num ? ' · ' + escapeHtml(num) : ''}</span></span>${win}`;
+              }).join('');
+            }
+            // Single WhatsApp (API o Lite)
+            if (isWA(c.provider)) {
+              const num = _integrationLabel(c.integrationId);
+              return `<span class="rh-chat-origin"><span class="rh-channel-badge">${_whatsappLogoIcon(13)} ${_waChannelShort(c.provider)}${num ? ' · ' + escapeHtml(num) : ''}</span></span>${wa24Html(c.provider, c.lastIncomingAt)}`;
+            }
+            // Otros canales (Messenger, Instagram, Email...) — badge original
+            return `<span class="rh-chat-origin"><span class="rh-channel-badge"><span class="rh-channel-dot rh-channel-${c.provider}"></span>${escapeHtml(PROVIDER_LABEL[c.provider] || c.provider)}</span></span>`;
+          })()}
         </div>
       </div>
     </div>
@@ -2804,8 +2876,19 @@ async function openConversation(convoId) {
     openChatContact({ id: convo.contactId, botPaused: convo.botPaused, convoId });
   }
 
-  // Marcar leída + cargar mensajes
-  api('PATCH', `/api/conversations/${convoId}/read`).then(() => decrementUnreadBadge(convoId)).catch(() => {});
+  // Timeline unificado: si el contacto tiene varias convos WA (API+Lite),
+  // cargar mensajes de TODAS juntas. Si no, solo la activa.
+  const _WA = new Set(['whatsapp', 'whatsapp-lite']);
+  if (convo && _WA.has(convo.provider) && convo.contactId) {
+    const grp = CONVERSATIONS.filter(x => _WA.has(x.provider) && x.contactId === convo.contactId);
+    _activeGroupConvoIds = grp.length > 1 ? grp.map(x => x.id) : null;
+    // Marcar TODAS las del grupo como leídas
+    (grp.length > 1 ? grp : [{ id: convoId }]).forEach(x =>
+      api('PATCH', `/api/conversations/${x.id}/read`).then(() => decrementUnreadBadge(x.id)).catch(() => {}));
+  } else {
+    _activeGroupConvoIds = null;
+    api('PATCH', `/api/conversations/${convoId}/read`).then(() => decrementUnreadBadge(convoId)).catch(() => {});
+  }
   await loadMessages(convoId);
 
   // Habilitar form de respuesta + evaluar ventana 24h
@@ -4763,6 +4846,29 @@ function renderDashboard(d) {
   set('dashConvos', fmt(m.leadsWon || 0));
   set('dashConvosUnread', `${fmt(m.leadsLost || 0)} perdidos · ${fmt(m.tasksCompleted || 0)} tareas hechas`);
 
+  // Revenue cards (solo si "Valor de lead" está prendido)
+  const rev = d.revenue || { won_cents: 0, lost_cents: 0, in_progress_cents: 0 };
+  const fmtMxn = (cents) => '$' + Math.round((cents || 0) / 100).toLocaleString('es-MX');
+  set('dashRevenueWon', fmtMxn(rev.won_cents));
+  set('dashRevenueLost', fmtMxn(rev.lost_cents));
+  set('dashRevenueInProgress', fmtMxn(rev.in_progress_cents));
+  set('dashRevenueWonSub', `${fmt(m.leadsWon || 0)} leads ganados en ${PERIOD_LABELS[_dashPeriod] || 'período'}`);
+  set('dashRevenueLostSub', `${fmt(m.leadsLost || 0)} leads perdidos en ${PERIOD_LABELS[_dashPeriod] || 'período'}`);
+  set('dashRevenueInProgressSub', 'pipeline activo (no filtra período)');
+  const won = m.leadsWon || 0;
+  const lost = m.leadsLost || 0;
+  const total = won + lost;
+  const convRate = total > 0 ? Math.round((won / total) * 100) : null;
+  set('dashConvRate', convRate !== null ? `${convRate}%` : '—');
+  set('dashConvRateSub', total > 0 ? `${won} ganados de ${total} cerrados` : 'aún no hay leads cerrados');
+
+  // FASE 5: render gráficas
+  if (isLeadValueEnabled()) {
+    renderByPipeline(d.revenueByPipeline || []);
+    loadDashFunnel();      // pobla selector si vacío + render si pipeline seleccionado
+    loadDashEvolution();
+  }
+
   // Costo estimado de Meta — solo si hay WhatsApp API conectada
   const costCard = document.getElementById('dashCostCard');
   if (costCard) {
@@ -4901,8 +5007,137 @@ function renderDashChart(daily) {
   }).join('');
 }
 
+
+// ═══════ FASE 5: Gráficas Kommo-style ═══════
+let _dashFunnelPipelineId = null;
+let _plOutcomeFilter = 'active'; // 'active' | 'won' | 'lost'
+
+async function loadDashFunnel() {
+  if (!isLeadValueEnabled()) return;
+  // Si no hay pipelineId, llenar el selector primero
+  const sel = document.getElementById('dashFunnelPipeline');
+  if (sel && sel.options.length <= 1) {
+    try {
+      const pls = await api('GET', '/api/pipelines');
+      const opts = (pls.items || pls.pipelines || pls || []).map(p =>
+        `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+      sel.innerHTML = '<option value="">— Selecciona pipeline —</option>' + opts;
+    } catch (e) { /* noop */ }
+  }
+  if (!_dashFunnelPipelineId) return;
+  try {
+    const d = await api('GET', `/api/analytics/funnel?pipelineId=${_dashFunnelPipelineId}`);
+    renderFunnel(d);
+  } catch (e) { /* noop */ }
+}
+
+function renderFunnel(d) {
+  const bars = document.getElementById('dashFunnelBars');
+  if (!bars) return;
+  const stages = d.stages || [];
+  if (stages.length === 0) { bars.innerHTML = '<p style="color:var(--muted);padding:12px">Sin datos</p>'; return; }
+  const maxCount = Math.max(...stages.map(s => s.count), 1);
+  const fmtMxn = (c) => '$' + Math.round((c || 0) / 100).toLocaleString('es-MX');
+  bars.innerHTML = stages.map(s => {
+    const pct = Math.round((s.count / maxCount) * 100);
+    const color = s.kind === 'won' ? '#10b981' : s.kind === 'lost' ? '#ef4444' : (s.color || '#3b82f6');
+    return `
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="min-width:160px;font-weight:600;font-size:13px">${escapeHtml(s.stage_name)}
+          ${s.kind === 'won'  ? '<span style="color:#10b981">✓</span>' : ''}
+          ${s.kind === 'lost' ? '<span style="color:#ef4444">✗</span>' : ''}
+        </div>
+        <div style="flex:1;background:var(--bg-soft, #f1f5f9);border-radius:6px;height:28px;position:relative;overflow:hidden">
+          <div style="width:${pct}%;background:${color};height:100%;border-radius:6px;transition:width .3s"></div>
+          <span style="position:absolute;left:8px;top:0;bottom:0;display:flex;align-items:center;font-size:12px;color:#fff;font-weight:600;mix-blend-mode:difference">
+            ${s.count} leads · ${fmtMxn(s.value_cents)}
+          </span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function loadDashEvolution() {
+  if (!isLeadValueEnabled()) return;
+  try {
+    const d = await api('GET', `/api/analytics/evolution?period=${_dashPeriod}`);
+    renderEvolution(d);
+  } catch (e) { /* noop */ }
+}
+
+function renderEvolution(d) {
+  const chart  = document.getElementById('dashEvolutionChart');
+  const labels = document.getElementById('dashEvolutionLabels');
+  const total  = document.getElementById('dashEvolutionTotal');
+  if (!chart || !labels) return;
+  const days = d.days || [];
+  if (days.length === 0) { chart.innerHTML = '<p style="color:var(--muted)">Sin datos</p>'; return; }
+
+  const totalWon = days.reduce((s, d) => s + (d.won_cents || 0), 0);
+  if (total) total.textContent = '$' + Math.round(totalWon / 100).toLocaleString('es-MX');
+
+  const maxVal = Math.max(...days.map(d => Math.max(d.won_cents, d.lost_cents)), 1);
+  const H = 140;
+  const BAR_W = 12;
+  const GAP = 4;
+  const PAIR = BAR_W * 2 + GAP;
+  const SLOT = PAIR + 10;
+  const W = SLOT * days.length + 4;
+
+  const bars = days.map((d, i) => {
+    const x0 = i * SLOT + 2;
+    const hW = Math.round((d.won_cents  / maxVal) * H);
+    const hL = Math.round((d.lost_cents / maxVal) * H);
+    return `
+      <rect x="${x0}"            y="${H - hW}" width="${BAR_W}" height="${hW}" rx="2" fill="#10b981" opacity=".9"><title>${d.day}: ganado $${Math.round(d.won_cents/100).toLocaleString('es-MX')}</title></rect>
+      <rect x="${x0 + BAR_W + GAP}" y="${H - hL}" width="${BAR_W}" height="${hL}" rx="2" fill="#ef4444" opacity=".9"><title>${d.day}: perdido $${Math.round(d.lost_cents/100).toLocaleString('es-MX')}</title></rect>`;
+  }).join('');
+
+  chart.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:${H}px;display:block;">${bars}</svg>`;
+  labels.innerHTML = days.map(d => {
+    const dd = new Date(d.day + 'T12:00:00');
+    return `<span>${dd.getDate()}/${dd.getMonth() + 1}</span>`;
+  }).join('');
+}
+
+function renderByPipeline(arr) {
+  const tbody = document.getElementById('dashByPipelineTbody');
+  if (!tbody) return;
+  if (!arr || arr.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="padding:12px;color:var(--muted)">Sin datos</td></tr>'; return; }
+  const fmtMxn = (c) => '$' + Math.round((c || 0) / 100).toLocaleString('es-MX');
+  tbody.innerHTML = arr.map(p => `
+    <tr style="border-bottom:1px solid var(--border-soft, #f1f5f9)">
+      <td style="padding:10px 12px;font-weight:600">${escapeHtml(p.name)}</td>
+      <td style="padding:10px 12px;text-align:right;color:#10b981;font-weight:600">${fmtMxn(p.won_cents)}</td>
+      <td style="padding:10px 12px;text-align:right;color:#ef4444">${fmtMxn(p.lost_cents)}</td>
+      <td style="padding:10px 12px;text-align:right;color:#3b82f6">${fmtMxn(p.in_progress_cents)}</td>
+      <td style="padding:10px 12px;text-align:right;color:var(--muted)">${p.leads_won}✓ / ${p.leads_lost}✗</td>
+    </tr>`).join('');
+}
+
+
+
+// ═══════ FASE 6: Botones Ganar/Perder + tabs Activos/Ganados/Perdidos ═══════
+document.addEventListener('click', async (ev) => {
+  const t = ev.target.closest('[data-action]');
+  if (!t) return;
+
+  // Tabs de filtro outcome
+  if (t.dataset.action === 'pl-outcome-filter') {
+    _plOutcomeFilter = t.dataset.filter;
+    renderPipelinesBoard();
+    return;
+  }
+
+// (botones mark-won/mark-lost removidos a pedido del user — drag to column)
+});
+
 function setupDashboard() {
   document.getElementById('dashRefreshBtn')?.addEventListener('click', loadDashboard);
+  document.getElementById('dashFunnelPipeline')?.addEventListener('change', (e) => {
+    _dashFunnelPipelineId = Number(e.target.value) || null;
+    loadDashFunnel();
+  });
   // Pills de período
   document.querySelectorAll('#dashPeriodPills .dash-pill').forEach(pill => {
     pill.addEventListener('click', () => {
@@ -5519,9 +5754,20 @@ function setupSettingsTabs() {
   const lvToggle = document.getElementById('cfgLeadValueEnabled');
   if (lvToggle) {
     lvToggle.checked = isLeadValueEnabled();
-    lvToggle.addEventListener('change', () => {
+    lvToggle.addEventListener('change', async () => {
+      // Guardar estado + aplicar visibilidad (cards + dropdown placeholders)
       try { localStorage.setItem('leadValueEnabled', lvToggle.checked ? '1' : '0'); } catch {}
       applyLeadValueVisibility();
+
+      // ACTIVAR: crear stages Ganados/Perdidos en cada pipeline que no las tenga.
+      // DESACTIVAR: NO toca DB — las stages y leads se quedan vivos (conservador).
+      // El admin puede borrar manualmente desde el editor de pipelines si quiere.
+      if (lvToggle.checked) {
+        try {
+          const r = await api('POST', '/api/pipelines/ensure-outcome-stages', {});
+          if (r.stagesCreated > 0) toast(`Se crearon ${r.stagesCreated} etapas (Ganados/Perdidos) en ${r.pipelines} pipelines`, 'success');
+        } catch (err) { toast('Error creando etapas: ' + err.message, 'error'); }
+      }
     });
   }
 
@@ -7166,6 +7412,7 @@ function renderExpPaginator({ page, pageSize, total, totalPages }) {
 let EXP_DETAIL = null;          // expedient actual en el detalle
 let EXP_DETAIL_CONVOS = [];     // conversaciones del contacto
 let EXP_DETAIL_CONVO_ID = null; // conversación activa en el detalle
+let EXP_DETAIL_UNIFIED = true;  // timeline unificado (todos los canales del contacto) vs vista de 1 canal
 let EXP_DETAIL_MSGS = [];       // mensajes de la convo activa
 let EXP_DETAIL_ACTIVITY = [];   // actividad del expediente
 let _chatSearchQuery = '';      // búsqueda activa en el chat del expediente
@@ -7869,7 +8116,7 @@ async function loadExpDetailConvos() {
   } catch (err) { EXP_DETAIL_CONVOS = []; }
   renderExpDetailConvoTabs();
   if (EXP_DETAIL_CONVOS.length) {
-    await selectExpDetailConvo(EXP_DETAIL_CONVOS[0].id);
+    await selectExpDetailUnified();  // timeline unificado de todos los canales
   } else {
     // Limpiar mensajes del lead anterior para no mostrar chat equivocado
     EXP_DETAIL_MSGS     = [];
@@ -7978,19 +8225,71 @@ function renderExpDetailConvoTabs() {
     root.innerHTML = '<span style="color:#64748b;font-size:12px">Sin conversaciones</span>';
     return;
   }
-  root.innerHTML = EXP_DETAIL_CONVOS.map((c) => `
-    <button class="exp-detail-convo-tab ${c.id === EXP_DETAIL_CONVO_ID ? 'is-active' : ''}" data-convo-id="${c.id}">
+  // Si hay 2+ canales, mostrar tab "Todos" (timeline unificado, default) +
+  // un tab por canal para filtrar. Si solo hay 1 convo, no hace falta filtro.
+  const multi = EXP_DETAIL_CONVOS.length > 1;
+  const allTab = multi ? `
+    <button class="exp-detail-convo-tab ${EXP_DETAIL_UNIFIED ? 'is-active' : ''}" data-convo-id="__all__">
+      💬 Todos
+    </button>` : '';
+  root.innerHTML = allTab + EXP_DETAIL_CONVOS.map((c) => `
+    <button class="exp-detail-convo-tab ${!EXP_DETAIL_UNIFIED && c.id === EXP_DETAIL_CONVO_ID ? 'is-active' : ''}" data-convo-id="${c.id}">
       <span class="rh-channel-dot rh-channel-${c.provider}"></span>
       ${escapeHtml(PROVIDER_LABEL[c.provider] || c.provider)}
       ${c.unreadCount ? `<span class="rh-chat-unread-dot"></span>` : ''}
     </button>
   `).join('');
   root.querySelectorAll('.exp-detail-convo-tab').forEach((btn) => {
-    btn.addEventListener('click', () => selectExpDetailConvo(Number(btn.dataset.convoId)));
+    btn.addEventListener('click', () => {
+      if (btn.dataset.convoId === '__all__') selectExpDetailUnified();
+      else selectExpDetailConvo(Number(btn.dataset.convoId));
+    });
   });
 }
 
+// ─── Timeline UNIFICADO: todos los mensajes de TODOS los canales del contacto ──
+// intercalados por fecha, cada uno con su ícono de canal. Responder usa el
+// selector de canal del composer (cross-channel).
+async function loadExpDetailUnifiedMessages() {
+  const convos = EXP_DETAIL_CONVOS || [];
+  if (!convos.length) { EXP_DETAIL_MSGS = []; return; }
+  const results = await Promise.all(convos.map(c =>
+    api('GET', `/api/conversations/${c.id}/messages`).then(d => d.items || []).catch(() => [])
+  ));
+  // Mergear y ordenar por fecha. Cada mensaje ya trae su `provider` para el ícono.
+  EXP_DETAIL_MSGS = results.flat().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
+
+async function selectExpDetailUnified() {
+  const convos = EXP_DETAIL_CONVOS || [];
+  if (!convos.length) return;
+  EXP_DETAIL_UNIFIED = true;
+  _chatSearchQuery = '';
+  const si = document.getElementById('expChatSearchInput');
+  if (si) si.value = '';
+  // Convo "primaria" para el form (la de mensaje más reciente)
+  const primary = [...convos].sort((a, b) =>
+    (b.lastMessageAt || b.last_message_at || 0) - (a.lastMessageAt || a.last_message_at || 0)
+  )[0];
+  EXP_DETAIL_CONVO_ID = primary.id;
+  renderExpDetailConvoTabs();
+  // Selector de canal del composer: default al canal de la convo primaria
+  try { renderChannelSelector('expDetailChannelSelectWrap', primary); } catch (_) {}
+  // Marcar TODAS las convos del contacto como leídas
+  convos.forEach(c => api('PATCH', `/api/conversations/${c.id}/read`).catch(() => {}));
+  try {
+    await loadExpDetailUnifiedMessages();
+    const actData = EXP_DETAIL ? await api('GET', `/api/expedients/${EXP_DETAIL.id}/activity`).catch(() => ({ items: [] })) : { items: [] };
+    EXP_DETAIL_ACTIVITY = actData.items || [];
+  } catch (err) { EXP_DETAIL_ACTIVITY = []; }
+  renderExpDetailMessages();
+  const form = document.getElementById('expDetailReplyForm');
+  if (form) form.dataset.convoId = primary.id;
+  refreshExpDetailReplyState();
+}
+
 async function selectExpDetailConvo(convoId) {
+  EXP_DETAIL_UNIFIED = false;  // vista de 1 canal específico
   EXP_DETAIL_CONVO_ID = convoId;
   _chatSearchQuery = '';
   const si = document.getElementById('expChatSearchInput');
@@ -8220,7 +8519,30 @@ function setupExpDetail() {
     isSendingExpDetail = true;
     if (textarea) { textarea.value = ''; textarea.style.height = 'auto'; }
     try {
-      const msg = await api('POST', `/api/conversations/${convoId}/messages`, { body });
+      // Cross-channel: si el user eligió un canal distinto al de la convo
+      // (ej. WhatsApp Lite en una convo WhatsApp API), mandar por ese canal.
+      // Mismo flujo que el composer del chat principal — este handler del
+      // LEAD DETAIL no lo tenía y por eso siempre salía por API.
+      const selectedIntId = Number(window._rhSelectedChannelId || 0);
+      const useCrossChannel = selectedIntId && convo && selectedIntId !== convo.integrationId && selectedIntId !== convo.integration_id;
+      let msg;
+      if (useCrossChannel) {
+        const r = await api('POST', '/api/conversations/cross-channel-send', {
+          contactId:     convo.contactId || convo.contact_id || (EXP_DETAIL && EXP_DETAIL.contactId),
+          integrationId: selectedIntId,
+          body,
+        });
+        msg = r.message;
+        if (r.created && r.conversation && r.conversation.id) {
+          await loadExpDetailConvos();
+          await selectExpDetailConvo(r.conversation.id);
+          toast('Mensaje enviado por otro canal · conversación nueva', 'success');
+          return;
+        }
+        toast('Mensaje enviado por canal alterno', 'success');
+      } else {
+        msg = await api('POST', `/api/conversations/${convoId}/messages`, { body });
+      }
       EXP_DETAIL_MSGS.push(msg);
       renderExpDetailMessages();
       // Reflect in convo list
@@ -12548,7 +12870,7 @@ function setupBot() {
       config: {
         trigger_type: sbTriggerType,
         trigger_value: sbTriggerValue,
-        trigger_modes: sbTriggerModes,
+        trigger_modes: (currentBot && currentBot.trigger_modes) || null,
       },
     };
     // Convertir steps a nodes lineales
@@ -12721,7 +13043,7 @@ function setupBot() {
         icon = def.icon ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${def.icon}</svg>` : '';
         grp = def.group || 'advanced';
       }
-      const summary = def?.summary ? def.summary(n.config) : (isTrigger ? `${n.config.trigger_type || ''}` : '');
+      const summary = def?.summary ? def.summary(n) : (isTrigger ? `${n.config.trigger_type || ''}` : '');
       const el = document.createElement('div');
       el.className = `bb-ve-node grp-${grp} ${_bbVe.selection === n.id ? 'is-selected' : ''}`;
       el.dataset.id = n.id;
@@ -13879,6 +14201,15 @@ function setupBot() {
     const enabled = document.getElementById('botBuilderEnabled').checked ? 1 : 0;
     const trigger_type = document.getElementById('sbTriggerType').value;
     const def = BOT_TRIGGER_REGISTRY[trigger_type];
+    // Fix: sincronizar chips de keyword antes de leer el disparador (evita perder
+    // una palabra escrita en el input que no se convirtio en chip con Enter/coma).
+    if (trigger_type === 'keyword') {
+      try {
+        const kwInput = document.getElementById('sbKwChipsInput');
+        if (kwInput && (kwInput.value || '').trim() && typeof kwChipsAddFromInput === 'function') kwChipsAddFromInput();
+        if (typeof kwChipsSyncHidden === 'function') kwChipsSyncHidden();
+      } catch (_) {}
+    }
     let trigger_value = '';
     try {
       if (def?.serialize) {
@@ -13909,7 +14240,8 @@ function setupBot() {
     }
 
     try {
-      const payload = { name, enabled, trigger_type, trigger_value, steps, tagIds: sbTagIds, trigger_modes };
+      const trigger_match_mode = (trigger_type === 'keyword') ? (document.querySelector('input[name="sbKwMode"]:checked')?.value || 'any') : 'any';
+      const payload = { name, enabled, trigger_type, trigger_value, steps, tagIds: sbTagIds, trigger_modes, trigger_match_mode };
       if (sbCurrentId) {
         await api('PATCH', `/api/bot/${sbCurrentId}`, payload);
       } else {
@@ -14750,8 +15082,14 @@ function renderPipelinesBoard() {
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
 
+  // Mostrar TODAS las stages (incluye Ganados/Perdidos como columnas normales).
+  // El user arrastra leads ahí. Las stages won/lost solo existen si el toggle
+  // "Valor de lead" está ON (ensure-outcome-stages las crea).
+  const lvOn = isLeadValueEnabled();
+  const visibleStages = pipeline.stages;
+
   const expByStage = {};
-  for (const s of pipeline.stages) expByStage[s.id] = [];
+  for (const s of visibleStages) expByStage[s.id] = [];
   for (const e of filtered) {
     if (expByStage[e.stageId]) expByStage[e.stageId].push(e);
   }
@@ -14773,7 +15111,7 @@ function renderPipelinesBoard() {
     if (totalEl) totalEl.hidden = true;
   }
 
-  board.innerHTML = pipeline.stages.map(stage => {
+  board.innerHTML = visibleStages.map(stage => {
     const cards = expByStage[stage.id] || [];
     // alarmActive considera el array nuevo y el legacy (vía _stageAlarms helper)
     const alarmActive = _stageAlarms(stage).length > 0;
@@ -14828,6 +15166,7 @@ function renderPipelinesBoard() {
                 <div class="pl-card-tags">${overdueLabel}${(e.tags || []).slice(0,2).map(t => `<span class="pl-card-tag">${escHtml(t)}</span>`).join('')}</div>
                 <div class="pl-card-footer-right">${cardValueHtml}<span class="pl-card-date">${fmtDate(e.createdAt)}</span></div>
               </div>
+
             </div>`;
           }).join('') : `<div class="pl-col-empty">Sin leads</div>`}
         </div>
@@ -17052,10 +17391,46 @@ function setupChatFilters() {
 // Detecta si la ventana de 24h de WhatsApp Business API está cerrada para esta
 // conversación. Solo aplica al provider 'whatsapp' (Cloud API). Otros providers
 // no tienen esta restricción.
+// Determina el provider del canal de ENVÍO actual. Si el usuario seleccionó
+// un canal distinto en el composer (ej. WhatsApp Lite), ese manda — no el de
+// la conversación. Clave para la regla de ventana 24h.
+function _currentSendProvider(convo) {
+  const selId = Number(window._rhSelectedChannelId || 0);
+  if (selId && typeof _whatsappIntegrationsConnected === 'function') {
+    const integ = _whatsappIntegrationsConnected().find(i => i.id === selId);
+    if (integ) return integ.provider || integ.providerKey || (convo && convo.provider);
+  }
+  return convo && convo.provider;
+}
+
+// Encuentra la convo del CANAL seleccionado para el mismo contacto. En modo
+// unificado la convo "cara" puede ser de otro canal (ej. Lite), así que para
+// evaluar la ventana 24h de WhatsApp API hay que mirar la convo API real.
+function _convoForSelectedChannel(convo) {
+  const selId = Number(window._rhSelectedChannelId || 0);
+  if (!selId || !convo) return convo;
+  const cid = convo.contactId || convo.contact_id;
+  const pools = [];
+  if (typeof CONVERSATIONS !== 'undefined' && Array.isArray(CONVERSATIONS)) pools.push(...CONVERSATIONS);
+  if (typeof EXP_DETAIL_CONVOS !== 'undefined' && Array.isArray(EXP_DETAIL_CONVOS)) pools.push(...EXP_DETAIL_CONVOS);
+  const match = pools.find(c =>
+    ((c.contactId || c.contact_id) === cid) && ((c.integrationId || c.integration_id) === selId)
+  );
+  return match || convo;
+}
+
 function isWaWindowClosed(convo) {
-  if (!convo || convo.provider !== 'whatsapp') return false;
-  if (!convo.lastIncomingAt) return true; // nunca nos escribió → solo plantillas
-  const elapsedMs = Date.now() - convo.lastIncomingAt * 1000;
+  if (!convo) return false;
+  // SOLO WhatsApp API (Cloud) tiene ventana de 24h. WhatsApp Lite (Baileys) NO.
+  const sendProvider = _currentSendProvider(convo);
+  if (sendProvider !== 'whatsapp') return false;
+  // Evaluar la ventana de la convo del CANAL seleccionado (API), no la "cara"
+  // del grupo unificado (que podría ser Lite con lastIncomingAt reciente →
+  // la ventana parecería abierta erróneamente).
+  const target = _convoForSelectedChannel(convo);
+  const lastIn = target.lastIncomingAt || target.last_incoming_at;
+  if (!lastIn) return true; // nunca nos escribió por API → solo plantillas
+  const elapsedMs = Date.now() - lastIn * 1000;
   return elapsedMs > 24 * 60 * 60 * 1000;
 }
 
@@ -18368,8 +18743,9 @@ async function sendAttachmentNow() {
     convoId = _rhAttachOriginConvoId;
     convo = EXP_DETAIL_CONVOS.find(c => c.id === convoId);
   } else {
-    const form = document.querySelector('.rh-reply-form');
-    convoId = Number(form?.dataset.convoId);
+    // FUENTE DE VERDAD: ACTIVE_CONVO_ID (lo que el usuario ve), no el dataset
+    // que puede quedar stale y mandar el adjunto a la conversación equivocada.
+    convoId = ACTIVE_CONVO_ID || Number(document.querySelector('.rh-reply-form')?.dataset.convoId);
     convo = CONVERSATIONS.find(c => c.id === convoId);
   }
   if (!convoId) { toast('Selecciona una conversación primero', 'warning'); return; }
@@ -18434,8 +18810,18 @@ function setupReplyForm() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (isSending) return;
-    const convoId = Number(form.dataset.convoId);
+    // FUENTE DE VERDAD: ACTIVE_CONVO_ID = la conversación que el usuario VE
+    // abierta (controla header + mensajes renderizados). form.dataset.convoId
+    // es un duplicado que puede quedar STALE tras re-renders/polling y mandar
+    // el mensaje a la conversación equivocada (bug: respuesta a un cliente
+    // llegó al número del propio asesor). Siempre priorizar ACTIVE_CONVO_ID.
+    const convoId = ACTIVE_CONVO_ID || Number(form.dataset.convoId);
     if (!convoId) { toast('Selecciona una conversación primero', 'warning'); return; }
+    // Defensa extra: si el dataset no coincide con lo visible, log + corrige.
+    if (Number(form.dataset.convoId) && Number(form.dataset.convoId) !== convoId) {
+      console.warn('[chat] convoId desincronizado: dataset=' + form.dataset.convoId + ' activo=' + convoId + ' → uso el activo');
+      form.dataset.convoId = String(convoId);
+    }
     // Bloquear si la ventana 24h está cerrada
     const convo = CONVERSATIONS.find((c) => c.id === convoId);
     if (isWaWindowClosed(convo)) {
@@ -18540,7 +18926,7 @@ function _whatsappIntegrationsConnected() {
   );
 }
 
-function renderChannelSelector(slotId, currentConvo) {
+function renderChannelSelector(slotId, currentConvo, resetSelection = true) {
   const slot = document.getElementById(slotId);
   if (!slot) return;
   const integrations = _whatsappIntegrationsConnected();
@@ -18551,7 +18937,13 @@ function renderChannelSelector(slotId, currentConvo) {
     return;
   }
   const currentIntegId = currentConvo?.integrationId || currentConvo?.integration_id || null;
-  window._rhSelectedChannelId = currentIntegId;
+  // Solo resetear al canal de la convo cuando se ABRE una conversación nueva
+  // (resetSelection=true). Cuando el usuario elige un canal manualmente, el
+  // re-render pasa resetSelection=false para NO pisar su elección (bug: no
+  // dejaba cambiar de WhatsApp API a WhatsApp Lite — el re-render lo reseteaba).
+  if (resetSelection || !window._rhSelectedChannelId) {
+    window._rhSelectedChannelId = currentIntegId;
+  }
 
   const label = (i) => {
     const provLabel = _providerLabel(i.providerKey || i.provider);
@@ -18560,7 +18952,7 @@ function renderChannelSelector(slotId, currentConvo) {
   };
   const providerOf = (i) => i.providerKey || i.provider || 'whatsapp';
 
-  const current = integrations.find(i => i.id === currentIntegId) || integrations[0];
+  const current = integrations.find(i => i.id === window._rhSelectedChannelId) || integrations.find(i => i.id === currentIntegId) || integrations[0];
   slot.hidden = false;
   slot.innerHTML = `
     <button type="button" class="rh-channel-mini-btn" id="${slotId}_btn" title="Canal: ${escapeHtml(label(current))}">
@@ -18588,7 +18980,15 @@ function renderChannelSelector(slotId, currentConvo) {
       const intId = Number(opt.dataset.intId);
       window._rhSelectedChannelId = intId;
       menu.hidden = true;
-      renderChannelSelector(slotId, currentConvo);
+      renderChannelSelector(slotId, currentConvo, false);  // false: preservar la elección del usuario
+      // Re-evaluar la ventana 24h según el canal elegido y el contexto (inbox
+      // o lead detail). Lite → sin ventana; API → muestra/oculta según la
+      // ventana de la convo API real.
+      if (slotId === 'expDetailChannelSelectWrap') {
+        if (typeof refreshExpDetailReplyState === 'function') refreshExpDetailReplyState();
+      } else {
+        if (typeof refreshReplyFormState === 'function') refreshReplyFormState();
+      }
     });
   });
   document.addEventListener('click', () => { if (menu) menu.hidden = true; }, { once: true });
@@ -18617,8 +19017,13 @@ function startChatPolling() {
     // palomitas / icono ⚠ en tiempo real sin tener que cambiar de vista.
     if (document.body.dataset.viewActive === 'exp-detail' && EXP_DETAIL_CONVO_ID) {
       try {
-        const data = await api('GET', `/api/conversations/${EXP_DETAIL_CONVO_ID}/messages`);
-        EXP_DETAIL_MSGS = data.items || [];
+        if (EXP_DETAIL_UNIFIED && (EXP_DETAIL_CONVOS || []).length > 1) {
+          // Modo unificado: recargar mensajes de TODAS las convos del contacto
+          await loadExpDetailUnifiedMessages();
+        } else {
+          const data = await api('GET', `/api/conversations/${EXP_DETAIL_CONVO_ID}/messages`);
+          EXP_DETAIL_MSGS = data.items || [];
+        }
         renderExpDetailMessages();
       } catch (_) {}
     }
@@ -20960,6 +21365,25 @@ function _stopBulkJobTracking() {
   if (bar) bar.hidden = true;
 }
 
+// Handler del botón pause/resume del widget
+function _setupBulkJobPauseBtn() {
+  const btn = document.getElementById('bulkJobPause');
+  if (!btn || btn._wired) return;
+  btn._wired = true;
+  btn.addEventListener('click', async () => {
+    if (!_bulkJobCurrentId) return;
+    const isPaused = btn.classList.contains('is-paused');
+    try {
+      btn.disabled = true;
+      await api('POST', `/api/jobs/${_bulkJobCurrentId}/${isPaused ? 'resume' : 'pause'}`);
+      // Refrescar inmediato — el render del estado nuevo viene en el próximo poll
+      _pollBulkJobNow();
+    } catch (e) {
+      toast(e.message || 'Error', 'error');
+    } finally { btn.disabled = false; }
+  });
+}
+
 async function _pollBulkJobNow() {
   if (!_bulkJobCurrentId) return;
   try {
@@ -21015,6 +21439,22 @@ function _renderBulkJobBar(job) {
       : '';
   }
   if (fillEl) fillEl.style.width = `${job.status === 'done' ? 100 : pct}%`;
+  // Actualizar botón pause según status
+  const pauseBtn = document.getElementById('bulkJobPause');
+  if (pauseBtn) {
+    _setupBulkJobPauseBtn();
+    if (job.status === 'paused') {
+      pauseBtn.textContent = '▶';
+      pauseBtn.title = 'Reanudar';
+      pauseBtn.classList.add('is-paused');
+    } else {
+      pauseBtn.textContent = '⏸';
+      pauseBtn.title = 'Pausar';
+      pauseBtn.classList.remove('is-paused');
+    }
+    // Solo visible si está running/queued/paused (oculto en done/error/cancelled)
+    pauseBtn.hidden = !['running', 'queued', 'paused'].includes(job.status);
+  }
 }
 
 // Cancela el job — llama al backend y para el polling
@@ -21626,6 +22066,8 @@ let _tplDraftPlaceholders = [];   // [{label, example, contactField}] — uno po
 let _tplDraftTagIds = [];         // ids de tags asignadas en el modal
 
 function openTplModal(tmpl = null) {
+  // Refrescar custom field defs antes de abrir — dropdown placeholders los usa.
+  loadExpFieldDefs().catch(() => {});
   _tplEditId = tmpl?.id || null;
   _tplDraftMediaFile = null;
   _tplDraftRemoveMedia = false;
@@ -21935,6 +22377,29 @@ const CONTACT_FIELD_DEFAULTS = {
   email:      { label: 'Email',           example: 'cliente@gmail.com' },
 };
 
+// Sample por field_type para auto-llenar el ejemplo que Meta requiere
+const CF_SAMPLE_BY_TYPE = {
+  text: 'Ejemplo', number: '123', toggle: 'Sí',
+  date: '2026-01-15', datetime: '2026-01-15 10:00',
+  url: 'https://ejemplo.com', long_text: 'Texto de ejemplo',
+  birthday: '1990-05-15', select: 'Opción A', multi_select: 'Opción A',
+};
+
+// Resuelve {label, example} dado un valor de contactField. Soporta los 5
+// fields built-in + custom fields como cf:<id> (contacto) y lf:<id> (lead).
+function _getPlaceholderMeta(cf) {
+  if (!cf) return { label: '', example: '—' };
+  if (cf === 'lead_value') return { label: 'Valor del lead', example: '720' };
+  if (CONTACT_FIELD_DEFAULTS[cf]) return CONTACT_FIELD_DEFAULTS[cf];
+  const m = cf.match(/^(cf|lf):(\d+)$/);
+  if (m) {
+    const fd = (typeof EXP_FIELD_DEFS !== 'undefined' ? EXP_FIELD_DEFS : []).find(f => Number(f.id) === Number(m[2]));
+    if (fd) return { label: fd.label, example: CF_SAMPLE_BY_TYPE[fd.fieldType] || 'Ejemplo' };
+  }
+  return { label: cf, example: '—' };
+}
+
+
 function renderTplPlaceholdersBox() {
   const box = document.getElementById('tplPlaceholdersBox');
   const list = document.getElementById('tplPlaceholdersList');
@@ -21951,18 +22416,29 @@ function renderTplPlaceholdersBox() {
     const cf  = ph.contactField || '';
     const opt = (val, lbl) => `<option value="${val}"${cf===val?' selected':''}>${lbl}</option>`;
     const dropdownHtml = `
-      <select class="int-input tpl-ph-field" data-i="${i}" data-field="contactField" title="¿De qué campo del contacto se llena al enviar?">
+      <select class="int-input tpl-ph-field" data-i="${i}" data-field="contactField" title="¿De qué campo se llena al enviar?">
         ${opt('', '— Manual —')}
-        ${opt('first_name', 'Nombre')}
-        ${opt('last_name',  'Apellido')}
-        ${opt('full_name',  'Nombre completo')}
-        ${opt('phone',      'Teléfono')}
-        ${opt('email',      'Email')}
+        <optgroup label="Contacto">
+          ${opt('first_name', 'Nombre')}
+          ${opt('last_name',  'Apellido')}
+          ${opt('full_name',  'Nombre completo')}
+          ${opt('phone',      'Teléfono')}
+          ${opt('email',      'Email')}
+          ${(typeof EXP_FIELD_DEFS !== 'undefined' ? EXP_FIELD_DEFS : []).filter(f => f.entity === 'contact').map(f => opt('cf:' + f.id, escapeHtml(f.label))).join('')}
+        </optgroup>
+        ${(() => {
+          const lf = (typeof EXP_FIELD_DEFS !== 'undefined' ? EXP_FIELD_DEFS : []).filter(f => f.entity === 'expedient' || !f.entity);
+          const lvEnabled = (typeof isLeadValueEnabled === 'function') && isLeadValueEnabled();
+          const items = [];
+          if (lvEnabled) items.push(opt('lead_value', 'Valor del lead'));
+          lf.forEach(f => items.push(opt('lf:' + f.id, escapeHtml(f.label))));
+          return items.length ? `<optgroup label="Lead">${items.join('')}</optgroup>` : '';
+        })()}
       </select>`;
 
     if (cf) {
       // Mapeado → label + ejemplo se llenan solos, no se piden al usuario.
-      const def = CONTACT_FIELD_DEFAULTS[cf] || { label: cf, example: '—' };
+      const def = _getPlaceholderMeta(cf);
       return `
         <div class="tpl-placeholder-row tpl-placeholder-row--mapped" data-i="${i}">
           <span class="tpl-placeholder-num">{{${i + 1}}}</span>
@@ -24574,6 +25050,13 @@ function renderKbList() {
         ${s.category ? `<span class="kb-item-cat">${escapeHtml(s.category)}</span>` : ''}
         <span class="kb-item-chars" title="Tamaño">${(s.content || '').length.toLocaleString()} chars</span>
         <span class="kb-item-toggle ${s.active ? 'is-on' : ''}" data-kb-toggle="${s.id}" title="${s.active ? 'Activa (IA la usa)' : 'Desactivada (IA la ignora)'}"></span>
+        <button type="button" class="kb-item-download" data-kb-download="${s.id}" title="Descargar como archivo .md" aria-label="Descargar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
         <button type="button" class="kb-item-delete" data-kb-delete="${s.id}" title="Eliminar fuente" aria-label="Eliminar">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"/>
@@ -24601,6 +25084,34 @@ function renderKbList() {
     });
   });
 
+  // Botón descargar → download .md del backend
+  root.querySelectorAll('[data-kb-download]').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = Number(el.dataset.kbDownload);
+      try {
+        // El endpoint retorna el archivo como blob con Content-Disposition
+        const resp = await fetch(`/api/ai-knowledge/${id}/download`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        // Sacar filename del header
+        const cd = resp.headers.get('Content-Disposition') || '';
+        const m = cd.match(/filename="([^"]+)"/);
+        const fname = m ? m[1] : `fuente-${id}.md`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fname;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        (typeof toast === 'function' ? toast : alert)('Descarga iniciada: ' + fname, 'success');
+      } catch (err) {
+        (typeof toast === 'function' ? toast : alert)('Error: ' + err.message, 'error');
+      }
+    });
+  });
+
   // Botón papelera → eliminar con confirmación
   root.querySelectorAll('[data-kb-delete]').forEach(el => {
     el.addEventListener('click', async (e) => {
@@ -24620,7 +25131,7 @@ function renderKbList() {
   root.querySelectorAll('[data-kb-id]').forEach(el => {
     el.addEventListener('click', (e) => {
       // Si el click vino de un control hijo, no abrir
-      if (e.target.closest('[data-kb-toggle], [data-kb-delete]')) return;
+      if (e.target.closest('[data-kb-toggle], [data-kb-delete], [data-kb-download]')) return;
       openKbModal(Number(el.dataset.kbId));
     });
   });
@@ -26615,6 +27126,7 @@ let _wooProducts      = [];
 let _wooRules         = [];
 let _wooOrders        = [];
 let _wooCarriers      = [];
+let _reelanceIaStatuses = []; // statuses de lucho101 (Reelance IA app)
 let _wooOrderStatuses = [];   // estatus disponibles en WC para cambiar desde tracking
 let _wooHasCredentials = false; // si hay consumer key/secret guardados
 let _wooOrdersPage  = 1;
@@ -26809,6 +27321,7 @@ async function loadPedidosView(page = _pedidosPage) {
       api('GET', `/api/apps/reelance-ia/orders?page=${page}&limit=25`).catch(() => ({ orders: [], page: 1, pages: 1 })),
       loadWooCarriers(),
       loadWooOrderStatuses(),
+      loadReelanceIaStatuses(),
       // Asegurar que _wooHasCredentials esté actualizado
       api('GET', '/api/apps/woo/config').then(cfg => { _wooHasCredentials = !!(cfg?.hasCredentials); }).catch(() => {}),
     ]);
@@ -27051,6 +27564,17 @@ WAPI101_ENABLED=true</pre>
           <select id="riaOrderBot" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
             ${botOpts(cfg.order_bot_id)}
           </select>
+        </label>
+
+        <label style="font-size:12px;color:#475569;display:flex;gap:8px;align-items:flex-start;margin-top:12px;padding:10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px">
+          <input type="checkbox" id="riaStopBots" ${cfg.order_stop_active_bots ? 'checked' : ''} style="margin-top:2px" />
+          <span>
+            <strong>🛑 Detener bots activos cuando se complete la compra</strong><br>
+            <small style="color:#78350f;font-size:11px">
+              Cuando llegue tracking + status COMPLETED/FULFILLED/SHIPPED, se matan los bot_runs en estado 'running' o 'paused' del lead y contacto.
+              Útil para que los bots de seguimiento previos no choquen con el nuevo pipeline destino.
+            </small>
+          </span>
         </label>
 
         <label style="font-size:12px;color:#475569;display:block;margin-top:12px">
@@ -27341,6 +27865,7 @@ async function _riaSaveConfig() {
     abandoned_stage_id:     Number(document.getElementById('riaAbandonedStage').value) || null,
     order_bot_id:           Number(document.getElementById('riaOrderBot').value) || null,
     order_template_id:      Number(document.getElementById('riaOrderTemplate')?.value) || null,
+    order_stop_active_bots: document.getElementById('riaStopBots')?.checked ? 1 : 0,
     order_tag:              document.getElementById('riaOrderTagName')?.value.trim() || null,
     order_tag_target:       document.querySelector('input[name="riaOrderTagTarget"]:checked')?.value || 'contact',
     abandoned_bot_id:       Number(document.getElementById('riaAbandonedBot').value) || null,
@@ -27685,6 +28210,13 @@ async function loadWooOrders(page = _wooOrdersPage) {
   } catch (e) { console.error('loadWooOrders', e); }
 }
 
+async function loadReelanceIaStatuses() {
+  try {
+    const data = await api('GET', '/api/apps/reelance-ia/order-statuses');
+    _reelanceIaStatuses = data.statuses || [];
+  } catch (e) { _reelanceIaStatuses = []; }
+}
+
 async function loadWooCarriers() {
   try {
     const data = await api('GET', '/api/apps/woo/orders/carriers');
@@ -27789,11 +28321,25 @@ function _buildOrderRows(orders, prefix, carriers) {
       </select>
     </div>
     <div class="woo-tracking-fields woo-tracking-fields--second">
-      <span style="font-size:11px;color:var(--muted);white-space:nowrap">Estatus en WooCommerce:</span>
-      <select class="int-input ${prefix}-wcstatus-sel" data-oid="${o.id}" style="flex:1" ${!_wooHasCredentials ? 'disabled title="Configura credenciales WC REST API"' : ''}>
-        ${wcStatusOpts.map(s => `<option value="${escapeHtml(s.slug)}">${escapeHtml(s.label)}</option>`).join('')}
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">${o.source === 'reelance-ia' ? 'Estatus en Reelance IA:' : 'Estatus en WooCommerce:'}</span>
+      <select class="int-input ${prefix}-wcstatus-sel" data-oid="${o.id}" style="flex:1" ${o.source !== 'reelance-ia' && !_wooHasCredentials ? 'disabled title="Configura credenciales WC REST API"' : ''}>
+        ${(() => {
+          // Source determina la lista de statuses: reelance-ia → lucho101; otro → WC
+          if (o.source === 'reelance-ia') {
+            const list = _reelanceIaStatuses || [];
+            const opts = list.map(s => {
+              const key = (s.key || s.slug || '').toString();
+              const lbl = (s.label || s.name || key).toString();
+              const sel = (o.status || '').toUpperCase() === key.toUpperCase() ? ' selected' : '';
+              return `<option value="${escapeHtml(key)}"${sel}>${escapeHtml(lbl)}</option>`;
+            }).join('');
+            return `<option value="">— No cambiar estatus —</option>${opts}`;
+          }
+          // Default: WC
+          return wcStatusOpts.map(s => `<option value="${escapeHtml(s.slug)}">${escapeHtml(s.label)}</option>`).join('');
+        })()}
       </select>
-      <button class="btn btn--primary btn--sm ${prefix}-save-tracking-btn" data-oid="${o.id}">Guardar</button>
+      <button class="btn btn--primary btn--sm ${prefix}-save-tracking-btn" data-oid="${o.id}" data-source="${o.source || 'woo'}">Guardar</button>
       <button class="btn btn--ghost btn--sm ${prefix}-cancel-tracking-btn" data-oid="${o.id}">✕</button>
     </div>
   </div>
@@ -27902,11 +28448,18 @@ function _bindOrderRows(el, prefix, onSave) {
         btn.disabled = true;
         const payload = { carrier, tracking_number, tracking_status };
         if (wc_status) payload.wc_status = wc_status;
-        const result = await api('PATCH', `/api/apps/woo/orders/${oid}/tracking`, payload);
+        const source = btn.dataset.source || 'woo';
+        const endpoint = source === 'reelance-ia'
+          ? `/api/apps/reelance-ia/orders/${oid}/tracking`
+          : `/api/apps/woo/orders/${oid}/tracking`;
+        const result = await api('PATCH', endpoint, payload);
         let msg = '✅ Rastreo guardado';
-        if (result.wcPush) msg += ' y sincronizado con WooCommerce';
-        if (wc_status && result.hasCredentials) msg += ` · Estatus → ${wc_status}`;
-        if (!result.hasCredentials) msg += ' (configura credenciales WC para sincronizar)';
+        if (result.wcPush)    msg += ' y sincronizado con WooCommerce';
+        if (result.luchoPush) msg += ' y sincronizado con lucho101.com';
+        if (wc_status && (result.hasCredentials || result.luchoPush)) msg += ` · Estatus → ${wc_status}`;
+        if (result.luchoError && !result.luchoPush) console.warn('[lucho push]', result.luchoError);
+        if (source === 'woo' && !result.hasCredentials) msg += ' (configura credenciales WC para sincronizar)';
+        if (source === 'reelance-ia' && !result.hasCredentials && !result.luchoPush) msg += ' (configura REELANCE_IA_LUCHO_TOKEN en .env)';
         toast(msg, 'success');
         await onSave();
       } catch (e) { toast(e.message, 'error'); } finally { btn.disabled = false; }

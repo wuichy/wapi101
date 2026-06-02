@@ -32,5 +32,33 @@ module.exports = function createJobsRouter(db) {
     } catch (e) { next(e); }
   });
 
+  // Pausar un job en running (queda en 'paused', no se toca processed/failed)
+  router.post('/:id/pause', (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      const job = db.prepare('SELECT id, status FROM bulk_jobs WHERE id = ? AND tenant_id = ?').get(id, req.tenantId);
+      if (!job) return res.status(404).json({ error: 'Job no encontrado' });
+      if (!['queued', 'running'].includes(job.status)) {
+        return res.status(400).json({ error: `No se puede pausar un job en estado '${job.status}'` });
+      }
+      db.prepare("UPDATE bulk_jobs SET status='paused', updated_at=unixepoch() WHERE id=?").run(id);
+      res.json({ ok: true, id, status: 'paused' });
+    } catch (e) { next(e); }
+  });
+
+  // Reanudar un job pausado — vuelve a 'running' (el runner tick lo agarra)
+  router.post('/:id/resume', (req, res, next) => {
+    try {
+      const id = Number(req.params.id);
+      const job = db.prepare('SELECT id, status FROM bulk_jobs WHERE id = ? AND tenant_id = ?').get(id, req.tenantId);
+      if (!job) return res.status(404).json({ error: 'Job no encontrado' });
+      if (job.status !== 'paused') {
+        return res.status(400).json({ error: `Solo se puede reanudar jobs pausados (actual: '${job.status}')` });
+      }
+      db.prepare("UPDATE bulk_jobs SET status='running', updated_at=unixepoch() WHERE id=?").run(id);
+      res.json({ ok: true, id, status: 'running' });
+    } catch (e) { next(e); }
+  });
+
   return router;
 };

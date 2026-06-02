@@ -66,6 +66,7 @@
         <span class="bulk-job-bar-icon">⚡</span>
         <span class="bulk-job-bar-label" id="bulkJobLabel">Procesando…</span>
         <span class="bulk-job-bar-stats" id="bulkJobStats">0/0</span>
+        <button type="button" class="bulk-job-bar-pause" id="bulkJobPause" aria-label="Pausar/Reanudar" title="Pausar">⏸</button>
         <button type="button" class="bulk-job-bar-close" id="bulkJobClose" aria-label="Cancelar">×</button>
       </div>
       <div class="bulk-job-bar-progress">
@@ -827,6 +828,109 @@
                 <span class="dash-card-value" id="dashExps">—</span>
                 <span class="dash-card-sub" data-i18n="dash.card.total">en total</span>
               </div>
+            </div>
+          </div>
+
+          <!-- Fila Revenue (solo visible si "Valor de lead" está activado) -->
+          <div class="dash-row dash-row--sm" data-feature="lead-value" hidden>
+            <div class="dash-card dash-card--sm" style="border-left: 4px solid #10b981;">
+              <div class="dash-card-icon dash-card-icon--sm" style="background:#d1fae5; color:#059669;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">💰 Vendido</span>
+                <span class="dash-card-value" id="dashRevenueWon">$0</span>
+                <span class="dash-card-sub" id="dashRevenueWonSub">— en período</span>
+              </div>
+            </div>
+
+            <div class="dash-card dash-card--sm" style="border-left: 4px solid #ef4444;">
+              <div class="dash-card-icon dash-card-icon--sm" style="background:#fee2e2; color:#dc2626;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">❌ Perdido</span>
+                <span class="dash-card-value" id="dashRevenueLost">$0</span>
+                <span class="dash-card-sub" id="dashRevenueLostSub">— en período</span>
+              </div>
+            </div>
+
+            <div class="dash-card dash-card--sm" style="border-left: 4px solid #3b82f6;">
+              <div class="dash-card-icon dash-card-icon--sm" style="background:#dbeafe; color:#2563eb;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">⏳ En proceso</span>
+                <span class="dash-card-value" id="dashRevenueInProgress">$0</span>
+                <span class="dash-card-sub" id="dashRevenueInProgressSub">— pipeline activo</span>
+              </div>
+            </div>
+
+            <div class="dash-card dash-card--sm" style="border-left: 4px solid #8b5cf6;">
+              <div class="dash-card-icon dash-card-icon--sm" style="background:#ede9fe; color:#7c3aed;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </div>
+              <div class="dash-card-body">
+                <span class="dash-card-label">📊 Tasa de conversión</span>
+                <span class="dash-card-value" id="dashConvRate">—</span>
+                <span class="dash-card-sub" id="dashConvRateSub">ganados / (ganados + perdidos)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ FASE 5: Gráficas Kommo-style (solo si Valor de lead ON) ═══ -->
+
+          <!-- Funnel de conversión -->
+          <div class="dash-cost-card" id="dashFunnelCard" data-feature="lead-value" hidden style="margin-top:16px">
+            <div class="dash-cost-header" style="align-items:flex-start">
+              <div>
+                <h3>🪜 Embudo de conversión</h3>
+                <p class="dash-cost-sub">Leads y valor monetario por etapa. Selecciona un pipeline.</p>
+              </div>
+              <select id="dashFunnelPipeline" class="int-input" style="max-width:240px">
+                <option value="">— Selecciona pipeline —</option>
+              </select>
+            </div>
+            <div id="dashFunnelBars" style="margin-top:16px;display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+
+          <!-- Evolución temporal -->
+          <div class="dash-cost-card" id="dashEvolutionCard" data-feature="lead-value" hidden style="margin-top:16px">
+            <div class="dash-cost-header">
+              <div>
+                <h3>📈 Evolución de ventas</h3>
+                <p class="dash-cost-sub">Ganado vs perdido por día en el período seleccionado.</p>
+              </div>
+              <div class="dash-cost-amount">
+                <span class="dash-cost-usd" id="dashEvolutionTotal">$0</span>
+                <span class="dash-cost-mxn">total vendido en período</span>
+              </div>
+            </div>
+            <div id="dashEvolutionChart" style="margin-top:16px"></div>
+            <div id="dashEvolutionLabels" style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px"></div>
+          </div>
+
+          <!-- Breakdown por pipeline -->
+          <div class="dash-cost-card" id="dashByPipelineCard" data-feature="lead-value" hidden style="margin-top:16px">
+            <div class="dash-cost-header">
+              <div>
+                <h3>🏆 Ranking por pipeline</h3>
+                <p class="dash-cost-sub">Cuánto ha vendido cada pipeline en el período.</p>
+              </div>
+            </div>
+            <div style="margin-top:12px;overflow-x:auto">
+              <table style="width:100%;font-size:14px;border-collapse:collapse" id="dashByPipelineTable">
+                <thead>
+                  <tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--muted);font-weight:600">
+                    <th style="padding:8px 12px">Pipeline</th>
+                    <th style="padding:8px 12px;text-align:right;color:#10b981">Vendido</th>
+                    <th style="padding:8px 12px;text-align:right;color:#ef4444">Perdido</th>
+                    <th style="padding:8px 12px;text-align:right;color:#3b82f6">En proceso</th>
+                    <th style="padding:8px 12px;text-align:right">Leads cerrados</th>
+                  </tr>
+                </thead>
+                <tbody id="dashByPipelineTbody"></tbody>
+              </table>
             </div>
           </div>
 
@@ -4426,7 +4530,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script src="/app.js?v=20260527s"></script>
+  <script src="/app.js?v=20260602aiguard"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

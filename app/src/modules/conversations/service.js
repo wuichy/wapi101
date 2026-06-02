@@ -164,32 +164,54 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
     params.push(...pipelineIds);
   }
   if (search) {
-    // Buscador expandido: nombre, teléfono, email, external_id, último msg,
-    // mensajes históricos (body de cualquier mensaje de la conversación) y
-    // etiquetas del contacto (vía tabla contact_tags).
-    conditions.push(`(
-      LOWER(co.first_name) LIKE ?
-      OR LOWER(IFNULL(co.last_name,'')) LIKE ?
-      OR LOWER(IFNULL(co.phone,'')) LIKE ?
-      OR LOWER(IFNULL(co.email,'')) LIKE ?
-      OR LOWER(IFNULL(c.external_id,'')) LIKE ?
-      OR LOWER(IFNULL(c.last_message,'')) LIKE ?
-      OR EXISTS (
-        SELECT 1 FROM contact_tags ct
-        WHERE ct.contact_id = co.id
-          AND LOWER(ct.tag) LIKE ?
-        LIMIT 1
-      )
-      OR EXISTS (
-        SELECT 1 FROM messages m
-        WHERE m.conversation_id = c.id
-          AND m.tenant_id = c.tenant_id
-          AND LOWER(IFNULL(m.body,'')) LIKE ?
-        LIMIT 1
-      )
-    )`);
+    // Buscador expandido. Campos de contacto (nombre/tel/email/external_id/
+    // último msg/tags) → LIKE substring (rápido, contacts es chico).
+    // Body de mensajes históricos → FTS5 (messages_fts) en vez de LIKE scan,
+    // que con 12k mensajes × 4.6k convos tardaba ~11.8s. Ahora ~20ms.
     const q = `%${search.toLowerCase()}%`;
-    params.push(q, q, q, q, q, q, q, q);
+
+    // Construir query FTS5: tokens alfanuméricos con prefijo (luis → luis*).
+    // Sanitiza símbolos que romperían el MATCH. remove_diacritics en el índice
+    // hace que acentos se ignoren.
+    const ftsTokens = String(search)
+      .toLowerCase()
+      .replace(/[^a-z0-9áéíóúñü\s]/gi, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const ftsQuery = ftsTokens.map(t => t + '*').join(' ');
+
+    if (ftsQuery) {
+      conditions.push(`(
+        LOWER(co.first_name) LIKE ?
+        OR LOWER(IFNULL(co.last_name,'')) LIKE ?
+        OR LOWER(IFNULL(co.phone,'')) LIKE ?
+        OR LOWER(IFNULL(co.email,'')) LIKE ?
+        OR LOWER(IFNULL(c.external_id,'')) LIKE ?
+        OR LOWER(IFNULL(c.last_message,'')) LIKE ?
+        OR EXISTS (
+          SELECT 1 FROM contact_tags ct
+          WHERE ct.contact_id = co.id AND LOWER(ct.tag) LIKE ? LIMIT 1
+        )
+        OR c.id IN (
+          SELECT m.conversation_id FROM messages_fts fts
+          JOIN messages m ON m.id = fts.rowid
+          WHERE fts.body MATCH ? AND m.tenant_id = ?
+        )
+      )`);
+      params.push(q, q, q, q, q, q, q, ftsQuery, tenantId);
+    } else {
+      // search solo símbolos (ej "+++") → solo campos de contacto con LIKE
+      conditions.push(`(
+        LOWER(co.first_name) LIKE ?
+        OR LOWER(IFNULL(co.last_name,'')) LIKE ?
+        OR LOWER(IFNULL(co.phone,'')) LIKE ?
+        OR LOWER(IFNULL(co.email,'')) LIKE ?
+        OR LOWER(IFNULL(c.external_id,'')) LIKE ?
+        OR LOWER(IFNULL(c.last_message,'')) LIKE ?
+      )`);
+      params.push(q, q, q, q, q, q);
+    }
   }
 
   const where = 'WHERE ' + conditions.join(' AND ');
@@ -247,10 +269,19 @@ function findOrCreate(db, tenantId, { provider, externalId, integrationId, conta
            AND SUBSTR(REPLACE(REPLACE(external_id,'+',''),' ',''), -10) = ?
          ORDER BY id ASC LIMIT 1
       `).get(provider, t, last10);
-      // Si encontró por fuzzy, normalizar el external_id guardado para que la próxima sea exact
+      // Si encontró por fuzzy, normalizar el external_id guardado para que la
+      // próxima sea exact — PERO solo si el nuevo es igual o MÁS COMPLETO.
+      // NUNCA degradar un número con código de país (12-13 díg, ej 5216444628803)
+      // a uno de 10 díg (6444628803), porque Meta no entrega plantillas a un
+      // número sin código de país. (bug: plantilla de orden con phone de 10
+      // díg corrompía el external_id de la convo y rompía entregas.)
       if (row && row.external_id !== extIdStr) {
-        db.prepare('UPDATE conversations SET external_id = ? WHERE id = ?').run(extIdStr, row.id);
-        row.external_id = extIdStr;
+        const curDigits = String(row.external_id || '').replace(/\D/g, '');
+        const newDigits = extIdStr.replace(/\D/g, '');
+        if (newDigits.length >= curDigits.length) {
+          db.prepare('UPDATE conversations SET external_id = ? WHERE id = ?').run(extIdStr, row.id);
+          row.external_id = extIdStr;
+        }
       }
     }
   }
@@ -342,7 +373,7 @@ function _mapMessageRow(m) {
   };
 }
 
-function addMessage(db, tenantId, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt, byAdvisor = false }) {
+function addMessage(db, tenantId, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt, byAdvisor = false, byAi = false, byBot = false }) {
   const t = tenantId ?? _tenantFromConvo(db, conversationId);
   if (!t) throw new Error('Conversación no encontrada');
 
@@ -355,10 +386,15 @@ function addMessage(db, tenantId, conversationId, { externalId, direction, provi
   }
 
   const ts = createdAt || Math.floor(Date.now() / 1000);
+  // Tracking: sentBy = quien originó este mensaje saliente
+  const sentBy = direction === 'outgoing'
+    ? (byAi ? 'ai' : (byAdvisor ? 'advisor' : (byBot ? 'bot' : 'system')))
+    : null;
+  const metaJson = sentBy ? JSON.stringify({ sentBy }) : null;
   const result = db.prepare(`
-    INSERT INTO messages (tenant_id, conversation_id, external_id, direction, provider, body, media_url, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(t, conversationId, externalId || null, direction, provider, body || null, mediaUrl || null, status, ts);
+    INSERT INTO messages (tenant_id, conversation_id, external_id, direction, provider, body, media_url, status, created_at, meta_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(t, conversationId, externalId || null, direction, provider, body || null, mediaUrl || null, status, ts, metaJson);
 
   // Actualizar last_message en conversación (con tenant para defensa adicional).
   const unreadDelta = direction === 'incoming' ? 1 : 0;
@@ -376,10 +412,11 @@ function addMessage(db, tenantId, conversationId, { externalId, direction, provi
     `).run((body || '').slice(0, 200), ts, conversationId, t);
   }
 
-  // Inbound Router (híbrido): si el msg saliente lo mandó un asesor (no un
-  // bot), arranca la "ventana humano" para que IA y bots no contesten encima.
-  // Y limpia is_urgent (el asesor ya tomó la conversación → 🚨 desaparece).
-  if (direction === 'outgoing' && byAdvisor) {
+  // Inbound Router (híbrido): SOLO si el mensaje saliente lo mandó un ASESOR
+  // HUMANO (no bot ni IA), arranca la "ventana humano" para que IA y bots no
+  // contesten encima. Y limpia is_urgent (🚨 desaparece). La IA NO limpia urgent
+  // ni marca leído — eso es exclusivo del humano.
+  if (direction === 'outgoing' && byAdvisor && !byAi && !byBot) {
     try {
       db.prepare(`UPDATE conversations SET last_human_msg_at = ?, is_urgent = 0 WHERE id = ? AND tenant_id = ?`)
         .run(ts, conversationId, t);

@@ -1029,12 +1029,20 @@ app.get('/reset', (_req, res) => {
 app.use(express.static(path.join(__dirname, 'public'), {
   index: false,
   setHeaders: (res, filePath) => {
+    const url = (res.req && (res.req.originalUrl || res.req.url)) || '';
+    const hasVersion = /[?&]v=/.test(url);
+    // Assets versionados (app.js?v=..., styles.css?v=...): cache FUERTE.
+    // El ?v= cambia en cada deploy → seguro cachear inmutable. Esto elimina
+    // el re-download de ~345KB (zstd) en cada carga/refresh. Navegador y CDN
+    // reusan la copia hasta que el ?v= cambie. ⚠️ OBLIGATORIO bumpear el ?v=
+    // en index.html en CADA deploy que toque app.js o styles.css.
+    if (/\.(js|css)$/i.test(filePath) && hasVersion) {
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      return;
+    }
+    // HTML y assets SIN versión: no-store (deploy se ve inmediato, sin pelear
+    // con browsers que ignoran no-cache+ETag).
     if (/\.(html|css|js|json|map)$/i.test(filePath)) {
-      // no-store: nunca guardar — fuerza re-download en cada visit. Es la
-      // única forma de garantizar que un deploy se vea inmediato sin pelear
-      // con browsers que ignoran no-cache+ETag (Safari, mobile webviews).
-      // Como app.js es ~600KB minified pasa por gzip de Cloudflare a ~120KB,
-      // un re-download por sesión es aceptable.
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       res.set('Pragma', 'no-cache');
       res.set('Expires', '0');

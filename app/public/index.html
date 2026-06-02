@@ -18,7 +18,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=3" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png?v=3" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260525b" />
+  <link rel="stylesheet" href="/styles.css?v=20260528a" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -3843,6 +3843,24 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 </div>
               </div>
 
+              <!-- ─── Manual copy-paste para conectar IA ─── -->
+              <details class="mt-ai-manual">
+                <summary>
+                  <span class="mt-ai-manual__icon">🤖</span>
+                  <span><strong>¿Quieres conectar una IA?</strong> — copia este manual y pásaselo junto con tu token</span>
+                </summary>
+                <div class="mt-ai-manual__body">
+                  <p class="mt-ai-manual__intro">
+                    Genera un token arriba, luego copia este texto y pégaselo a tu IA (Claude, ChatGPT, Gemini, etc.) junto con el token. La IA sabrá cómo conectarse y qué puede hacer.
+                  </p>
+                  <textarea id="mtAiManual" class="mt-ai-manual__textarea" readonly rows="18"></textarea>
+                  <div class="mt-ai-manual__actions">
+                    <button class="btn btn--primary" id="mtAiManualCopy">📋 Copiar manual completo</button>
+                    <span class="mt-ai-manual__hint">Después pégalo en el chat de tu IA + pega el token cuando te lo pida.</span>
+                  </div>
+                </div>
+              </details>
+
               <label class="mt-toggle">
                 <input type="checkbox" id="mtShowRevoked" />
                 <span data-i18n="mt.show_revoked">Mostrar revocados</span>
@@ -4426,7 +4444,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script src="/app.js?v=20260527s"></script>
+  <script src="/app.js?v=20260528a"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

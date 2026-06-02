@@ -31,6 +31,23 @@ module.exports = function createAnalyticsRouter(db) {
   });
 
   // Lista mínima de advisors para el selector del filtro (sólo admin)
+  router.get('/funnel', (req, res, next) => {
+    try {
+      const pipelineId = Number(req.query.pipelineId);
+      const data = svc.getFunnel(db, req.tenantId, pipelineId);
+      res.json({ ok: true, ...data });
+    } catch (err) { next(err); }
+  });
+
+  router.get('/evolution', (req, res, next) => {
+    try {
+      const period = req.query.period || 'week';
+      const advisorId = req.query.advisorId ? Number(req.query.advisorId) : null;
+      const data = svc.getEvolution(db, req.tenantId, { period, advisorId });
+      res.json({ ok: true, ...data });
+    } catch (err) { next(err); }
+  });
+
   router.get('/advisors', (req, res) => {
     if (req.advisor?.role !== 'admin') {
       return res.status(403).json({ error: 'Solo admins' });

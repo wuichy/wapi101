@@ -136,6 +136,63 @@ function getDashboardData(db, tenantId, { period = 'today', advisorId = null, is
   const outcomes = { won: 0, lost: 0 };
   for (const r of leadOutcomes) outcomes[r.kind] = r.n;
 
+  // Revenue: suma de expedients.value por outcome.
+  const revenue = { won_cents: 0, lost_cents: 0, in_progress_cents: 0 };
+  try {
+    const revOutcomes = db.prepare(`
+      SELECT s.kind, COALESCE(SUM(e.value), 0) AS total
+        FROM expedients e
+        JOIN stages s ON s.id = e.stage_id
+       WHERE e.tenant_id = ?
+         AND e.updated_at BETWEEN ? AND ?
+         AND s.kind IN ('won', 'lost')
+         ${effectiveAdvisorId ? 'AND e.assigned_advisor_id = ?' : ''}
+       GROUP BY s.kind
+    `).all(tenantId, start, end, ...(effectiveAdvisorId ? [effectiveAdvisorId] : []));
+    for (const r of revOutcomes) {
+      if (r.kind === 'won')  revenue.won_cents  = Math.round((r.total || 0) * 100);
+      if (r.kind === 'lost') revenue.lost_cents = Math.round((r.total || 0) * 100);
+    }
+    const inProgress = db.prepare(`
+      SELECT COALESCE(SUM(e.value), 0) AS total
+        FROM expedients e
+        JOIN stages s ON s.id = e.stage_id
+       WHERE e.tenant_id = ?
+         AND s.kind = 'in_progress'
+         ${effectiveAdvisorId ? 'AND e.assigned_advisor_id = ?' : ''}
+    `).get(tenantId, ...(effectiveAdvisorId ? [effectiveAdvisorId] : [])) || { total: 0 };
+    revenue.in_progress_cents = Math.round((inProgress.total || 0) * 100);
+  } catch (_) { /* legacy */ }
+
+  // Revenue breakdown por pipeline
+  let revenueByPipeline = [];
+  try {
+    revenueByPipeline = db.prepare(`
+      SELECT p.id AS pipeline_id, p.name,
+        COALESCE(SUM(CASE WHEN s.kind='won'  AND e.updated_at BETWEEN ? AND ? THEN e.value END), 0) AS won,
+        COALESCE(SUM(CASE WHEN s.kind='lost' AND e.updated_at BETWEEN ? AND ? THEN e.value END), 0) AS lost,
+        COALESCE(SUM(CASE WHEN s.kind='in_progress' THEN e.value END), 0) AS in_progress,
+        COUNT(DISTINCT CASE WHEN s.kind='won'  AND e.updated_at BETWEEN ? AND ? THEN e.id END) AS leads_won,
+        COUNT(DISTINCT CASE WHEN s.kind='lost' AND e.updated_at BETWEEN ? AND ? THEN e.id END) AS leads_lost
+      FROM pipelines p
+      LEFT JOIN stages s    ON s.pipeline_id = p.id AND s.tenant_id = p.tenant_id
+      LEFT JOIN expedients e ON e.stage_id    = s.id AND e.tenant_id = p.tenant_id
+      WHERE p.tenant_id = ?
+      GROUP BY p.id, p.name
+      ORDER BY won DESC, in_progress DESC
+    `).all(start, end, start, end, start, end, start, end, tenantId)
+      .map(r => ({
+        pipeline_id: r.pipeline_id,
+        name: r.name,
+        won_cents:         Math.round((r.won  || 0) * 100),
+        lost_cents:        Math.round((r.lost || 0) * 100),
+        in_progress_cents: Math.round((r.in_progress || 0) * 100),
+        leads_won:  r.leads_won  || 0,
+        leads_lost: r.leads_lost || 0,
+      }));
+  } catch (_) { /* legacy */ }
+
+
   // Tareas — filtradas por asesor asignado
   const taskAdvFilter = effectiveAdvisorId ? 'AND assigned_advisor_id = ?' : '';
   const taskAdvParams = effectiveAdvisorId ? [effectiveAdvisorId] : [];
@@ -270,6 +327,8 @@ function getDashboardData(db, tenantId, { period = 'today', advisorId = null, is
       tasksCreated,
       tasksCompleted,
     },
+    revenue,
+    revenueByPipeline,
     deliveryStatus: statusCounts,
     deliveryFailures: failureReasons,
     metaCost,
@@ -324,4 +383,67 @@ function getDashboardWithComparison(db, tenantId, opts = {}) {
   };
 }
 
-module.exports = { log, getDashboardData, getDashboardWithComparison };
+
+function getFunnel(db, tenantId, pipelineId) {
+  if (!pipelineId) return { pipeline_id: null, stages: [] };
+  const pipeline = db.prepare('SELECT id, name FROM pipelines WHERE id = ? AND tenant_id = ?').get(pipelineId, tenantId);
+  if (!pipeline) return { pipeline_id: pipelineId, stages: [] };
+  const stages = db.prepare(`
+    SELECT s.id, s.name, s.color, s.kind, s.sort_order,
+      COUNT(e.id) AS count,
+      COALESCE(SUM(e.value), 0) AS total_value
+    FROM stages s
+    LEFT JOIN expedients e ON e.stage_id = s.id AND e.tenant_id = s.tenant_id
+    WHERE s.pipeline_id = ? AND s.tenant_id = ?
+    GROUP BY s.id, s.name, s.color, s.kind, s.sort_order
+    ORDER BY s.sort_order ASC, s.id ASC
+  `).all(pipelineId, tenantId);
+  return {
+    pipeline_id: pipeline.id,
+    pipeline_name: pipeline.name,
+    stages: stages.map(s => ({
+      stage_id: s.id, stage_name: s.name, color: s.color, kind: s.kind,
+      count: s.count, value_cents: Math.round((s.total_value || 0) * 100),
+    })),
+  };
+}
+
+function getEvolution(db, tenantId, { period = 'week', advisorId = null } = {}) {
+  const [start, end] = _periodRange(period);
+  const advFilter = advisorId ? 'AND e.assigned_advisor_id = ?' : '';
+  const advParams = advisorId ? [advisorId] : [];
+  let rows = [];
+  try {
+    rows = db.prepare(`
+      SELECT date(e.updated_at, 'unixepoch', 'localtime') AS day,
+             s.kind,
+             COALESCE(SUM(e.value), 0) AS total,
+             COUNT(*) AS n
+      FROM expedients e
+      JOIN stages s ON s.id = e.stage_id
+      WHERE e.tenant_id = ?
+        AND e.updated_at BETWEEN ? AND ?
+        AND s.kind IN ('won', 'lost')
+        ${advFilter}
+      GROUP BY day, s.kind
+      ORDER BY day ASC
+    `).all(tenantId, start, end, ...advParams);
+  } catch (_) {}
+  const byDay = new Map();
+  for (const r of rows) {
+    if (!byDay.has(r.day)) byDay.set(r.day, { day: r.day, won_cents: 0, lost_cents: 0, leads_won: 0, leads_lost: 0 });
+    const o = byDay.get(r.day);
+    if (r.kind === 'won')  { o.won_cents  = Math.round((r.total || 0) * 100); o.leads_won  = r.n; }
+    if (r.kind === 'lost') { o.lost_cents = Math.round((r.total || 0) * 100); o.leads_lost = r.n; }
+  }
+  const days = [];
+  const startD = new Date(start * 1000);
+  const endD   = new Date(end * 1000);
+  for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+    const key = d.toISOString().slice(0, 10);
+    days.push(byDay.get(key) || { day: key, won_cents: 0, lost_cents: 0, leads_won: 0, leads_lost: 0 });
+  }
+  return { period, days };
+}
+
+module.exports = { log, getDashboardData, getDashboardWithComparison, getFunnel, getEvolution };

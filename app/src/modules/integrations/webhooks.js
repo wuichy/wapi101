@@ -365,7 +365,7 @@ module.exports = function createWebhooksRouter(db) {
           for (const msg of (value.messages || [])) {
             const waId    = msg.from;
             const media   = _extractWhatsAppMedia(msg);
-            const body    = msg.text?.body || media?.caption || msg.caption || '';
+            const body    = msg.text?.body || msg.button?.text || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || media?.caption || msg.caption || '';
             const msgId   = msg.id;
             const ts      = msg.timestamp ? Number(msg.timestamp) : Math.floor(Date.now() / 1000);
             const profile = value.contacts?.find((c) => c.wa_id === waId);

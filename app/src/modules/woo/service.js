@@ -560,7 +560,22 @@ async function processAbandonedCartQueue(db) {
 
     // 2) Intentar enviar
     try {
-      const externalId = (wac.customer_phone || '').replace(/\D/g, '');
+      // Resolver número con código país COMPLETO. wac.customer_phone de WC
+      // puede venir sin código país (10 díg) → Meta no entrega plantillas
+      // (mismo bug que reelance-ia). Prioridad: phone del contacto (>=12 díg)
+      // > customer_phone normalizado a +521 (formato MX que WhatsApp entrega).
+      let externalId = null;
+      if (wac.contact_id) {
+        const c = db.prepare('SELECT phone FROM contacts WHERE id = ? AND tenant_id = ?').get(wac.contact_id, wac.tenant_id);
+        if (c && c.phone) {
+          const d = String(c.phone).replace(/\D/g, '');
+          if (d.length >= 12) externalId = d;
+        }
+      }
+      if (!externalId) {
+        const norm = normalizePhoneForWA(wac.customer_phone);
+        externalId = (norm || String(wac.customer_phone || '')).replace(/\D/g, '');
+      }
       const waIntegration = db.prepare(
         "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
       ).get(wac.tenant_id);
@@ -568,7 +583,7 @@ async function processAbandonedCartQueue(db) {
       const convo = convoSvc.findOrCreate(db, wac.tenant_id, {
         provider:      'whatsapp',
         externalId,
-        contactPhone:  wac.customer_phone,
+        contactPhone:  '+' + externalId,
         contactName:   wac.customer_name,
         contactId:     wac.contact_id,
         integrationId: waIntegration?.id || null,

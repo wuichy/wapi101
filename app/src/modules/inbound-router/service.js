@@ -434,6 +434,7 @@ async function _triggerAiFallback(db, args) {
     const externalId = await sendMessage(db, convo, reply);
     convoSvc.addMessage(db, null, args.convoId, {
       externalId, direction: 'outgoing', provider: convo.provider, body: reply, status: 'sent',
+      byAi: true,  // marca como respuesta IA — NO limpia urgent ni marca leído
     });
 
     // Marcar telemetría

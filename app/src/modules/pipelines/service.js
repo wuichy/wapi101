@@ -121,7 +121,9 @@ function updateStage(db, tenantId, id, patch) {
   if (!s) throw new Error('Etapa no encontrada');
   const newName   = patch.name  !== undefined ? (patch.name.trim() || s.name) : s.name;
   const newColor  = patch.color !== undefined ? patch.color : s.color;
-  const newKind   = patch.kind  !== undefined ? patch.kind  : s.kind;
+  // Si la stage es won/lost, NO permitir cambiar su kind (mantiene su rol)
+  const isOutcome = (s.kind === 'won' || s.kind === 'lost');
+  const newKind   = isOutcome ? s.kind : (patch.kind !== undefined ? patch.kind : s.kind);
   let newBotId = s.bot_id;
   if ('bot_id' in patch) {
     const bid = patch.bot_id ? Number(patch.bot_id) : null;
@@ -197,6 +199,9 @@ function updateStage(db, tenantId, id, patch) {
 function removeStage(db, tenantId, id, advisor) {
   const s = db.prepare('SELECT * FROM stages WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!s) throw new Error('Etapa no encontrada');
+  if (s.kind === 'won' || s.kind === 'lost') {
+    throw new Error('Etapa Ganados/Perdidos no se puede eliminar. Desactiva "Valor de lead" en Ajustes si quieres quitarlas.');
+  }
   const trash = require('../trash/service');
   trash.save(db, tenantId, {
     entityType:    'stage',
@@ -210,4 +215,117 @@ function removeStage(db, tenantId, id, advisor) {
   if (!r.changes) throw new Error('Etapa no encontrada');
 }
 
-module.exports = { listWithStages, create, getById, update, remove, createStage, updateStage, removeStage, reorderStages, reorderPipelines };
+
+// ─── Ensure outcome stages (Ganados/Perdidos) en cada pipeline del tenant ──
+// Idempotente: si ya existen stages con kind='won' o kind='lost' en un
+// pipeline, no se duplican. Se llama cuando el user prende el toggle
+// "Valor de lead" en Ajustes.
+function ensureOutcomeStages(db, tenantId) {
+  const pipelines = db.prepare('SELECT id FROM pipelines WHERE tenant_id = ?').all(tenantId);
+  let created = 0;
+  for (const p of pipelines) {
+    const existing = db.prepare(
+      'SELECT kind FROM stages WHERE pipeline_id = ? AND tenant_id = ? AND kind IN (?, ?)'
+    ).all(p.id, tenantId, 'won', 'lost');
+    const haveWon  = existing.some(s => s.kind === 'won');
+    const haveLost = existing.some(s => s.kind === 'lost');
+
+    // Sort order grande para que queden al final del kanban
+    const maxOrder = (db.prepare(
+      'SELECT COALESCE(MAX(sort_order), 0) AS m FROM stages WHERE pipeline_id = ?'
+    ).get(p.id) || { m: 0 }).m;
+
+    if (!haveWon) {
+      db.prepare(`
+        INSERT INTO stages (pipeline_id, name, color, sort_order, kind, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(p.id, 'Ganados', '#10b981', maxOrder + 1, 'won', tenantId);
+      created++;
+    }
+    if (!haveLost) {
+      db.prepare(`
+        INSERT INTO stages (pipeline_id, name, color, sort_order, kind, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(p.id, 'Perdidos', '#ef4444', maxOrder + 2, 'lost', tenantId);
+      created++;
+    }
+  }
+  return { pipelines: pipelines.length, stagesCreated: created };
+}
+
+
+// ─── Contar leads en stages won/lost del tenant ───
+// Útil ANTES de desactivar el toggle "Valor de lead" para saber si hay
+// leads que se quedarían huérfanos al borrar las stages.
+function countLeadsInOutcomeStages(db, tenantId) {
+  const rows = db.prepare(`
+    SELECT s.kind, COUNT(e.id) AS n
+    FROM stages s
+    LEFT JOIN expedients e ON e.stage_id = s.id AND e.tenant_id = s.tenant_id
+    WHERE s.tenant_id = ? AND s.kind IN ('won', 'lost')
+    GROUP BY s.kind
+  `).all(tenantId);
+  const out = { won: 0, lost: 0, total: 0 };
+  for (const r of rows) { out[r.kind] = r.n; out.total += r.n; }
+  return out;
+}
+
+// ─── Eliminar stages Ganados/Perdidos de todos los pipelines del tenant ──
+// IMPORTANTE: si hay leads en esas stages, requiere moveToStageId (o un default
+// por pipeline). El frontend debe llamar countLeadsInOutcomeStages primero y
+// preguntar al user qué hacer.
+//
+// Modos:
+//   - default (sin moveToStageId): para cada lead, lo mueve a la PRIMERA stage
+//     del MISMO pipeline (menor sort_order, kind=in_progress).
+//   - con moveToStageId específico: TODOS los leads van a ese stage.
+function removeOutcomeStages(db, tenantId, { moveToStageId = null } = {}) {
+  let moved = 0;
+  let deleted = 0;
+  const outcomeStages = db.prepare(`
+    SELECT id, pipeline_id, kind FROM stages
+    WHERE tenant_id = ? AND kind IN ('won', 'lost')
+  `).all(tenantId);
+
+  // Migrar leads: por cada outcome stage, mover sus leads a destino
+  for (const s of outcomeStages) {
+    const leads = db.prepare(
+      'SELECT id FROM expedients WHERE stage_id = ? AND tenant_id = ?'
+    ).all(s.id, tenantId);
+    if (leads.length === 0) continue;
+
+    let destId = moveToStageId;
+    if (!destId) {
+      // Default: primera stage in_progress del mismo pipeline
+      const first = db.prepare(`
+        SELECT id FROM stages
+        WHERE pipeline_id = ? AND tenant_id = ? AND kind = 'in_progress'
+        ORDER BY sort_order ASC, id ASC LIMIT 1
+      `).get(s.pipeline_id, tenantId);
+      destId = first?.id;
+    }
+    if (!destId) {
+      // No hay a dónde moverlos — saltar este stage (el delete fallaría)
+      continue;
+    }
+    const r = db.prepare(`
+      UPDATE expedients SET stage_id = ?, stage_entered_at = unixepoch(), updated_at = unixepoch()
+      WHERE stage_id = ? AND tenant_id = ?
+    `).run(destId, s.id, tenantId);
+    moved += r.changes;
+  }
+
+  // Ahora sí, borrar las stages (sin leads)
+  for (const s of outcomeStages) {
+    const stillHas = db.prepare(
+      'SELECT COUNT(*) AS n FROM expedients WHERE stage_id = ? AND tenant_id = ?'
+    ).get(s.id, tenantId).n;
+    if (stillHas === 0) {
+      db.prepare('DELETE FROM stages WHERE id = ? AND tenant_id = ?').run(s.id, tenantId);
+      deleted++;
+    }
+  }
+  return { moved, deleted, totalOutcomeStages: outcomeStages.length };
+}
+
+module.exports = { listWithStages, create, getById, update, remove, createStage, updateStage, removeStage, reorderStages, reorderPipelines, ensureOutcomeStages, countLeadsInOutcomeStages, removeOutcomeStages };

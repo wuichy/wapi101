@@ -25,6 +25,34 @@ module.exports = function createPipelinesRouter(db) {
   });
 
   // ── Pipeline reorder ──
+  // Asegurar etapas Ganados/Perdidos en todos los pipelines del tenant.
+  // Llamado por la UI cuando el user prende el toggle "Valor de lead".
+  // Contar leads en stages won/lost (antes de desactivar el toggle)
+  router.get('/outcome-stages-count', (req, res, next) => {
+    try {
+      const counts = svc.countLeadsInOutcomeStages(db, req.tenantId);
+      res.json({ ok: true, ...counts });
+    } catch (err) { next(err); }
+  });
+
+  // Eliminar stages won/lost (mueve leads a in_progress o a destino dado)
+  router.post('/remove-outcome-stages', (req, res, next) => {
+    try {
+      const { moveToStageId } = req.body || {};
+      const result = svc.removeOutcomeStages(db, req.tenantId, {
+        moveToStageId: moveToStageId ? Number(moveToStageId) : null,
+      });
+      res.json({ ok: true, ...result });
+    } catch (err) { next(err); }
+  });
+
+  router.post('/ensure-outcome-stages', (req, res, next) => {
+    try {
+      const result = svc.ensureOutcomeStages(db, req.tenantId);
+      res.json({ ok: true, ...result });
+    } catch (err) { next(err); }
+  });
+
   router.post('/reorder', (req, res, next) => {
     try {
       const { order } = req.body;

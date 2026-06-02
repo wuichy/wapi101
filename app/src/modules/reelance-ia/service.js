@@ -51,7 +51,7 @@ function updateConfig(db, tenantId, patch) {
     'order_bot_id', 'abandoned_bot_id',
     'abandoned_tag', 'abandoned_tag_target', 'abandoned_wait_minutes', 'abandoned_dedupe_hours',
     'abandoned_template_id',
-    'order_tag', 'order_tag_target', 'order_template_id',
+    'order_tag', 'order_tag_target', 'order_template_id', 'order_stop_active_bots',
     'products_json', 'pipeline_rules',
   ];
   const sets = [];
@@ -193,6 +193,30 @@ function _findOrCreateContact(db, tenantId, { email, phone, firstName, lastName 
 // Crea o encuentra lead para el contacto en el pipeline/stage configurado.
 // Si ya hay lead en ese pipeline, lo reusa y mueve al stage configurado
 // (comportamiento "cliente ya existe → mover a etapa correcta").
+
+// Setea un valor de custom_field_values por label del field (busca el field def).
+function _setCustomField(db, tenantId, leadId, labelRegex, value) {
+  if (!leadId || value == null || value === '') return;
+  try {
+    // SQLite no tiene REGEXP nativo. Cargamos todos los defs y matcheamos en JS.
+    const rows = db.prepare(
+      "SELECT id, label FROM custom_field_defs WHERE tenant_id = ? AND entity = 'expedient'"
+    ).all(tenantId);
+    const re = new RegExp(labelRegex, 'i');
+    const fd = rows.find(r => re.test(r.label));
+    if (!fd) {
+      console.warn(`[_setCustomField] no field def matched /${labelRegex}/i — fields:`, rows.map(r => r.label).join(', '));
+      return;
+    }
+    db.prepare(`
+      INSERT INTO custom_field_values (tenant_id, entity, record_id, field_id, value)
+      VALUES (?, 'expedient', ?, ?, ?)
+      ON CONFLICT(entity, record_id, field_id) DO UPDATE SET value = excluded.value
+    `).run(tenantId, leadId, fd.id, String(value));
+    console.log(`[_setCustomField] lead ${leadId} field "${fd.label}" = "${String(value).slice(0,40)}"`);
+  } catch (e) { console.warn('[_setCustomField]', e.message); }
+}
+
 function _findOrCreateLead(db, tenantId, { contactId, pipelineId, stageId, name, value }) {
   if (!pipelineId || !stageId) return null;
   // En Wapi101 la tabla se llama 'expedients' (no 'leads'). Nombre legacy
@@ -274,12 +298,49 @@ function _applyTag(db, { tenantId, contactId, leadId, tagName, target }) {
 
 // Envía una plantilla WhatsApp API. Compartido por órdenes y carritos.
 // kind: 'order' | 'abandoned_cart' — solo para logging y placeholders.
-async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phone, templateId, payload, kind }) {
+async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phone, templateId, payload, kind, leadId = null }) {
   if (!templateId || !phone) return;
   const convoSvc = require('../conversations/service');
   const sender   = require('../conversations/sender');
 
-  const externalId = String(phone).replace(/\D/g, '');
+  // ── Resolver el número CORRECTO para Meta ──────────────────────────────
+  // BUG histórico: payload.phone de reelance.mx a veces viene SIN código de
+  // país (ej "6444628803") → Meta acepta el send pero NO entrega plantillas
+  // (error 131026 "número sin WhatsApp"), aunque los mensajes libres SÍ
+  // llegan (esos usan el external_id de la convo que WhatsApp ya validó).
+  // Prioridad para máxima entregabilidad:
+  //   1) external_id de una convo whatsapp existente del contacto (el número
+  //      EXACTO que WhatsApp validó — mismo que usan los mensajes que llegan)
+  //   2) phone del contacto en DB (normalizado)
+  //   3) payload.phone normalizado a E.164 MX (último recurso)
+  let externalId = null;
+  // 1) Phone del CONTACTO (canónico, normalizado a E.164 MX). Es la fuente más
+  //    confiable: el matching de contactos lo guarda con código país completo.
+  if (contactId) {
+    const c = db.prepare('SELECT phone FROM contacts WHERE id = ? AND tenant_id = ?').get(contactId, tenantId);
+    if (c && c.phone) {
+      const norm = _normalizePhone(c.phone);
+      const d = (norm || String(c.phone)).replace(/\D/g, '');
+      if (d.length >= 12) externalId = d;  // solo si tiene código país completo
+    }
+  }
+  // 2) external_id de convo whatsapp BIEN FORMADA del contacto (>=12 díg, 52*)
+  if (!externalId && contactId) {
+    const convoRow = db.prepare(
+      "SELECT external_id FROM conversations WHERE tenant_id = ? AND contact_id = ? AND provider = 'whatsapp' AND external_id IS NOT NULL AND length(replace(external_id,'+','')) >= 12 ORDER BY last_message_at DESC LIMIT 1"
+    ).get(tenantId, contactId);
+    if (convoRow && convoRow.external_id) externalId = String(convoRow.external_id).replace(/\D/g, '');
+  }
+  // 3) Último recurso: payload.phone normalizado (puede venir sin código país)
+  if (!externalId) {
+    const norm = _normalizePhone(phone);
+    externalId = (norm || String(phone)).replace(/\D/g, '');
+  }
+  if (!externalId) { console.warn('[reelance-ia] template: no se pudo resolver número para contacto', contactId); return; }
+  if (externalId !== String(phone).replace(/\D/g, '')) {
+    console.log('[reelance-ia] template phone normalizado: payload=' + String(phone).replace(/\D/g,'') + ' → enviado=' + externalId);
+  }
+
   const waIntegration = db.prepare(
     "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
   ).get(tenantId);
@@ -288,7 +349,7 @@ async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phon
   const convo = convoSvc.findOrCreate(db, tenantId, {
     provider:      'whatsapp',
     externalId,
-    contactPhone:  phone,
+    contactPhone:  '+' + externalId,
     contactName:   contactName || null,
     contactId:     contactId || null,
     integrationId: waIntegration.id,
@@ -299,13 +360,22 @@ async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phon
   //   {{1}} = nombre del cliente
   //   {{2}} = URL (recovery para abandoned_cart, tracking_url para order)
   //   {{3}} = total
+  // Placeholders del template:
+  //   {{1}} = nombre cliente
+  //   {{2}} = (order)   shortOrderId si no hay trackingUrl, sino trackingUrl
+  //           (abandoned_cart) recoveryUrl/cartUrl
+  //   {{3}} = total en MXN (entero)
+  const shortOrderId = payload?.id ? String(payload.id).slice(-8) : '';
+  const placeholder2 = kind === 'abandoned_cart'
+    ? (payload.recoveryUrl || payload.cartUrl || '')
+    : (payload.trackingUrl || shortOrderId || '');
   const manualValues = [
     firstName,
-    kind === 'abandoned_cart' ? (payload.recoveryUrl || payload.cartUrl || '') : (payload.trackingUrl || ''),
+    placeholder2,
     payload.totalCents ? String(Math.round(payload.totalCents / 100)) : '',
   ];
 
-  const result = await sender.sendWhatsAppTemplate(db, convo, templateId, manualValues, { autoFallback: true });
+  const result = await sender.sendWhatsAppTemplate(db, convo, templateId, manualValues, { autoFallback: true, leadId });
   convoSvc.addMessage(db, tenantId, convo.id, {
     externalId: result.externalId,
     direction:  'outgoing',
@@ -412,6 +482,48 @@ function processOrderEvent(db, tenantId, payload) {
         name: leadName,
         value: totalMxn,
       });
+
+      // Si lead ya existía (no se creó nuevo), ACTUALIZAR su nombre con el
+      // formato estándar + value de la nueva compra. Y llenar "Ultima Compra".
+      if (lead) {
+        try {
+          db.prepare(
+            "UPDATE expedients SET name = ?, value = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?"
+          ).run(leadName, totalMxn, lead.id, tenantId);
+          lead.name = leadName;
+          lead.value = totalMxn;
+        } catch (e) { console.warn('[ria order] update lead name failed:', e.message); }
+
+        // Custom field "Ultima Compra" → fecha ISO de la compra
+        const purchaseDate = payload.createdAt || new Date().toISOString();
+        _setCustomField(db, tenantId, lead.id, 'ultima.?compra', purchaseDate);
+
+        // Custom field "# Pedido" → últimos 8 chars del order id (sin "#")
+        const shortOrderId = externalId ? String(externalId).slice(-8) : '';
+        if (shortOrderId) {
+          _setCustomField(db, tenantId, lead.id, '(#\\s?)?pedido|order.?(num|id|number)', shortOrderId);
+        }
+      }
+
+      // Si el pago se confirmó (Order en PAID/PROCESSING/COMPLETED/FULFILLED)
+      // → mover lead al stage con kind='won' del pipeline configurado.
+      // Esto permite que las analytics cuenten el monto vendido correctamente.
+      const PAID_ORDER = ['PAID', 'PROCESSING', 'COMPLETED', 'FULFILLED', 'SHIPPED'];
+      if (lead && PAID_ORDER.includes(String(payload.status || '').toUpperCase())) {
+        try {
+          const wonStage = db.prepare(
+            "SELECT id FROM stages WHERE pipeline_id = ? AND tenant_id = ? AND kind = 'won' ORDER BY id LIMIT 1"
+          ).get(cfg.order_pipeline_id, tenantId);
+          if (wonStage && wonStage.id !== lead.stage_id) {
+            db.prepare(
+              'UPDATE expedients SET stage_id = ?, stage_entered_at = unixepoch(), updated_at = unixepoch() WHERE id = ?'
+            ).run(wonStage.id, lead.id);
+            console.log(`[reelance-ia] lead ${lead.id} movido a Ganados (stage ${wonStage.id}) tras Order ${payload.status}`);
+          }
+        } catch (e) {
+          console.warn('[reelance-ia] move-to-won failed:', e.message);
+        }
+      }
     }
 
     db.prepare('UPDATE reelance_ia_config SET last_order_at = unixepoch() WHERE tenant_id = ?').run(tenantId);
@@ -436,7 +548,21 @@ function processOrderEvent(db, tenantId, payload) {
     // Prioridad: plantilla WA API > bot.
     // Las órdenes pueden estar fuera de ventana 24h (cliente compró pero no
     // nos escribió), por eso template es más confiable.
-    if (cfg.order_template_id) {
+    // NO notificar "compra confirmada" en órdenes con pago fallido/cancelado/
+    // reembolsado — sería un mensaje erróneo al cliente (bug: pedidos FAILED
+    // de Rebeca Carrillo recibieron plantilla de compra exitosa).
+    const NO_NOTIFY_STATUSES = ['FAILED', 'CANCELLED', 'REFUNDED', 'VOIDED'];
+    const orderStatusUpper = String(payload.status || '').toUpperCase();
+    // payload.statusSync === true → este POST es un SYNC de estatus desde
+    // reelance.mx (el admin cambió/canceló/reembolsó allá), NO una orden nueva.
+    // Actualizamos external_status + movemos pipeline arriba, pero NO re-enviamos
+    // la plantilla "compra confirmada" (el cliente ya la recibió al comprar).
+    const skipNotify = NO_NOTIFY_STATUSES.includes(orderStatusUpper) || payload.statusSync === true;
+
+    if (skipNotify) {
+      const skipReason = payload.statusSync ? 'sync de estatus desde reelance (no es orden nueva)' : 'pago no exitoso';
+      console.log(`[reelance-ia] orden ${externalId} status=${orderStatusUpper} → NO se envía notificación de compra (${skipReason})`);
+    } else if (cfg.order_template_id) {
       _sendTemplateMessage(db, {
         tenantId,
         contactId:   contact.id,
@@ -445,6 +571,7 @@ function processOrderEvent(db, tenantId, payload) {
         templateId:  cfg.order_template_id,
         payload,
         kind: 'order',
+        leadId: lead?.id || null,
       }).catch(err => console.error('[reelance-ia] order template send failed:', err.message));
     } else if (cfg.order_bot_id) {
       _fireBot(db, tenantId, cfg.order_bot_id, contact.id, lead?.id, { source: 'reelance-ia.order', order: payload });
@@ -566,6 +693,23 @@ function _routeOrderToPipeline(db, tenantId, lead, payload, cfg) {
   } catch (e) {
     console.error('[reelance-ia] error disparando bots de pipeline:', e.message);
   }
+
+  // Si configuración indica parar bots activos del lead/contacto, killear
+  // todos los bot_runs en estado 'running' o 'paused' del mismo lead.
+  if (cfg.order_stop_active_bots) {
+    try {
+      const engine = require('../bot/engine');
+      const runs = db.prepare(
+        "SELECT id FROM bot_runs WHERE tenant_id = ? AND (expedient_id = ? OR contact_id = ?) AND status IN ('running','paused')"
+      ).all(tenantId, lead.id, lead.contact_id);
+      let killed = 0;
+      for (const r of runs) {
+        try { engine.killRun(db, r.id); killed++; } catch (_) {}
+      }
+      if (killed > 0) console.log(`[reelance-ia] stop_active_bots: ${killed} bot_runs killed para lead ${lead.id}`);
+    } catch (e) { console.warn('[ria route-pipeline] stop bots failed:', e.message); }
+  }
+
 }
 
 function _safeJsonParse(s, fallback) {
@@ -828,6 +972,7 @@ async function _sendAbandonedTemplate(db, row, payload, templateId) {
     templateId,
     payload,
     kind: 'abandoned_cart',
+    leadId: row.lead_id || null,
   });
 }
 
@@ -841,6 +986,27 @@ function startAbandonedCartPoller(db) {
   console.log('[reelance-ia] abandoned cart poller iniciado (cada 60s)');
 }
 
+
+// Borrar todos los eventos de tipo order del mismo external_id, y limpiar
+// queue de abandoned si existe. NO toca el lead asociado.
+function deleteOrderEvents(db, tenantId, externalId) {
+  const events = db.prepare(
+    "SELECT id, lead_id FROM reelance_ia_events WHERE tenant_id = ? AND event_type = 'order' AND external_id = ?"
+  ).all(tenantId, externalId);
+  const deletedEvents = db.prepare(
+    "DELETE FROM reelance_ia_events WHERE tenant_id = ? AND event_type = 'order' AND external_id = ?"
+  ).run(tenantId, externalId).changes;
+  // También limpiar el queue de abandoned si quedó pending vinculado
+  let deletedQueue = 0;
+  try {
+    deletedQueue = db.prepare(
+      "DELETE FROM reelance_ia_abandoned_queue WHERE tenant_id = ? AND external_id = ?"
+    ).run(tenantId, externalId).changes;
+  } catch (_) {}
+  console.log(`[reelance-ia] delete ${externalId}: ${deletedEvents} events, ${deletedQueue} queue items`);
+  return { ok: true, externalId, deletedEvents, deletedQueue, leadIds: events.map(e => e.lead_id).filter(Boolean) };
+}
+
 module.exports = {
   generateToken,
   getConfigByToken,
@@ -850,5 +1016,4 @@ module.exports = {
   regenerateToken,
   processOrderEvent,
   processAbandonedCartEvent,
-  startAbandonedCartPoller,
-};
+  startAbandonedCartPoller, _routeOrderToPipeline, deleteOrderEvents };

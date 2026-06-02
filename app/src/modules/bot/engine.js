@@ -786,7 +786,7 @@ async function executeStep(db, step, ctx) {
       try {
         const convo = convoSvc.getById(db, null, ctx.convoId);
         if (!convo) return false;
-        const result = await sendWhatsAppTemplate(db, convo, templateId, c.manualValues || [], { autoFallback: true });
+        const result = await sendWhatsAppTemplate(db, convo, templateId, c.manualValues || [], { autoFallback: true, leadId: ctx.expedientId || ctx.leadId || null });
         convoSvc.addMessage(db, null, ctx.convoId, {
           externalId: result.externalId,
           direction: 'outgoing',
@@ -1696,12 +1696,20 @@ async function executeStep(db, step, ctx) {
 
         const reply = await aiSvc.callAI(settings, systemPrompt, history.length ? history : [{ role: 'user', content: ctx.messageBody || '' }], { db, tenantId: ctx.tenantId, kind: 'ai_reply' });
         if (!reply || !reply.trim()) return false;
+        // Salvaguarda: nunca enviar al cliente un JSON/codigo crudo (p.ej. output
+        // de un clasificador que se cuele en el contexto de conocimiento).
+        const _rt = reply.trim();
+        if (_rt.startsWith('```') || (_rt.startsWith('{') && /"(isBot|confidence|reason|bot_id)"/i.test(_rt))) {
+          _log('warn', 'ai_reply descartado: respuesta parece JSON/codigo crudo, no se envia: ' + _rt.slice(0, 80));
+          return false;
+        }
 
         const convo = convoSvc.getById(db, null, ctx.convoId);
         if (!convo) return false;
         const externalId = await sendMessage(db, convo, reply);
         convoSvc.addMessage(db, null, ctx.convoId, {
           externalId, direction: 'outgoing', provider: convo.provider, body: reply, status: 'sent',
+          byAi: true,  // marca como respuesta de IA — NO limpia urgent ni marca leído
         });
         _log('info', `ai_reply enviado: "${reply.slice(0, 80)}"`);
       } catch (err) {

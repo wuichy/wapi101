@@ -140,9 +140,17 @@ async function _processJobChunk(db, job) {
   const chunk = ids.slice(startIdx, startIdx + CHUNK_SIZE);
   let processedDelta = 0, failedDelta = 0;
   for (const itemId of chunk) {
-    // Re-check status — el usuario pudo cancelar
+    // Re-check status — el usuario pudo cancelar o pausar
     const fresh = db.prepare('SELECT status FROM bulk_jobs WHERE id = ?').get(job.id);
     if (!fresh || fresh.status === 'cancelled') return;
+    if (fresh.status === 'paused') {
+      // Persistir progreso acumulado del chunk parcial y salir sin marcar done
+      if (processedDelta || failedDelta) {
+        db.prepare("UPDATE bulk_jobs SET processed = processed + ?, failed = failed + ?, updated_at = unixepoch() WHERE id = ?")
+          .run(processedDelta, failedDelta, job.id);
+      }
+      return;
+    }
     try {
       await handler(db, job.tenant_id, itemId, payload);
       processedDelta++;

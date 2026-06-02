@@ -424,7 +424,15 @@ function authRouter(db) {
       const resp = await fetch(url, { headers: { 'X-Wapi-Token': cfg.token } });
       if (!resp.ok) return res.json({ carriers: DEFAULT_CARRIERS });
       const data = await resp.json();
-      res.json({ carriers: data.carriers || DEFAULT_CARRIERS });
+      // Dedup defensivo: el plugin WP puede retornar carriers duplicados
+      // (mismo id). Conservamos el primer match por id.
+      const seen = new Set();
+      const carriers = (data.carriers || DEFAULT_CARRIERS).filter(c => {
+        if (!c?.id || seen.has(c.id)) return false;
+        seen.add(c.id);
+        return true;
+      });
+      res.json({ carriers });
     } catch (e) {
       res.json({ carriers: DEFAULT_CARRIERS });
     }

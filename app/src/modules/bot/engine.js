@@ -799,6 +799,56 @@ async function executeStep(db, step, ctx) {
         _log('error', `error enviando template: ${err.message}`);
         throw new Error(`Envío de plantilla ${templateId} falló: ${err.message}`);
       }
+
+      // ─── Auto-suspender si la plantilla tiene QUICK_REPLY buttons mapeados ──
+      // Cuando el step template tiene `button_branches` (mapa de texto-de-botón
+      // → sub-flow), se comporta como wait_response: tras enviar, suspende el
+      // run y espera al click/texto/timeout. Al llegar el mensaje, resumeWait
+      // matchea el texto contra las claves de button_branches.
+      const buttonBranches = (c.button_branches && typeof c.button_branches === 'object') ? c.button_branches : null;
+      const hasButtonBranches = buttonBranches && Object.values(buttonBranches).some(arr => Array.isArray(arr) && arr.length > 0);
+      const otherBranches = (c.other_branches && typeof c.other_branches === 'object') ? c.other_branches : {};
+      const hasOtherBranches = ['on_text_reply', 'on_timeout', 'on_delivery_fail'].some(k => Array.isArray(otherBranches[k]) && otherBranches[k].length > 0);
+
+      if (hasButtonBranches || hasOtherBranches) {
+        const timeoutMin = Number(c.timeoutMinutes || 1440);
+        const expiresAt  = Math.floor(Date.now() / 1000) + (timeoutMin * 60);
+        const runId      = ctx._runId;
+        const stepIndex  = ctx._stepIndex;
+        if (!runId) {
+          _log('warn', 'template con ramas: sin runId, no se puede suspender — terminando step');
+          return false;
+        }
+        const ctxSnapshot = {
+          chainDepth:    ctx.chainDepth || 0,
+          provider:      ctx.provider || null,
+          integrationId: ctx.integrationId || null,
+          pipelineId:    ctx.pipelineId || null,
+          stageId:       ctx.stageId || null,
+          messageBody:   ctx.messageBody || '',
+          path:          Array.isArray(ctx._stepPath) ? ctx._stepPath : [stepIndex],
+        };
+        db.prepare(`
+          INSERT INTO bot_run_waits (
+            tenant_id, run_id, bot_id, contact_id, conversation_id, expedient_id,
+            wait_step_id, wait_step_index, ctx_json, expires_at, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'waiting')
+        `).run(
+          ctx.tenantId,
+          runId,
+          db.prepare('SELECT bot_id FROM bot_runs WHERE id = ? AND tenant_id = ?').get(runId, ctx.tenantId)?.bot_id || 0,
+          ctx.contactId || null,
+          ctx.convoId || null,
+          ctx.expedientId || null,
+          step._id || `s${stepIndex}`,
+          stepIndex,
+          JSON.stringify(ctxSnapshot),
+          expiresAt
+        );
+        _log('info', `template ${templateId}: suspendido esperando click/texto (timeout ${timeoutMin}min, ramas: ${Object.keys(buttonBranches || {}).join('|')})`);
+        return 'suspend';
+      }
+
       return false;
     }
 
@@ -1752,11 +1802,12 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     : [wait.wait_step_index];
   const located = _walkStepPath(allSteps, path);
   const waitStep = located?.step;
-  if (!waitStep || (waitStep.type !== 'wait_response' && waitStep.type !== 'timer')) {
-    _log('error', `resumeRun: no se encontró wait_response/timer en path ${JSON.stringify(path)} (got ${waitStep?.type})`);
+  if (!waitStep || (waitStep.type !== 'wait_response' && waitStep.type !== 'timer' && waitStep.type !== 'template')) {
+    _log('error', `resumeRun: no se encontró wait_response/timer/template en path ${JSON.stringify(path)} (got ${waitStep?.type})`);
     return;
   }
   const isTimer = waitStep.type === 'timer';
+  const isTemplate = waitStep.type === 'template';
 
   // GUARD CRÍTICO: un timer SOLO se resume por expiración natural (on_timeout)
   // o por adjust-wait manual (que cambia expires_at, no llama a esta función).
@@ -1775,8 +1826,43 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
   ).run(branch, waitId);
   if (upd.changes === 0) { _log('info', `resumeRun: wait ${waitId} ya fue resumido por otro proceso`); return; }
 
-  const branches = waitStep.config?.branches || {};
-  const branchSteps = isTimer ? [] : (Array.isArray(branches[branch]) ? branches[branch] : []);
+  // Resolver steps de la rama. Distinto shape para template (button_branches + other_branches):
+  let branchSteps = [];
+  let matchedButtonText = null;
+  if (isTimer) {
+    branchSteps = [];
+  } else if (isTemplate) {
+    const cfg = waitStep.config || {};
+    const buttonBranches = (cfg.button_branches && typeof cfg.button_branches === 'object') ? cfg.button_branches : {};
+    const otherBranches  = (cfg.other_branches  && typeof cfg.other_branches  === 'object') ? cfg.other_branches  : {};
+
+    if (branch === 'on_button_click') {
+      // Match exacto del texto contra las keys de button_branches. Como fallback,
+      // intentamos case-insensitive y trim por si Meta normaliza el body.
+      const incoming = (extraCtx.messageBody || '').trim();
+      let target = buttonBranches[incoming];
+      if (!Array.isArray(target)) {
+        const incomingLow = incoming.toLowerCase();
+        const matchKey = Object.keys(buttonBranches).find(k => String(k).trim().toLowerCase() === incomingLow);
+        if (matchKey) {
+          target = buttonBranches[matchKey];
+          matchedButtonText = matchKey;
+        }
+      } else {
+        matchedButtonText = incoming;
+      }
+      branchSteps = Array.isArray(target) ? target : (Array.isArray(otherBranches.on_text_reply) ? otherBranches.on_text_reply : []);
+    } else if (branch === 'on_text_reply') {
+      branchSteps = Array.isArray(otherBranches.on_text_reply) ? otherBranches.on_text_reply : [];
+    } else if (branch === 'on_timeout') {
+      branchSteps = Array.isArray(otherBranches.on_timeout) ? otherBranches.on_timeout : [];
+    } else if (branch === 'on_delivery_fail') {
+      branchSteps = Array.isArray(otherBranches.on_delivery_fail) ? otherBranches.on_delivery_fail : [];
+    }
+  } else {
+    const branches = waitStep.config?.branches || {};
+    branchSteps = Array.isArray(branches[branch]) ? branches[branch] : [];
+  }
   // Asegurar _ids únicos
   const branchStepsHydrated = branchSteps.map((s, i) => ({ ...s, _id: s._id || `${wait.wait_step_id}-${branch}-${i}` }));
   const contact = wait.contact_id

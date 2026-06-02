@@ -10867,6 +10867,75 @@ function buildStepBody(step) {
       const noApproved = !waApproved.length
         ? '<p style="font-size:12px;color:#dc2626;margin-top:6px">No tienes plantillas wa_api aprobadas todavía. Ve a Plantillas → crear → Enviar a Meta.</p>'
         : '';
+
+      // ─── Editor de ramas por botón QUICK_REPLY ──────────────────────
+      // Si la plantilla seleccionada tiene QUICK_REPLY buttons, mostramos
+      // un editor "macro": por cada botón, un dropdown de acción + input
+      // contextual. Internamente se guarda como `button_branches: {key: [step]}`
+      // y backend (engine.js) lo trata como wait_response al ejecutar.
+      let branchesHtml = '';
+      if (tpl && Array.isArray(tpl.buttons) && tpl.buttons.length) {
+        const quickReplyBtns = tpl.buttons.filter(b => b && (b.type === 'QUICK_REPLY') && b.text);
+        if (quickReplyBtns.length) {
+          const branches = (c.button_branches && typeof c.button_branches === 'object') ? c.button_branches : {};
+          const other    = (c.other_branches  && typeof c.other_branches  === 'object') ? c.other_branches  : {};
+          const renderBranchEditor = (key, steps, isOther) => {
+            const s = (Array.isArray(steps) && steps[0]) ? steps[0] : null;
+            const action = s ? s.type : '';
+            const cfg = s?.config || {};
+            const dataKey = `data-branch-key="${escHtml(key)}"`;
+            const dataKind = isOther ? `data-branch-kind="other"` : `data-branch-kind="button"`;
+            const opts = `
+              <option value=""        ${action === ''           ? 'selected' : ''}>— ninguna —</option>
+              <option value="message" ${action === 'message'    ? 'selected' : ''}>Enviar mensaje</option>
+              <option value="tag"     ${action === 'tag'        ? 'selected' : ''}>Aplicar etiqueta</option>
+              <option value="stage"   ${action === 'stage'      ? 'selected' : ''}>Cambiar etapa</option>
+              <option value="stop_bot"${action === 'stop_bot'   ? 'selected' : ''}>Detener bot</option>
+            `;
+            let cfgHtml = '';
+            if (action === 'message') {
+              cfgHtml = `<textarea class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="text" rows="2" placeholder="Mensaje a enviar...">${escHtml(cfg.text || '')}</textarea>`;
+            } else if (action === 'tag') {
+              cfgHtml = `<input class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="tag" placeholder="Nombre de etiqueta" value="${escHtml(cfg.tag || '')}" />`;
+            } else if (action === 'stage') {
+              const pipes = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
+              const pipeOpts = pipes.map(p => `<option value="${p.id}" ${cfg.pipelineId == p.id ? 'selected' : ''}>${escHtml(p.name)}</option>`).join('');
+              const pipe = pipes.find(p => p.id == cfg.pipelineId);
+              const stageOpts = (pipe?.stages || []).map(st => `<option value="${st.id}" ${cfg.stageId == st.id ? 'selected' : ''}>${escHtml(st.name)}</option>`).join('');
+              cfgHtml = `
+                <div class="sb-tpl-branch-stage">
+                  <select class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="pipelineId"><option value="">— pipeline —</option>${pipeOpts}</select>
+                  <select class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="stageId"><option value="">— etapa —</option>${stageOpts}</select>
+                </div>`;
+            }
+            const label = isOther
+              ? (key === 'on_timeout' ? '⏱ Si no responde (timeout)' : (key === 'on_text_reply' ? '✉ Si responde con texto libre' : key))
+              : `🔘 "${key}"`;
+            return `
+              <div class="sb-tpl-branch-row">
+                <div class="sb-tpl-branch-label">${escHtml(label)}</div>
+                <select class="sb-tpl-branch-action" data-sid="${sid}" ${dataKey} ${dataKind}>${opts}</select>
+                ${cfgHtml ? `<div class="sb-tpl-branch-cfg">${cfgHtml}</div>` : ''}
+              </div>`;
+          };
+          const buttonRows = quickReplyBtns.map(b => renderBranchEditor(b.text, branches[b.text], false)).join('');
+          const timeoutMin = Number(c.timeoutMinutes || 1440);
+          branchesHtml = `
+            <div class="sb-tpl-branches">
+              <label style="margin-top:14px">Ramas por botón</label>
+              <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px">Cuando el cliente pique un botón, ejecuta la acción configurada. Si no hay acción, el bot continúa al siguiente step.</p>
+              ${buttonRows}
+              <label style="margin-top:10px">Tiempo de espera (timeout)</label>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                <input type="number" min="1" data-field="timeoutMinutes" data-sid="${sid}" value="${timeoutMin}" style="width:80px" />
+                <span style="font-size:12px;color:var(--text-muted)">minutos</span>
+              </div>
+              ${renderBranchEditor('on_timeout', other.on_timeout, true)}
+              ${renderBranchEditor('on_text_reply', other.on_text_reply, true)}
+            </div>`;
+        }
+      }
+
       return `
         <label>Plantilla aprobada por Meta</label>
         <select data-field="templateId" data-sid="${sid}">
@@ -10875,7 +10944,8 @@ function buildStepBody(step) {
         </select>
         ${noApproved}
         ${tpl ? `<div class="sb-tpl-preview">${escHtml((tpl.body || '').slice(0, 200))}${(tpl.body || '').length > 200 ? '…' : ''}</div>` : ''}
-        ${phsHtml}`;
+        ${phsHtml}
+        ${branchesHtml}`;
     }
     case 'send_product': {
       // Selector de producto del catálogo de WhatsApp Business.
@@ -11528,6 +11598,53 @@ function collectStepConfig(sid, bodyEl) {
       const i = Number(inp.dataset.i);
       cfg.manualValues[i] = inp.value;
     });
+  }
+  // Template steps — button_branches + other_branches a partir del editor "macro".
+  // Cada select .sb-tpl-branch-action define UNA acción simple por rama. Los
+  // inputs hermanos con data-branch-field cargan el detalle de esa acción.
+  const branchActionSels = [...body.querySelectorAll('.sb-tpl-branch-action')]
+    .filter(el => el.closest('[data-body-sid]') === body);
+  if (branchActionSels.length) {
+    const buttonBranches = {};
+    const otherBranches  = {};
+    branchActionSels.forEach(actSel => {
+      const key  = actSel.dataset.branchKey;
+      const kind = actSel.dataset.branchKind; // 'button' | 'other'
+      const action = actSel.value;
+      if (!key || !action) return;
+      // Recolectar los inputs con data-branch-field para esta rama (mismo key+kind)
+      const cfgInputs = [...body.querySelectorAll(`.sb-tpl-branch-input[data-branch-key="${CSS.escape(key)}"][data-branch-kind="${kind}"]`)]
+        .filter(el => el.closest('[data-body-sid]') === body);
+      const stepConfig = {};
+      cfgInputs.forEach(inp => { stepConfig[inp.dataset.branchField] = inp.value; });
+      let step = null;
+      if (action === 'message' && (stepConfig.text || '').trim()) {
+        step = { type: 'message', config: { text: stepConfig.text.trim() } };
+      } else if (action === 'tag' && (stepConfig.tag || '').trim()) {
+        step = { type: 'tag', config: { tag: stepConfig.tag.trim() } };
+      } else if (action === 'stage' && stepConfig.pipelineId && stepConfig.stageId) {
+        // Buscar stageName para display
+        const pipes = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
+        const pipe = pipes.find(p => p.id == stepConfig.pipelineId);
+        const st   = pipe?.stages?.find(s => s.id == stepConfig.stageId);
+        step = { type: 'stage', config: {
+          pipelineId: Number(stepConfig.pipelineId),
+          stageId:    Number(stepConfig.stageId),
+          stageName:  st?.name || '',
+        }};
+      } else if (action === 'stop_bot') {
+        step = { type: 'stop_bot', config: {} };
+      }
+      if (!step) return;
+      if (kind === 'button') {
+        buttonBranches[key] = [step];
+      } else {
+        otherBranches[key] = [step];
+      }
+    });
+    // Solo asignar si hay al menos una rama definida — evita ensuciar JSON
+    if (Object.keys(buttonBranches).length) cfg.button_branches = buttonBranches;
+    if (Object.keys(otherBranches).length)  cfg.other_branches  = otherBranches;
   }
   // wait_response (nuevo shape simple): timeoutMinutes + onTimeout
   const waitAmtEl  = body.querySelector('[data-field="waitAmount"]');
@@ -12608,6 +12725,21 @@ function setupBot() {
     if (!modeSel) return;
     const sid     = modeSel.dataset.sid;
     const ownBody = modeSel.closest('[data-body-sid]');
+    const step    = _findBranchStep(sid);
+    if (!step) return;
+    step.config = collectStepConfig(sid, ownBody);
+    _rerenderBranchBody(ownBody, step);
+  });
+
+  // ── template: cambio de plantilla o acción de rama → re-render para
+  // mostrar los botones nuevos / el input contextual de la acción ──
+  document.getElementById('sbStepsFlow')?.addEventListener('change', (e) => {
+    const tplSel = e.target.closest('select[data-field="templateId"]');
+    const brAct  = e.target.closest('.sb-tpl-branch-action');
+    if (!tplSel && !brAct) return;
+    const trigger = tplSel || brAct;
+    const sid     = trigger.dataset.sid;
+    const ownBody = trigger.closest('[data-body-sid]');
     const step    = _findBranchStep(sid);
     if (!step) return;
     step.config = collectStepConfig(sid, ownBody);

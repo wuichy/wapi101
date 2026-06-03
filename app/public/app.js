@@ -10905,15 +10905,17 @@ function buildStepBody(step) {
             } else if (action === 'tag') {
               cfgHtml = `<input class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="tag" placeholder="Nombre de etiqueta" value="${escHtml(cfg.tag || '')}" />`;
             } else if (action === 'stage') {
+              // Select combinado pipeline→stage (value="pid:sid") — evita cascada frágil.
               const pipes = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
-              const pipeOpts = pipes.map(p => `<option value="${p.id}" ${cfg.pipelineId == p.id ? 'selected' : ''}>${escHtml(p.name)}</option>`).join('');
-              const pipe = pipes.find(p => p.id == cfg.pipelineId);
-              const stageOpts = (pipe?.stages || []).map(st => `<option value="${st.id}" ${cfg.stageId == st.id ? 'selected' : ''}>${escHtml(st.name)}</option>`).join('');
-              cfgHtml = `
-                <div class="sb-tpl-branch-stage">
-                  <select class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="pipelineId"><option value="">— pipeline —</option>${pipeOpts}</select>
-                  <select class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="stageId"><option value="">— etapa —</option>${stageOpts}</select>
-                </div>`;
+              const curVal = (cfg.pipelineId && cfg.stageId) ? `${cfg.pipelineId}:${cfg.stageId}` : '';
+              const groups = pipes.map(p => {
+                const sOpts = (p.stages || []).map(st => {
+                  const v = `${p.id}:${st.id}`;
+                  return `<option value="${v}" ${curVal === v ? 'selected' : ''}>${escHtml(st.name)}</option>`;
+                }).join('');
+                return `<optgroup label="${escHtml(p.name)}">${sOpts}</optgroup>`;
+              }).join('');
+              cfgHtml = `<select class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="stageCombo"><option value="">— elige etapa destino —</option>${groups}</select>`;
             }
             const label = isOther
               ? (key === 'on_timeout' ? '⏱ Si no responde (timeout)' : (key === 'on_text_reply' ? '✉ Si responde con texto libre' : key))
@@ -11585,7 +11587,11 @@ function _findStepDeep(steps, sid) {
   return null;
 }
 
-function collectStepConfig(sid, bodyEl) {
+// clean=true (al guardar): descarta ramas de template incompletas.
+// clean=false (durante edición): preserva la acción elegida aunque el detalle
+// esté vacío, para que el input contextual no desaparezca tras el rerender.
+function collectStepConfig(sid, bodyEl, opts = {}) {
+  const clean = opts.clean === true;
   const body = bodyEl || _resolveStepBody(sid);
   if (!body) return {};
   const cfg = {};
@@ -11624,25 +11630,37 @@ function collectStepConfig(sid, bodyEl) {
         .filter(el => el.closest('[data-body-sid]') === body);
       const stepConfig = {};
       cfgInputs.forEach(inp => { stepConfig[inp.dataset.branchField] = inp.value; });
+
+      // Determinar si la rama está "completa" (tiene los datos requeridos).
       let step = null;
-      if (action === 'message' && (stepConfig.text || '').trim()) {
-        step = { type: 'message', config: { text: stepConfig.text.trim() } };
-      } else if (action === 'tag' && (stepConfig.tag || '').trim()) {
-        step = { type: 'tag', config: { tag: stepConfig.tag.trim() } };
-      } else if (action === 'stage' && stepConfig.pipelineId && stepConfig.stageId) {
-        // Buscar stageName para display
+      let complete = false;
+      if (action === 'message') {
+        step = { type: 'message', config: { text: (stepConfig.text || '').trim() } };
+        complete = !!step.config.text;
+      } else if (action === 'tag') {
+        step = { type: 'tag', config: { tag: (stepConfig.tag || '').trim() } };
+        complete = !!step.config.tag;
+      } else if (action === 'stage') {
+        // stageCombo = "pipelineId:stageId"
+        const combo = stepConfig.stageCombo || '';
+        const [pid, sidv] = combo.split(':');
         const pipes = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
-        const pipe = pipes.find(p => p.id == stepConfig.pipelineId);
-        const st   = pipe?.stages?.find(s => s.id == stepConfig.stageId);
+        const pipe = pipes.find(p => p.id == pid);
+        const st   = pipe?.stages?.find(s => s.id == sidv);
         step = { type: 'stage', config: {
-          pipelineId: Number(stepConfig.pipelineId),
-          stageId:    Number(stepConfig.stageId),
+          pipelineId: pid ? Number(pid) : null,
+          stageId:    sidv ? Number(sidv) : null,
           stageName:  st?.name || '',
         }};
+        complete = !!(pid && sidv);
       } else if (action === 'stop_bot') {
         step = { type: 'stop_bot', config: {} };
+        complete = true;
       }
       if (!step) return;
+      // Si clean (guardado final), solo incluir ramas completas.
+      // Si edición, incluir aunque incompleta para preservar la acción elegida.
+      if (clean && !complete) return;
       if (kind === 'button') {
         buttonBranches[key] = [step];
       } else {
@@ -11753,7 +11771,7 @@ function collectStepConfig(sid, bodyEl) {
 
 function collectAllSteps() {
   return sbSteps.map(step => {
-    const config = collectStepConfig(step._id);
+    const config = collectStepConfig(step._id, null, { clean: true });
     // Auto-migrar condition viejo → branch cuando ya tiene el formato v2
     const type = (step.type === 'condition' && Array.isArray(config.cases)) ? 'branch' : step.type;
     return { ...step, type, config };

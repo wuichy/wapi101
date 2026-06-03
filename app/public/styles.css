@@ -10139,6 +10139,32 @@ body.personal-mode [data-view]:not([data-view="chats"]) {
   line-height: 1.5;
   color: #78350f;
 }
+/* Bloques de rama por botón (sub-flujo completo, estilo branch) */
+.sb-tpl-branch-block {
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid #ddd6fe;
+  border-left: 3px solid #8b5cf6;
+  border-radius: 8px;
+  background: #faf5ff;
+}
+.sb-tpl-branch-block-head {
+  font-size: 13px;
+  font-weight: 600;
+  color: #5b21b6;
+  margin-bottom: 8px;
+}
+.sb-tpl-branch-block .sb-rem-substeps:empty {
+  min-height: 0;
+}
+.sb-tpl-branch-block .sb-rem-substeps:empty::before {
+  content: '(sin pasos aún — agrega uno abajo)';
+  display: block;
+  font-size: 11px;
+  color: #a78bda;
+  font-style: italic;
+  padding: 2px 0 6px;
+}
 /* Editor de ramas por botón QUICK_REPLY */
 .sb-tpl-branches {
   margin-top: 14px;

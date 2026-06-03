@@ -10886,61 +10886,45 @@ function buildStepBody(step) {
         } else if (quickReplyBtns.length) {
           const branches = (c.button_branches && typeof c.button_branches === 'object') ? c.button_branches : {};
           const other    = (c.other_branches  && typeof c.other_branches  === 'object') ? c.other_branches  : {};
-          const renderBranchEditor = (key, steps, isOther) => {
-            const s = (Array.isArray(steps) && steps[0]) ? steps[0] : null;
-            const action = s ? s.type : '';
-            const cfg = s?.config || {};
-            const dataKey = `data-branch-key="${escHtml(key)}"`;
-            const dataKind = isOther ? `data-branch-kind="other"` : `data-branch-kind="button"`;
-            const opts = `
-              <option value=""        ${action === ''           ? 'selected' : ''}>— ninguna —</option>
-              <option value="message" ${action === 'message'    ? 'selected' : ''}>Enviar mensaje</option>
-              <option value="tag"     ${action === 'tag'        ? 'selected' : ''}>Aplicar etiqueta</option>
-              <option value="stage"   ${action === 'stage'      ? 'selected' : ''}>Cambiar etapa</option>
-              <option value="stop_bot"${action === 'stop_bot'   ? 'selected' : ''}>Detener bot</option>
-            `;
-            let cfgHtml = '';
-            if (action === 'message') {
-              cfgHtml = `<textarea class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="text" rows="2" placeholder="Mensaje a enviar...">${escHtml(cfg.text || '')}</textarea>`;
-            } else if (action === 'tag') {
-              cfgHtml = `<input class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="tag" placeholder="Nombre de etiqueta" value="${escHtml(cfg.tag || '')}" />`;
-            } else if (action === 'stage') {
-              // Select combinado pipeline→stage (value="pid:sid") — evita cascada frágil.
-              const pipes = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
-              const curVal = (cfg.pipelineId && cfg.stageId) ? `${cfg.pipelineId}:${cfg.stageId}` : '';
-              const groups = pipes.map(p => {
-                const sOpts = (p.stages || []).map(st => {
-                  const v = `${p.id}:${st.id}`;
-                  return `<option value="${v}" ${curVal === v ? 'selected' : ''}>${escHtml(st.name)}</option>`;
-                }).join('');
-                return `<optgroup label="${escHtml(p.name)}">${sOpts}</optgroup>`;
-              }).join('');
-              cfgHtml = `<select class="sb-tpl-branch-input" data-sid="${sid}" ${dataKey} ${dataKind} data-branch-field="stageCombo"><option value="">— elige etapa destino —</option>${groups}</select>`;
-            }
-            const label = isOther
-              ? (key === 'on_timeout' ? '⏱ Si no responde (timeout)' : (key === 'on_text_reply' ? '✉ Si responde con texto libre' : key))
-              : `🔘 "${key}"`;
+          // Render de una rama con sub-flujo COMPLETO (reusa _renderBranchSubStepCard
+          // + handlers de agregar/eliminar paso vía caseId con prefijo).
+          const renderBranchBlock = (caseId, label, steps) => {
+            const arr = Array.isArray(steps) ? steps : [];
+            const lastIsStop = arr.length > 0 && (arr[arr.length - 1].type === 'stop_bot' || arr[arr.length - 1].type === 'stop_and_start');
+            const subHtml = arr.map((ss, si) =>
+              (typeof _renderBranchSubStepCard === 'function')
+                ? _renderBranchSubStepCard(sid, caseId, ss, si > 0 ? arr[si - 1] : null)
+                : ''
+            ).join('');
             return `
-              <div class="sb-tpl-branch-row">
-                <div class="sb-tpl-branch-label">${escHtml(label)}</div>
-                <select class="sb-tpl-branch-action" data-sid="${sid}" ${dataKey} ${dataKind}>${opts}</select>
-                ${cfgHtml ? `<div class="sb-tpl-branch-cfg">${cfgHtml}</div>` : ''}
+              <div class="sb-tpl-branch-block">
+                <div class="sb-tpl-branch-block-head">${label}</div>
+                <div class="sb-rem-substeps" data-case-substeps="${escHtml(caseId)}">
+                  ${subHtml}
+                </div>
+                ${!lastIsStop ? `<button type="button" class="sb-branch-case-add-step-btn sb-rem-add-step-btn"
+                  data-parent-sid="${escHtml(sid)}" data-case-id="${escHtml(caseId)}">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+                  Agregar paso
+                </button>` : ''}
               </div>`;
           };
-          const buttonRows = quickReplyBtns.map(b => renderBranchEditor(b.text, branches[b.text], false)).join('');
+          const buttonBlocks = quickReplyBtns.map(b =>
+            renderBranchBlock(`__btn__${b.text}`, `🔘 Si pican "<strong>${escHtml(b.text)}</strong>"`, branches[b.text])
+          ).join('');
           const timeoutMin = Number(c.timeoutMinutes || 1440);
           branchesHtml = `
             <div class="sb-tpl-branches">
               <label style="margin-top:14px">Ramas por botón</label>
-              <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px">Cuando el cliente pique un botón, ejecuta la acción configurada. Si no hay acción, el bot continúa al siguiente step.</p>
-              ${buttonRows}
-              <label style="margin-top:10px">Tiempo de espera (timeout)</label>
+              <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px">Cada botón abre una rama con su propio flujo. Agrega los pasos que quieras (mensaje, espera, etapa, etiqueta, otro bot…). Si una rama queda vacía, el bot solo continúa al siguiente paso.</p>
+              ${buttonBlocks}
+              <label style="margin-top:12px">Tiempo de espera (timeout)</label>
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
                 <input type="number" min="1" data-field="timeoutMinutes" data-sid="${sid}" value="${timeoutMin}" style="width:80px" />
-                <span style="font-size:12px;color:var(--text-muted)">minutos</span>
+                <span style="font-size:12px;color:var(--text-muted)">minutos sin respuesta</span>
               </div>
-              ${renderBranchEditor('on_timeout', other.on_timeout, true)}
-              ${renderBranchEditor('on_text_reply', other.on_text_reply, true)}
+              ${renderBranchBlock('__other__on_timeout', '⏱ Si no responde (timeout)', other.on_timeout)}
+              ${renderBranchBlock('__other__on_text_reply', '✉ Si responde con texto (no botón)', other.on_text_reply)}
             </div>`;
         }
       }
@@ -11393,6 +11377,18 @@ function _findStepLocation(steps, sid, depthInfo = []) {
         if (r) return r;
       }
     }
+    if (s.type === 'template') {
+      const bb = s.config?.button_branches || {};
+      for (const [bk, arr] of Object.entries(bb)) {
+        const r = _findStepLocation(arr, sid, [...depthInfo, { parentStep: s, label: `🔘 ${bk}` }]);
+        if (r) return r;
+      }
+      const ob = s.config?.other_branches || {};
+      for (const [bk, arr] of Object.entries(ob)) {
+        const r = _findStepLocation(arr, sid, [...depthInfo, { parentStep: s, label: bk }]);
+        if (r) return r;
+      }
+    }
   }
   return null;
 }
@@ -11583,6 +11579,52 @@ function _findStepDeep(steps, sid) {
         if (f) return f;
       }
     }
+    // template con ramas por botón
+    if (s.config?.button_branches && typeof s.config.button_branches === 'object') {
+      for (const arr of Object.values(s.config.button_branches)) {
+        const f = _findStepDeep(arr || [], sid);
+        if (f) return f;
+      }
+    }
+    if (s.config?.other_branches && typeof s.config.other_branches === 'object') {
+      for (const arr of Object.values(s.config.other_branches)) {
+        const f = _findStepDeep(arr || [], sid);
+        if (f) return f;
+      }
+    }
+  }
+  return null;
+}
+
+// Resuelve el array de sub-steps destino para un caseId, soportando todos los
+// contenedores de ramas. Crea las estructuras intermedias si no existen.
+//   '__default__'    → branch .config.default
+//   '__btn__<text>'  → template .config.button_branches[text]
+//   '__other__<key>' → template .config.other_branches[key]
+//   '<caseId>'       → branch .config.cases[].steps
+function _resolveBranchStepArray(parentStep, caseId) {
+  if (!parentStep || !caseId) return null;
+  const cfg = parentStep.config || (parentStep.config = {});
+  if (caseId === '__default__') {
+    if (!Array.isArray(cfg.default)) cfg.default = [];
+    return cfg.default;
+  }
+  if (caseId.startsWith('__btn__')) {
+    const key = caseId.slice('__btn__'.length);
+    if (!cfg.button_branches || typeof cfg.button_branches !== 'object') cfg.button_branches = {};
+    if (!Array.isArray(cfg.button_branches[key])) cfg.button_branches[key] = [];
+    return cfg.button_branches[key];
+  }
+  if (caseId.startsWith('__other__')) {
+    const key = caseId.slice('__other__'.length);
+    if (!cfg.other_branches || typeof cfg.other_branches !== 'object') cfg.other_branches = {};
+    if (!Array.isArray(cfg.other_branches[key])) cfg.other_branches[key] = [];
+    return cfg.other_branches[key];
+  }
+  const cs = (cfg.cases || []).find(c => c.id === caseId);
+  if (cs) {
+    if (!Array.isArray(cs.steps)) cs.steps = [];
+    return cs.steps;
   }
   return null;
 }
@@ -11615,61 +11657,40 @@ function collectStepConfig(sid, bodyEl, opts = {}) {
   // Template steps — button_branches + other_branches a partir del editor "macro".
   // Cada select .sb-tpl-branch-action define UNA acción simple por rama. Los
   // inputs hermanos con data-branch-field cargan el detalle de esa acción.
-  const branchActionSels = [...body.querySelectorAll('.sb-tpl-branch-action')]
-    .filter(el => el.closest('[data-body-sid]') === body);
-  if (branchActionSels.length) {
-    const buttonBranches = {};
-    const otherBranches  = {};
-    branchActionSels.forEach(actSel => {
-      const key  = actSel.dataset.branchKey;
-      const kind = actSel.dataset.branchKind; // 'button' | 'other'
-      const action = actSel.value;
-      if (!key || !action) return;
-      // Recolectar los inputs con data-branch-field para esta rama (mismo key+kind)
-      const cfgInputs = [...body.querySelectorAll(`.sb-tpl-branch-input[data-branch-key="${CSS.escape(key)}"][data-branch-kind="${kind}"]`)]
-        .filter(el => el.closest('[data-body-sid]') === body);
-      const stepConfig = {};
-      cfgInputs.forEach(inp => { stepConfig[inp.dataset.branchField] = inp.value; });
-
-      // Determinar si la rama está "completa" (tiene los datos requeridos).
-      let step = null;
-      let complete = false;
-      if (action === 'message') {
-        step = { type: 'message', config: { text: (stepConfig.text || '').trim() } };
-        complete = !!step.config.text;
-      } else if (action === 'tag') {
-        step = { type: 'tag', config: { tag: (stepConfig.tag || '').trim() } };
-        complete = !!step.config.tag;
-      } else if (action === 'stage') {
-        // stageCombo = "pipelineId:stageId"
-        const combo = stepConfig.stageCombo || '';
-        const [pid, sidv] = combo.split(':');
-        const pipes = (typeof PIPELINES !== 'undefined' ? PIPELINES : []) || [];
-        const pipe = pipes.find(p => p.id == pid);
-        const st   = pipe?.stages?.find(s => s.id == sidv);
-        step = { type: 'stage', config: {
-          pipelineId: pid ? Number(pid) : null,
-          stageId:    sidv ? Number(sidv) : null,
-          stageName:  st?.name || '',
-        }};
-        complete = !!(pid && sidv);
-      } else if (action === 'stop_bot') {
-        step = { type: 'stop_bot', config: {} };
-        complete = true;
-      }
-      if (!step) return;
-      // Si clean (guardado final), solo incluir ramas completas.
-      // Si edición, incluir aunque incompleta para preservar la acción elegida.
-      if (clean && !complete) return;
-      if (kind === 'button') {
-        buttonBranches[key] = [step];
+  // Template con ramas por botón: la ESTRUCTURA (qué ramas, qué sub-steps, en
+  // qué orden) vive en el estado en memoria; del DOM solo re-leemos el config
+  // de cada sub-step. Mismo patrón que branch cases.
+  const tplBranchEls = [...body.querySelectorAll('[data-case-substeps]')]
+    .filter(el => el.closest('[data-body-sid]') === body)
+    .filter(el => {
+      const k = el.dataset.caseSubsteps || '';
+      return k.startsWith('__btn__') || k.startsWith('__other__');
+    });
+  if (tplBranchEls.length) {
+    const existingTpl = (typeof sbSteps !== 'undefined' ? _findStepDeep(sbSteps, sid) : null);
+    const exBtn   = existingTpl?.config?.button_branches || {};
+    const exOther = existingTpl?.config?.other_branches  || {};
+    const reCollect = (steps) => (steps || []).map(subStep => {
+      const subBody = body.querySelector(`[data-body-sid="${subStep._id}"]`);
+      const newConfig = subBody ? collectStepConfig(subStep._id, subBody, opts) : subStep.config;
+      return { ...subStep, config: newConfig };
+    });
+    const bb = {};
+    const ob = {};
+    tplBranchEls.forEach(el => {
+      const k = el.dataset.caseSubsteps;
+      if (k.startsWith('__btn__')) {
+        const key = k.slice('__btn__'.length);
+        const steps = reCollect(exBtn[key]);
+        if (steps.length) bb[key] = steps;
       } else {
-        otherBranches[key] = [step];
+        const key = k.slice('__other__'.length);
+        const steps = reCollect(exOther[key]);
+        if (steps.length) ob[key] = steps;
       }
     });
-    // Solo asignar si hay al menos una rama definida — evita ensuciar JSON
-    if (Object.keys(buttonBranches).length) cfg.button_branches = buttonBranches;
-    if (Object.keys(otherBranches).length)  cfg.other_branches  = otherBranches;
+    if (Object.keys(bb).length) cfg.button_branches = bb;
+    if (Object.keys(ob).length) cfg.other_branches  = ob;
   }
   // wait_response (nuevo shape simple): timeoutMinutes + onTimeout
   const waitAmtEl  = body.querySelector('[data-field="waitAmount"]');
@@ -12230,16 +12251,8 @@ function setupBot() {
       const parentStep = _findBranchStep(parentSid);
       if (parentStep) {
         parentStep.config = collectStepConfig(parentSid, ownBody);
-        if (caseId === '__default__') {
-          if (!Array.isArray(parentStep.config.default)) parentStep.config.default = [];
-          parentStep.config.default.push(newStep);
-        } else {
-          const cs = (parentStep.config.cases || []).find(c => c.id === caseId);
-          if (cs) {
-            if (!Array.isArray(cs.steps)) cs.steps = [];
-            cs.steps.push(newStep);
-          }
-        }
+        const arr = _resolveBranchStepArray(parentStep, caseId);
+        if (arr) arr.push(newStep);
         _rerenderBranchBody(ownBody, parentStep);
         if (ownBody) ownBody.classList.add('is-open');
       }
@@ -12290,17 +12303,10 @@ function setupBot() {
       _branchSubInsertCtx = null;
       const parentStep = _findBranchStep(parentSid);
       if (parentStep) {
-        if (caseId === '__default__') {
-          if (!Array.isArray(parentStep.config.default)) parentStep.config.default = [];
-          const idx = parentStep.config.default.findIndex(s => s._id === afterStepId);
-          parentStep.config.default.splice(idx + 1, 0, newStep);
-        } else {
-          const cs = (parentStep.config.cases || []).find(c => c.id === caseId);
-          if (cs) {
-            if (!Array.isArray(cs.steps)) cs.steps = [];
-            const idx = cs.steps.findIndex(s => s._id === afterStepId);
-            cs.steps.splice(idx + 1, 0, newStep);
-          }
+        const arr = _resolveBranchStepArray(parentStep, caseId);
+        if (arr) {
+          const idx = arr.findIndex(s => s._id === afterStepId);
+          arr.splice(idx + 1, 0, newStep);
         }
         // Re-render lista y visual
         if (typeof renderStepsFlow === 'function') renderStepsFlow();
@@ -12583,12 +12589,12 @@ function setupBot() {
       parentStep.config = collectStepConfig(parentSid, ownBody);
 
       if (caseId !== undefined) {
-        // branch v2
-        if (caseId === '__default__') {
-          parentStep.config.default = (parentStep.config.default || []).filter(ss => ss._id !== subSid);
-        } else {
-          const cs = (parentStep.config.cases || []).find(c => c.id === caseId);
-          if (cs && Array.isArray(cs.steps)) cs.steps = cs.steps.filter(ss => ss._id !== subSid);
+        // branch v2 / template (button_branches, other_branches) / default
+        const arr = _resolveBranchStepArray(parentStep, caseId);
+        if (arr) {
+          const filtered = arr.filter(ss => ss._id !== subSid);
+          arr.length = 0;
+          arr.push(...filtered);
         }
       } else {
         // reminder_timer
@@ -12756,15 +12762,13 @@ function setupBot() {
     _rerenderBranchBody(ownBody, step);
   });
 
-  // ── template: cambio de plantilla o acción de rama → re-render para
-  // mostrar los botones nuevos / el input contextual de la acción ──
+  // ── template: cambio de plantilla → re-render para mostrar las ramas
+  // de los botones QUICK_REPLY de la plantilla recién elegida ──
   document.getElementById('sbStepsFlow')?.addEventListener('change', (e) => {
     const tplSel = e.target.closest('select[data-field="templateId"]');
-    const brAct  = e.target.closest('.sb-tpl-branch-action');
-    if (!tplSel && !brAct) return;
-    const trigger = tplSel || brAct;
-    const sid     = trigger.dataset.sid;
-    const ownBody = trigger.closest('[data-body-sid]');
+    if (!tplSel) return;
+    const sid     = tplSel.dataset.sid;
+    const ownBody = tplSel.closest('[data-body-sid]');
     const step    = _findBranchStep(sid);
     if (!step) return;
     step.config = collectStepConfig(sid, ownBody);

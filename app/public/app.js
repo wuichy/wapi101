@@ -7727,9 +7727,9 @@ function renderExpDetailInfo() {
       </div>
     </div>` : ''}
 
-    <div class="exp-detail-actions-bar" id="expDetailActionsBar" hidden>
-      <button class="btn btn--primary btn--sm" id="expDetailSaveBtn">Guardar</button>
+    <div class="exp-detail-actions-bar" id="expDetailActionsBar">
       <button class="btn btn--ghost btn--sm" id="expDetailCancelBtn">Cancelar</button>
+      <button class="btn btn--primary btn--sm is-clean" id="expDetailSaveBtn">Guardar</button>
     </div>`;
 
   setupExpDetailEditing();
@@ -8093,20 +8093,23 @@ function setupExpDetailEditing() {
   const root = document.getElementById('expDetailInfo');
   if (!root) return;
 
-  const actionsBar = document.getElementById('expDetailActionsBar');
+  const saveBtn = document.getElementById('expDetailSaveBtn');
 
   // Update dot when stage select changes
   const stageSel = document.getElementById('edfStageSel');
   stageSel?.addEventListener('change', () => updateStageDot(stageSel));
 
-  // Track which fields have pending changes
+  // La barra de acciones queda SIEMPRE visible. El botón Guardar arranca gris
+  // (.is-clean) y se pone azul en cuanto hay algún cambio pendiente, como pista
+  // de "oye, ya puedes guardar".
   function checkForChanges() {
     let hasChanges = false;
     root.querySelectorAll('.edf-input').forEach(input => {
       if (String(input.value) !== String(input.dataset.original || '')) hasChanges = true;
     });
-    if (actionsBar) actionsBar.hidden = !hasChanges;
+    saveBtn?.classList.toggle('is-clean', !hasChanges);
   }
+  checkForChanges(); // estado inicial → gris
 
   // Pipeline changes → reload stage options with colors
   const pipelineSel = document.getElementById('edfPipelineSel');
@@ -8148,11 +8151,9 @@ function setupExpDetailEditing() {
   // Save button
   document.getElementById('expDetailSaveBtn')?.addEventListener('click', saveExpDetailEdits);
 
-  // Cancel button
+  // Cancel button → revierte TODO (incluye badges de pipeline/etapa) re-render.
   document.getElementById('expDetailCancelBtn')?.addEventListener('click', () => {
-    root.querySelectorAll('.edf-cell').forEach(cell => cell.classList.remove('is-editing'));
-    root.querySelectorAll('.edf-input').forEach(input => { input.value = input.dataset.original || ''; });
-    if (actionsBar) actionsBar.hidden = true;
+    renderExpDetailInfo();
   });
 
 }
@@ -8196,7 +8197,7 @@ async function saveExpDetailEdits() {
   if (Object.keys(fieldValues).length) patch.fieldValues = fieldValues;
 
   if (!Object.keys(patch).length) {
-    document.getElementById('expDetailActionsBar').hidden = true;
+    document.getElementById('expDetailSaveBtn')?.classList.add('is-clean');
     return;
   }
 

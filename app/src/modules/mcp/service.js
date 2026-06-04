@@ -91,6 +91,93 @@ const TOOLS = [
     description: 'Lista los pipelines del tenant con sus etapas. Útil para resolver IDs antes de crear leads o moverlos.',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'send_template',
+    description: 'Envía una plantilla de WhatsApp API APROBADA por Meta a un contacto (sirve fuera de la ventana de 24h, ideal si el cliente no nos ha escrito). Usa list_templates para ver IDs y placeholders.',
+    inputSchema: {
+      type: 'object',
+      required: ['phone', 'templateId'],
+      properties: {
+        phone:        { type: 'string', description: 'Teléfono destino en formato internacional' },
+        templateId:   { type: 'integer', description: 'ID de la plantilla (de list_templates, debe ser wa_api approved)' },
+        values:       { type: 'array', items: { type: 'string' }, description: 'Valores para los placeholders {{1}}, {{2}}... en orden' },
+        contactName:  { type: 'string', description: 'Nombre del contacto si hay que crearlo' },
+      },
+    },
+  },
+  {
+    name: 'list_conversations',
+    description: 'Lista las conversaciones recientes (chats) del tenant. Soporta filtro por no leídas y búsqueda.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        search:     { type: 'string', description: 'Texto a buscar en nombre/teléfono' },
+        unreadOnly: { type: 'boolean', description: 'Solo conversaciones con mensajes sin leer' },
+        limit:      { type: 'integer', minimum: 1, maximum: 100, default: 30 },
+      },
+    },
+  },
+  {
+    name: 'read_conversation',
+    description: 'Lee los últimos mensajes de una conversación por teléfono del contacto. Útil para que la IA entienda el contexto antes de responder.',
+    inputSchema: {
+      type: 'object',
+      required: ['phone'],
+      properties: {
+        phone: { type: 'string', description: 'Teléfono del contacto en formato internacional' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+      },
+    },
+  },
+  {
+    name: 'list_leads',
+    description: 'Lista o busca leads/expedientes del tenant. Filtra por texto y/o pipeline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        search:     { type: 'string' },
+        pipelineId: { type: 'integer' },
+        page:       { type: 'integer', minimum: 1, default: 1 },
+        pageSize:   { type: 'integer', minimum: 1, maximum: 100, default: 25 },
+      },
+    },
+  },
+  {
+    name: 'add_tag_to_contact',
+    description: 'Agrega una etiqueta a un contacto (por teléfono). Si la etiqueta no existe, se crea. No duplica.',
+    inputSchema: {
+      type: 'object',
+      required: ['phone', 'tag'],
+      properties: {
+        phone: { type: 'string', description: 'Teléfono del contacto en formato internacional' },
+        tag:   { type: 'string', description: 'Nombre de la etiqueta' },
+      },
+    },
+  },
+  {
+    name: 'list_tags',
+    description: 'Lista las etiquetas existentes del tenant (de contactos y de leads).',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'update_contact',
+    description: 'Actualiza datos de un contacto existente (nombre, email) buscándolo por teléfono.',
+    inputSchema: {
+      type: 'object',
+      required: ['phone'],
+      properties: {
+        phone:     { type: 'string', description: 'Teléfono del contacto a actualizar (debe existir)' },
+        firstName: { type: 'string' },
+        lastName:  { type: 'string' },
+        email:     { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'get_stats',
+    description: 'Resumen rápido del CRM del tenant: nº de contactos, leads, conversaciones, y conversaciones sin leer.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -233,6 +320,130 @@ async function callTool(db, tenantId, name, args = {}) {
         `).all(p.id, tenantId),
       }));
       return textContent({ pipelines: result });
+    }
+
+    case 'send_template': {
+      const templateId = Number(args.templateId);
+      if (!templateId) throw new Error('templateId es requerido.');
+      const tpl = db.prepare(
+        "SELECT id, type, wa_status FROM message_templates WHERE id=? AND tenant_id=?"
+      ).get(templateId, tenantId);
+      if (!tpl) throw new Error(`Plantilla #${templateId} no existe en este tenant.`);
+      if (tpl.type !== 'wa_api' || String(tpl.wa_status).toLowerCase() !== 'approved') {
+        throw new Error('La plantilla debe ser tipo WhatsApp API y estar aprobada por Meta.');
+      }
+      const contact = _ensureContact(db, tenantId, { phone: args.phone, name: args.contactName });
+      if (!contact) throw new Error('Teléfono inválido.');
+      const integ = db.prepare(`
+        SELECT id FROM integrations WHERE tenant_id = ? AND status='connected'
+          AND provider = 'whatsapp' ORDER BY id LIMIT 1
+      `).get(tenantId);
+      if (!integ) throw new Error('No hay integración WhatsApp API activa (las plantillas solo van por WhatsApp Cloud API).');
+      const convo = conversations.findOrCreate(db, tenantId, {
+        provider: 'whatsapp', integrationId: integ.id,
+        contactPhone: contact.phone, contactName: contact.name, contactId: contact.id,
+      });
+      const result = await sender.sendWhatsAppTemplate(db, convo, templateId, Array.isArray(args.values) ? args.values : [], { autoFallback: true });
+      conversations.addMessage(db, tenantId, convo.id, {
+        externalId: result?.externalId, direction: 'outgoing', provider: 'whatsapp',
+        body: result?.renderedBody || '', status: 'sent',
+      });
+      return textContent({ ok: true, conversationId: convo.id });
+    }
+
+    case 'list_conversations': {
+      const limit = Math.min(Math.max(Number(args.limit) || 30, 1), 100);
+      const out = conversations.list(db, tenantId, {
+        search: args.search || '', unreadOnly: !!args.unreadOnly, page: 1, pageSize: limit,
+      });
+      return textContent({
+        total: out.total,
+        items: (out.items || []).map(c => ({
+          id: c.id, name: c.name || c.contactName, phone: c.contactPhone,
+          provider: c.provider, unread: c.unreadCount || 0,
+          lastMessage: (c.lastMessage || '').slice(0, 120),
+        })),
+      });
+    }
+
+    case 'read_conversation': {
+      const c = _findContactByPhone(db, tenantId, args.phone);
+      if (!c) return textContent({ found: false, error: 'Contacto no encontrado' });
+      const convo = db.prepare(
+        'SELECT id, provider FROM conversations WHERE contact_id = ? AND tenant_id = ? ORDER BY last_message_at DESC LIMIT 1'
+      ).get(c.id, tenantId);
+      if (!convo) return textContent({ found: false, error: 'Sin conversación' });
+      const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 50);
+      const msgs = db.prepare(`
+        SELECT direction, body, status, created_at FROM messages
+        WHERE conversation_id = ? AND tenant_id = ? ORDER BY created_at DESC LIMIT ?
+      `).all(convo.id, tenantId, limit);
+      return textContent({
+        found: true, conversationId: convo.id, provider: convo.provider,
+        messages: msgs.reverse().map(m => ({
+          from: m.direction === 'incoming' ? 'cliente' : 'nosotros',
+          text: m.body, at: m.created_at,
+        })),
+      });
+    }
+
+    case 'list_leads': {
+      const out = expedients.list(db, tenantId, {
+        search: args.search || '',
+        pipelineId: args.pipelineId ? Number(args.pipelineId) : null,
+        page: Number(args.page) || 1,
+        pageSize: Math.min(Math.max(Number(args.pageSize) || 25, 1), 100),
+      });
+      return textContent({
+        total: out.total, page: out.page,
+        items: (out.items || []).map(e => ({
+          id: e.id, name: e.name, pipelineId: e.pipelineId, stageId: e.stageId,
+          stageName: e.stageName || null, value: e.value || 0,
+          contactName: e.contactName || null, contactPhone: e.contactPhone || null,
+        })),
+      });
+    }
+
+    case 'add_tag_to_contact': {
+      const tag = String(args.tag || '').trim();
+      if (!tag) throw new Error('tag es requerido.');
+      const c = _findContactByPhone(db, tenantId, args.phone);
+      if (!c) throw new Error('Contacto no encontrado por ese teléfono.');
+      db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag) VALUES (?, ?)').run(c.id, tag);
+      return textContent({ ok: true, contactId: c.id, tag });
+    }
+
+    case 'list_tags': {
+      const contactTags = db.prepare(`
+        SELECT DISTINCT t.tag AS name FROM contact_tags t
+        JOIN contacts c ON c.id = t.contact_id WHERE c.tenant_id = ? AND t.tag != ''
+      `).all(tenantId).map(r => r.name);
+      const leadTags = db.prepare(`
+        SELECT DISTINCT t.tag AS name FROM expedient_tags t
+        JOIN expedients e ON e.id = t.expedient_id WHERE e.tenant_id = ? AND t.tag != ''
+      `).all(tenantId).map(r => r.name);
+      const all = [...new Set([...contactTags, ...leadTags])].sort((a, b) => a.localeCompare(b));
+      return textContent({ tags: all });
+    }
+
+    case 'update_contact': {
+      const c = _findContactByPhone(db, tenantId, args.phone);
+      if (!c) throw new Error('Contacto no encontrado por ese teléfono.');
+      const patch = {};
+      if (args.firstName !== undefined) patch.firstName = args.firstName;
+      if (args.lastName  !== undefined) patch.lastName  = args.lastName;
+      if (args.email     !== undefined) patch.email     = args.email;
+      if (!Object.keys(patch).length) throw new Error('Nada que actualizar.');
+      customers.update(db, tenantId, c.id, patch);
+      return textContent({ ok: true, contactId: c.id });
+    }
+
+    case 'get_stats': {
+      const contacts = db.prepare('SELECT COUNT(*) n FROM contacts WHERE tenant_id = ?').get(tenantId).n;
+      const leads    = db.prepare('SELECT COUNT(*) n FROM expedients WHERE tenant_id = ?').get(tenantId).n;
+      const convos   = db.prepare('SELECT COUNT(*) n FROM conversations WHERE tenant_id = ?').get(tenantId).n;
+      const unread   = db.prepare('SELECT COUNT(*) n FROM conversations WHERE tenant_id = ? AND unread_count > 0').get(tenantId).n;
+      return textContent({ contacts, leads, conversations: convos, unread });
     }
 
     default:

@@ -27219,6 +27219,24 @@ function _renderBranchSubStepCard(parentSid, caseId, subStep, prevStep = null) {
     </div>`;
 }
 
+// Paleta rotativa para colorear las ramas del step Condición. main = borde +
+// número; soft = fondo del header. Distingue visualmente cada rama cuando hay
+// muchas (ej. bot Productos con 11 ramas — antes todas se veían iguales).
+const SB_BRANCH_COLORS = [
+  { main: '#6366f1', soft: '#eef2ff' }, // indigo
+  { main: '#10b981', soft: '#ecfdf5' }, // emerald
+  { main: '#f59e0b', soft: '#fffbeb' }, // amber
+  { main: '#ef4444', soft: '#fef2f2' }, // red
+  { main: '#8b5cf6', soft: '#f5f3ff' }, // violet
+  { main: '#ec4899', soft: '#fdf2f8' }, // pink
+  { main: '#14b8a6', soft: '#f0fdfa' }, // teal
+  { main: '#f97316', soft: '#fff7ed' }, // orange
+  { main: '#0ea5e9', soft: '#f0f9ff' }, // sky
+  { main: '#84cc16', soft: '#f7fee7' }, // lime
+  { main: '#d946ef', soft: '#fdf4ff' }, // fuchsia
+  { main: '#06b6d4', soft: '#ecfeff' }, // cyan
+];
+
 function _renderBranchEditor(sid, c) {
   // Prefijo jerárquico: si este step está dentro de "Rama 11" del padre → prefijo "11."
   let casePrefix = '';
@@ -27272,10 +27290,14 @@ function _renderBranchEditor(sid, c) {
       _renderBranchSubStepCard(sid, cs.id, ss, si > 0 ? cs.steps[si - 1] : null)
     ).join('');
 
+    // Color por rama (paleta rotativa) — distingue visualmente cada rama
+    // cuando hay muchas (ej. bot Productos con 11 ramas).
+    const col = SB_BRANCH_COLORS[i % SB_BRANCH_COLORS.length];
+
     return `
-      <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}">
-        <div class="sb-branch-case-v2-header">
-          <span class="sb-branch-case-v2-num">Rama ${casePrefix}${i + 1}</span>
+      <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}" style="border-left:4px solid ${col.main}">
+        <div class="sb-branch-case-v2-header" style="background:${col.soft}">
+          <span class="sb-branch-case-v2-num" style="color:${col.main}">● Rama ${casePrefix}${i + 1}</span>
           <button type="button" class="sb-branch-case-del-v2" data-del-case-id="${escHtml(cs.id)}" data-sid="${sid}" title="Eliminar rama">×</button>
         </div>
         <div class="sb-branch-rules" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">

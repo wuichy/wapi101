@@ -1236,6 +1236,12 @@ body.nav-collapsed .nav-notif-panel {
   background: var(--accent); color: #fff;
 }
 .btn--primary:hover { background: var(--accent-hover); }
+/* Botón Guardar del bot builder cuando NO hay cambios pendientes: gris.
+   Al primer cambio se le quita .is-clean y vuelve a azul. */
+#botBuilderSave.is-clean {
+  background: #e2e8f0; color: #94a3b8; cursor: default;
+}
+#botBuilderSave.is-clean:hover { background: #e2e8f0; }
 
 .settings-actions { display: flex; gap: 8px; margin-top: 16px; }
 

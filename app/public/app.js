@@ -10393,7 +10393,30 @@ function renderBotList() {
 //   'expedientes'  → volver al modal de expediente (si lo abrieron desde ahí)
 let _botBuilderReturnTo = null;
 
+// ─── Estado "cambios sin guardar" (dirty) del bot builder ───────────────
+// Habilita: botón Guardar gris↔azul, confirmación al salir, aviso al refrescar.
+let _botDirty = false;
+let _botSuppressDirty = false; // true durante openBotBuilder (setear values no debe marcar dirty)
+
+function _refreshBotSaveBtn() {
+  const btn = document.getElementById('botBuilderSave');
+  if (btn) btn.classList.toggle('is-clean', !_botDirty);
+}
+function markBotClean() { _botDirty = false; _refreshBotSaveBtn(); }
+function markBotDirty() {
+  if (_botSuppressDirty) return;
+  if (!_botDirty) { _botDirty = true; _refreshBotSaveBtn(); }
+}
+
 function openBotBuilder(bot, returnTo = null) {
+  // Mientras se inicializa el builder, NO marcar dirty (setear .value por JS
+  // no dispara eventos, pero por si acaso suprimimos durante el setup).
+  _botSuppressDirty = true;
+  // Persistir el id del bot editado para restaurarlo al refrescar la página.
+  try {
+    if (bot && bot.id) localStorage.setItem('lastBotEditId', String(bot.id));
+    else localStorage.removeItem('lastBotEditId');
+  } catch (_) {}
   _botBuilderReturnTo = returnTo;
   // Cargar productos del catálogo en background (para el step send_product).
   // Lazy load: no bloqueamos abrir el builder.
@@ -10509,9 +10532,15 @@ function openBotBuilder(bot, returnTo = null) {
     }
   }
   renderStepsFlow();
+  // Builder listo → estado limpio (botón Guardar gris hasta el primer cambio).
+  _botSuppressDirty = false;
+  markBotClean();
 }
 
 function closeBotBuilder() {
+  // Salir del builder: limpiar el marcador de bot-en-edición y el dirty.
+  try { localStorage.removeItem('lastBotEditId'); } catch (_) {}
+  _botDirty = false;
   // Si el modo Pantalla completa de la vista Editable estaba activo, salir.
   document.body.classList.remove('bb-ve-fullscreen-on');
   // Reset de flags: el próximo bot que abra OTRO bot debería:
@@ -11806,8 +11835,50 @@ function collectAllSteps() {
 }
 
 function setupBot() {
-  // Back button — devuelve al contexto desde el que se abrió el builder
+  // ─── Detección de cambios sin guardar (dirty) ───
+  // Cualquier edición dentro del builder marca dirty (botón Guardar se pone azul).
+  const _builderEl = document.getElementById('botBuilder');
+  if (_builderEl && !_builderEl._dirtySetup) {
+    _builderEl._dirtySetup = true;
+    _builderEl.addEventListener('input',  () => markBotDirty());
+    _builderEl.addEventListener('change', () => markBotDirty());
+  }
+  // Clicks estructurales (agregar/eliminar paso, rama, insertar, elegir tipo).
+  // El step picker se re-parenta al body, por eso escuchamos en document y
+  // verificamos que el builder esté abierto.
+  if (!document._botDirtyClickSetup) {
+    document._botDirtyClickSetup = true;
+    document.addEventListener('click', (e) => {
+      if (document.getElementById('botBuilder')?.hidden) return;
+      if (e.target.closest(
+        '.sb-step-type-btn, .sb-rem-substep-del, .sb-branch-add-case-v2, ' +
+        '.sb-branch-case-del-v2, .sb-branch-add-rule, .sb-branch-rule-del, ' +
+        '.sb-branch-case-add-step-btn, .sb-rem-add-step-btn, .sb-insert-between, ' +
+        '.sb-step-del, .sb-step-card-del, [data-del-substep], [data-del-case-id], ' +
+        '.kw-chip-remove, .sb-tag-remove, #botBuilderAddStep'
+      )) {
+        setTimeout(() => markBotDirty(), 0);
+      }
+    });
+  }
+  // Aviso del navegador al refrescar/cerrar con cambios sin guardar.
+  if (!window._botBeforeUnloadSetup) {
+    window._botBeforeUnloadSetup = true;
+    window.addEventListener('beforeunload', (e) => {
+      if (_botDirty && !document.getElementById('botBuilder')?.hidden) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    });
+  }
+
+  // Back button — devuelve al contexto desde el que se abrió el builder.
+  // Si hay cambios sin guardar, confirma antes de salir.
   document.getElementById('botBackBtn')?.addEventListener('click', () => {
+    if (_botDirty && !confirm('Tienes cambios sin guardar en este bot.\n\n¿Salir sin guardar? (Cancela para seguir editando y luego dale Guardar)')) {
+      return;
+    }
     const returnTo = _botBuilderReturnTo;
     closeBotBuilder();
     if (returnTo === 'pipelines') {
@@ -21412,6 +21483,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     applySocialCommentsVisibility(),
     updatePedidosNavVisibility(),
   ]);
+
+  // Restaurar el bot que se estaba editando al refrescar la página.
+  // Si la última vista era 'bot' y había un bot abierto en el builder,
+  // reabrirlo (antes el refresh tiraba a la lista de bots y se perdía).
+  try {
+    const _lastBotEditId = localStorage.getItem('lastBotEditId');
+    const _noDeepLink = !new URLSearchParams(location.search).get('bot-editor') && !location.hash;
+    if (_lastBotEditId && (localStorage.getItem('lastView') === 'bot') && _noDeepLink) {
+      const bot = (sbBots || []).find(b => String(b.id) === String(_lastBotEditId));
+      if (bot && typeof openBotBuilder === 'function') openBotBuilder(bot);
+    }
+  } catch (_) {}
 
   // Deep link de notificación: si la URL trae ?convo=ID&view=chats (push
   // notification click → cold boot), abrir la convo directamente. Se hace

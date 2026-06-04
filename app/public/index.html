@@ -18,7 +18,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=3" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png?v=3" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260603wrap" />
+  <link rel="stylesheet" href="/styles.css?v=20260603hidden" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -2084,8 +2084,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                       <span><strong>Frase exacta</strong><small>el mensaje contiene la <em>frase tal cual</em> está escrita</small></span>
                     </label>
                   </div>
-                  <!-- Textarea oculto (sync con chips) — preserva compat con código existente -->
-                  <textarea id="sbTriggerValue" hidden></textarea>
+                  <!-- Textarea oculto (sync con chips) — preserva compat con código existente.
+                       display:none !important para que NUNCA se vea (el [hidden] solo no
+                       bastaba: algún estilo de textarea lo hacía visible). -->
+                  <textarea id="sbTriggerValue" hidden style="display:none !important"></textarea>
                 </div>
                 <div id="sbTriggerNoResponseWrap" hidden style="display:flex;align-items:center;gap:8px;margin-top:6px">
                   <span style="font-size:13px;color:var(--text-muted)">Disparar después de</span>
@@ -4548,7 +4550,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script src="/app.js?v=20260603wrap"></script>
+  <script src="/app.js?v=20260603hidden"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

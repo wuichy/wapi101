@@ -10508,9 +10508,14 @@ function openBotBuilder(bot, returnTo = null) {
   document.getElementById('botBuilderName').value = bot ? bot.name : '';
   document.getElementById('botBuilderEnabled').checked = bot ? bot.enabled : false;
   document.getElementById('sbTriggerType').value = bot ? bot.trigger_type : 'keyword';
-  document.getElementById('sbTriggerValue').value = bot ? (bot.trigger_value || '') : '';
-  // Inicializar UI de chips + modo de match para trigger keyword
-  try { kwChipsInit(bot ? (bot.trigger_value || '') : '', bot?.trigger_match_mode || 'any'); } catch (_) {}
+  // Solo el trigger 'keyword' usa trigger_value como lista de palabras. Para los
+  // demás (pipeline_stage, scheduled, etc.) el trigger_value es un id/fecha y NO
+  // debe sembrar los chips — si no, p.ej. el stage id "16" aparecía como palabra
+  // clave fantasma que reaparecía cada vez que se reabría el bot.
+  const _isKwTrigger = bot ? bot.trigger_type === 'keyword' : true;
+  document.getElementById('sbTriggerValue').value = (bot && _isKwTrigger) ? (bot.trigger_value || '') : '';
+  // Inicializar UI de chips + modo de match (vacío si el trigger no es keyword)
+  try { kwChipsInit(_isKwTrigger && bot ? (bot.trigger_value || '') : '', bot?.trigger_match_mode || 'any'); } catch (_) {}
 
   // Reset a vista Lista al abrir el builder (la vista Código es read-only y confunde si se queda activa)
   document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(t => {
@@ -10601,6 +10606,13 @@ function updateTriggerValueVisibility() {
     valInput.hidden = (widget !== 'text');
     valInput.placeholder = def?.valuePlaceholder || 'p.ej. "precio", "hola", "info"';
   }
+
+  // El bloque de palabras clave (chips + modo de match) SOLO aplica al trigger
+  // 'keyword'. Para los demás (p.ej. pipeline_stage) hay que ocultarlo, si no se
+  // queda visible mostrando basura — antes el stage id "16" aparecía como chip.
+  // Esta es la fuente única: se llama al abrir el builder y al cambiar el dropdown.
+  const kwWrap = document.getElementById('sbTriggerKeywordWrap');
+  if (kwWrap) kwWrap.hidden = (type !== 'keyword');
 
   // Mostrar el wrapper del widget activo, ocultar todos los demás
   for (const [w, wrapId] of Object.entries(_BOT_TRIGGER_WIDGET_WRAPS)) {

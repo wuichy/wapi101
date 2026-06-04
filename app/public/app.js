@@ -27295,8 +27295,8 @@ function _renderBranchEditor(sid, c) {
     const col = SB_BRANCH_COLORS[i % SB_BRANCH_COLORS.length];
 
     return `
-      <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}" style="border-left:4px solid ${col.main}">
-        <div class="sb-branch-case-v2-header" style="background:${col.soft}">
+      <div class="sb-branch-case-v2" data-case-id="${escHtml(cs.id)}" style="border-left:4px solid ${col.main}; background:${col.soft}">
+        <div class="sb-branch-case-v2-header" style="background:${col.soft}; border-bottom-color:${col.main}33">
           <span class="sb-branch-case-v2-num" style="color:${col.main}">● Rama ${casePrefix}${i + 1}</span>
           <button type="button" class="sb-branch-case-del-v2" data-del-case-id="${escHtml(cs.id)}" data-sid="${sid}" title="Eliminar rama">×</button>
         </div>

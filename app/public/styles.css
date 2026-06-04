@@ -6471,21 +6471,27 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .sb-fallback-arrow { font-size: 14px; color: #d97706; }
 .sb-step-connector {
-  width: 2px; height: 28px; background: var(--border);
+  width: 100%; height: 34px;
   position: relative; display: flex; align-items: center; justify-content: center;
 }
+/* Línea punteada vertical al centro — marca el "salto" al siguiente step */
+.sb-step-connector::before {
+  content: '';
+  position: absolute; top: 0; bottom: 0; left: 50%;
+  width: 0; border-left: 2px dashed #cbd5e1; transform: translateX(-50%);
+}
 .sb-insert-between {
-  position: absolute;
-  width: 22px; height: 22px; border-radius: 50%;
-  background: var(--surface); border: 2px solid var(--border);
-  color: var(--text-muted); cursor: pointer;
+  position: absolute; left: 50%; transform: translateX(-50%);
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; border: 2px dashed #94a3b8;
+  color: #475569; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0.35; transition: opacity .15s, border-color .15s, color .15s, background .15s;
-  z-index: 2;
+  opacity: 0.85; transition: opacity .15s, border-color .15s, color .15s, background .15s, transform .12s;
+  z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
 .sb-step-connector:hover .sb-insert-between,
 .sb-insert-between:focus { opacity: 1; border-color: var(--accent); color: var(--accent); }
-.sb-insert-between:hover { opacity: 1; border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.sb-insert-between:hover { opacity: 1; border-style: solid; border-color: var(--accent); color: var(--accent); transform: translateX(-50%) scale(1.12); background: color-mix(in srgb, var(--accent) 8%, #fff); }
 
 .sb-step-card {
   width: 100%;

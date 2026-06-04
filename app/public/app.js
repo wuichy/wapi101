@@ -8579,10 +8579,16 @@ function setupExpDetail() {
     try {
       await api('DELETE', `/api/expedients/${EXP_DETAIL.id}`);
       toast('Lead eliminado', 'success');
-      showView(EXP_DETAIL_FROM);
+      const from = EXP_DETAIL_FROM;
       EXP_DETAIL = null;
-      if (EXP_DETAIL_FROM === 'expedientes') await loadExpedients();
-      else if (EXP_DETAIL_FROM === 'pipelines') await loadPipelinesKanban();
+      showView(from);
+      // Recargar la vista de origen para reflejar el borrado sin refrescar.
+      // Cubre las 3 vistas desde las que se puede abrir un lead (antes solo
+      // recargaba expedientes/pipelines → desde Contactos el lead borrado
+      // seguía apareciendo hasta refrescar la página).
+      if (from === 'pipelines') await loadPipelinesKanban();
+      else if (from === 'contactos') await loadCustomers();
+      else await loadExpedients();
     } catch (err) { toast(err.message, 'error'); }
   });
 

@@ -6892,6 +6892,10 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   border-radius: 6px; padding: 4px 10px; cursor: pointer; margin-top: 6px;
 }
 .sb-branch-case-add-step-btn:hover { background: rgba(37,99,235,.06); }
+/* Meter los pasos (sub-steps) hacia adentro para que el fondo de color de la
+   rama los ENVUELVA por los lados, en vez de ir de borde a borde. */
+.sb-branch-case-v2 .sb-rem-substeps { padding: 0 12px; }
+.sb-branch-case-v2 > .sb-branch-case-add-step-btn { margin-left: 12px; margin-bottom: 10px; }
 .sb-branch-add-case-v2 {
   display: block; width: 100%; padding: 8px;
   border: 1.5px dashed var(--border, #e2e8f0);

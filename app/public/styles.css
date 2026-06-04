@@ -3929,12 +3929,20 @@ body[data-view-active="chats"] .main { background: #f2f2f7; }
 
 /* ─── Panel de conversación ─── */
 .rh-conversation-panel {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* Flex column (antes era grid de 3 filas 'auto 1fr auto', pero al agregar
+     el owner-badge quedaron 4 elementos → el badge caía en la fila 1fr y se
+     estiraba altísimo). Con flex, SOLO los mensajes crecen; header, badge y
+     composer toman su contenido. El badge oculto (display:none) no descuadra. */
+  display: flex;
+  flex-direction: column;
   height: 100%;
   overflow: hidden;
   background: var(--rh-bg);
 }
+.rh-conversation-panel > .rh-conversation-header { flex: 0 0 auto; }
+.rh-conversation-panel > .rh-owner-badge         { flex: 0 0 auto; }
+.rh-conversation-panel > .rh-messages            { flex: 1 1 0; }
+.rh-conversation-panel > .rh-reply-form          { flex: 0 0 auto; }
 .rh-conversation-header {
   padding: 14px 20px;
   border-bottom: 1px solid var(--rh-border);

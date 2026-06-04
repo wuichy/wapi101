@@ -6874,6 +6874,16 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   font-size: 10px; font-weight: 700; color: #94a3b8;
   text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px;
 }
+/* Divisor "Entonces ejecuta" entre las condiciones de la rama y sus pasos */
+.sb-branch-then {
+  display: flex; align-items: center; justify-content: center;
+  margin: 10px 12px 2px;
+}
+.sb-branch-then span {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; padding: 3px 12px;
+  border: 1px dashed currentColor; border-radius: 999px; background: #fff;
+}
 .sb-branch-case-add-step-btn {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 12px; color: var(--accent, #2563eb);

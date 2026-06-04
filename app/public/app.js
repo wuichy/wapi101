@@ -27304,6 +27304,7 @@ function _renderBranchEditor(sid, c) {
           ${rulesHtml || '<p class="sb-hint" style="margin:4px 0 8px">Sin condiciones — esta rama siempre ejecuta.</p>'}
         </div>
         <button type="button" class="sb-branch-add-rule" data-case-id="${escHtml(cs.id)}" data-sid="${sid}">+ Agregar condición</button>
+        <div class="sb-branch-then" style="color:${col.main}"><span style="border-color:${col.main}55">↓ Entonces ejecuta</span></div>
         <div class="sb-rem-substeps" data-case-substeps="${escHtml(cs.id)}">
           ${subStepsHtml}
         </div>

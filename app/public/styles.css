@@ -4226,6 +4226,10 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   min-height: 0;
   background: var(--rh-bg);
 }
+/* Spacer: empuja los mensajes al fondo cuando hay pocos (estilo WhatsApp/
+   Messenger), sin romper el scroll cuando hay muchos (el spacer se comprime
+   a 0). Antes con 1-2 mensajes quedaban flotando con un hueco grande arriba. */
+.rh-messages::before { content: ''; flex: 1 0 auto; }
 .rh-message {
   display: flex;
   flex-direction: column;

@@ -291,6 +291,21 @@ module.exports = function createSuperRouter(db) {
     }
   });
 
+  // ─── Analítica de visitantes de la landing pública ───
+  // GET /super/visitors?range=7d&country=MX → stats + feed (solo super-admin).
+  router.get('/visitors', (req, res) => {
+    try {
+      const visitors = require('../visitors/service');
+      const out = visitors.getOverview(db, {
+        range:   req.query.range || '7d',
+        country: req.query.country || null,
+      });
+      res.json(out);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 };
 

@@ -142,6 +142,16 @@ try {
   console.warn('[boot] reelance-ia webhook routes not mounted:', err.message);
 }
 
+// Analítica de visitantes de la landing pública — ingesta PÚBLICA (sin auth).
+// El tracker en landing.html/signup/etc. hace POST /api/track. Va ANTES del
+// authMiddleware. Los datos se ven en /super → Visitantes.
+try {
+  const { publicRouter: visitorsPublicRouter } = require('./src/modules/visitors/routes');
+  app.use('/api/track', visitorsPublicRouter(db));
+} catch (err) {
+  console.warn('[boot] visitors track route not mounted:', err.message);
+}
+
 // ─── Cache-busting de assets ─────────────────────────────────────────────
 // Problema: en cada deploy, navegadores (especialmente iOS Safari, Cloudflare,
 // SW PWA) sirven app.js/styles.css cacheados → la app aparece en blanco o con

@@ -592,6 +592,31 @@
       .sa-nav-section { display: none; }
       .sa-main { padding: 16px; }
     }
+    /* ── Visitantes ── */
+    .vs-range-btn { padding:5px 12px;border:1px solid var(--sa-border,#e2e8f0);background:#fff;border-radius:8px;font-size:13px;cursor:pointer;color:var(--sa-muted,#64748b); }
+    .vs-range-btn.is-active { background:#4f46e5;color:#fff;border-color:#4f46e5; }
+    .vs-stats { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px; }
+    .vs-stat { background:#fff;border:1px solid var(--sa-border,#e2e8f0);border-radius:12px;padding:14px 16px; }
+    .vs-stat-n { font-size:26px;font-weight:700;color:#0f172a;line-height:1.1; }
+    .vs-stat-l { font-size:12px;color:var(--sa-muted,#64748b);margin-top:4px; }
+    .vs-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px; }
+    .vs-panel-h { font-size:13px;font-weight:700;color:#334155;margin-bottom:8px; }
+    .vs-row { display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;font-size:13px;border-bottom:1px solid #f1f5f9; }
+    .vs-row:last-child { border-bottom:0; }
+    .vs-row.clickable { cursor:pointer;border-radius:6px;padding:5px 6px;margin:0 -6px; }
+    .vs-row.clickable:hover { background:#f8fafc; }
+    .vs-row-n { font-weight:600;color:#475569;font-variant-numeric:tabular-nums; }
+    .vs-bar { height:4px;background:#e0e7ff;border-radius:2px;margin-top:2px; }
+    .vs-feed-row { display:flex;align-items:flex-start;gap:10px;padding:10px 10px;border-bottom:1px solid #f1f5f9; }
+    .vs-feed-row:last-child { border-bottom:0; }
+    .vs-badge { display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;font-weight:600; }
+    .vs-b-new { background:#dcfce7;color:#15803d; }
+    .vs-b-ret { background:#e0e7ff;color:#4338ca; }
+    .vs-b-bot { background:#f1f5f9;color:#64748b; }
+    .vs-feed-meta { font-size:12px;color:var(--sa-muted,#64748b);margin-top:3px; }
+    .vs-feed-path { font-size:12px;color:#475569;margin-top:3px;word-break:break-all; }
+    .vs-chip { display:inline-flex;align-items:center;gap:8px;background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;border-radius:999px;padding:4px 12px;font-size:13px; }
+    .vs-chip button { background:none;border:0;color:#4338ca;cursor:pointer;font-size:15px;line-height:1; }
   </style>
 </head>
 <body>
@@ -643,6 +668,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><circle cx="18" cy="6" r="2" fill="currentColor" stroke="none"/></svg>
         <span>Live Support</span>
         <span id="lsActiveBadge" class="sr-badge" hidden></span>
+      </a>
+      <a class="sa-nav-item" data-section="visitors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span>Visitantes</span>
       </a>
       <a class="sa-nav-item" data-section="health">
         <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -925,6 +954,31 @@
         <p style="margin:0;color:var(--sa-muted);font-size:12px">El estado se reconsulta cada 30 segundos.</p>
       </div>
     </section>
+
+    <!-- ────────── Visitantes (analítica de la landing pública) ────────── -->
+    <section data-section-pane="visitors" hidden>
+      <div class="sa-page-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <h1 class="sa-page-title">Visitantes de wapi101.com</h1>
+        <div style="display:flex;gap:6px;align-items:center" id="vsRange">
+          <button class="vs-range-btn" data-range="today">Hoy</button>
+          <button class="vs-range-btn" data-range="yesterday">Ayer</button>
+          <button class="vs-range-btn is-active" data-range="7d">7 días</button>
+          <button class="vs-range-btn" data-range="30d">30 días</button>
+        </div>
+      </div>
+      <div id="vsCountryChip" hidden style="margin-bottom:12px"></div>
+      <div class="vs-stats" id="vsStats"><div class="empty-state" style="padding:20px">Cargando…</div></div>
+      <div class="vs-grid">
+        <div class="sa-card vs-panel"><div class="vs-panel-h">🌎 Países</div><div id="vsCountries"></div></div>
+        <div class="sa-card vs-panel"><div class="vs-panel-h">📍 Estados / regiones</div><div id="vsRegions"></div></div>
+        <div class="sa-card vs-panel"><div class="vs-panel-h">↗ Orígenes (referrer / UTM)</div><div id="vsSources"></div></div>
+        <div class="sa-card vs-panel"><div class="vs-panel-h">📄 Páginas más vistas</div><div id="vsPages"></div></div>
+      </div>
+      <div class="sa-card" style="margin-top:14px">
+        <div class="vs-panel-h" style="padding:14px 16px 0">👥 Últimos visitantes</div>
+        <div id="vsFeed" style="padding:8px 6px"></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -1062,7 +1116,7 @@ $('logoutBtn').addEventListener('click', async () => {
 });
 
 // ── Navegación entre secciones ──
-const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', reports: 'Reportes', 'live-support': 'Live Support', health: 'Salud del sistema', email: 'Email / SMTP' };
+const SECTION_TITLES = { dashboard: 'Dashboard', tenants: 'Tenants', reports: 'Reportes', 'live-support': 'Live Support', visitors: 'Visitantes', health: 'Salud del sistema', email: 'Email / SMTP' };
 $('saNav').addEventListener('click', (e) => {
   const item = e.target.closest('[data-section]');
   if (!item) return;
@@ -1080,6 +1134,111 @@ function switchSection(name) {
   if (name === 'reports') loadReports();
   if (name === 'email')   loadEmailConfig();
   if (name === 'live-support') lsAdminInit();
+  if (name === 'visitors') loadVisitors();
+}
+
+// ──────────── Visitantes (analítica de la landing) ────────────
+let _vsRange = '7d';
+let _vsCountry = null;
+
+const VS_FLAGS = { MX:'🇲🇽', US:'🇺🇸', CO:'🇨🇴', AR:'🇦🇷', ES:'🇪🇸', PE:'🇵🇪', CL:'🇨🇱', BR:'🇧🇷', EC:'🇪🇨', GT:'🇬🇹', VE:'🇻🇪' };
+function vsFlag(cc) { return VS_FLAGS[cc] || (cc && cc !== '??' ? '🌐' : '❔'); }
+function vsDur(s) {
+  if (!s || s <= 0) return '⚡ Rebote';
+  if (s < 60) return s + ' s';
+  const m = Math.floor(s/60), r = s%60;
+  return r ? `${m} min ${r} s` : `${m} min`;
+}
+function vsAgo(ts) {
+  if (!ts) return '';
+  const d = Math.floor(Date.now()/1000) - ts;
+  if (d < 60) return 'hace ' + d + ' s';
+  if (d < 3600) return 'hace ' + Math.floor(d/60) + ' min';
+  if (d < 86400) return 'hace ' + Math.floor(d/3600) + ' h';
+  return 'hace ' + Math.floor(d/86400) + ' d';
+}
+const VS_DEV = { mobile:'📱', tablet:'📲', desktop:'💻' };
+
+document.getElementById('vsRange').addEventListener('click', (e) => {
+  const b = e.target.closest('.vs-range-btn'); if (!b) return;
+  _vsRange = b.dataset.range;
+  document.querySelectorAll('.vs-range-btn').forEach(x => x.classList.toggle('is-active', x === b));
+  loadVisitors();
+});
+
+async function loadVisitors() {
+  try {
+    const qs = new URLSearchParams({ range: _vsRange });
+    if (_vsCountry) qs.set('country', _vsCountry);
+    const data = await api('GET', '/visitors?' + qs.toString());
+    renderVisitors(data);
+  } catch (err) {
+    $('vsStats').innerHTML = `<div class="empty-state" style="padding:20px">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function vsBarsRows(rows, key, labelFn, total, onClick) {
+  if (!rows.length) return '<div style="font-size:13px;color:#94a3b8;padding:6px 0">Sin datos</div>';
+  return rows.map(r => {
+    const pct = total ? Math.round((r.n / total) * 100) : 0;
+    return `<div class="vs-row ${onClick ? 'clickable' : ''}" ${onClick ? `data-vs-click="${escapeHtml(String(r[key] || ''))}"` : ''}>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${labelFn(r)}</span>
+          <span class="vs-row-n">${r.n} · ${pct}%</span>
+        </div>
+        <div class="vs-bar" style="width:${pct}%"></div>
+      </div></div>`;
+  }).join('');
+}
+
+function renderVisitors(data) {
+  const s = data.stats;
+  $('vsStats').innerHTML = `
+    <div class="vs-stat"><div class="vs-stat-n">${s.humans}</div><div class="vs-stat-l">Visitantes ${s.bots ? `· <span style="color:#94a3b8">${s.bots} bots excl.</span>` : ''}</div></div>
+    <div class="vs-stat"><div class="vs-stat-n">${s.nuevos}</div><div class="vs-stat-l">Nuevos</div></div>
+    <div class="vs-stat"><div class="vs-stat-n">${s.recurrentes}</div><div class="vs-stat-l">Recurrentes</div></div>
+    <div class="vs-stat"><div class="vs-stat-n">${s.pageviews}</div><div class="vs-stat-l">Páginas vistas</div></div>`;
+
+  $('vsCountries').innerHTML = vsBarsRows(s.topCountries, 'country', r => `${vsFlag(r.country)} ${r.country}`, s.humans, true);
+  $('vsRegions').innerHTML   = vsBarsRows(s.topRegions, 'region', r => `${escapeHtml(r.region)} <span style="color:#94a3b8">${r.country}</span>`, s.humans, false);
+  $('vsSources').innerHTML   = vsBarsRows(s.topSources, 'source', r => escapeHtml(r.source || '(directo)'), s.humans, false);
+  $('vsPages').innerHTML     = vsBarsRows(s.topPages, 'path', r => escapeHtml(r.path), s.pageviews, false);
+
+  // Chip de filtro de país
+  const chip = $('vsCountryChip');
+  if (_vsCountry) {
+    chip.hidden = false;
+    chip.innerHTML = `<span class="vs-chip">Mostrando solo: ${vsFlag(_vsCountry)} ${_vsCountry} <button id="vsClearCountry">✕</button></span>`;
+    document.getElementById('vsClearCountry').onclick = () => { _vsCountry = null; loadVisitors(); };
+  } else { chip.hidden = true; chip.innerHTML = ''; }
+
+  // Click en país → filtra
+  $('vsCountries').querySelectorAll('[data-vs-click]').forEach(el => {
+    el.onclick = () => { _vsCountry = el.dataset.vsClick; loadVisitors(); };
+  });
+
+  // Feed
+  $('vsFeed').innerHTML = data.feed.length ? data.feed.map(v => {
+    const name = `Visitante ${v.sessionShort}`;
+    const geo = [v.city, v.region, v.country].filter(Boolean).join(', ') || 'Geo desconocido';
+    const dur = v.isBot ? '🤖 Bot' : vsDur(v.durationSec);
+    const tag = v.isBot ? '<span class="vs-badge vs-b-bot">bot</span>'
+              : v.isNew ? '<span class="vs-badge vs-b-new">Nuevo</span>'
+                        : '<span class="vs-badge vs-b-ret">Recurrente</span>';
+    const path = v.pages && v.pages.length ? v.pages.join(' → ') : '—';
+    const src = v.utmCampaign ? `📣 ${escapeHtml(v.utmCampaign)}` : (v.source ? `↗ ${escapeHtml(v.source)}` : '⌁ Directo');
+    return `<div class="vs-feed-row">
+      <div style="font-size:20px">${VS_DEV[v.device] || '💻'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong style="font-size:13px">${name}</strong> ${tag}
+          <span style="font-size:12px;color:#94a3b8">· ${v.pageCount} pág · ${dur} · ${vsAgo(v.lastSeenAt)}</span>
+        </div>
+        <div class="vs-feed-meta">${vsFlag(v.country)} ${escapeHtml(geo)} · ${src}</div>
+        <div class="vs-feed-path">${escapeHtml(path)}</div>
+      </div></div>`;
+  }).join('') : '<div class="empty-state" style="padding:20px">Sin visitantes en este periodo.</div>';
 }
 
 // ──────────── Reportes (cross-tenant) ────────────

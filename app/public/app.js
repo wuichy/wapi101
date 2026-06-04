@@ -5356,7 +5356,11 @@ const ROUTER = {
       } else if (state.type === 'lead') {
         await openExpDetail(state.id, state.from || 'pipelines');
       } else if (state.type === 'bot' && typeof openBotBuilder === 'function') {
-        openBotBuilder(state.id);
+        // openBotBuilder necesita el objeto bot completo, no el id. Buscarlo
+        // en la lista ya cargada; si no está, caer en la lista de bots.
+        const _b = (typeof sbBots !== 'undefined' ? sbBots : []).find(x => String(x.id) === String(state.id));
+        if (_b) openBotBuilder(_b);
+        else showView('bot');
       }
       return true;
     } catch (_) {
@@ -10535,6 +10539,9 @@ function openBotBuilder(bot, returnTo = null) {
   // Builder listo → estado limpio (botón Guardar gris hasta el primer cambio).
   _botSuppressDirty = false;
   markBotClean();
+  // Reflejar en la URL (#/bot/<id>) que estamos editando este bot, para que un
+  // refresh del navegador restaure el builder en vez de tirar a la lista.
+  try { if (bot && bot.id) ROUTER.push({ type: 'bot', id: bot.id }); } catch (_) {}
 }
 
 function closeBotBuilder() {
@@ -11889,6 +11896,9 @@ function setupBot() {
     } else if (returnTo === 'expedientes') {
       showView('expedientes');
     } else {
+      // Volver a la lista de bots: actualizar el hash a #/bot (sin id) para
+      // que un refresh ya NO reabra el builder.
+      try { ROUTER.push({ type: 'view', view: 'bot' }); } catch (_) {}
       loadSalsbots();
     }
     _botBuilderReturnTo = null;
@@ -21454,8 +21464,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // 1ro: si la URL trae hash (deep link compartido o reload), respetar ese
   const urlState = ROUTER.parse(location.hash);
+  let _pendingBotOpen = null;
   if (urlState) {
-    ROUTER.restore(urlState);
+    if (urlState.type === 'bot') {
+      // El bot builder necesita el OBJETO bot completo (con steps), pero los
+      // bots aún no están cargados en el boot. Mostramos la lista ahora y
+      // diferimos la apertura del builder hasta después de loadSalsbots.
+      showView('bot');
+      _pendingBotOpen = urlState.id;
+    } else {
+      ROUTER.restore(urlState);
+    }
   } else if (_savedView === 'exp-detail' && _savedExpId) {
     // 2do: si localStorage tiene un lead abierto, restaurarlo
     openExpDetail(Number(_savedExpId), _savedExpFrom);
@@ -21485,13 +21504,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   ]);
 
   // Restaurar el bot que se estaba editando al refrescar la página.
-  // Si la última vista era 'bot' y había un bot abierto en el builder,
-  // reabrirlo (antes el refresh tiraba a la lista de bots y se perdía).
+  // El hash #/bot/<id> quedó en la URL al abrir el builder; aquí (ya con
+  // los bots cargados) buscamos el objeto completo y reabrimos el builder.
   try {
-    const _lastBotEditId = localStorage.getItem('lastBotEditId');
-    const _noDeepLink = !new URLSearchParams(location.search).get('bot-editor') && !location.hash;
-    if (_lastBotEditId && (localStorage.getItem('lastView') === 'bot') && _noDeepLink) {
-      const bot = (sbBots || []).find(b => String(b.id) === String(_lastBotEditId));
+    if (_pendingBotOpen != null) {
+      const bot = (sbBots || []).find(b => String(b.id) === String(_pendingBotOpen));
       if (bot && typeof openBotBuilder === 'function') openBotBuilder(bot);
     }
   } catch (_) {}

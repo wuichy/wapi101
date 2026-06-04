@@ -10468,6 +10468,9 @@ function openBotBuilder(bot, returnTo = null) {
       for (const cs of (s.config?.cases || [])) m = Math.max(m, _maxNestedStepNum(cs.steps));
       m = Math.max(m, _maxNestedStepNum(s.config?.default));
       for (const rem of (s.config?.reminders || [])) m = Math.max(m, _maxNestedStepNum(rem.steps));
+      // template: ramas por botón + ramas de timeout/texto
+      for (const arr of Object.values(s.config?.button_branches || {})) m = Math.max(m, _maxNestedStepNum(arr));
+      for (const arr of Object.values(s.config?.other_branches  || {})) m = Math.max(m, _maxNestedStepNum(arr));
     }
     return m;
   };
@@ -10483,6 +10486,10 @@ function openBotBuilder(bot, returnTo = null) {
       _ensureSubStepIds(s.config?.default);
       for (const rem of (s.config?.reminders || [])) _ensureSubStepIds(rem.steps);
       for (const arr of Object.values(s.config?.branches || {})) _ensureSubStepIds(arr);
+      // template: sub-steps de ramas por botón + timeout/texto (sin esto no
+      // tenían _id → el botón × no podía borrarlos).
+      for (const arr of Object.values(s.config?.button_branches || {})) _ensureSubStepIds(arr);
+      for (const arr of Object.values(s.config?.other_branches  || {})) _ensureSubStepIds(arr);
     }
   };
   _ensureSubStepIds(sbSteps);

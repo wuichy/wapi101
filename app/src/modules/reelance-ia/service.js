@@ -142,17 +142,11 @@ function _findOrCreateContact(db, tenantId, { email, phone, firstName, lastName 
   if (!contact && email) {
     const byEmail = db.prepare('SELECT * FROM contacts WHERE email = ? AND tenant_id = ? LIMIT 1').get(email, tenantId);
     if (byEmail) {
-      if (!normPhone || !byEmail.phone || _looksLikeTestPhone(byEmail.phone)) {
-        // Sin phone en payload, sin phone en contacto, o phone del contacto
-        // es obvio test — match seguro.
-        contact = byEmail;
-      } else {
-        const byEmailDigits = String(byEmail.phone).replace(/\D/g, '').slice(-10);
-        const payloadDigits = normPhone.replace(/\D/g, '').slice(-10);
-        if (byEmailDigits === payloadDigits) contact = byEmail;
-        // Si los últimos 10 dígitos del phone no coinciden, NO usar este
-        // contacto — es otra persona / dato viejo.
-      }
+      // REGLA wuichy: matchear por mail O teléfono. Si el email coincide es
+      // el mismo cliente aunque haya puesto otro teléfono (caso real: dejó
+      // carrito con un celular y compró con otro — mismo email = misma
+      // persona). El nombre/phone se actualiza abajo si llega info mejor.
+      contact = byEmail;
     }
   }
 
@@ -241,6 +235,41 @@ function _findOrCreateLead(db, tenantId, { contactId, pipelineId, stageId, name,
     lead = db.prepare('SELECT * FROM expedients WHERE id = ?').get(lead.id);
   }
   return lead;
+}
+
+// REGLA wuichy: una sola base de datos. El lead "existe" si el contacto ya
+// tiene CUALQUIER expediente (en cualquier pipeline — incluido el histórico
+// de Kommo). Devuelve el más reciente. Nunca se crea un lead nuevo si ya hay.
+function _findExistingLead(db, tenantId, contactId) {
+  if (!contactId) return null;
+  return db.prepare(`
+    SELECT * FROM expedients
+    WHERE contact_id = ? AND tenant_id = ?
+    ORDER BY created_at DESC LIMIT 1
+  `).get(contactId, tenantId);
+}
+
+// Mueve un lead existente a pipeline/stage destino (reusa, NO crea otro).
+// Actualiza nombre y valor si se pasan. Resetea stage_entered_at para que
+// las alarmas y bots de la nueva etapa cuenten desde ahora.
+function _moveLead(db, tenantId, leadId, { pipelineId, stageId, name, value }) {
+  const sets = ['pipeline_id = ?', 'stage_id = ?', 'stage_entered_at = unixepoch()', 'updated_at = unixepoch()'];
+  const args = [pipelineId, stageId];
+  if (name)            { sets.push('name = ?');  args.push(name); }
+  if (value != null)   { sets.push('value = ?'); args.push(value); }
+  args.push(leadId);
+  db.prepare(`UPDATE expedients SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+  return db.prepare('SELECT * FROM expedients WHERE id = ?').get(leadId);
+}
+
+// Crea un lead nuevo (solo cuando NO existe ninguno para el contacto).
+function _createLead(db, tenantId, { contactId, pipelineId, stageId, name, value }) {
+  if (!pipelineId || !stageId) return null;
+  const result = db.prepare(`
+    INSERT INTO expedients (tenant_id, contact_id, pipeline_id, stage_id, name, value)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(tenantId, contactId, pipelineId, stageId, name || null, value || 0);
+  return db.prepare('SELECT * FROM expedients WHERE id = ?').get(result.lastInsertRowid);
 }
 
 // Formato dd/MM/yyyy en TZ America/Mexico_City. Usado para nombres de
@@ -465,63 +494,48 @@ function processOrderEvent(db, tenantId, payload) {
       lastName,
     });
 
-    // Crear lead solo si tenemos pipeline configurado para órdenes
+    // ─── REGLA wuichy (orden): UNA sola base de datos ──────────────────
+    // 1) Buscar si el contacto YA tiene un lead (cualquier pipeline, incl.
+    //    histórico de Kommo). 2) Si existe → MOVERLO a CLIENTES/Cliente Final
+    //    (nunca crear otro). 3) Si no existe → crear ahí.
     let lead = null;
     if (cfg.order_pipeline_id && cfg.order_stage_id) {
-      // Nombre del lead = "Nombre Apellido dd/MM/yyyy" (formato consistente
-      // con leads viejos importados de Kommo, ej "Paola Rello 19/05/2026").
-      // Fallback al order id corto si no hay nombre del cliente.
+      // Nombre del lead = "Nombre Apellido dd/MM/yyyy" (consistente con Kommo).
       const leadName = customerName
         ? `${customerName} ${_formatDateMx(payload.createdAt)}`
         : `Orden #${externalId.slice(-8)}`;
       const totalMxn = payload.totalCents ? Math.round(payload.totalCents / 100) : 0;
-      lead = _findOrCreateLead(db, tenantId, {
-        contactId: contact.id,
-        pipelineId: cfg.order_pipeline_id,
-        stageId: cfg.order_stage_id,
-        name: leadName,
-        value: totalMxn,
-      });
 
-      // Si lead ya existía (no se creó nuevo), ACTUALIZAR su nombre con el
-      // formato estándar + value de la nueva compra. Y llenar "Ultima Compra".
+      const existing = _findExistingLead(db, tenantId, contact.id);
+      if (existing) {
+        // Lead existe → reusar: mover a CLIENTES/Cliente Final + actualizar nombre/valor.
+        lead = _moveLead(db, tenantId, existing.id, {
+          pipelineId: cfg.order_pipeline_id,
+          stageId:    cfg.order_stage_id,
+          name:       leadName,
+          value:      totalMxn,
+        });
+        console.log(`[reelance-ia] orden: lead existente #${existing.id} → CLIENTES/Cliente Final (reusado, no se crea otro)`);
+      } else {
+        // No existe → crear en CLIENTES/Cliente Final.
+        lead = _createLead(db, tenantId, {
+          contactId: contact.id,
+          pipelineId: cfg.order_pipeline_id,
+          stageId:    cfg.order_stage_id,
+          name:       leadName,
+          value:      totalMxn,
+        });
+        console.log(`[reelance-ia] orden: lead nuevo #${lead?.id} en CLIENTES/Cliente Final`);
+      }
+
       if (lead) {
-        try {
-          db.prepare(
-            "UPDATE expedients SET name = ?, value = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?"
-          ).run(leadName, totalMxn, lead.id, tenantId);
-          lead.name = leadName;
-          lead.value = totalMxn;
-        } catch (e) { console.warn('[ria order] update lead name failed:', e.message); }
-
         // Custom field "Ultima Compra" → fecha ISO de la compra
         const purchaseDate = payload.createdAt || new Date().toISOString();
         _setCustomField(db, tenantId, lead.id, 'ultima.?compra', purchaseDate);
-
         // Custom field "# Pedido" → últimos 8 chars del order id (sin "#")
         const shortOrderId = externalId ? String(externalId).slice(-8) : '';
         if (shortOrderId) {
           _setCustomField(db, tenantId, lead.id, '(#\\s?)?pedido|order.?(num|id|number)', shortOrderId);
-        }
-      }
-
-      // Si el pago se confirmó (Order en PAID/PROCESSING/COMPLETED/FULFILLED)
-      // → mover lead al stage con kind='won' del pipeline configurado.
-      // Esto permite que las analytics cuenten el monto vendido correctamente.
-      const PAID_ORDER = ['PAID', 'PROCESSING', 'COMPLETED', 'FULFILLED', 'SHIPPED'];
-      if (lead && PAID_ORDER.includes(String(payload.status || '').toUpperCase())) {
-        try {
-          const wonStage = db.prepare(
-            "SELECT id FROM stages WHERE pipeline_id = ? AND tenant_id = ? AND kind = 'won' ORDER BY id LIMIT 1"
-          ).get(cfg.order_pipeline_id, tenantId);
-          if (wonStage && wonStage.id !== lead.stage_id) {
-            db.prepare(
-              'UPDATE expedients SET stage_id = ?, stage_entered_at = unixepoch(), updated_at = unixepoch() WHERE id = ?'
-            ).run(wonStage.id, lead.id);
-            console.log(`[reelance-ia] lead ${lead.id} movido a Ganados (stage ${wonStage.id}) tras Order ${payload.status}`);
-          }
-        } catch (e) {
-          console.warn('[reelance-ia] move-to-won failed:', e.message);
         }
       }
     }
@@ -767,17 +781,25 @@ function processAbandonedCartEvent(db, tenantId, payload) {
       lastName: payload.lastName || null,
     });
 
-    let lead = null;
-    if (cfg.abandoned_pipeline_id && cfg.abandoned_stage_id) {
+    // ─── REGLA wuichy (carrito): UNA sola base de datos ───────────────
+    // Si el contacto YA tiene un lead (cualquier pipeline, incl. Kommo) →
+    // NO se crea ni se mueve: el lead se queda donde está y SOLO se manda el
+    // mensaje de recuperación. Si NO existe → crear contacto+lead en
+    // WHATSAPP/Cartbounty (abandoned_pipeline/stage) y mandar mensaje.
+    let lead = _findExistingLead(db, tenantId, contact.id);
+    if (lead) {
+      console.log(`[reelance-ia] carrito: lead existente #${lead.id} → solo mensaje (no se crea ni mueve)`);
+    } else if (cfg.abandoned_pipeline_id && cfg.abandoned_stage_id) {
       const leadName = `Carrito abandonado #${externalId.slice(-8)}`;
       const totalMxn = payload.totalCents ? Math.round(payload.totalCents / 100) : 0;
-      lead = _findOrCreateLead(db, tenantId, {
+      lead = _createLead(db, tenantId, {
         contactId: contact.id,
         pipelineId: cfg.abandoned_pipeline_id,
         stageId: cfg.abandoned_stage_id,
         name: leadName,
         value: totalMxn,
       });
+      console.log(`[reelance-ia] carrito: lead nuevo #${lead?.id} en WHATSAPP/Cartbounty`);
     }
 
     db.prepare('UPDATE reelance_ia_config SET last_abandoned_cart_at = unixepoch() WHERE tenant_id = ?').run(tenantId);

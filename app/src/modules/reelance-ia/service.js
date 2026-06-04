@@ -673,7 +673,27 @@ function _routeOrderToPipeline(db, tenantId, lead, payload, cfg) {
     }
   } catch (_) { /* opcional */ }
 
-  // Disparar bots de salida + entrada
+  // ⚠️ ORDEN CRÍTICO: parar bots viejos ANTES de disparar el bot del nuevo
+  // stage. Si esto corriera DESPUÉS de triggerPipelineStage, mataría el bot
+  // de nurturing recién disparado (bug histórico: leads estancados en 2:1
+  // porque el bot de la etapa moría en 0s justo tras nacer — la orden los
+  // movía al stage, disparaba el bot, y order_stop_active_bots lo mataba).
+  if (cfg.order_stop_active_bots) {
+    try {
+      const engine = require('../bot/engine');
+      const runs = db.prepare(
+        "SELECT id FROM bot_runs WHERE tenant_id = ? AND (expedient_id = ? OR contact_id = ?) AND status IN ('running','paused')"
+      ).all(tenantId, lead.id, lead.contact_id);
+      let killed = 0;
+      for (const r of runs) {
+        try { engine.killRun(db, r.id); killed++; } catch (_) {}
+      }
+      if (killed > 0) console.log(`[reelance-ia] stop_active_bots: ${killed} bot_runs killed para lead ${lead.id}`);
+    } catch (e) { console.warn('[ria route-pipeline] stop bots failed:', e.message); }
+  }
+
+  // Disparar bots de salida + entrada (DESPUÉS de matar los viejos, para que
+  // el bot del nuevo stage sobreviva).
   try {
     const botEngine = require('../bot/engine');
     if (prevStageId && typeof botEngine.triggerPipelineStageLeave === 'function') {
@@ -692,22 +712,6 @@ function _routeOrderToPipeline(db, tenantId, lead, payload, cfg) {
     console.log(`[reelance-ia] lead #${lead.id} (${maxDays}d) → pipeline ${rule.pipeline_id} stage ${rule.stage_id}`);
   } catch (e) {
     console.error('[reelance-ia] error disparando bots de pipeline:', e.message);
-  }
-
-  // Si configuración indica parar bots activos del lead/contacto, killear
-  // todos los bot_runs en estado 'running' o 'paused' del mismo lead.
-  if (cfg.order_stop_active_bots) {
-    try {
-      const engine = require('../bot/engine');
-      const runs = db.prepare(
-        "SELECT id FROM bot_runs WHERE tenant_id = ? AND (expedient_id = ? OR contact_id = ?) AND status IN ('running','paused')"
-      ).all(tenantId, lead.id, lead.contact_id);
-      let killed = 0;
-      for (const r of runs) {
-        try { engine.killRun(db, r.id); killed++; } catch (_) {}
-      }
-      if (killed > 0) console.log(`[reelance-ia] stop_active_bots: ${killed} bot_runs killed para lead ${lead.id}`);
-    } catch (e) { console.warn('[ria route-pipeline] stop bots failed:', e.message); }
   }
 
 }

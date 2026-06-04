@@ -18,7 +18,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=3" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png?v=3" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260603ownerheight" />
+  <link rel="stylesheet" href="/styles.css?v=20260604editsoon" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -2021,9 +2021,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><polyline points="7 6 3 10 7 14"/><polyline points="13 6 17 10 13 14"/></svg>
                 <span data-i18n="bot.builder.view.code">Código</span>
               </button>
-              <button type="button" class="bb-view-tab" data-view="editable">
+              <button type="button" class="bb-view-tab bb-view-tab--soon" data-view="editable" title="En construcción — pronto disponible">
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="7" y="11" width="6" height="6" rx="1"/><path d="M6 9v1M14 9v1M10 11V9"/></svg>
                 <span data-i18n="bot.builder.view.editable">Editable</span>
+                <span class="bb-soon-badge">🚧</span>
               </button>
             </div>
 
@@ -2325,7 +2326,19 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
             <!-- Vista: Editable (DAG) — canvas con drag & drop tipo n8n/Kommo -->
             <div class="bb-view-content" data-view="editable" hidden>
-              <div class="bb-ve-wrap">
+              <!-- Aviso "en construcción": cubre el editor visual (que aún no
+                   está pulido). El editor sigue en el DOM detrás, solo tapado. -->
+              <div class="bb-ve-construction">
+                <div class="bb-ve-construction-card">
+                  <div class="bb-ve-construction-emoji">🚧</div>
+                  <h3>Editor visual en construcción</h3>
+                  <p>Estamos puliendo el editor de arrastrar y soltar. Mientras tanto,
+                     usa la vista <strong>Lista</strong> para crear y editar tus bots —
+                     funciona completa.</p>
+                  <button type="button" class="btn btn--primary" data-go-list>Ir a vista Lista</button>
+                </div>
+              </div>
+              <div class="bb-ve-wrap" aria-hidden="true">
                 <!-- Sidebar izquierda: catálogo de tipos -->
                 <aside class="bb-ve-sidebar" id="bbVeSidebar">
                   <div class="bb-ve-sidebar-search">
@@ -4550,7 +4563,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script src="/app.js?v=20260603delsubstep"></script>
+  <script src="/app.js?v=20260604editsoon"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

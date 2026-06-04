@@ -13833,6 +13833,28 @@ button, a, [role="button"], .btn, [data-action] {
   overflow: hidden;
   background: #0e162a;
 }
+
+/* ── Vista Editable "en construcción" ── */
+.bb-view-tab--soon { opacity: .75; }
+.bb-soon-badge { font-size: 11px; margin-left: 2px; }
+.bb-view-content[data-view="editable"] { position: relative; }
+/* El editor detrás queda difuminado y no interactivo. */
+.bb-view-content[data-view="editable"] .bb-ve-wrap[aria-hidden="true"] {
+  filter: blur(3px) grayscale(.4); opacity: .5; pointer-events: none; user-select: none;
+}
+.bb-ve-construction {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.bb-ve-construction-card {
+  background: #fff; border: 1px solid var(--border, #e2e8f0); border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.12);
+  padding: 32px 36px; max-width: 460px; text-align: center;
+}
+.bb-ve-construction-emoji { font-size: 48px; line-height: 1; margin-bottom: 12px; }
+.bb-ve-construction-card h3 { margin: 0 0 8px; font-size: 19px; color: #0f172a; }
+.bb-ve-construction-card p { margin: 0 0 18px; font-size: 14px; color: #475569; line-height: 1.5; }
 .bb-ve-wrap.no-inspector { grid-template-columns: 240px 1fr; }
 
 .bb-ve-sidebar { background: #152038; border-right: 1px solid #25334f; overflow-y: auto; }

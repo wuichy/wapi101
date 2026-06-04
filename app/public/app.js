@@ -14545,6 +14545,8 @@ function setupBot() {
   document.querySelectorAll('#botBuilderViewTabs .bb-view-tab').forEach(tab => {
     tab.addEventListener('click', () => bbSwitchView(tab.dataset.view));
   });
+  // Botón "Ir a vista Lista" del aviso "en construcción" del editor visual.
+  document.querySelector('[data-go-list]')?.addEventListener('click', () => bbSwitchView('list'));
 
   document.getElementById('bbCodeCopyBtn')?.addEventListener('click', async () => {
     const codeEl = document.getElementById('bbCodeContent');

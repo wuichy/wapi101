@@ -852,7 +852,6 @@ mountSafe('/api/template-tags',      require('./src/modules/template-tags/routes
 mountSafe('/api/machine-tokens',     require('./src/modules/machine-tokens/routes'));
 mountSafe('/api/admin',              require('./src/modules/admin/routes'));
 mountSafe('/api/conversations',      require('./src/modules/conversations/routes'));
-mountSafe('/api/personal-chat',      require('./src/modules/personal-chat/routes'));
 mountSafe('/api/templates',          require('./src/modules/templates/routes'));
 mountSafe('/api/stats',              require('./src/modules/stats/routes'));
 mountSafe('/api/advisors',           require('./src/modules/advisors/routes'));
@@ -938,9 +937,10 @@ if (config.env !== 'production') {
     next();
   });
 }
-// /chat eliminado 2026-05-22 — la vista personal-chat no se usaba. El CRM
-// completo en /app cubre todos los casos. Si alguien aún tiene el shortcut
-// guardado, lo redirigimos al /app principal.
+// /chat ELIMINADO por completo (página + módulo backend personal-chat
+// borrados 2026-06-03). El CRM completo en /app cubre todos los casos.
+// Dejamos solo este redirect 301 por si alguien aún tiene el shortcut viejo
+// guardado — lo manda al /app principal en lugar de un 404.
 app.get('/chat', (_req, res) => res.redirect(301, '/app'));
 
 

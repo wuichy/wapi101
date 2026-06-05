@@ -441,6 +441,37 @@ function _alreadyProcessed(db, tenantId, eventType, externalId, externalStatus) 
   return !!(row && !row.error);
 }
 
+// Conserva el rastreo ya capturado. Cuando la tienda reenvía una orden (sync de
+// estatus PROCESSING→COMPLETED, etc.) el payload entrante NO trae el
+// trackingCarrier/Number que el usuario guardó a mano en wapi. Como el endpoint
+// /orders muestra siempre la fila con MAX(processed_at), esa fila nueva sin
+// rastreo "borraría" visualmente el tracking. Aquí lo arrastramos del último
+// evento previo del mismo external_id para que NUNCA se pierda. Solo rellena
+// huecos: si el payload entrante ya trae rastreo, ese gana.
+function _mergeForwardTracking(db, tenantId, externalId, payload) {
+  const p = payload || {};
+  if (!externalId) return p;
+  if (p.trackingCarrier && p.trackingNumber) return p; // el entrante ya trae rastreo
+  try {
+    const prev = db.prepare(`
+      SELECT payload FROM reelance_ia_events
+      WHERE tenant_id = ? AND event_type = 'order' AND external_id = ?
+      ORDER BY processed_at DESC LIMIT 1
+    `).get(tenantId, String(externalId));
+    if (!prev) return p;
+    let pp = {};
+    try { pp = JSON.parse(prev.payload || '{}'); } catch { return p; }
+    if (!pp.trackingCarrier && !pp.trackingNumber) return p; // nada que conservar
+    return {
+      ...p,
+      trackingCarrier: p.trackingCarrier || pp.trackingCarrier || null,
+      trackingNumber:  p.trackingNumber  || pp.trackingNumber  || null,
+      trackingUrl:     p.trackingUrl     || pp.trackingUrl     || null,
+      trackingStatus:  p.trackingStatus  || pp.trackingStatus  || null,
+    };
+  } catch (_) { return p; }
+}
+
 // ─── Handler: webhook de Order ────────────────────────────────────────
 //
 // Payload esperado desde la tienda Next.js (Prisma Order model):
@@ -545,7 +576,10 @@ function processOrderEvent(db, tenantId, payload) {
     _logEvent(db, {
       tenantId, eventType: 'order',
       externalId, externalStatus: payload.status,
-      payload, contactId: contact.id, leadId: lead?.id,
+      // Conservar el rastreo previo si este evento (p.ej. sync de estatus) no lo trae,
+      // para que el tracking guardado a mano no se pierda en re-syncs de la tienda.
+      payload: _mergeForwardTracking(db, tenantId, externalId, payload),
+      contactId: contact.id, leadId: lead?.id,
     });
 
     // Aplicar etiqueta configurada (a contact, lead, o both según target).

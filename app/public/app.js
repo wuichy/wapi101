@@ -28857,32 +28857,49 @@ function _bindOrderRows(el, prefix, onSave) {
       });
     });
   });
+  // IMPORTANTE: en la vista "Pedidos" se mezclan órdenes de WooCommerce y de
+  // Reelance IA, y sus `id` vienen de tablas distintas (woo_orders vs
+  // reelance_ia_events) → PUEDEN COLISIONAR (p.ej. woo #180 = Wendy y ria #180 =
+  // Dante). Por eso NUNCA buscamos por `[data-oid="X"]` global ni por id de DOM:
+  // siempre scopeamos al card propio con closest('.woo-order-card'). El target real
+  // del API se arma con el data-oid + data-source del BOTÓN (eso sí desambigua).
   el.querySelectorAll('.woo-tracking-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const form = document.getElementById(`${prefix}TrackingForm_${btn.dataset.orderId}`);
+      const form = btn.closest('.woo-order-card')?.querySelector('.woo-tracking-form');
       if (form) form.hidden = !form.hidden;
     });
   });
   el.querySelectorAll(`.${prefix}-cancel-tracking-btn`).forEach(btn => {
     btn.addEventListener('click', () => {
-      const form = document.getElementById(`${prefix}TrackingForm_${btn.dataset.oid}`);
+      const form = btn.closest('.woo-order-card')?.querySelector('.woo-tracking-form');
       if (form) form.hidden = true;
     });
   });
   el.querySelectorAll(`.${prefix}-save-tracking-btn`).forEach(btn => {
     btn.addEventListener('click', async () => {
+      // Leer SIEMPRE del card propio (closest), no del contenedor global. Antes se
+      // leía con querySelector global por data-oid; con la colisión de ids agarraba
+      // el card equivocado (campos vacíos) y, al ser .value sobre un posible null
+      // FUERA del try, el handler moría sin toast ni request → "le di guardar y nada".
+      const card        = btn.closest('.woo-order-card');
+      const carrierEl   = card?.querySelector(`.${prefix}-carrier-sel`);
+      const tracknumEl  = card?.querySelector(`.${prefix}-tracknum-inp`);
+      const trackstatEl = card?.querySelector(`.${prefix}-trackstatus-sel`);
+      const wcStatusEl  = card?.querySelector(`.${prefix}-wcstatus-sel`);
+      if (!card || !carrierEl || !tracknumEl) {
+        return toast('No se pudo leer el formulario de rastreo. Recarga la página e intenta de nuevo.', 'error');
+      }
       const oid             = btn.dataset.oid;
-      const carrier         = el.querySelector(`.${prefix}-carrier-sel[data-oid="${oid}"]`).value;
-      const tracking_number = el.querySelector(`.${prefix}-tracknum-inp[data-oid="${oid}"]`).value.trim();
-      const tracking_status = el.querySelector(`.${prefix}-trackstatus-sel[data-oid="${oid}"]`).value;
-      const wc_status_el    = el.querySelector(`.${prefix}-wcstatus-sel[data-oid="${oid}"]`);
-      const wc_status       = wc_status_el ? wc_status_el.value : '';
+      const source          = btn.dataset.source || 'woo';
+      const carrier         = carrierEl.value;
+      const tracking_number = tracknumEl.value.trim();
+      const tracking_status = trackstatEl ? trackstatEl.value : 'pendiente';
+      const wc_status       = wcStatusEl ? wcStatusEl.value : '';
       if (!carrier || !tracking_number) return toast('Selecciona paquetería y número de rastreo', 'error');
       try {
         btn.disabled = true;
         const payload = { carrier, tracking_number, tracking_status };
         if (wc_status) payload.wc_status = wc_status;
-        const source = btn.dataset.source || 'woo';
         const endpoint = source === 'reelance-ia'
           ? `/api/apps/reelance-ia/orders/${oid}/tracking`
           : `/api/apps/woo/orders/${oid}/tracking`;

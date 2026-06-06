@@ -304,7 +304,31 @@ mountSafe('/oauth', require('./src/modules/oauth/routes'));
 // si en el futuro removemos eso, se puede tightening.
 const helmet = require('helmet');
 app.use(helmet({
-  contentSecurityPolicy: false, // Desactivado: la SPA usa scripts inline/eval. Reactivar tras refactor.
+  // CSP en modo REPORT-ONLY: el navegador NO bloquea nada (cero riesgo de romper
+  // la UI), solo reporta a /api/csp-report lo que violaría la política. Así medimos
+  // qué recursos carga la app de verdad y luego pasamos a enforcing sin sorpresas.
+  // Allowlist armado del recon: jsdelivr (rrweb/pdf.js/mammoth), FB SDK, Google Fonts,
+  // avatares (https:), inline handlers/estilos de la SPA.
+  contentSecurityPolicy: {
+    useDefaults: false,
+    reportOnly: true,
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://connect.facebook.net"],
+      styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc:     ["'self'", "data:", "https://fonts.gstatic.com"],
+      imgSrc:      ["'self'", "data:", "blob:", "https:"],
+      connectSrc:  ["'self'", "https://connect.facebook.net", "https://graph.facebook.com", "https://*.facebook.com"],
+      frameSrc:    ["'self'", "blob:", "https://*.facebook.com", "https://web.facebook.com"],
+      workerSrc:   ["'self'", "blob:"],
+      mediaSrc:    ["'self'", "blob:", "data:"],
+      objectSrc:   ["'none'"],
+      baseUri:     ["'self'"],
+      formAction:  ["'self'"],
+      frameAncestors: ["'self'"],
+      reportUri:   ["/api/csp-report"],
+    },
+  },
   crossOriginEmbedderPolicy: false, // Permite cargar recursos de Meta/Stripe/etc.
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permite que webhook URLs reciban POSTs externos
 }));
@@ -318,6 +342,27 @@ app.use(express.json({ limit: '150mb' }));
 app.get('/api/push/vapid-public-key', (_req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || null });
 });
+
+// ─── CSP violation reports (Report-Only) ───
+// Público, va ANTES del authMiddleware. El navegador postea aquí lo que la CSP
+// reportaría como violación. Lo logueamos (resumido) para afinar la política
+// antes de pasarla a enforcing. Responde 204 siempre; nunca rompe nada.
+app.post('/api/csp-report',
+  express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'], limit: '64kb' }),
+  (req, res) => {
+    try {
+      const payload = req.body && (req.body['csp-report'] || req.body);
+      const reports = Array.isArray(payload) ? payload : [payload];
+      for (const r of reports) {
+        const b = (r && r.body) || r || {};
+        const directive = b['violated-directive'] || b['effective-directive'] || b.effectiveDirective || '?';
+        const blocked   = b['blocked-uri'] || b.blockedURL || '?';
+        const doc       = b['document-uri'] || b.documentURL || '?';
+        console.warn(`[CSP-report] ${directive} ⟵ ${String(blocked).slice(0, 140)} @ ${String(doc).slice(0, 140)}`);
+      }
+    } catch (_) { /* nunca romper por un reporte mal formado */ }
+    res.status(204).end();
+  });
 
 // ─── Login endpoints (públicos, no requieren sesión) ───
 const { authMiddleware, loadTenant } = require('./src/middleware/auth');

@@ -315,22 +315,33 @@ module.exports = function createWebhooksRouter(db) {
     return null;
   }
 
+  // Marca un mensaje cuya descarga de media falló: registra el motivo (error_reason)
+  // y pone una etiqueta legible si el body estaba vacío. Así el fallo es VISIBLE en
+  // el chat (no una burbuja en blanco) y queda rastro para reintentar.
+  function _markMediaFailed(msgId, media, reason) {
+    try {
+      const label = { image: '📷 Imagen', video: '🎬 Video', audio: '🎵 Audio', document: '📎 Documento' }[media?.type] || '📎 Archivo';
+      db.prepare("UPDATE messages SET error_reason = ?, body = CASE WHEN body IS NULL OR body = '' THEN ? ELSE body END WHERE id = ?")
+        .run(String(reason || 'descarga de media falló').slice(0, 300), `${label} (no se pudo descargar — reintentar)`, msgId);
+    } catch (_) {}
+  }
+
   async function _downloadAndStoreWhatsAppMedia(integration, msgRow, media) {
     try {
       const path = require('path');
       const fs = require('fs');
       const accessToken = integration?.credentials?.accessToken || process.env.WHATSAPP_ACCESS_TOKEN;
-      if (!accessToken) { console.warn('[webhook media] sin access token, no se puede descargar'); return; }
+      if (!accessToken) { console.warn('[webhook media] sin access token, no se puede descargar'); _markMediaFailed(msgRow.id, media, 'sin access token'); return; }
       const version = process.env.META_GRAPH_VERSION || 'v22.0';
 
       const metaRes = await fetch(`https://graph.facebook.com/${version}/${media.mediaId}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const metaJson = await metaRes.json().catch(() => ({}));
-      if (!metaJson.url) { console.warn(`[webhook media] no se obtuvo URL para media ${media.mediaId}`); return; }
+      if (!metaJson.url) { console.warn(`[webhook media] no se obtuvo URL para media ${media.mediaId}`); _markMediaFailed(msgRow.id, media, `Graph sin URL: ${metaJson?.error?.message || 'desconocido'}`); return; }
 
       const dlRes = await fetch(metaJson.url, { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (!dlRes.ok) { console.warn(`[webhook media] descarga falló: HTTP ${dlRes.status}`); return; }
+      if (!dlRes.ok) { console.warn(`[webhook media] descarga falló: HTTP ${dlRes.status}`); _markMediaFailed(msgRow.id, media, `descarga HTTP ${dlRes.status}`); return; }
       const buffer = Buffer.from(await dlRes.arrayBuffer());
 
       const uploadsDir = path.resolve(process.env.UPLOADS_DIR || './data/uploads');
@@ -342,11 +353,12 @@ module.exports = function createWebhooksRouter(db) {
       const localUrl = `/uploads/chat-media/${localName}`;
 
       // El UPDATE usa solo PK porque no tenemos tenant a la mano; messages.id
-      // es único globalmente.
-      db.prepare('UPDATE messages SET media_url = ? WHERE id = ?').run(localUrl, msgRow.id);
+      // es único globalmente. Limpia error_reason por si fue un reintento exitoso.
+      db.prepare('UPDATE messages SET media_url = ?, error_reason = NULL WHERE id = ?').run(localUrl, msgRow.id);
       console.log(`[webhook media] msg #${msgRow.id} → ${localUrl} (${(buffer.length/1024).toFixed(1)}KB)`);
     } catch (err) {
       console.error('[webhook media] error descargando:', err.message);
+      _markMediaFailed(msgRow.id, media, err.message);
     }
   }
 
@@ -365,7 +377,25 @@ module.exports = function createWebhooksRouter(db) {
           for (const msg of (value.messages || [])) {
             const waId    = msg.from;
             const media   = _extractWhatsAppMedia(msg);
-            const body    = msg.text?.body || msg.button?.text || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || media?.caption || msg.caption || '';
+            const waType  = msg.type || (media ? media.type : 'unknown');
+            let   body    = msg.text?.body || msg.button?.text || msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || media?.caption || msg.caption || '';
+
+            // Si NO hay texto NI media reconocida, dejar un placeholder LEGIBLE en vez
+            // de una burbuja en blanco invisible (era el bug: el chat no mostraba nada).
+            // Cubre ubicación, contacto, reacción y tipos que WhatsApp NO deja recibir
+            // por API (p.ej. foto "ver una vez" llega como 'unsupported').
+            if (!body && !media) {
+              const L = {
+                location:    '📍 Ubicación',
+                contacts:    '👤 Contacto compartido',
+                reaction:    msg.reaction?.emoji ? `Reaccionó: ${msg.reaction.emoji}` : '👍 Reacción',
+                unsupported: '⚠️ Mensaje no soportado (posible foto de "ver una vez" o formato que WhatsApp no permite recibir por API — pídele al cliente que lo reenvíe como foto normal)',
+                order:       '🛒 Pedido del catálogo',
+                system:      'ℹ️ Mensaje del sistema',
+              };
+              body = L[waType] || `⚠️ Mensaje tipo "${waType}" aún no soportado`;
+            }
+
             const msgId   = msg.id;
             const ts      = msg.timestamp ? Number(msg.timestamp) : Math.floor(Date.now() / 1000);
             const profile = value.contacts?.find((c) => c.wa_id === waId);
@@ -387,6 +417,22 @@ module.exports = function createWebhooksRouter(db) {
               status:     'delivered',
               createdAt:  ts,
             });
+
+            // Guardar meta_json del entrante: tipo crudo de WhatsApp + referencia de
+            // media (mediaId) para poder DIAGNOSTICAR y REINTENTAR descargas. Antes no
+            // se guardaba nada → un mensaje fallido quedaba sin rastro.
+            if (insertedMsg) {
+              try {
+                const meta = { waType };
+                if (media) { meta.mediaId = media.mediaId; meta.mediaType = media.type; meta.mimetype = media.mimetype; }
+                if (Array.isArray(msg.errors) && msg.errors.length) meta.errors = msg.errors;
+                db.prepare('UPDATE messages SET meta_json = ? WHERE id = ? AND (meta_json IS NULL OR meta_json = \'\')')
+                  .run(JSON.stringify(meta), insertedMsg.id);
+                if (!media && !['text', 'button', 'interactive'].includes(waType)) {
+                  console.warn(`[webhook whatsapp] tipo "${waType}" sin contenido descargable (msg #${insertedMsg.id}, contact ${convo.contact_id})`);
+                }
+              } catch (_) {}
+            }
 
             if (media && insertedMsg) {
               _downloadAndStoreWhatsAppMedia(integration, insertedMsg, media);

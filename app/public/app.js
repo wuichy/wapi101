@@ -6086,12 +6086,13 @@ function renderIntegDownBanner(down) {
   }
   const names = visible.map(d => `${d.label}${d.num ? ' (' + d.num + ')' : ''}`).join(', ');
   bar.innerHTML =
-    '<span class="integ-down-ico">⚠️</span>' +
-    '<span class="integ-down-txt"><strong>' + escapeHtml(names) + '</strong> ' +
+    '<span class="integ-down-txt">⚠️ <strong>' + escapeHtml(names) + '</strong> ' +
     (visible.length > 1 ? 'están desconectados' : 'está desconectado') +
     ' — no envía ni recibe mensajes. Reconéctalo escaneando el QR.</span>' +
-    '<button type="button" class="integ-down-btn" id="integDownReconnectBtn">Reconectar</button>' +
-    '<button type="button" class="integ-down-dismiss" id="integDownDismissBtn" title="Ya lo sé, no me avises de esta desconexión">No volver a avisar</button>';
+    '<span class="integ-down-actions">' +
+      '<button type="button" class="integ-down-btn" id="integDownReconnectBtn">Reconectar</button>' +
+      '<button type="button" class="integ-down-dismiss" id="integDownDismissBtn" title="Ya lo sé, no me avises de esta desconexión">No volver a avisar</button>' +
+    '</span>';
   document.getElementById('integDownReconnectBtn')?.addEventListener('click', () => {
     try { if (typeof showView === 'function') showView('integraciones'); } catch (_) {}
   });

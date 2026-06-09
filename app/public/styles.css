@@ -1246,29 +1246,37 @@ body.nav-collapsed .nav-notif-panel {
 
 .settings-actions { display: flex; gap: 8px; margin-top: 16px; }
 
-/* Banner persistente: canal de WhatsApp desconectado (no se ignora entre las notifs) */
+/* Banner persistente: canal de WhatsApp desconectado (no se ignora entre las notifs).
+   Responsive: en desktop es una píldora centrada; en móvil ocupa el ancho y los
+   botones bajan a su propia fila (antes se desbordaban). */
 .integ-down-banner {
   position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
-  z-index: 9998; display: flex; align-items: center; gap: 12px;
-  max-width: min(720px, calc(100vw - 32px));
+  z-index: 9998; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  width: max-content; max-width: min(760px, calc(100vw - 20px));
   background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
-  padding: 10px 14px; border-radius: 12px;
+  padding: 12px 16px; border-radius: 12px;
   box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: 13.5px;
   animation: integDownIn .25s ease-out;
 }
 @keyframes integDownIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
-.integ-down-ico { font-size: 18px; line-height: 1; }
-.integ-down-txt { flex: 1; line-height: 1.35; }
+.integ-down-txt { flex: 1 1 240px; line-height: 1.4; }
+.integ-down-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .integ-down-btn {
-  flex-shrink: 0; background: #dc2626; color: #fff; border: 0;
-  padding: 7px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  background: #dc2626; color: #fff; border: 0;
+  padding: 8px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .integ-down-btn:hover { background: #b91c1c; }
 .integ-down-dismiss {
-  flex-shrink: 0; background: transparent; color: #991b1b; border: 1px solid #fecaca;
-  padding: 7px 12px; border-radius: 8px; font-weight: 500; cursor: pointer; white-space: nowrap;
+  background: transparent; color: #991b1b; border: 1px solid #fecaca;
+  padding: 8px 12px; border-radius: 8px; font-weight: 500; cursor: pointer; white-space: nowrap;
 }
 .integ-down-dismiss:hover { background: #fee2e2; }
+@media (max-width: 600px) {
+  .integ-down-banner { left: 10px; right: 10px; bottom: 10px; transform: none; width: auto; max-width: none; }
+  .integ-down-txt { flex: 1 1 100%; }
+  .integ-down-actions { width: 100%; }
+  .integ-down-actions > button { flex: 1 1 0; text-align: center; }
+}
 
 /* Users table */
 .users-table { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }

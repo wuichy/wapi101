@@ -6033,6 +6033,54 @@ async function loadOutgoingWebhooks() {
   }
 }
 
+// ─── Banner persistente: canal de WhatsApp caído ──────────────────────────────
+// Si WhatsApp (API o Lite) queda 'disconnected'/'error', muestra una barra roja
+// fija con botón "Reconectar". Es IMPOSIBLE de ignorar entre las 99+ notifs (caso
+// real: WA Lite cayó 4 días sin que nadie lo notara). Se quita solo al reconectar.
+let _integHealthTimer = null;
+async function checkIntegrationsHealth() {
+  try {
+    const data = await api('GET', '/api/integrations');
+    const down = [];
+    for (const p of (data?.items || [])) {
+      const provKey = String(p.key || p.provider || p.providerKey || '').toLowerCase();
+      for (const i of (p.integrations || [])) {
+        const prov = (provKey + ' ' + String(i.provider || '')).toLowerCase();
+        if (!prov.includes('whatsapp')) continue;
+        if (i.status === 'disconnected' || i.status === 'error') {
+          down.push({ label: prov.includes('lite') ? 'WhatsApp Lite' : 'WhatsApp', num: i.external_id || i.phoneNumber || '' });
+        }
+      }
+    }
+    renderIntegDownBanner(down);
+  } catch (_) { /* silencioso: el chequeo nunca debe romper la app */ }
+}
+function renderIntegDownBanner(down) {
+  let bar = document.getElementById('integDownBanner');
+  if (!down || !down.length) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'integDownBanner';
+    bar.className = 'integ-down-banner';
+    document.body.appendChild(bar);
+  }
+  const names = down.map(d => `${d.label}${d.num ? ' (' + d.num + ')' : ''}`).join(', ');
+  bar.innerHTML =
+    '<span class="integ-down-ico">⚠️</span>' +
+    '<span class="integ-down-txt"><strong>' + escapeHtml(names) + '</strong> ' +
+    (down.length > 1 ? 'están desconectados' : 'está desconectado') +
+    ' — no envía ni recibe mensajes. Reconéctalo escaneando el QR.</span>' +
+    '<button type="button" class="integ-down-btn" id="integDownReconnectBtn">Reconectar</button>';
+  document.getElementById('integDownReconnectBtn')?.addEventListener('click', () => {
+    try { if (typeof showView === 'function') showView('integraciones'); } catch (_) {}
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => { try { checkIntegrationsHealth(); } catch (_) {} }, 5000);
+  if (_integHealthTimer) clearInterval(_integHealthTimer);
+  _integHealthTimer = setInterval(() => { try { checkIntegrationsHealth(); } catch (_) {} }, 180000);
+});
+
 function oauthIcon(providerKey, hasExisting) {
   if (hasExisting) return t('oauth.connect.more');
   if (providerKey === 'outlook')   return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M7.88 12.04q0 .45-.11.87-.1.41-.33.74-.22.33-.58.52-.37.2-.87.2t-.85-.2q-.35-.21-.57-.55-.22-.33-.33-.75-.1-.42-.1-.86t.1-.87q.1-.43.34-.76.22-.34.59-.54.36-.2.87-.2t.86.2q.35.21.57.55.22.34.31.77.1.43.1.88zM24 12v9.38q0 .46-.33.8-.33.32-.8.32H7.13q-.46 0-.8-.33-.32-.33-.32-.8V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h6.5V2.55q0-.44.3-.75.3-.3.75-.3h12.9q.44 0 .75.3.3.3.3.75V10.85l1.24.72q.07.04.11.1.03.06.03.13zm-7.98-4.67-1.75 8.12h1.3l1.02-5.42 1.6 5.42h1.08l1.62-5.42 1 5.42h1.28L23.5 7.33h-1.37l-1.5 5.2-1.5-5.2h-1.11z"/></svg> Conectar con Outlook`;

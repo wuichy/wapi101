@@ -335,9 +335,12 @@ function _notifyDisconnected(db, integrationId, errorMessage) {
       icloud_mail:    'iCloud Mail',
     }[integ.provider] || integ.provider;
 
+    const isLite = integ.provider === 'whatsapp-lite';
     const title = `⚠️ ${providerLabel} desconectado`;
-    const body  = `${integ.display_name || providerLabel} requiere reconexión: ${String(errorMessage || '').slice(0, 140)}`;
-    const link  = 'ajustes';
+    const body  = isLite
+      ? `${providerLabel} se desconectó y dejó de enviar/recibir mensajes. Reconéctalo escaneando el QR en Configuración → Canales.`
+      : `${integ.display_name || providerLabel} requiere reconexión en Configuración → Canales (${String(errorMessage || '').slice(0, 80)}).`;
+    const link  = 'integraciones';
 
     // In-app: notificar a todos los admins activos del tenant
     const notifSvc = require('../notifications/service');

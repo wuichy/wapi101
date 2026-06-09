@@ -1246,6 +1246,25 @@ body.nav-collapsed .nav-notif-panel {
 
 .settings-actions { display: flex; gap: 8px; margin-top: 16px; }
 
+/* Banner persistente: canal de WhatsApp desconectado (no se ignora entre las notifs) */
+.integ-down-banner {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  z-index: 9998; display: flex; align-items: center; gap: 12px;
+  max-width: min(720px, calc(100vw - 32px));
+  background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+  padding: 10px 14px; border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: 13.5px;
+  animation: integDownIn .25s ease-out;
+}
+@keyframes integDownIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.integ-down-ico { font-size: 18px; line-height: 1; }
+.integ-down-txt { flex: 1; line-height: 1.35; }
+.integ-down-btn {
+  flex-shrink: 0; background: #dc2626; color: #fff; border: 0;
+  padding: 7px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.integ-down-btn:hover { background: #b91c1c; }
+
 /* Users table */
 .users-table { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .users-row {

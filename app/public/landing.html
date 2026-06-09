@@ -1029,8 +1029,15 @@
 
 <script>
 // ─── Redirect if already logged in ───────────────────────────────────────────
+// SOLO redirige a /app si hay sesión REAL en 'rh_token' (el mismo key que usa la
+// app y que el logout limpia). NO usar keys viejos (rh_session/wapi101_token):
+// quedaban stale tras cerrar sesión y mandaban a /app → /app rebotaba a /login.
+// Ese era el bug de "wapi101.com siempre me lleva a /login".
 (function() {
-  const token = localStorage.getItem('rh_session') || localStorage.getItem('wapi101_token');
+  var token = (localStorage.getItem('rh_token')
+            || sessionStorage.getItem('rh_token')
+            || (document.cookie.match(/(?:^|;\s*)rh_token=([^;]+)/) || [])[1]
+            || '').trim();
   if (token) { location.replace('/app'); }
 })();
 

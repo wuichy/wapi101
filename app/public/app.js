@@ -6038,6 +6038,20 @@ async function loadOutgoingWebhooks() {
 // fija con botón "Reconectar". Es IMPOSIBLE de ignorar entre las 99+ notifs (caso
 // real: WA Lite cayó 4 días sin que nadie lo notara). Se quita solo al reconectar.
 let _integHealthTimer = null;
+// "No volver a avisar" se guarda por TOKEN = id:updatedAt. Así te calla SOLO para
+// esta caída concreta; si el canal se reconecta y se vuelve a caer, updatedAt cambia
+// → token nuevo → te vuelve a avisar (no te silencia para siempre).
+function _integDismissed() {
+  try { return new Set(JSON.parse(localStorage.getItem('wapi_integ_dismissed') || '[]')); }
+  catch (_) { return new Set(); }
+}
+function _integDismiss(tokens) {
+  try {
+    const s = _integDismissed();
+    tokens.forEach(t => s.add(t));
+    localStorage.setItem('wapi_integ_dismissed', JSON.stringify(Array.from(s).slice(-30)));
+  } catch (_) {}
+}
 async function checkIntegrationsHealth() {
   try {
     const data = await api('GET', '/api/integrations');
@@ -6048,7 +6062,11 @@ async function checkIntegrationsHealth() {
         const prov = (provKey + ' ' + String(i.provider || '')).toLowerCase();
         if (!prov.includes('whatsapp')) continue;
         if (i.status === 'disconnected' || i.status === 'error') {
-          down.push({ label: prov.includes('lite') ? 'WhatsApp Lite' : 'WhatsApp', num: i.external_id || i.phoneNumber || '' });
+          down.push({
+            token: `${i.id}:${i.updatedAt || i.updated_at || 0}`,
+            label: prov.includes('lite') ? 'WhatsApp Lite' : 'WhatsApp',
+            num:   i.externalId || i.external_id || i.phoneNumber || '',
+          });
         }
       }
     }
@@ -6056,23 +6074,30 @@ async function checkIntegrationsHealth() {
   } catch (_) { /* silencioso: el chequeo nunca debe romper la app */ }
 }
 function renderIntegDownBanner(down) {
+  const dismissed = _integDismissed();
+  const visible = (down || []).filter(d => !dismissed.has(d.token));
   let bar = document.getElementById('integDownBanner');
-  if (!down || !down.length) { if (bar) bar.remove(); return; }
+  if (!visible.length) { if (bar) bar.remove(); return; }
   if (!bar) {
     bar = document.createElement('div');
     bar.id = 'integDownBanner';
     bar.className = 'integ-down-banner';
     document.body.appendChild(bar);
   }
-  const names = down.map(d => `${d.label}${d.num ? ' (' + d.num + ')' : ''}`).join(', ');
+  const names = visible.map(d => `${d.label}${d.num ? ' (' + d.num + ')' : ''}`).join(', ');
   bar.innerHTML =
     '<span class="integ-down-ico">⚠️</span>' +
     '<span class="integ-down-txt"><strong>' + escapeHtml(names) + '</strong> ' +
-    (down.length > 1 ? 'están desconectados' : 'está desconectado') +
+    (visible.length > 1 ? 'están desconectados' : 'está desconectado') +
     ' — no envía ni recibe mensajes. Reconéctalo escaneando el QR.</span>' +
-    '<button type="button" class="integ-down-btn" id="integDownReconnectBtn">Reconectar</button>';
+    '<button type="button" class="integ-down-btn" id="integDownReconnectBtn">Reconectar</button>' +
+    '<button type="button" class="integ-down-dismiss" id="integDownDismissBtn" title="Ya lo sé, no me avises de esta desconexión">No volver a avisar</button>';
   document.getElementById('integDownReconnectBtn')?.addEventListener('click', () => {
     try { if (typeof showView === 'function') showView('integraciones'); } catch (_) {}
+  });
+  document.getElementById('integDownDismissBtn')?.addEventListener('click', () => {
+    _integDismiss(visible.map(d => d.token));
+    bar.remove();
   });
 }
 document.addEventListener('DOMContentLoaded', () => {

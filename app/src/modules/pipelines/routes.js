@@ -82,6 +82,14 @@ module.exports = function createPipelinesRouter(db) {
     catch (err) { res.status(400).json({ error: err.message, errorCode: 'STAGE_VALIDATION_FAILED' }); }
   });
 
+  // IA por etapa — prende/apaga que la IA responda a los leads de esta etapa.
+  router.patch('/stages/:stageId/ai', (req, res, next) => {
+    try {
+      const ok = service.setStageAi(db, req.tenantId, Number(req.params.stageId), !!req.body?.enabled);
+      res.json({ ok, enabled: !!req.body?.enabled });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
   router.delete('/stages/:stageId', (req, res, next) => {
     try { service.removeStage(db, req.tenantId, Number(req.params.stageId), req.advisor); res.json({ ok: true }); }
     catch (err) { res.status(400).json({ error: err.message, errorCode: 'STAGE_DELETE_FAILED' }); }

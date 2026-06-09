@@ -7368,6 +7368,36 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   font-weight: 600;
 }
 
+/* IA por etapa: toggle on/off en el footer de la columna, junto a la alarma.
+   El footer pasa a fila: el chip de bot ocupa su propia línea y el toggle de IA
+   + la alarma (ahora más chica) comparten la línea de abajo. */
+.pl-col-footer { flex-flow: row wrap; align-items: stretch; }
+.pl-col-bot-hint { flex: 1 1 100%; }
+.pl-col-alarm-btn { flex: 1 1 0; width: auto; min-width: 0; }
+.pl-col-alarm-btn--sm { padding: 5px 8px; font-size: 11px; gap: 4px; }
+.pl-col-ai-toggle {
+  flex: 1 1 0; min-width: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 5px 8px; font-size: 11.5px; font-weight: 600; font-family: inherit;
+  border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b;
+  border-radius: 8px; cursor: pointer; white-space: nowrap;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.pl-col-ai-toggle:hover { border-color: #cbd5e1; background: #f1f5f9; }
+.pl-col-ai-toggle.is-on { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
+.pl-col-ai-lbl { line-height: 1; }
+.pl-col-ai-sw {
+  position: relative; width: 26px; height: 15px; border-radius: 999px;
+  background: #cbd5e1; flex-shrink: 0; transition: background .15s;
+}
+.pl-col-ai-sw::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px;
+  border-radius: 50%; background: #fff; transition: transform .15s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+}
+.pl-col-ai-toggle.is-on .pl-col-ai-sw { background: #10b981; }
+.pl-col-ai-toggle.is-on .pl-col-ai-sw::after { transform: translateX(11px); }
+
 /* Tarjetas estancadas — borde rojo y leve tinte */
 .pl-card.is-stale {
   border-color: #fca5a5;

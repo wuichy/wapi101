@@ -93,6 +93,25 @@ function _isHumanActive(convo, cfg) {
   return false;
 }
 
+// ─── IA por etapa ────────────────────────────────────────────────────
+// ¿La etapa del lead tiene la IA prendida? Toma el lead más reciente del
+// contacto y mira stages.ai_enabled. Si no hay lead/etapa → false (IA apagada
+// por defecto: el toggle de la columna es el que la prende).
+function _stageAiEnabled(db, tenantId, contactId) {
+  if (!contactId) return false;
+  try {
+    const row = db.prepare(`
+      SELECT s.ai_enabled AS ai
+        FROM expedients e
+        JOIN stages s ON s.id = e.stage_id
+       WHERE e.contact_id = ? AND e.tenant_id = ?
+       ORDER BY e.updated_at DESC, e.id DESC
+       LIMIT 1
+    `).get(contactId, tenantId);
+    return !!(row && row.ai === 1);
+  } catch (_) { return false; }
+}
+
 // ─── Paso 2 + 2.5: ¿hay bot waits activos? ───────────────────────────
 function _activeWaits(db, contactId) {
   const rows = db.prepare(`
@@ -246,7 +265,12 @@ function handleInboundMessage(db, args) {
   const useMatcherIA = !!cfg.ia_matcher_enabled;
   const aiSilenced = convo && convo.ai_mode === 'off';
 
-  _resolveAndDispatch(db, args, { tenantId, useMatcherIA, aiSilenced, aiFallbackEnabled: !!cfg.ia_fallback_enabled, convoId, messageId })
+  // IA por etapa: el fallback de IA SOLO responde si la etapa del lead lo permite
+  // (toggle de la columna). Los bots y el matcher NO se ven afectados — siguen igual.
+  const stageAi = _stageAiEnabled(db, tenantId, contactId);
+  const aiFallbackEnabled = !!cfg.ia_fallback_enabled && stageAi;
+
+  _resolveAndDispatch(db, args, { tenantId, useMatcherIA, aiSilenced, aiFallbackEnabled, convoId, messageId })
     .catch(err => console.error('[inbound-router] resolve failed:', err));
 }
 

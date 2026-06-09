@@ -24,6 +24,7 @@ function toStage(s) {
   return {
     id: s.id, name: s.name, color: s.color, sortOrder: s.sort_order, kind: s.kind,
     bot_id: s.bot_id || null,
+    aiEnabled: !!s.ai_enabled,   // IA por etapa: si true, la IA (fallback) responde a leads de esta etapa
     stale_hours: s.stale_hours || null,
     // Single-alarm legacy (mantenido para que vistas/código viejo no rompan).
     // Refleja el primer elemento del array — si solo hay una alarma se ve igual
@@ -328,4 +329,11 @@ function removeOutcomeStages(db, tenantId, { moveToStageId = null } = {}) {
   return { moved, deleted, totalOutcomeStages: outcomeStages.length };
 }
 
-module.exports = { listWithStages, create, getById, update, remove, createStage, updateStage, removeStage, reorderStages, reorderPipelines, ensureOutcomeStages, countLeadsInOutcomeStages, removeOutcomeStages };
+// IA por etapa: prende/apaga que la IA responda a los leads de esta etapa.
+function setStageAi(db, tenantId, stageId, enabled) {
+  const r = db.prepare('UPDATE stages SET ai_enabled = ? WHERE id = ? AND tenant_id = ?')
+    .run(enabled ? 1 : 0, Number(stageId), tenantId);
+  return r.changes > 0;
+}
+
+module.exports = { listWithStages, create, getById, update, remove, createStage, updateStage, removeStage, reorderStages, reorderPipelines, ensureOutcomeStages, countLeadsInOutcomeStages, removeOutcomeStages, setStageAi };

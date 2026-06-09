@@ -15671,10 +15671,15 @@ function renderPipelinesBoard() {
               <span class="pl-col-bot-hint-name">${escHtml(bot.name)}</span>
             </button>`;
           })()}
+          ${(stage.kind === 'in_progress' || stage.kind === 'open' || !stage.kind) ? `
+            <button type="button" class="pl-col-ai-toggle ${stage.aiEnabled ? 'is-on' : ''}" data-stage-ai="${stage.id}"
+              title="${stage.aiEnabled ? 'IA ACTIVADA en esta etapa: la IA responde automáticamente a los leads de esta columna (respeta modo humano y bots). Click para apagar.' : 'IA apagada. Click para que la IA responda automáticamente a los leads de esta etapa.'}">
+              <span class="pl-col-ai-sw"></span><span class="pl-col-ai-lbl">🤖 IA</span>
+            </button>` : ''}
           ${showAlarms ? `
-            <button class="pl-col-alarm-btn ${alarmActive ? 'is-active' : ''}" data-stage-alarm="${stage.id}" title="${alarmActive ? alarmReason(stage) + ' — click para cambiar' : 'Configurar alarma de leads estancados'}">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M10 2a5 5 0 0 0-5 5v3l-2 3h14l-2-3V7a5 5 0 0 0-5-5z"/><path d="M8 16a2 2 0 0 0 4 0"/></svg>
-              ${alarmActive ? alarmButtonLabel(stage) : 'Alarma'}
+            <button class="pl-col-alarm-btn pl-col-alarm-btn--sm ${alarmActive ? 'is-active' : ''}" data-stage-alarm="${stage.id}" title="${alarmActive ? alarmReason(stage) + ' — click para cambiar' : 'Configurar alarma de leads estancados'}">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M10 2a5 5 0 0 0-5 5v3l-2 3h14l-2-3V7a5 5 0 0 0-5-5z"/><path d="M8 16a2 2 0 0 0 4 0"/></svg>
+              ${alarmActive ? alarmButtonLabel(stage) : ''}
             </button>` : ''}
         </div>
       </div>`;
@@ -16975,6 +16980,13 @@ function setupPipelines() {
 
   // Click card → open expedient detail (from pipelines)
   document.getElementById('plBoard')?.addEventListener('click', async (e) => {
+    // Toggle de IA por etapa — prende/apaga que la IA responda a los leads de esta columna
+    const aiBtn = e.target.closest('[data-stage-ai]');
+    if (aiBtn) {
+      e.stopPropagation();
+      await toggleStageAi(Number(aiBtn.dataset.stageAi), aiBtn);
+      return;
+    }
     // Botón de alarma — configura el umbral de estancado de la etapa
     const alarmBtn = e.target.closest('[data-stage-alarm]');
     if (alarmBtn) {
@@ -17485,6 +17497,28 @@ let _alarmEditingStageId = null;
 // forma { id, type, threshold_seconds, meta }. Se reescriben al guardar.
 let _alarmDraft = [];
 let _alarmFieldDefs = []; // cache de field-defs para el selector empty_field
+
+// IA por etapa: prende/apaga el toggle de la columna (optimista + persiste).
+async function toggleStageAi(stageId, btn) {
+  const turningOn = !(btn && btn.classList.contains('is-on'));
+  const setMem = (val) => { try { for (const p of (PIPELINES || [])) { const s = (p.stages || []).find(x => x.id === stageId); if (s) { s.aiEnabled = val; return; } } } catch (_) {} };
+  // Optimista
+  if (btn) {
+    btn.classList.toggle('is-on', turningOn);
+    btn.title = turningOn
+      ? 'IA ACTIVADA en esta etapa: la IA responde automáticamente a los leads de esta columna (respeta modo humano y bots). Click para apagar.'
+      : 'IA apagada. Click para que la IA responda automáticamente a los leads de esta etapa.';
+  }
+  setMem(turningOn);
+  try {
+    await api('PATCH', `/api/pipelines/stages/${stageId}/ai`, { enabled: turningOn });
+    toast(turningOn ? '🤖 IA activada en esta etapa' : 'IA apagada en esta etapa', 'success');
+  } catch (err) {
+    if (btn) btn.classList.toggle('is-on', !turningOn);
+    setMem(!turningOn);
+    toast(err.message || 'No se pudo cambiar la IA de la etapa', 'error');
+  }
+}
 
 async function handleStageAlarmClick(stageId) {
   let stage = null;

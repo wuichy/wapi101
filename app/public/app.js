@@ -15674,7 +15674,7 @@ function renderPipelinesBoard() {
           ${(stage.kind === 'in_progress' || stage.kind === 'open' || !stage.kind) ? `
             <button type="button" class="pl-col-ai-toggle ${stage.aiEnabled ? 'is-on' : ''}" data-stage-ai="${stage.id}"
               title="${stage.aiEnabled ? 'IA ACTIVADA en esta etapa: la IA responde automáticamente a los leads de esta columna (respeta modo humano y bots). Click para apagar.' : 'IA apagada. Click para que la IA responda automáticamente a los leads de esta etapa.'}">
-              <span class="pl-col-ai-sw"></span><span class="pl-col-ai-lbl">🤖 IA</span>
+              <span class="pl-col-ai-sw"></span><svg class="pl-col-ai-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span class="pl-col-ai-lbl">IA</span>
             </button>` : ''}
           ${showAlarms ? `
             <button class="pl-col-alarm-btn pl-col-alarm-btn--sm ${alarmActive ? 'is-active' : ''}" data-stage-alarm="${stage.id}" title="${alarmActive ? alarmReason(stage) + ' — click para cambiar' : 'Configurar alarma de leads estancados'}">
@@ -17512,7 +17512,7 @@ async function toggleStageAi(stageId, btn) {
   setMem(turningOn);
   try {
     await api('PATCH', `/api/pipelines/stages/${stageId}/ai`, { enabled: turningOn });
-    toast(turningOn ? '🤖 IA activada en esta etapa' : 'IA apagada en esta etapa', 'success');
+    toast(turningOn ? 'IA activada en esta etapa' : 'IA apagada en esta etapa', 'success');
   } catch (err) {
     if (btn) btn.classList.toggle('is-on', !turningOn);
     setMem(!turningOn);

@@ -7386,6 +7386,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .pl-col-ai-toggle:hover { border-color: #cbd5e1; background: #f1f5f9; }
 .pl-col-ai-toggle.is-on { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
 .pl-col-ai-lbl { line-height: 1; }
+.pl-col-ai-ico { flex-shrink: 0; opacity: .9; }
 .pl-col-ai-sw {
   position: relative; width: 26px; height: 15px; border-radius: 999px;
   background: #cbd5e1; flex-shrink: 0; transition: background .15s;

@@ -467,16 +467,17 @@ module.exports = function createWebhooksRouter(db) {
     const codeNum = Number(code);
     const details = (fallbackDetails || '').toLowerCase();
 
-    // 131049: Meta no especifica la causa exacta, pero los detalles a veces dan pistas
+    // 131049: "This message was not delivered to maintain healthy ecosystem
+    // engagement." Es el LÍMITE DE MARKETING de Meta: frena (throttle) las plantillas
+    // de MARKETING hacia usuarios que NO han interactuado recientemente. NO es un
+    // bloqueo del lead ni necesariamente baja calidad.
     if (codeNum === 131049) {
-      if (details.includes('re-engagement') || details.includes('experiment'))
-        return 'Meta bloqueó el reenganche — el lead no ha respondido recientemente (posible baja calidad del número)';
       if (details.includes('block'))
         return 'El lead bloqueó tu número de WhatsApp';
       if (details.includes('spam'))
         return 'Meta detectó el mensaje como spam — revisa el Quality Rating de tu WABA';
-      // Sin detalle específico: razón más probable
-      return 'Meta bloqueó la entrega — causa más probable: lead bloqueó el número o baja calidad del WABA';
+      // Caso por defecto (el real de 131049): tope de marketing de Meta.
+      return 'Meta limitó esta plantilla de MARKETING (131049): frena el marketing a usuarios que no interactúan hace rato. NO es bloqueo del lead. Solución: envía dentro de la ventana de 24h, usa plantillas de utilidad, o espera a que el lead te escriba.';
     }
 
     // 131026: número sin WA o bloqueado — los detalles a veces especifican
@@ -522,9 +523,13 @@ module.exports = function createWebhooksRouter(db) {
         const status = s.status;
         if (!id || !status) continue;
         let errorReason = null;
+        let metaErrObj  = null;
         if (status === 'failed' && Array.isArray(s.errors) && s.errors.length) {
           const err = s.errors[0];
           errorReason = friendlyDeliveryError(err.code, err.title, err.error_data?.details || err.message);
+          // Guardar el error CRUDO de Meta (código + título + detalle) para no quedar
+          // a ciegas: el texto "amigable" es una interpretación; el código es la verdad.
+          metaErrObj = { code: err.code ?? null, title: err.title || null, details: err.error_data?.details || err.message || null };
         }
         // El external_id de WhatsApp es global; combinado con tenant_id de la
         // integración que nos llega, encontramos el mensaje exacto.
@@ -536,11 +541,12 @@ module.exports = function createWebhooksRouter(db) {
         const incoming = order[status] || 0;
         if (incoming < cur) continue;
         if (errorReason) {
-          db.prepare('UPDATE messages SET status = ?, error_reason = ? WHERE id = ?').run(status, errorReason, msg.id);
+          db.prepare("UPDATE messages SET status = ?, error_reason = ?, meta_json = json_set(COALESCE(meta_json,'{}'), '$.metaError', json(?)) WHERE id = ?")
+            .run(status, errorReason, JSON.stringify(metaErrObj), msg.id);
         } else {
           db.prepare('UPDATE messages SET status = ? WHERE id = ?').run(status, msg.id);
         }
-        console.log(`[webhook status] msg wa_id=${id} → ${status}${errorReason ? ` (${errorReason})` : ''}`);
+        console.log(`[webhook status] msg wa_id=${id} → ${status}${metaErrObj ? ` (Meta ${metaErrObj.code}: ${errorReason})` : ''}`);
 
         if (status === 'failed') {
           try {

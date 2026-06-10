@@ -504,6 +504,14 @@ module.exports = function createWebhooksRouter(db) {
       133010: 'Número de teléfono del lead inválido',
       133015: 'El número no está registrado en WhatsApp',
       470:    'Ventana de 24h cerrada — solo plantillas aprobadas',
+      // Errores a nivel CUENTA (no del lead) — el caso "me bloquearon":
+      368:    '⚠️ TU CUENTA de WhatsApp Business está bloqueada temporalmente por violación de políticas de Meta — revisa business.facebook.com (esto afecta TODOS tus envíos, no solo este lead)',
+      131031: '⚠️ TU CUENTA de WhatsApp Business está bloqueada/restringida por Meta — revisa el estado en business.facebook.com (afecta TODOS tus envíos)',
+      131048: '⚠️ Meta limitó tus envíos por reportes de spam — baja el volumen y revisa el Quality Rating de tu WABA',
+      131045: 'Problema de registro del número — re-registra el teléfono en Meta Business',
+      131008: 'Mensaje inválido — falta un parámetro requerido (revisa la plantilla/variables)',
+      100:    'Parámetro inválido en el mensaje (revisa variables de la plantilla o el formato del número)',
+      80007:  'Límite de velocidad de envío alcanzado (rate limit de Meta) — espera unos minutos',
     };
     return map[codeNum] || fallbackTitle || fallbackDetails || `Error desconocido (código ${code || '?'})`;
   }

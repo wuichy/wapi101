@@ -94,21 +94,25 @@ function _isHumanActive(convo, cfg) {
 }
 
 // ─── IA por etapa ────────────────────────────────────────────────────
-// ¿La etapa del lead tiene la IA prendida? Toma el lead más reciente del
-// contacto y mira stages.ai_enabled. Si no hay lead/etapa → false (IA apagada
-// por defecto: el toggle de la columna es el que la prende).
+// ¿ALGÚN lead ABIERTO del contacto está en una etapa con IA prendida?
+// Antes se tomaba solo el lead TOCADO más recientemente (de cualquier
+// pipeline): una orden de Reelance que movía el lead a CLIENTES apagaba la
+// IA del lead activo de ventas aunque su etapa la tuviera prendida.
+// Regla: leads en curso (kind='in_progress' o sin kind) cuentan; basta uno
+// con ai_enabled=1. Si no hay lead/etapa → false (apagada por default).
 function _stageAiEnabled(db, tenantId, contactId) {
   if (!contactId) return false;
   try {
     const row = db.prepare(`
-      SELECT s.ai_enabled AS ai
+      SELECT 1
         FROM expedients e
         JOIN stages s ON s.id = e.stage_id
        WHERE e.contact_id = ? AND e.tenant_id = ?
-       ORDER BY e.updated_at DESC, e.id DESC
+         AND s.ai_enabled = 1
+         AND COALESCE(s.kind, 'in_progress') = 'in_progress'
        LIMIT 1
     `).get(contactId, tenantId);
-    return !!(row && row.ai === 1);
+    return !!row;
   } catch (_) { return false; }
 }
 
@@ -414,16 +418,12 @@ async function _tryMatchBot(db, { tenantId, messageBody, useMatcherIA }) {
     return botMatcher.matchSemantic(db, { tenantId, messageBody, bots });
   }
 
-  // Matcher tradicional (substring case-insensitive) — comportamiento legacy
-  const body = messageBody.toLowerCase();
-  for (const bot of bots) {
-    if (bot.trigger_type !== 'keyword') continue;
-    const keywords = String(bot.trigger_value || '')
-      .split(/[\n|,]/).map(k => k.toLowerCase().trim()).filter(Boolean);
-    if (keywords.some(k => body.includes(k))) {
-      return { botId: bot.id, source: 'keyword', confidence: 1.0 };
-    }
-  }
+  // Matcher tradicional: reusar la lógica compartida de bot-matcher, que SÍ
+  // respeta trigger_match_mode (any/all/exact). La versión anterior duplicaba
+  // la lógica en modo 'any' fijo — un bot configurado 'all' o 'exact'
+  // disparaba con una sola palabra en modo híbrido.
+  const matchedId = botMatcher._matchKeyword(bots, messageBody);
+  if (matchedId) return { botId: matchedId, source: 'keyword', confidence: 1.0 };
   return { botId: null, source: 'keyword', confidence: 0 };
 }
 

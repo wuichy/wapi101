@@ -88,7 +88,27 @@ function getConversationHistory(db, tenantId, convoId, limit = 15) {
  *
  * @returns {Promise<string>} - texto de respuesta
  */
+// ¿El tenant tiene saldo de IA disponible? Solo aplica si el sistema de saldo
+// está EN USO (ai_credit_loaded_at seteado) — tenants con su propia API key y
+// sin carga de saldo no se bloquean. Antes el saldo solo se MOSTRABA: con
+// saldo en 0, el matcher y el fallback seguían quemando tokens sin límite.
+function hasAiCredit(db, tenantId) {
+  try {
+    const t = db.prepare('SELECT ai_credit_loaded_usd, ai_credit_loaded_at FROM tenants WHERE id = ?').get(tenantId) || {};
+    if (!t.ai_credit_loaded_at) return true;
+    const loaded = Number(t.ai_credit_loaded_usd || 0);
+    const r = db.prepare('SELECT COALESCE(SUM(cost_usd),0) AS c FROM ai_usage_log WHERE tenant_id = ? AND created_at >= ?')
+      .get(tenantId, t.ai_credit_loaded_at);
+    return loaded - (r?.c || 0) > 0;
+  } catch (_) { return true; }
+}
+
 async function callAI(settings, systemPrompt, history, track) {
+  // Enforcement central de saldo: corta matcher, fallback, ai_reply y copilot
+  // en un solo punto cuando el saldo cargado se agotó.
+  if (track?.db && track?.tenantId && !hasAiCredit(track.db, track.tenantId)) {
+    throw new Error('Saldo de IA agotado — recarga en Configuración → IA');
+  }
   const provider    = settings.provider || 'anthropic';
   const apiKey      = settings.apiKey   || '';
   const model       = settings.model    || DEFAULT_MODELS[provider] || DEFAULT_MODELS.anthropic;
@@ -290,4 +310,4 @@ function setCredit(db, tenantId, { loadedUsd, alertThreshold }) {
   db.prepare(`UPDATE tenants SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 }
 
-module.exports = { getSettings, getKnowledgeContext, getConversationHistory, callAI, getUsageStats, setCredit };
+module.exports = { getSettings, getKnowledgeContext, getConversationHistory, callAI, getUsageStats, setCredit, hasAiCredit };

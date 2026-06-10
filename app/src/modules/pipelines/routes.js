@@ -30,7 +30,7 @@ module.exports = function createPipelinesRouter(db) {
   // Contar leads en stages won/lost (antes de desactivar el toggle)
   router.get('/outcome-stages-count', (req, res, next) => {
     try {
-      const counts = svc.countLeadsInOutcomeStages(db, req.tenantId);
+      const counts = service.countLeadsInOutcomeStages(db, req.tenantId);
       res.json({ ok: true, ...counts });
     } catch (err) { next(err); }
   });
@@ -39,7 +39,7 @@ module.exports = function createPipelinesRouter(db) {
   router.post('/remove-outcome-stages', (req, res, next) => {
     try {
       const { moveToStageId } = req.body || {};
-      const result = svc.removeOutcomeStages(db, req.tenantId, {
+      const result = service.removeOutcomeStages(db, req.tenantId, {
         moveToStageId: moveToStageId ? Number(moveToStageId) : null,
       });
       res.json({ ok: true, ...result });
@@ -48,7 +48,7 @@ module.exports = function createPipelinesRouter(db) {
 
   router.post('/ensure-outcome-stages', (req, res, next) => {
     try {
-      const result = svc.ensureOutcomeStages(db, req.tenantId);
+      const result = service.ensureOutcomeStages(db, req.tenantId);
       res.json({ ok: true, ...result });
     } catch (err) { next(err); }
   });

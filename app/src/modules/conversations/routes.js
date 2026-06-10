@@ -12,6 +12,28 @@ const {
   sendTelegramMedia,
 } = require('./sender');
 
+// Persiste un envío FALLIDO como message row (status='failed') para que el
+// chat muestre la burbuja roja y el badge deliveryFailure. Sin esto, un fallo
+// síncrono de envío (token caducado, ventana 24h, bloqueo) solo vive en un
+// toast de 3.5s y desaparece — el incidente del token 9-10 jun fue invisible.
+// Nunca lanza: si el insert falla no debe enmascarar el error original.
+function _persistFailedSend(db, tenantId, convoId, { provider, body, mediaUrl = null, errorReason }) {
+  try {
+    return svc.addMessage(db, tenantId, convoId, {
+      direction: 'outgoing',
+      provider,
+      body: body || '',
+      mediaUrl,
+      status: 'failed',
+      byAdvisor: true,
+      errorReason,
+    });
+  } catch (persistErr) {
+    console.error('[conversations] no se pudo persistir el envío fallido:', persistErr.message);
+    return null;
+  }
+}
+
 // Reglas por provider — formatos y tamaños máximos que aceptan.
 const MEDIA_RULES = {
   whatsapp: {
@@ -161,7 +183,12 @@ module.exports = function createConversationsRouter(db) {
       res.json(msg);
     } catch (err) {
       console.error('[conversations] error enviando template:', err.message);
-      res.status(500).json({ error: err.message });
+      const failed = _persistFailedSend(db, req.tenantId, convoId, {
+        provider: 'whatsapp',
+        body: `📋 Plantilla #${templateId} (no enviada)`,
+        errorReason: err.message,
+      });
+      res.status(500).json({ error: err.message, failedMessage: failed });
     }
   });
 
@@ -289,7 +316,12 @@ module.exports = function createConversationsRouter(db) {
       res.json(msg);
     } catch (err) {
       console.error('[conversations] error enviando media:', err.message);
-      res.status(500).json({ error: err.message });
+      const failed = _persistFailedSend(db, req.tenantId, convoId, {
+        provider: convo.provider,
+        body: (req.body && req.body.caption) || '📎 Archivo (no enviado)',
+        errorReason: err.message,
+      });
+      res.status(500).json({ error: err.message, failedMessage: failed });
     }
   });
 
@@ -316,7 +348,12 @@ module.exports = function createConversationsRouter(db) {
       res.json(msg);
     } catch (err) {
       console.error('[conversations] error enviando mensaje:', err.message);
-      res.status(500).json({ error: err.message });
+      const failed = _persistFailedSend(db, req.tenantId, convoId, {
+        provider: convo.provider,
+        body: body.trim(),
+        errorReason: err.message,
+      });
+      res.status(500).json({ error: err.message, failedMessage: failed });
     }
   });
 
@@ -393,7 +430,14 @@ module.exports = function createConversationsRouter(db) {
       res.json({ message: msg, conversation: convo, created });
     } catch (err) {
       console.error('[conversations] cross-channel send error:', err.message);
-      res.status(500).json({ error: err.message });
+      // La convo puede ser recién creada; NO se borra: con el mensaje failed
+      // dentro ya no es "fantasma" — muestra exactamente qué pasó.
+      const failed = _persistFailedSend(db, req.tenantId, convo.id, {
+        provider: convo.provider,
+        body: body.trim(),
+        errorReason: err.message,
+      });
+      res.status(500).json({ error: err.message, failedMessage: failed, conversation: convo, created });
     }
   });
 

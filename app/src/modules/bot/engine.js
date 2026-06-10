@@ -451,6 +451,19 @@ function _walkStepPath(rootSteps, path) {
       idxInContainer = path[i + 3];
       step = containerArr?.[idxInContainer];
       i += 4;
+    } else if (seg === 'branches' || seg === 'button_branches' || seg === 'other_branches') {
+      // Ramas de wait_response (config.branches[rama]) y de template con
+      // botones (config.button_branches[texto] / config.other_branches[rama]).
+      // Sin esto, un wait ANIDADO dentro de una rama persistía un path que
+      // apuntaba al PRIMER wait → al responder, re-ejecutaba la rama anterior
+      // completa (mensajes duplicados).
+      const key = path[i + 1];
+      const arr = step.config?.[seg]?.[key];
+      if (!Array.isArray(arr)) return null;
+      containerArr = arr;
+      idxInContainer = path[i + 2];
+      step = containerArr?.[idxInContainer];
+      i += 3;
     } else {
       return null;
     }
@@ -735,6 +748,19 @@ async function executeStep(db, step, ctx) {
         _log('info', `mensaje enviado OK, externalId=${externalId}`);
       } catch (err) {
         _log('error', `error enviando mensaje: ${err.message}`);
+        // Persistir el fallo en el chat (burbuja roja) — sin esto el envío
+        // fallido del bot es invisible para el asesor.
+        try {
+          const provRow = db.prepare('SELECT provider FROM conversations WHERE id = ?').get(targetConvoId);
+          convoSvc.addMessage(db, null, targetConvoId, {
+            direction: 'outgoing',
+            provider:  provRow?.provider || ctx.provider || 'whatsapp',
+            body:      text,
+            status:    'failed',
+            byBot:     true,
+            errorReason: err.message,
+          });
+        } catch (_) { /* no enmascarar el error original */ }
         throw new Error(`Envío de mensaje falló: ${err.message}`);
       }
       return false;
@@ -797,6 +823,16 @@ async function executeStep(db, step, ctx) {
         _log('info', `template ${templateId} enviada OK, externalId=${result.externalId}`);
       } catch (err) {
         _log('error', `error enviando template: ${err.message}`);
+        try {
+          convoSvc.addMessage(db, null, ctx.convoId, {
+            direction: 'outgoing',
+            provider:  'whatsapp',
+            body:      `📋 Plantilla #${templateId} (no enviada)`,
+            status:    'failed',
+            byBot:     true,
+            errorReason: err.message,
+          });
+        } catch (_) { /* no enmascarar el error original */ }
         throw new Error(`Envío de plantilla ${templateId} falló: ${err.message}`);
       }
 
@@ -1476,8 +1512,11 @@ async function executeStep(db, step, ctx) {
           if (result === true) return true;
           if (result === 'suspend') return 'suspend';
         } catch (subErr) {
+          // Propagar: antes solo se loggeaba y el run terminaba 'done' — el
+          // lead quedaba abandonado a mitad de rama sin rastro en métricas
+          // (pasó masivamente el 9-10 jun con el token caducado).
           _log('error', `branch sub-step error: ${subErr.message}`);
-          break;
+          throw subErr;
         }
       }
       return true;
@@ -1909,9 +1948,23 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     }
     stopped = true;
   }
+  // Prefijo de path REAL hacia los pasos de la rama (los entiende _walkStepPath).
+  // Sin esto, un wait anidado dentro de la rama persistía path=[wait original]
+  // y al resumir re-ejecutaba la rama del PRIMER wait (mensajes duplicados).
+  let branchPathPrefix = null;
+  if (!isTimer) {
+    if (isTemplate) {
+      if (matchedButtonText != null)            branchPathPrefix = ['button_branches', matchedButtonText];
+      else if (branch === 'on_button_click')    branchPathPrefix = ['other_branches', 'on_text_reply']; // fallback usado arriba
+      else                                      branchPathPrefix = ['other_branches', branch];
+    } else {
+      branchPathPrefix = ['branches', branch];
+    }
+  }
   for (let i = 0; i < branchStepsHydrated.length && !stopped; i++) {
     const step = branchStepsHydrated[i];
     ctx._stepIndex = wait.wait_step_index; // mantenemos el índice del wait original
+    ctx._stepPath = branchPathPrefix ? [...path, ...branchPathPrefix, i] : path;
     ctx._runId = wait.run_id;
     try {
       const result = await executeStep(db, step, ctx);
@@ -2006,10 +2059,14 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
 // Útil para hooks de webhook (mensaje entrante, falla de entrega).
 async function resumeWaitsForContact(db, contactId, branch, extraCtx = {}) {
   if (!contactId) return;
+  // Excluir runs pausados manualmente: un bot en pausa no debe reaccionar a
+  // réplicas del contacto (consistente con el freeze del timeout en el poller).
   const waits = db.prepare(`
-    SELECT id FROM bot_run_waits
-     WHERE contact_id = ? AND status = 'waiting'
-     ORDER BY created_at DESC
+    SELECT w.id FROM bot_run_waits w
+     JOIN bot_runs br ON br.id = w.run_id
+     WHERE w.contact_id = ? AND w.status = 'waiting'
+       AND COALESCE(br.paused_manually, 0) = 0
+     ORDER BY w.created_at DESC
   `).all(contactId);
   for (const w of waits) {
     try { await resumeWait(db, w.id, branch, extraCtx); }
@@ -2207,11 +2264,30 @@ function startNoResponsePoller(db) {
 let _waitTimeoutTimer = null;
 function startWaitTimeoutPoller(db) {
   if (_waitTimeoutTimer) return;
+  // Reconciliación al boot: un restart (deploy/workflow A) mata la ejecución
+  // in-memory — cualquier run que quedó 'running' sin un wait persistido es
+  // huérfano y jamás avanzará (ej. run 5427 llevaba 3 semanas zombie).
+  try {
+    const r = db.prepare(`
+      UPDATE bot_runs
+      SET status = 'error', error_msg = 'proceso reiniciado a mitad del run', finished_at = unixepoch()
+      WHERE status = 'running'
+        AND started_at < unixepoch() - 60
+        AND id NOT IN (SELECT run_id FROM bot_run_waits WHERE status = 'waiting')
+    `).run();
+    if (r.changes) console.warn(`[bot] reconciliación al boot: ${r.changes} run(s) 'running' huérfanos → error`);
+  } catch (e) { console.error('[bot] reconciliación al boot:', e.message); }
   _waitTimeoutTimer = setInterval(async () => {
     try {
+      // OJO: excluir runs pausados manualmente (la pausa debe CONGELAR el
+      // timeout — antes la rama on_timeout corría igual durante la pausa) y
+      // ORDER BY para que un wait atascado no acapare el batch de 50 eternamente.
       const expired = db.prepare(`
-        SELECT id FROM bot_run_waits
-         WHERE status = 'waiting' AND expires_at <= unixepoch()
+        SELECT w.id FROM bot_run_waits w
+         JOIN bot_runs br ON br.id = w.run_id
+         WHERE w.status = 'waiting' AND w.expires_at <= unixepoch()
+           AND COALESCE(br.paused_manually, 0) = 0
+         ORDER BY w.expires_at ASC
          LIMIT 50
       `).all();
       for (const w of expired) {

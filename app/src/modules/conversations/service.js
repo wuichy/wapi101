@@ -373,7 +373,7 @@ function _mapMessageRow(m) {
   };
 }
 
-function addMessage(db, tenantId, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt, byAdvisor = false, byAi = false, byBot = false }) {
+function addMessage(db, tenantId, conversationId, { externalId, direction, provider, body, mediaUrl, status = 'sent', createdAt, byAdvisor = false, byAi = false, byBot = false, errorReason = null }) {
   const t = tenantId ?? _tenantFromConvo(db, conversationId);
   if (!t) throw new Error('Conversación no encontrada');
 
@@ -392,9 +392,9 @@ function addMessage(db, tenantId, conversationId, { externalId, direction, provi
     : null;
   const metaJson = sentBy ? JSON.stringify({ sentBy }) : null;
   const result = db.prepare(`
-    INSERT INTO messages (tenant_id, conversation_id, external_id, direction, provider, body, media_url, status, created_at, meta_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(t, conversationId, externalId || null, direction, provider, body || null, mediaUrl || null, status, ts, metaJson);
+    INSERT INTO messages (tenant_id, conversation_id, external_id, direction, provider, body, media_url, status, created_at, meta_json, error_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(t, conversationId, externalId || null, direction, provider, body || null, mediaUrl || null, status, ts, metaJson, errorReason ? String(errorReason).slice(0, 500) : null);
 
   // Actualizar last_message en conversación (con tenant para defensa adicional).
   const unreadDelta = direction === 'incoming' ? 1 : 0;

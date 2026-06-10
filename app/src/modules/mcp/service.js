@@ -272,8 +272,25 @@ async function callTool(db, tenantId, name, args = {}) {
         provider: integ.provider, integrationId: integ.id,
         contactPhone: contact.phone, contactName: contact.name, contactId: contact.id,
       });
-      const result = await sender.sendMessage(db, convo, text);
-      return textContent({ ok: true, conversationId: convo.id, messageId: result?.id || null });
+      // sendMessage devuelve el external id (string). Persistir SIEMPRE el
+      // resultado en el chat: antes el envío MCP salía al cliente pero el CRM
+      // no lo mostraba → el asesor podía repetirle el mensaje.
+      let externalId;
+      try {
+        externalId = await sender.sendMessage(db, convo, text);
+      } catch (err) {
+        try {
+          conversations.addMessage(db, tenantId, convo.id, {
+            direction: 'outgoing', provider: convo.provider, body: text,
+            status: 'failed', errorReason: err.message,
+          });
+        } catch (_) { /* no enmascarar */ }
+        throw err;
+      }
+      const msg = conversations.addMessage(db, tenantId, convo.id, {
+        externalId, direction: 'outgoing', provider: convo.provider, body: text, status: 'sent',
+      });
+      return textContent({ ok: true, conversationId: convo.id, messageId: msg?.id || null });
     }
 
     case 'create_lead': {

@@ -105,11 +105,30 @@ function _getWAClientCreds(db, convo) {
   let phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   let accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
   if (convo.integrationId) {
-    const row = db.prepare('SELECT credentials_enc FROM integrations WHERE id = ?').get(convo.integrationId);
-    if (row?.credentials_enc) {
-      const creds = decryptJson(row.credentials_enc) || {};
-      if (creds.phoneNumberId) phoneNumberId = creds.phoneNumberId;
-      if (creds.accessToken)   accessToken   = creds.accessToken;
+    const row = db.prepare('SELECT id, provider, credentials_enc FROM integrations WHERE id = ?').get(convo.integrationId);
+    if (row && row.provider !== 'whatsapp') {
+      // Guard anti-contaminación: convo 'whatsapp' apuntando a una integración
+      // de OTRO provider (ej. whatsapp-lite, que no tiene creds → caía al token
+      // del .env y el fallo marcaba disconnected a la integración EQUIVOCADA).
+      // Re-resolver a la integración whatsapp real del tenant.
+      const real = tenantId ? db.prepare(
+        "SELECT id FROM integrations WHERE provider = 'whatsapp' AND tenant_id = ? ORDER BY CASE status WHEN 'connected' THEN 0 ELSE 1 END, id DESC LIMIT 1"
+      ).get(tenantId) : null;
+      console.warn(`[sender] convo ${convo.id} (whatsapp) apuntaba a integración ${row.id} (${row.provider}) → re-resuelta a ${real?.id || 'env'}`);
+      convo.integrationId = real?.id || null;
+      if (real && convo.id && tenantId) {
+        db.prepare('UPDATE conversations SET integration_id = ? WHERE id = ? AND tenant_id = ?')
+          .run(real.id, convo.id, tenantId);
+      }
+    }
+    if (convo.integrationId) {
+      const credsRow = (row && row.id === convo.integrationId) ? row
+        : db.prepare('SELECT credentials_enc FROM integrations WHERE id = ?').get(convo.integrationId);
+      if (credsRow?.credentials_enc) {
+        const creds = decryptJson(credsRow.credentials_enc) || {};
+        if (creds.phoneNumberId) phoneNumberId = creds.phoneNumberId;
+        if (creds.accessToken)   accessToken   = creds.accessToken;
+      }
     }
   }
   if (!phoneNumberId || !accessToken) throw new Error('No hay credenciales de WhatsApp configuradas');
@@ -254,6 +273,14 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
   const tplSvc = require('../templates/service');
   const tpl = tplSvc.getById(db, null, Number(templateId));
   if (!tpl) throw new Error('Plantilla no encontrada');
+  // Aislamiento multi-tenant: la plantilla DEBE ser del mismo tenant que la
+  // conversación — sin esto, un tenant podía enviar (y leer el contenido de)
+  // plantillas de otro tenant por enumeración de IDs.
+  const tplTenant = tpl.tenantId ?? tpl.tenant_id;
+  const convoTenant = convo.tenantId ?? convo.tenant_id;
+  if (tplTenant && convoTenant && Number(tplTenant) !== Number(convoTenant)) {
+    throw new Error('Plantilla no encontrada');
+  }
   if (tpl.type !== 'wa_api') throw new Error('Solo plantillas WhatsApp API se envían como template');
   if (tpl.waStatus !== 'approved') throw new Error(`Plantilla no aprobada por Meta (status: ${tpl.waStatus})`);
 

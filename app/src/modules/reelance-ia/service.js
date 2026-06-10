@@ -365,7 +365,9 @@ async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phon
     const norm = _normalizePhone(phone);
     externalId = (norm || String(phone)).replace(/\D/g, '');
   }
-  if (!externalId) { console.warn('[reelance-ia] template: no se pudo resolver número para contacto', contactId); return; }
+  // Throw (no return silencioso): el caller debe registrar el fallo — si no,
+  // la cola de carritos marcaría 'sent' sin haber enviado nada.
+  if (!externalId) throw new Error(`no se pudo resolver número del cliente (contacto ${contactId || 's/n'})`);
   if (externalId !== String(phone).replace(/\D/g, '')) {
     console.log('[reelance-ia] template phone normalizado: payload=' + String(phone).replace(/\D/g,'') + ' → enviado=' + externalId);
   }
@@ -404,7 +406,23 @@ async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phon
     payload.totalCents ? String(Math.round(payload.totalCents / 100)) : '',
   ];
 
-  const result = await sender.sendWhatsAppTemplate(db, convo, templateId, manualValues, { autoFallback: true, leadId });
+  let result;
+  try {
+    result = await sender.sendWhatsAppTemplate(db, convo, templateId, manualValues, { autoFallback: true, leadId });
+  } catch (err) {
+    // Persistir el fallo en el chat (burbuja roja + badge deliveryFailure).
+    // Además la convo recién creada deja de ser "fantasma": muestra qué pasó.
+    try {
+      convoSvc.addMessage(db, tenantId, convo.id, {
+        direction:  'outgoing',
+        provider:   'whatsapp',
+        body:       `📋 Plantilla #${templateId} (no enviada — ${kind === 'abandoned_cart' ? 'carrito abandonado' : 'orden'})`,
+        status:     'failed',
+        errorReason: err.message,
+      });
+    } catch (_) { /* no enmascarar el error original */ }
+    throw err;
+  }
   convoSvc.addMessage(db, tenantId, convo.id, {
     externalId: result.externalId,
     direction:  'outgoing',
@@ -620,7 +638,20 @@ function processOrderEvent(db, tenantId, payload) {
         payload,
         kind: 'order',
         leadId: lead?.id || null,
-      }).catch(err => console.error('[reelance-ia] order template send failed:', err.message));
+      }).catch(err => {
+        console.error('[reelance-ia] order template send failed:', err.message);
+        // Re-loggear el evento CON error para que _alreadyProcessed permita
+        // reintento en el próximo re-sync de la tienda. Sin esto, el evento ya
+        // quedó marcado exitoso y la plantilla se perdía PARA SIEMPRE (pasó
+        // con las órdenes del 9-10 jun durante el token caducado).
+        _logEvent(db, {
+          tenantId, eventType: 'order',
+          externalId, externalStatus: payload.status,
+          payload: _mergeForwardTracking(db, tenantId, externalId, payload),
+          contactId: contact.id, leadId: lead?.id,
+          error: ('template-send-failed: ' + err.message).slice(0, 300),
+        });
+      });
     } else if (cfg.order_bot_id) {
       _fireBot(db, tenantId, cfg.order_bot_id, contact.id, lead?.id, { source: 'reelance-ia.order', order: payload });
     }
@@ -974,7 +1005,7 @@ async function _dispatchPendingAbandonedCarts(db) {
   try {
     rows = db.prepare(`
       SELECT id, tenant_id, external_id, contact_id, lead_id, bot_id,
-             customer_phone, customer_name, payload_json
+             customer_phone, customer_name, payload_json, attempts
       FROM reelance_ia_abandoned_queue
       WHERE status = 'pending' AND scheduled_at <= unixepoch()
       ORDER BY scheduled_at ASC LIMIT 20
@@ -1011,11 +1042,32 @@ async function _dispatchPendingAbandonedCarts(db) {
       `).run(row.id);
       console.log(`[reelance-ia] abandoned cart ${row.external_id} → ${dispatchedAs} (contact ${row.contact_id})`);
     } catch (err) {
-      db.prepare(`
-        UPDATE reelance_ia_abandoned_queue
-        SET status = 'failed', error = ? WHERE id = ?
-      `).run((err.message || String(err)).slice(0, 500), row.id);
-      console.error('[reelance-ia] dispatch failed:', err.message);
+      // Retry con backoff: hasta 3 intentos (15/30 min entre cada uno) antes
+      // de marcar failed definitivo. Un fallo transitorio (token renovándose,
+      // Meta caído) ya no pierde el carrito para siempre.
+      const errMsg = (err.message || String(err)).slice(0, 500);
+      const attempts = (row.attempts ?? 0) + 1;
+      const MAX_ATTEMPTS = 3;
+      try {
+        if (attempts < MAX_ATTEMPTS) {
+          db.prepare(`
+            UPDATE reelance_ia_abandoned_queue
+            SET attempts = ?, error = ?, scheduled_at = unixepoch() + ?
+            WHERE id = ?
+          `).run(attempts, errMsg, attempts * 15 * 60, row.id);
+          console.error(`[reelance-ia] dispatch failed (intento ${attempts}/${MAX_ATTEMPTS}, reintenta en ${attempts * 15} min):`, errMsg);
+        } else {
+          db.prepare(`
+            UPDATE reelance_ia_abandoned_queue
+            SET status = 'failed', attempts = ?, error = ? WHERE id = ?
+          `).run(attempts, errMsg, row.id);
+          console.error(`[reelance-ia] dispatch failed DEFINITIVO tras ${attempts} intentos:`, errMsg);
+        }
+      } catch (_) {
+        // DB vieja sin columna attempts → comportamiento anterior
+        db.prepare(`UPDATE reelance_ia_abandoned_queue SET status = 'failed', error = ? WHERE id = ?`).run(errMsg, row.id);
+        console.error('[reelance-ia] dispatch failed:', errMsg);
+      }
     }
   }
 }
@@ -1023,7 +1075,10 @@ async function _dispatchPendingAbandonedCarts(db) {
 // Wrapper que adapta el row del queue al _sendTemplateMessage compartido
 async function _sendAbandonedTemplate(db, row, payload, templateId) {
   const phone = row.customer_phone || payload.phone || '';
-  if (!phone) throw new Error('sin teléfono');
+  // OJO: no lanzar "sin teléfono" aquí si hay contactId — _sendTemplateMessage
+  // resuelve el número desde contacts.phone como PRIMERA prioridad (carritos
+  // capturados solo con email cuyo contacto SÍ tiene teléfono fallaban gratis).
+  if (!phone && !row.contact_id) throw new Error('sin teléfono ni contacto');
   return _sendTemplateMessage(db, {
     tenantId:    row.tenant_id,
     contactId:   row.contact_id,

@@ -362,6 +362,17 @@ function _handleTimerInterruption(db, args, timerWaits, tenantId) {
       // Cancela el wait. El paso siguiente del bot NO se ejecutará.
       db.prepare(`UPDATE bot_run_waits SET status='cancelled', resumed_at=unixepoch() WHERE id=?`)
         .run(wait.id);
+      // Cerrar también el RUN: antes quedaba en 'paused' eterno (zombie) —
+      // contaba como "bot activo" en la UI sin que nada pudiera despertarlo.
+      if (wait.run_id) {
+        try {
+          db.prepare(`
+            UPDATE bot_runs SET status='killed', finished_at=unixepoch()
+            WHERE id=? AND status IN ('paused','running')
+              AND NOT EXISTS (SELECT 1 FROM bot_run_waits w2 WHERE w2.run_id = bot_runs.id AND w2.status='waiting')
+          `).run(wait.run_id);
+        } catch (_) {}
+      }
       _logDecision(db, {
         tenantId, conversationId: args.convoId, messageId: args.messageId,
         decision: 'wait_cancelled', reason: `timer cancelado por msg entrante (wait ${wait.id})`,
@@ -455,7 +466,22 @@ async function _triggerAiFallback(db, args) {
 
     const convo = convoSvc.getById(db, null, args.convoId);
     if (!convo) return;
-    const externalId = await sendMessage(db, convo, reply);
+    let externalId;
+    try {
+      externalId = await sendMessage(db, convo, reply);
+    } catch (sendErr) {
+      // El envío falló (token, ventana 24h, etc.): persistir como failed para
+      // que el chat muestre la burbuja roja — antes la respuesta IA se perdía
+      // sin rastro (y la telemetría decía que la IA "contestó").
+      console.error('[inbound-router] IA fallback: envío falló:', sendErr.message);
+      try {
+        convoSvc.addMessage(db, null, args.convoId, {
+          direction: 'outgoing', provider: convo.provider, body: reply, status: 'failed',
+          byAi: true, errorReason: sendErr.message,
+        });
+      } catch (_) { /* no enmascarar */ }
+      return;
+    }
     convoSvc.addMessage(db, null, args.convoId, {
       externalId, direction: 'outgoing', provider: convo.provider, body: reply, status: 'sent',
       byAi: true,  // marca como respuesta IA — NO limpia urgent ni marca leído

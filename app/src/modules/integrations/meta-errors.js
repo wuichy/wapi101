@@ -97,13 +97,16 @@ function isMetaAuthError(err) {
   const txt = String(message).toLowerCase();
 
   if (subcode === 463) return true;
-  if (code === 190 || code === 102 || code === 10 || code === 200) return true;
+  // SOLO errores de TOKEN (190 = invalid/expired, 102 = session key inválida).
+  // Los códigos 10/200 son errores de PERMISO POR MENSAJE (ej. "(#10) message
+  // sent outside of allowed window" = ventana 24h de Messenger) — un fallo
+  // rutinario de un solo mensaje NO debe tumbar la integración entera.
+  if (code === 190 || code === 102) return true;
   if (txt.includes('session has expired')) return true;
   if (txt.includes('access token has expired')) return true;
   if (txt.includes('invalid oauth')) return true;
   if (txt.includes('error validating access token')) return true;
   if (txt.includes('token has been invalidated')) return true;
-  if (txt.includes('not authorized')) return true;
   return false;
 }
 

@@ -214,6 +214,7 @@ function getById(db, tenantId, id) {
     : db.prepare('SELECT * FROM message_templates WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!r) return null;
   const out = row(r);
+  out.tenantId = out.tenantId ?? r.tenant_id;  // para validación de aislamiento en sender
   const t = tenantId ?? r.tenant_id;
   try {
     out.tags = db.prepare(`

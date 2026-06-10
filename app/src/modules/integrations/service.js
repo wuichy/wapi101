@@ -297,6 +297,17 @@ async function connectRaw(db, tenantId, providerKey, creds, { displayName, exter
 function markAuthFailed(db, integrationId, errorMessage) {
   if (!integrationId) return false;
   try {
+    // Guard: solo providers que usan Bearer token de Graph API. Un error de
+    // auth de Meta NUNCA debe marcar disconnected a whatsapp-lite (Baileys/QR),
+    // telegram, email, etc. — pasó el 9-jun: la wa-lite quedó marcada
+    // "Authentication Error" por un token caducado de Cloud API y el boot dejó
+    // de restaurar su sesión.
+    const GRAPH_PROVIDERS = new Set(['whatsapp', 'messenger', 'instagram', 'threads', 'facebook']);
+    const integ = db.prepare('SELECT provider FROM integrations WHERE id = ?').get(integrationId);
+    if (!integ || !GRAPH_PROVIDERS.has(integ.provider)) {
+      console.warn(`[integrations] markAuthFailed ignorado para id=${integrationId} (provider=${integ?.provider || '?'}: no es Graph)`);
+      return false;
+    }
     const r = db.prepare(`
       UPDATE integrations
       SET status = 'disconnected', last_error = ?, updated_at = unixepoch()

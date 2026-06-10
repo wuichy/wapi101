@@ -97,6 +97,14 @@ function init(db) {
           integrationId,
         });
 
+        // Despertar bots suspendidos esperando respuesta (wait_response /
+        // template con botones). Los demás canales lo hacen en webhooks.js —
+        // sin esto, un bot por WA Lite quedaba colgado hasta el timeout aunque
+        // el cliente contestara.
+        try {
+          botEngine.resumeWaitsForContact(db, convo.contact_id, 'on_text_reply', { messageBody: payload.body });
+        } catch (_) {}
+
         const senderName = payload.pushName || convo.contact_first_name || `+${payload.externalId}`;
         const preview = (payload.body || '📎 Adjunto').slice(0, 140);
         // Si la convo está marcada urgente (handover disparado), prefijar 🚨

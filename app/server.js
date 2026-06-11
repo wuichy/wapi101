@@ -979,7 +979,11 @@ catch (e) { console.error('[jobs-worker] start failed:', e.message); }
 // Manejador global de errores
 app.use((err, _req, res, _next) => {
   console.error('[error]', err);
-  res.status(500).json({ error: err.message || 'Error inesperado' });
+  // Respetar el status del error cuando es un 4xx conocido (ej. 413
+  // entity.too.large del body parser) — antes todo salía como 500.
+  const status = (Number(err.status || err.statusCode) >= 400 && Number(err.status || err.statusCode) < 500)
+    ? Number(err.status || err.statusCode) : 500;
+  res.status(status).json({ error: err.message || 'Error inesperado' });
 });
 
 // ─── No-cache para app.js y styles.css (en todos los entornos) ───

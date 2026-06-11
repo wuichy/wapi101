@@ -52,6 +52,7 @@ function updateConfig(db, tenantId, patch) {
     'abandoned_tag', 'abandoned_tag_target', 'abandoned_wait_minutes', 'abandoned_dedupe_hours',
     'abandoned_template_id',
     'order_tag', 'order_tag_target', 'order_template_id', 'order_stop_active_bots',
+    'on_hold_template_id', 'shipping_template_id', 'cancelled_template_id', 'refunded_template_id',
     'products_json', 'pipeline_rules',
   ];
   const sets = [];
@@ -327,8 +328,8 @@ function _applyTag(db, { tenantId, contactId, leadId, tagName, target }) {
 
 // Envía una plantilla WhatsApp API. Compartido por órdenes y carritos.
 // kind: 'order' | 'abandoned_cart' — solo para logging y placeholders.
-async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phone, templateId, payload, kind, leadId = null }) {
-  if (!templateId || !phone) return;
+async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phone, templateId, payload, kind, leadId = null, manualValues: manualValuesOverride = null }) {
+  if (!templateId) return;
   const convoSvc = require('../conversations/service');
   const sender   = require('../conversations/sender');
 
@@ -400,7 +401,10 @@ async function _sendTemplateMessage(db, { tenantId, contactId, contactName, phon
   const placeholder2 = kind === 'abandoned_cart'
     ? (payload.recoveryUrl || payload.cartUrl || '')
     : (payload.trackingUrl || shortOrderId || '');
-  const manualValues = [
+  // Si el caller pasa manualValues (ruteo por estado de órdenes), se usan tal
+  // cual. El cálculo legacy ({{2}}=trackingUrl/recoveryUrl/shortId) queda para
+  // carritos abandonados y compatibilidad.
+  const manualValues = Array.isArray(manualValuesOverride) ? manualValuesOverride : [
     firstName,
     placeholder2,
     payload.totalCents ? String(Math.round(payload.totalCents / 100)) : '',
@@ -459,6 +463,25 @@ function _alreadyProcessed(db, tenantId, eventType, externalId, externalStatus) 
   // la idempotencia quedaba rota para eventos sin status)
   // Solo consideramos "ya procesado" si no falló — si tuvo error, vale reintentar
   return !!(row && !row.error);
+}
+
+// ─── Anti-duplicados por (pedido, tipo de notificación) ─────────────
+// Spec wuichy 2026-06-10: "no repitas el mismo mensaje para el mismo
+// orderNumberDisplay + status". Cada pedido recibe máximo UNA notificación de
+// cada tipo: hold / confirmed / shipped / cancelled / refunded.
+function _alreadyNotifiedKind(db, tenantId, externalId, kind) {
+  try {
+    return !!db.prepare(
+      'SELECT 1 FROM reelance_ia_notifications WHERE tenant_id = ? AND external_id = ? AND kind = ? LIMIT 1'
+    ).get(tenantId, externalId, kind);
+  } catch (_) { return false; /* tabla aún no migrada (DB vieja) */ }
+}
+function _markNotified(db, tenantId, externalId, kind) {
+  try {
+    db.prepare(
+      'INSERT OR IGNORE INTO reelance_ia_notifications (tenant_id, external_id, kind) VALUES (?, ?, ?)'
+    ).run(tenantId, externalId, kind);
+  } catch (_) {}
 }
 
 // Conserva el rastreo ya capturado. Cuando la tienda reenvía una orden (sync de
@@ -552,13 +575,18 @@ function processOrderEvent(db, tenantId, payload) {
     const NO_NOTIFY_STATUSES = ['FAILED', 'CANCELLED', 'REFUNDED', 'VOIDED'];
     const orderStatusUpper = String(payload.status || '').toUpperCase();
     const isFailedPayment = NO_NOTIFY_STATUSES.includes(orderStatusUpper);
+    // Solo estados con pago CONFIRMADO convierten al lead en "Cliente Final".
+    // PENDING (pago no recibido) y ON_HOLD (SPEI/OXXO apartado) NO son venta
+    // todavía — antes movían el lead y le ponían valor igual.
+    const PAID_STATUSES = ['PROCESSING', 'PAID', 'COMPLETED', 'FULFILLED', 'INVOICED'];
+    const isPaidStatus = PAID_STATUSES.includes(orderStatusUpper);
 
     // ─── REGLA wuichy (orden): UNA sola base de datos ──────────────────
     // 1) Buscar si el contacto YA tiene un lead (cualquier pipeline, incl.
     //    histórico de Kommo). 2) Si existe → MOVERLO a CLIENTES/Cliente Final
     //    (nunca crear otro). 3) Si no existe → crear ahí.
     let lead = null;
-    if (cfg.order_pipeline_id && cfg.order_stage_id && !isFailedPayment) {
+    if (cfg.order_pipeline_id && cfg.order_stage_id && isPaidStatus) {
       // Nombre del lead = "Nombre Apellido dd/MM/yyyy" (consistente con Kommo).
       const leadName = customerName
         ? `${customerName} ${_formatDateMx(payload.createdAt)}`
@@ -612,7 +640,9 @@ function processOrderEvent(db, tenantId, payload) {
 
     // Aplicar etiqueta configurada (a contact, lead, o both según target).
     // El nombre soporta placeholders — ej "{order_id}" → "ms7bqsu9".
-    const resolvedOrderTag = _resolveTagTemplate(cfg.order_tag, payload);
+    // Solo en estados pagados: etiquetar "Compra X" en un ON_HOLD/PENDING
+    // (pago no recibido) sería incorrecto.
+    const resolvedOrderTag = isPaidStatus ? _resolveTagTemplate(cfg.order_tag, payload) : null;
     if (resolvedOrderTag) {
       _applyTag(db, {
         tenantId, contactId: contact.id, leadId: lead?.id,
@@ -621,49 +651,69 @@ function processOrderEvent(db, tenantId, payload) {
       });
     }
 
-    // Prioridad: plantilla WA API > bot.
-    // Las órdenes pueden estar fuera de ventana 24h (cliente compró pero no
-    // nos escribió), por eso template es más confiable.
-    // NO notificar "compra confirmada" en órdenes con pago fallido/cancelado/
-    // reembolsado — sería un mensaje erróneo al cliente (bug: pedidos FAILED
-    // de Rebeca Carrillo recibieron plantilla de compra exitosa).
-    // payload.statusSync === true → este POST es un SYNC de estatus desde
-    // reelance.mx (el admin cambió/canceló/reembolsó allá), NO una orden nueva.
-    // Actualizamos external_status + movemos pipeline arriba, pero NO re-enviamos
-    // la plantilla "compra confirmada" (el cliente ya la recibió al comprar).
-    // Guard extra anti-doble-plantilla: si OTRO status de esta MISMA orden ya
-    // se procesó exitosamente (ej. llegó PENDING y ahora PAID sin statusSync),
-    // el cliente ya recibió su confirmación — no se reenvía. Si aquel envío
-    // FALLÓ (error en el evento), sí se reintenta aquí.
-    const alreadyNotified = !!db.prepare(`
-      SELECT 1 FROM reelance_ia_events
-      WHERE tenant_id = ? AND event_type = 'order' AND external_id = ?
-        AND external_status IS NOT ? AND error IS NULL
-        AND UPPER(COALESCE(external_status,'')) NOT IN ('FAILED','CANCELLED','REFUNDED','VOIDED')
-      LIMIT 1
-    `).get(tenantId, externalId, payload.status || null);
-    const skipNotify = isFailedPayment || payload.statusSync === true || alreadyNotified;
+    // ─── Notificación por ESTADO del pedido (spec wuichy 2026-06-10) ───
+    // Ruteo:
+    //   statusSync=true                 → ajuste interno del admin, NUNCA notificar
+    //   ON_HOLD                         → on_hold_template_id   (recordatorio comprobante)
+    //   PROCESSING/PAID sin guía        → order_template_id     (compra confirmada)
+    //   COMPLETED/FULFILLED con guía    → shipping_template_id  (pedido en camino — evento de la guía)
+    //   CANCELLED                       → cancelled_template_id
+    //   REFUNDED                        → refunded_template_id
+    //   PENDING/FAILED/otros            → sin notificación
+    // Anti-duplicados POR TIPO (reelance_ia_notifications): la confirmación y
+    // el "en camino" del mismo pedido son tipos DISTINTOS — ambos se mandan,
+    // pero ninguno se repite. Plantilla no configurada → se omite con log.
+    const hasGuide = !!payload.trackingNumber;
+    let notifKind = null, notifTemplateId = null;
+    if (orderStatusUpper === 'ON_HOLD')                                                  { notifKind = 'hold';      notifTemplateId = cfg.on_hold_template_id; }
+    else if ((orderStatusUpper === 'PROCESSING' || orderStatusUpper === 'PAID') && !hasGuide) { notifKind = 'confirmed'; notifTemplateId = cfg.order_template_id; }
+    else if ((orderStatusUpper === 'COMPLETED' || orderStatusUpper === 'FULFILLED') && hasGuide) { notifKind = 'shipped';   notifTemplateId = cfg.shipping_template_id; }
+    else if (orderStatusUpper === 'CANCELLED')                                           { notifKind = 'cancelled'; notifTemplateId = cfg.cancelled_template_id; }
+    else if (orderStatusUpper === 'REFUNDED')                                            { notifKind = 'refunded';  notifTemplateId = cfg.refunded_template_id; }
 
-    if (skipNotify) {
-      const skipReason = payload.statusSync ? 'sync de estatus desde reelance (no es orden nueva)'
-        : (alreadyNotified ? 'ya se notificó esta orden con otro status' : 'pago no exitoso');
-      console.log(`[reelance-ia] orden ${externalId} status=${orderStatusUpper} → NO se envía notificación de compra (${skipReason})`);
-    } else if (cfg.order_template_id) {
+    // Variables por tipo. Contrato de plantillas (el "#" lo pone el BODY de la
+    // plantilla, la variable va sin él — igual que la 53 "Pedido: #{{2}}"):
+    //   confirmed: {{1}} nombre · {{2}} número pedido · {{3}} total MXN
+    //   shipped:   {{1}} nombre · {{2}} número pedido · {{3}} paquetería · {{4}} guía · {{5}} URL rastreo
+    //   hold/cancelled/refunded: {{1}} nombre · {{2}} número pedido
+    const notifFirstName = (customerName || '').split(/\s+/)[0] || 'Cliente';
+    const orderNum = payload.orderNumber ? String(payload.orderNumber)
+      : (payload.orderNumberDisplay ? String(payload.orderNumberDisplay).replace(/^#/, '')
+      : String(externalId).slice(-8));
+    const totalMxn = payload.totalCents ? String(Math.round(payload.totalCents / 100)) : '';
+    const NOTIF_VALUES = {
+      hold:      [notifFirstName, orderNum],
+      confirmed: [notifFirstName, orderNum, totalMxn],
+      shipped:   [notifFirstName, orderNum, payload.trackingCarrier || '', payload.trackingNumber || '', payload.trackingUrl || ''],
+      cancelled: [notifFirstName, orderNum],
+      refunded:  [notifFirstName, orderNum],
+    };
+
+    if (payload.statusSync === true) {
+      console.log(`[reelance-ia] orden ${externalId} status=${orderStatusUpper} → statusSync (ajuste interno), sin notificación`);
+    } else if (!notifKind) {
+      console.log(`[reelance-ia] orden ${externalId} status=${orderStatusUpper}${hasGuide ? '+guía' : ''} → sin notificación para esta combinación`);
+    } else if (_alreadyNotifiedKind(db, tenantId, externalId, notifKind)) {
+      console.log(`[reelance-ia] orden ${externalId} → '${notifKind}' ya se notificó antes, no se repite`);
+    } else if (notifTemplateId) {
       _sendTemplateMessage(db, {
         tenantId,
         contactId:   contact.id,
         contactName: customerName || null,
         phone:       payload.phone || null,
-        templateId:  cfg.order_template_id,
+        templateId:  notifTemplateId,
         payload,
         kind: 'order',
         leadId: lead?.id || null,
+        manualValues: NOTIF_VALUES[notifKind],
+      }).then(() => {
+        _markNotified(db, tenantId, externalId, notifKind);
+        console.log(`[reelance-ia] orden ${externalId} → notificación '${notifKind}' enviada (plantilla ${notifTemplateId})`);
       }).catch(err => {
-        console.error('[reelance-ia] order template send failed:', err.message);
+        console.error(`[reelance-ia] orden ${externalId} → '${notifKind}' template send failed:`, err.message);
         // Re-loggear el evento CON error para que _alreadyProcessed permita
-        // reintento en el próximo re-sync de la tienda. Sin esto, el evento ya
-        // quedó marcado exitoso y la plantilla se perdía PARA SIEMPRE (pasó
-        // con las órdenes del 9-10 jun durante el token caducado).
+        // reintento en el próximo re-sync de la tienda (el tipo NO se marca
+        // como notificado, así que el reintento sí enviará).
         _logEvent(db, {
           tenantId, eventType: 'order',
           externalId, externalStatus: payload.status,
@@ -672,8 +722,12 @@ function processOrderEvent(db, tenantId, payload) {
           error: ('template-send-failed: ' + err.message).slice(0, 300),
         });
       });
-    } else if (cfg.order_bot_id) {
+    } else if (notifKind === 'confirmed' && cfg.order_bot_id) {
+      // Fallback legacy: sin plantilla de confirmación pero con bot configurado.
       _fireBot(db, tenantId, cfg.order_bot_id, contact.id, lead?.id, { source: 'reelance-ia.order', order: payload });
+      _markNotified(db, tenantId, externalId, notifKind);
+    } else {
+      console.log(`[reelance-ia] orden ${externalId} → etapa '${notifKind}' SIN plantilla configurada — no se notifica (configúrala en la app Reelance IA)`);
     }
 
     // Ruteo a pipeline por duración del producto.

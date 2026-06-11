@@ -28104,16 +28104,45 @@ WAPI101_ENABLED=true</pre>
             </select>
           </label>
         </div>
-        <label style="font-size:12px;color:#475569;display:block;margin-top:10px">
-          📨 Plantilla WhatsApp API al crearse orden (recomendado)
-          <select id="riaOrderTemplate" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
-            ${templateOpts(cfg.order_template_id)}
-          </select>
-          <small style="display:block;margin-top:4px;color:#64748b;font-size:11px">
-            El cliente puede estar fuera de la ventana 24h. Si configuras una, tiene <strong>prioridad sobre el bot</strong>.
-            Placeholders: <code>{{1}}</code>=nombre, <code>{{2}}</code>=URL tracking, <code>{{3}}</code>=total.
+        <div style="margin-top:12px;padding:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px">
+          <div style="font-size:13px;font-weight:600;color:#0c4a6e;margin-bottom:2px">📨 Notificaciones por estado del pedido</div>
+          <small style="display:block;color:#0369a1;font-size:11px;margin-bottom:10px">
+            Cada etapa manda su plantilla (máx. 1 vez por pedido y por etapa). Sin plantilla configurada = esa etapa no notifica.
+            Los ajustes internos del admin (statusSync) nunca notifican. En todas: <code>{{1}}</code>=nombre, <code>{{2}}</code>=número de pedido (sin #, ponlo en el texto).
           </small>
-        </label>
+          <label style="font-size:12px;color:#475569;display:block;margin-top:8px">
+            ✅ Compra confirmada <small style="color:#64748b">(PROCESSING/PAID sin guía) — <code>{{3}}</code>=total MXN</small>
+            <select id="riaOrderTemplate" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+              ${templateOpts(cfg.order_template_id)}
+            </select>
+          </label>
+          <label style="font-size:12px;color:#475569;display:block;margin-top:8px">
+            📦 Pedido en camino <small style="color:#64748b">(COMPLETED/FULFILLED con guía) — <code>{{3}}</code>=paquetería, <code>{{4}}</code>=guía, <code>{{5}}</code>=URL rastreo</small>
+            <select id="riaShippingTemplate" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+              ${templateOpts(cfg.shipping_template_id)}
+            </select>
+          </label>
+          <label style="font-size:12px;color:#475569;display:block;margin-top:8px">
+            ⏳ Pago pendiente <small style="color:#64748b">(ON_HOLD — SPEI/OXXO, recuerda el comprobante)</small>
+            <select id="riaOnHoldTemplate" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+              ${templateOpts(cfg.on_hold_template_id)}
+            </select>
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+            <label style="font-size:12px;color:#475569">
+              ❌ Cancelado
+              <select id="riaCancelledTemplate" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+                ${templateOpts(cfg.cancelled_template_id)}
+              </select>
+            </label>
+            <label style="font-size:12px;color:#475569">
+              💸 Reembolsado
+              <select id="riaRefundedTemplate" style="width:100%;margin-top:4px;padding:7px;border:1px solid #cbd5e1;border-radius:6px">
+                ${templateOpts(cfg.refunded_template_id)}
+              </select>
+            </label>
+          </div>
+        </div>
 
         <label style="font-size:12px;color:#475569;display:block;margin-top:10px">
           🤖 Bot opcional (fallback)
@@ -28421,6 +28450,10 @@ async function _riaSaveConfig() {
     abandoned_stage_id:     Number(document.getElementById('riaAbandonedStage').value) || null,
     order_bot_id:           Number(document.getElementById('riaOrderBot').value) || null,
     order_template_id:      Number(document.getElementById('riaOrderTemplate')?.value) || null,
+    shipping_template_id:   Number(document.getElementById('riaShippingTemplate')?.value) || null,
+    on_hold_template_id:    Number(document.getElementById('riaOnHoldTemplate')?.value) || null,
+    cancelled_template_id:  Number(document.getElementById('riaCancelledTemplate')?.value) || null,
+    refunded_template_id:   Number(document.getElementById('riaRefundedTemplate')?.value) || null,
     order_stop_active_bots: document.getElementById('riaStopBots')?.checked ? 1 : 0,
     order_tag:              document.getElementById('riaOrderTagName')?.value.trim() || null,
     order_tag_target:       document.querySelector('input[name="riaOrderTagTarget"]:checked')?.value || 'contact',

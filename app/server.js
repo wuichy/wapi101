@@ -189,6 +189,42 @@ app.get('/api/version', (_req, res) => {
   res.json({ version: BUILD_VERSION });
 });
 
+// ─── Headers de seguridad globales (helmet) ───
+// IMPORTANTE: va ANTES de /super, /developers, /privacy, /oauth, etc. — si se
+// monta después, esas páginas (incluido el panel super-admin) quedan SIN
+// X-Frame-Options/nosniff (anti-clickjacking). Solo agrega headers; los
+// webhooks raw-body de arriba no se ven afectados.
+const helmet = require('helmet');
+app.use(helmet({
+  // CSP en modo REPORT-ONLY: el navegador NO bloquea nada (cero riesgo de romper
+  // la UI), solo reporta a /api/csp-report lo que violaría la política. Así medimos
+  // qué recursos carga la app de verdad y luego pasamos a enforcing sin sorpresas.
+  // Allowlist armado del recon: jsdelivr (rrweb/pdf.js/mammoth), FB SDK, Google Fonts,
+  // avatares (https:), inline handlers/estilos de la SPA.
+  contentSecurityPolicy: {
+    useDefaults: false,
+    reportOnly: true,
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://connect.facebook.net"],
+      styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc:     ["'self'", "data:", "https://fonts.gstatic.com"],
+      imgSrc:      ["'self'", "data:", "blob:", "https:"],
+      connectSrc:  ["'self'", "https://connect.facebook.net", "https://graph.facebook.com", "https://*.facebook.com"],
+      frameSrc:    ["'self'", "blob:", "https://*.facebook.com", "https://web.facebook.com"],
+      workerSrc:   ["'self'", "blob:"],
+      mediaSrc:    ["'self'", "blob:", "data:"],
+      objectSrc:   ["'none'"],
+      baseUri:     ["'self'"],
+      formAction:  ["'self'"],
+      frameAncestors: ["'self'"],
+      reportUri:   ["/api/csp-report"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Permite cargar recursos de Meta/Stripe/etc.
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permite que webhook URLs reciban POSTs externos
+}));
+
 // Sirve la página HTML del super-admin ANTES de montar el router (sino el
 // authMiddleware del router intercepta la GET /super y devuelve 401).
 app.get('/super', (_req, res) => {
@@ -298,45 +334,14 @@ mountSafe('/api/dev', require('./src/modules/developers/routes'));
 // rh_token (sesión de advisor) para saber quién está autorizando.
 mountSafe('/oauth', require('./src/modules/oauth/routes'));
 
-// ─── Headers de seguridad globales (helmet) ───
-// Protege contra clickjacking, MIME sniffing, downgrade HTTP, etc.
-// CSP relajada porque la SPA usa scripts inline y eval para algunas operaciones —
-// si en el futuro removemos eso, se puede tightening.
-const helmet = require('helmet');
-app.use(helmet({
-  // CSP en modo REPORT-ONLY: el navegador NO bloquea nada (cero riesgo de romper
-  // la UI), solo reporta a /api/csp-report lo que violaría la política. Así medimos
-  // qué recursos carga la app de verdad y luego pasamos a enforcing sin sorpresas.
-  // Allowlist armado del recon: jsdelivr (rrweb/pdf.js/mammoth), FB SDK, Google Fonts,
-  // avatares (https:), inline handlers/estilos de la SPA.
-  contentSecurityPolicy: {
-    useDefaults: false,
-    reportOnly: true,
-    directives: {
-      defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://connect.facebook.net"],
-      styleSrc:    ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc:     ["'self'", "data:", "https://fonts.gstatic.com"],
-      imgSrc:      ["'self'", "data:", "blob:", "https:"],
-      connectSrc:  ["'self'", "https://connect.facebook.net", "https://graph.facebook.com", "https://*.facebook.com"],
-      frameSrc:    ["'self'", "blob:", "https://*.facebook.com", "https://web.facebook.com"],
-      workerSrc:   ["'self'", "blob:"],
-      mediaSrc:    ["'self'", "blob:", "data:"],
-      objectSrc:   ["'none'"],
-      baseUri:     ["'self'"],
-      formAction:  ["'self'"],
-      frameAncestors: ["'self'"],
-      reportUri:   ["/api/csp-report"],
-    },
-  },
-  crossOriginEmbedderPolicy: false, // Permite cargar recursos de Meta/Stripe/etc.
-  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permite que webhook URLs reciban POSTs externos
-}));
-
-// JSON parser global para el resto.
-// 150mb para soportar adjuntos de chat (PDFs hasta 100MB → ~133MB en base64).
-// Imágenes y videos pequeños caben holgadamente. La expansión base64 es 4/3.
-app.use(express.json({ limit: '150mb' }));
+// ─── JSON parsers por ámbito ───
+// Antes había un único parser global de 150mb: cualquier endpoint /api aceptaba
+// cuerpos de 150MB (vector de DoS/OOM en un proceso single-thread). Ahora el
+// límite grande aplica SOLO donde se suben archivos en base64; el resto usa 5mb.
+// OJO: estos parsers con path van ANTES del global — el primero que parsea gana.
+app.use('/api/conversations', express.json({ limit: '150mb' })); // adjuntos de chat (PDFs 100MB → ~133MB b64)
+app.use(['/api/business', '/api/templates', '/api/data-center'], express.json({ limit: '25mb' })); // logo, header media de plantillas, imports
+app.use(express.json({ limit: '5mb' }));
 
 // VAPID public key — público (cliente lo necesita para suscribirse antes de login)
 app.get('/api/push/vapid-public-key', (_req, res) => {
@@ -938,6 +943,13 @@ try {
   app.use('/api/apps/reelance-ia', reelanceIaAuthRouter(db));
 } catch (err) {
   console.warn('[boot] reelance-ia auth routes not mounted:', err.message);
+}
+
+// Integraciones — sondeo proactivo del token de WhatsApp (cada 6h)
+try {
+  require('./src/modules/integrations/service').startTokenProbePoller(db);
+} catch (err) {
+  console.warn('[boot] token probe poller no iniciado:', err.message);
 }
 
 // Reelance IA — poller de carritos abandonados pendientes (wait_minutes)

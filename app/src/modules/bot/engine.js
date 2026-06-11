@@ -59,6 +59,11 @@ function killRun(db, runId) {
       db.prepare(
         "UPDATE bot_run_waits SET status='cancelled' WHERE run_id=? AND status='waiting'"
       ).run(runId);
+      // Cancelar reminder jobs pendientes del run — sin esto un cliente que ya
+      // compró (stop bots al completar) recibía igual el recordatorio del bot muerto.
+      db.prepare(
+        "UPDATE appointment_reminder_jobs SET skipped=1, skip_reason='run killed' WHERE run_id=? AND fired=0 AND skipped=0"
+      ).run(runId);
     }
   } catch (_) {}
 }
@@ -1892,7 +1897,17 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
       }
       branchSteps = Array.isArray(target) ? target : (Array.isArray(otherBranches.on_text_reply) ? otherBranches.on_text_reply : []);
     } else if (branch === 'on_text_reply') {
-      branchSteps = Array.isArray(otherBranches.on_text_reply) ? otherBranches.on_text_reply : [];
+      // Si el lead ESCRIBIÓ el texto del botón en vez de tapearlo (muy común
+      // en WhatsApp), tratarlo como click: matchear contra button_branches
+      // antes de caer a la rama genérica de texto.
+      const typed = (extraCtx.messageBody || '').trim().toLowerCase();
+      const typedKey = typed && Object.keys(buttonBranches).find(k => String(k).trim().toLowerCase() === typed);
+      if (typedKey && Array.isArray(buttonBranches[typedKey]) && buttonBranches[typedKey].length) {
+        branchSteps = buttonBranches[typedKey];
+        matchedButtonText = typedKey;
+      } else {
+        branchSteps = Array.isArray(otherBranches.on_text_reply) ? otherBranches.on_text_reply : [];
+      }
     } else if (branch === 'on_timeout') {
       branchSteps = Array.isArray(otherBranches.on_timeout) ? otherBranches.on_timeout : [];
     } else if (branch === 'on_delivery_fail') {
@@ -2062,13 +2077,40 @@ async function resumeWaitsForContact(db, contactId, branch, extraCtx = {}) {
   // Excluir runs pausados manualmente: un bot en pausa no debe reaccionar a
   // réplicas del contacto (consistente con el freeze del timeout en el poller).
   const waits = db.prepare(`
-    SELECT w.id FROM bot_run_waits w
+    SELECT w.id, w.conversation_id FROM bot_run_waits w
      JOIN bot_runs br ON br.id = w.run_id
      WHERE w.contact_id = ? AND w.status = 'waiting'
        AND COALESCE(br.paused_manually, 0) = 0
      ORDER BY w.created_at DESC
   `).all(contactId);
   for (const w of waits) {
+    // Ventana humana (solo tenants con híbrido activado): si el asesor tomó la
+    // conversación, el bot NO debe contestar encima cuando el cliente escribe
+    // texto libre. Los clicks de botón (on_button_click) SÍ resumen — son una
+    // interacción explícita con la UI del bot.
+    if (branch === 'on_text_reply' && w.conversation_id) {
+      try {
+        const convo = db.prepare(
+          'SELECT ai_mode, human_takeover_until, last_human_msg_at, tenant_id FROM conversations WHERE id = ?'
+        ).get(w.conversation_id);
+        if (convo) {
+          const t = db.prepare(
+            'SELECT ia_hybrid_enabled, human_takeover_window_min FROM tenants WHERE id = ?'
+          ).get(convo.tenant_id);
+          if (t?.ia_hybrid_enabled) {
+            const now = Math.floor(Date.now() / 1000);
+            const windowMin = t.human_takeover_window_min || 15;
+            const humanActive = convo.ai_mode === 'human_lock'
+              || (convo.human_takeover_until && convo.human_takeover_until > now)
+              || (convo.last_human_msg_at && (now - convo.last_human_msg_at) / 60 < windowMin);
+            if (humanActive) {
+              _log('info', `resumeWaitsForContact: skip wait ${w.id} — asesor activo en convo ${w.conversation_id} (ventana humana)`);
+              continue;
+            }
+          }
+        }
+      } catch (_) { /* ante la duda, comportamiento previo: resumir */ }
+    }
     try { await resumeWait(db, w.id, branch, extraCtx); }
     catch (err) { _log('error', `resumeWaitsForContact: ${err.message}`); }
   }

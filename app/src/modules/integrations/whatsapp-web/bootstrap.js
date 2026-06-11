@@ -42,6 +42,21 @@ function ensureExpedient(db, tenantId, contactId, routing) {
 
 function init(db) {
   manager.setHandlers({
+    // Acks de salida (delivered/read) — actualiza el status del mensaje en DB
+    // con orden monotónico (un 'delivered' tardío no pisa un 'read').
+    onMessageStatus: (integrationId, { messageId, status }) => {
+      try {
+        const { tenantId } = getIntegrationContext(db, integrationId);
+        if (!tenantId || !messageId) return;
+        const rank = { pending: 0, sent: 1, delivered: 2, read: 3 };
+        const row = db.prepare(
+          "SELECT id, status FROM messages WHERE provider = 'whatsapp-lite' AND external_id = ? AND tenant_id = ? AND direction = 'outgoing'"
+        ).get(String(messageId), tenantId);
+        if (!row) return;
+        if ((rank[status] ?? 0) <= (rank[row.status] ?? 0)) return;
+        db.prepare('UPDATE messages SET status = ? WHERE id = ?').run(status, row.id);
+      } catch (_) { /* ack perdido no es crítico */ }
+    },
     onMessage: (integrationId, payload) => {
       try {
         const { tenantId, routing } = getIntegrationContext(db, integrationId);

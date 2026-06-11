@@ -134,6 +134,7 @@ async function uploadHeaderToMeta(db, tenantId, buffer, mimetype) {
   const sessionRes = await fetch(sessionUrl, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(20_000),
   });
   const sessionJson = await sessionRes.json().catch(() => ({}));
   if (!sessionRes.ok || !sessionJson.id) {
@@ -148,6 +149,7 @@ async function uploadHeaderToMeta(db, tenantId, buffer, mimetype) {
       file_offset: '0',
     },
     body: buffer,
+    signal: AbortSignal.timeout(120_000), // header media puede ser video de 16MB
   });
   const uploadJson = await uploadRes.json().catch(() => ({}));
   if (!uploadRes.ok || !uploadJson.h) {

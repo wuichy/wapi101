@@ -2159,6 +2159,7 @@ async function api(method, url, body) {
     const err = new Error(data.error || `HTTP ${res.status}`);
     if (data.errorCode) err.errorCode = data.errorCode;
     err.status = res.status;
+    err.data = data; // body completo (ej. failedMessage del send) para el caller
     throw err;
   }
   return data;
@@ -19279,7 +19280,12 @@ async function sendAttachmentNow() {
       if (!fromExpDetail) renderChatList();
     }
   } catch (err) {
-    toast(err.message || 'Error enviando archivo', 'error');
+    // Burbuja roja inmediata si el backend persistió el fallo
+    if (err.data?.failedMessage) {
+      if (fromExpDetail) { EXP_DETAIL_MSGS.push(err.data.failedMessage); renderExpDetailMessages(); }
+      else { CHAT_MESSAGES.push(err.data.failedMessage); renderMessages(); }
+    }
+    toast(err.message || 'Error enviando archivo', 'error', 8000);
   } finally {
     if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Enviar'; }
     _rhAttachOriginConvoId = null; // reset del flag de origen
@@ -19363,7 +19369,15 @@ function setupReplyForm() {
       // Actualizar preview en la lista
       if (convo) { convo.lastMessage = body; convo.time = msg.time || ''; renderChatList(); }
     } catch (err) {
-      toast(err.message, 'error');
+      // El backend ahora persiste el envío fallido como mensaje status='failed'
+      // y lo devuelve en el body del 500 → pintamos la burbuja roja al instante.
+      if (err.data?.failedMessage) {
+        CHAT_MESSAGES.push(err.data.failedMessage);
+        renderMessages();
+      }
+      // Errores de envío suelen ser largos (ej. instrucciones de token) — 8s
+      // en vez de 3.5s para que se alcancen a leer.
+      toast(err.message, 'error', 8000);
       if (textarea) { textarea.value = body; }
     } finally {
       isSending = false;

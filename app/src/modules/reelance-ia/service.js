@@ -452,9 +452,11 @@ function _alreadyProcessed(db, tenantId, eventType, externalId, externalStatus) 
   if (!externalId) return false;
   const row = db.prepare(`
     SELECT id, error FROM reelance_ia_events
-    WHERE tenant_id = ? AND event_type = ? AND external_id = ? AND external_status = ?
+    WHERE tenant_id = ? AND event_type = ? AND external_id = ? AND external_status IS ?
     LIMIT 1
   `).get(tenantId, eventType, externalId, externalStatus || null);
+  // ("IS ?" en vez de "= ?": con status NULL, "= NULL" nunca matchea en SQL y
+  // la idempotencia quedaba rota para eventos sin status)
   // Solo consideramos "ya procesado" si no falló — si tuvo error, vale reintentar
   return !!(row && !row.error);
 }
@@ -543,12 +545,20 @@ function processOrderEvent(db, tenantId, payload) {
       lastName,
     });
 
+    // Status de pago NO exitoso: un pedido FAILED/CANCELLED no debe convertir
+    // al lead en "Cliente Final" ni asignarle valor (bug: pagos fallidos
+    // contaban como clientes). Se calcula aquí porque también gatea el
+    // movimiento de pipeline, no solo la notificación.
+    const NO_NOTIFY_STATUSES = ['FAILED', 'CANCELLED', 'REFUNDED', 'VOIDED'];
+    const orderStatusUpper = String(payload.status || '').toUpperCase();
+    const isFailedPayment = NO_NOTIFY_STATUSES.includes(orderStatusUpper);
+
     // ─── REGLA wuichy (orden): UNA sola base de datos ──────────────────
     // 1) Buscar si el contacto YA tiene un lead (cualquier pipeline, incl.
     //    histórico de Kommo). 2) Si existe → MOVERLO a CLIENTES/Cliente Final
     //    (nunca crear otro). 3) Si no existe → crear ahí.
     let lead = null;
-    if (cfg.order_pipeline_id && cfg.order_stage_id) {
+    if (cfg.order_pipeline_id && cfg.order_stage_id && !isFailedPayment) {
       // Nombre del lead = "Nombre Apellido dd/MM/yyyy" (consistente con Kommo).
       const leadName = customerName
         ? `${customerName} ${_formatDateMx(payload.createdAt)}`
@@ -617,16 +627,26 @@ function processOrderEvent(db, tenantId, payload) {
     // NO notificar "compra confirmada" en órdenes con pago fallido/cancelado/
     // reembolsado — sería un mensaje erróneo al cliente (bug: pedidos FAILED
     // de Rebeca Carrillo recibieron plantilla de compra exitosa).
-    const NO_NOTIFY_STATUSES = ['FAILED', 'CANCELLED', 'REFUNDED', 'VOIDED'];
-    const orderStatusUpper = String(payload.status || '').toUpperCase();
     // payload.statusSync === true → este POST es un SYNC de estatus desde
     // reelance.mx (el admin cambió/canceló/reembolsó allá), NO una orden nueva.
     // Actualizamos external_status + movemos pipeline arriba, pero NO re-enviamos
     // la plantilla "compra confirmada" (el cliente ya la recibió al comprar).
-    const skipNotify = NO_NOTIFY_STATUSES.includes(orderStatusUpper) || payload.statusSync === true;
+    // Guard extra anti-doble-plantilla: si OTRO status de esta MISMA orden ya
+    // se procesó exitosamente (ej. llegó PENDING y ahora PAID sin statusSync),
+    // el cliente ya recibió su confirmación — no se reenvía. Si aquel envío
+    // FALLÓ (error en el evento), sí se reintenta aquí.
+    const alreadyNotified = !!db.prepare(`
+      SELECT 1 FROM reelance_ia_events
+      WHERE tenant_id = ? AND event_type = 'order' AND external_id = ?
+        AND external_status IS NOT ? AND error IS NULL
+        AND UPPER(COALESCE(external_status,'')) NOT IN ('FAILED','CANCELLED','REFUNDED','VOIDED')
+      LIMIT 1
+    `).get(tenantId, externalId, payload.status || null);
+    const skipNotify = isFailedPayment || payload.statusSync === true || alreadyNotified;
 
     if (skipNotify) {
-      const skipReason = payload.statusSync ? 'sync de estatus desde reelance (no es orden nueva)' : 'pago no exitoso';
+      const skipReason = payload.statusSync ? 'sync de estatus desde reelance (no es orden nueva)'
+        : (alreadyNotified ? 'ya se notificó esta orden con otro status' : 'pago no exitoso');
       console.log(`[reelance-ia] orden ${externalId} status=${orderStatusUpper} → NO se envía notificación de compra (${skipReason})`);
     } else if (cfg.order_template_id) {
       _sendTemplateMessage(db, {

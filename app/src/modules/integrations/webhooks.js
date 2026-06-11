@@ -895,7 +895,18 @@ module.exports = function createWebhooksRouter(db) {
     let payload = null;
     try { payload = JSON.parse(raw.toString('utf8')); } catch (_) {}
 
-    const integration = findIntegrationByProvider('telegram');
+    // Multi-tenant: las conexiones nuevas registran el webhook con
+    // /webhooks/telegram/:integrationId (con 2+ tenants el fallback por
+    // provider devolvía null y TODOS los updates se descartaban). La ruta
+    // legacy sin id sigue funcionando para la integración existente.
+    let integration = null;
+    const integId = Number(req.params?.integrationId || 0);
+    if (integId) {
+      const row = db.prepare("SELECT * FROM integrations WHERE id = ? AND provider = 'telegram'").get(integId);
+      if (row) integration = { ...row, credentials: row.credentials_enc ? (decryptJson(row.credentials_enc) || {}) : {} };
+    } else {
+      integration = findIntegrationByProvider('telegram');
+    }
     if (integration?.credentials?.webhookSecret) {
       if (!safeEqual(sentSecret, integration.credentials.webhookSecret)) {
         console.warn('[webhook telegram] secret token inválido');
@@ -990,6 +1001,7 @@ module.exports = function createWebhooksRouter(db) {
   router.post('/woocommerce',  raw, wooHandler);
   router.post('/square',       raw, squareHandler);
   router.post('/telegram',     raw, telegramHandler);
+  router.post('/telegram/:integrationId', raw, telegramHandler); // multi-tenant (ver telegramHandler)
   router.post('/tiktok',       raw, tiktokHandler);
 
   router.get('/_debug', (_req, res) => {

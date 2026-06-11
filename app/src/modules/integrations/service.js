@@ -142,7 +142,9 @@ async function connect(db, tenantId, providerKey, incomingCreds) {
 
   if (providerKey === 'telegram' && provider.setWebhook) {
     const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
-    const webhookUrl = `${baseUrl}/webhooks/telegram`;
+    // URL por integración → el handler resuelve tenant sin ambigüedad
+    // (con 2+ tenants la ruta legacy sin id descartaba todos los updates).
+    const webhookUrl = `${baseUrl}/webhooks/telegram/${savedId}`;
     try {
       const result = await provider.setWebhook(incomingCreds.botToken, webhookUrl, incomingCreds.webhookSecret || '');
       console.log('[telegram] setWebhook:', result.description || result.ok);
@@ -392,4 +394,44 @@ function updateRouting(db, tenantId, id, { pipelineId, stageId, pipelineName, st
   return getById(db, tenantId, id);
 }
 
-module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting, markAuthFailed };
+// ─── Poller proactivo de tokens (WhatsApp Cloud) ────────────────────
+// Antes el token muerto solo se detectaba al PRIMER envío fallido (banner
+// reactivo): un token caducado de madrugada pasaba horas invisible. Este
+// poller prueba el token de cada integración whatsapp 'connected' contra
+// Graph cada 6h (+ a los 2 min del boot) y marca disconnected con
+// markAuthFailed si Meta responde error de auth — el banner del frontend
+// (que lee /api/integrations cada 3 min) lo muestra solo.
+let _tokenProbeTimer = null;
+function startTokenProbePoller(db) {
+  if (_tokenProbeTimer) return;
+  const { isMetaAuthError } = require('./meta-errors');
+  const probe = async () => {
+    let rows = [];
+    try {
+      rows = db.prepare(
+        "SELECT id, credentials_enc FROM integrations WHERE provider = 'whatsapp' AND status = 'connected' AND credentials_enc IS NOT NULL"
+      ).all();
+    } catch (_) { return; }
+    const version = process.env.META_GRAPH_VERSION || 'v22.0';
+    for (const r of rows) {
+      try {
+        const creds = decryptJson(r.credentials_enc) || {};
+        if (!creds.accessToken || !creds.phoneNumberId) continue;
+        const res = await fetch(`https://graph.facebook.com/${version}/${creds.phoneNumberId}?fields=id`, {
+          headers: { Authorization: `Bearer ${creds.accessToken}` },
+          signal: AbortSignal.timeout(10_000),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data?.error && isMetaAuthError(data.error)) {
+          markAuthFailed(db, r.id, `Token inválido detectado por sondeo: ${data.error.message || 'auth error'}`);
+        }
+      } catch (_) { /* timeout/red — NO marcar nada con errores transitorios */ }
+    }
+  };
+  setTimeout(() => probe().catch(() => {}), 2 * 60_000);
+  _tokenProbeTimer = setInterval(() => probe().catch(() => {}), 6 * 3600_000);
+  _tokenProbeTimer.unref?.();
+  console.log('[integrations] token probe poller iniciado (cada 6h)');
+}
+
+module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting, markAuthFailed, startTokenProbePoller };

@@ -141,6 +141,7 @@ async function sendWhatsApp(db, convo, text) {
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
   const res = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
     method:  'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
@@ -177,6 +178,7 @@ async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, captio
   fd.append('file', blob, filename || 'file');
   const upRes = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/media`, {
     method: 'POST',
+    signal: AbortSignal.timeout(120_000), // archivos hasta 100MB — upload lento merece más margen
     headers: { Authorization: `Bearer ${accessToken}` },
     body: fd,
   });
@@ -198,6 +200,7 @@ async function sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, captio
 
   const sendRes = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({
       messaging_product: 'whatsapp',
@@ -336,6 +339,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
   const res = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(payload),
   });
@@ -359,6 +363,7 @@ async function sendMessenger(db, convo, text) {
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
   const res = await fetch(`https://graph.facebook.com/${version}/me/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ recipient: { id: convo.externalId }, message: { text } }),
   });
@@ -383,6 +388,7 @@ async function sendMessengerMedia(db, convo, { publicUrl, mediaType }) {
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
   const res = await fetch(`https://graph.facebook.com/${version}/me/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       recipient: { id: convo.externalId },
@@ -406,6 +412,7 @@ async function sendInstagram(db, convo, text) {
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
   const res = await fetch(`https://graph.facebook.com/${version}/me/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ recipient: { id: convo.externalId }, message: { text } }),
   });
@@ -429,6 +436,7 @@ async function sendInstagramMedia(db, convo, { publicUrl, mediaType }) {
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
   const res = await fetch(`https://graph.facebook.com/${version}/me/messages`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       recipient: { id: convo.externalId },
@@ -451,6 +459,7 @@ async function sendTelegram(db, convo, text) {
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: convo.externalId, text }),
   });
@@ -481,6 +490,7 @@ async function sendTelegramMedia(db, convo, { buffer, mimetype, filename, captio
 
   const res = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     body: fd,
   });
   const data = await _safeJson(res);
@@ -554,6 +564,7 @@ async function sendTikTokReply(db, convo, text) {
 
   const res = await fetch('https://open.tiktokapis.com/v2/video/comment/reply/create/', {
     method: 'POST',
+    signal: AbortSignal.timeout(20_000),
     headers: {
       Authorization: `Bearer ${creds.accessToken}`,
       'Content-Type': 'application/json',
@@ -593,4 +604,4 @@ function getIntegrationCreds(db, integrationId, convo = null) {
   return decryptJson(row.credentials_enc) || null;
 }
 
-module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendMessengerMedia, sendInstagram, sendInstagramMedia, sendTelegram, sendTelegramMedia, getIntegrationCreds };
+module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendMessengerMedia, sendInstagram, sendInstagramMedia, sendTelegram, sendTelegramMedia, getIntegrationCreds, waCloudRecipient };

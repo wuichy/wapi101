@@ -291,7 +291,7 @@ module.exports = function createIntegrationsRouter(db) {
       const creds = row?.credentials_enc ? (decryptJson(row.credentials_enc) || {}) : {};
       const provider = require('./providers').get('telegram');
       const baseUrl = (process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-      const webhookUrl = `${baseUrl}/webhooks/telegram`;
+      const webhookUrl = `${baseUrl}/webhooks/telegram/${item.id}`; // URL por integración (multi-tenant)
       const result = await provider.setWebhook(creds.botToken, webhookUrl, creds.webhookSecret || '');
       res.json({ ok: result.ok, description: result.description, webhookUrl });
     } catch (err) { res.status(400).json({ error: err.message }); }

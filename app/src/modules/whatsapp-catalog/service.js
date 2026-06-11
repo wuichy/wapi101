@@ -34,7 +34,7 @@ function _waCreds(db, tenantId) {
 }
 
 async function _metaGet(url, token) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000) });
   if (!res.ok) {
     const body = await res.text();
     const err = new Error(`Meta GET ${url.replace(GRAPH, '')} → ${res.status}: ${body.slice(0, 300)}`);
@@ -44,16 +44,24 @@ async function _metaGet(url, token) {
   return res.json();
 }
 
-async function _metaPost(url, token, body) {
+async function _metaPost(url, token, body, integrationId = null) {
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20_000),
   });
   const text = await res.text();
   if (!res.ok) {
-    const err = new Error(`Meta POST ${url.replace(GRAPH, '')} → ${res.status}: ${text.slice(0, 300)}`);
+    // Mismo manejo que el sender: error amigable + exponer el error crudo de
+    // Meta para que el caller (que sí tiene db) marque la integración si es
+    // un error de token (antes el error crudo se tragaba sin contexto).
+    let metaErr = null;
+    try { metaErr = JSON.parse(text)?.error || null; } catch (_) {}
+    const { friendlyMetaError } = require('../integrations/meta-errors');
+    const err = new Error(friendlyMetaError(metaErr) || `Meta POST ${url.replace(GRAPH, '')} → ${res.status}: ${text.slice(0, 300)}`);
     err.status = res.status;
+    err.metaError = metaErr;
     throw err;
   }
   try { return JSON.parse(text); } catch { return { raw: text }; }
@@ -281,14 +289,16 @@ async function sendProductToConversation(db, tenantId, { conversationId, product
   if (!creds) throw new Error('Sin integración de WhatsApp conectada');
 
   // POST interactive product message
+  const { waCloudRecipient } = require('../conversations/sender');
+  const productLabel = product.name + (product.price_amount ? ` — $${product.price_amount} ${product.price_currency || ''}`.trim() : '');
   const body = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to: convo.external_id,
+    to: waCloudRecipient(convo.external_id), // normaliza +521 viejo MX (igual que el sender)
     type: 'interactive',
     interactive: {
       type: 'product',
-      body: { text: product.name + (product.price_amount ? ` — $${product.price_amount} ${product.price_currency || ''}`.trim() : '') },
+      body: { text: productLabel },
       action: {
         catalog_id: cat.catalog_id,
         product_retailer_id: product.retailer_id,
@@ -296,7 +306,34 @@ async function sendProductToConversation(db, tenantId, { conversationId, product
     },
   };
 
-  const r = await _metaPost(`${GRAPH}/${creds.phoneNumberId}/messages`, creds.accessToken, body);
+  const convoSvc = require('../conversations/service');
+  let r;
+  try {
+    r = await _metaPost(`${GRAPH}/${creds.phoneNumberId}/messages`, creds.accessToken, body);
+  } catch (err) {
+    if (err.metaError) {
+      const { isMetaAuthError } = require('../integrations/meta-errors');
+      if (isMetaAuthError(err.metaError)) {
+        try { require('../integrations/service').markAuthFailed(db, creds.integrationId, err.message); } catch (_) {}
+      }
+    }
+    try {
+      convoSvc.addMessage(db, tenantId, conversationId, {
+        direction: 'outgoing', provider: 'whatsapp', body: `🛍️ ${productLabel} (no enviado)`,
+        status: 'failed', byAdvisor: via === 'manual', byBot: via !== 'manual', errorReason: err.message,
+      });
+    } catch (_) { /* no enmascarar */ }
+    throw err;
+  }
+
+  // Persistir en el chat (antes el producto enviado NO aparecía como burbuja)
+  try {
+    convoSvc.addMessage(db, tenantId, conversationId, {
+      externalId: r?.messages?.[0]?.id || null,
+      direction: 'outgoing', provider: 'whatsapp', body: `🛍️ ${productLabel}`,
+      status: 'sent', byAdvisor: via === 'manual', byBot: via !== 'manual',
+    });
+  } catch (_) { /* el send ya salió; no romper por la burbuja */ }
 
   // Registrar el envío para analytics y "productos enviados al lead"
   db.prepare(`
@@ -356,12 +393,38 @@ async function sendProductListToConversation(db, tenantId, { conversationId, sec
   const body = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to: convo.external_id,
+    to: require('../conversations/sender').waCloudRecipient(convo.external_id),
     type: 'interactive',
     interactive,
   };
 
-  const r = await _metaPost(`${GRAPH}/${creds.phoneNumberId}/messages`, creds.accessToken, body);
+  const convoSvc = require('../conversations/service');
+  let r;
+  try {
+    r = await _metaPost(`${GRAPH}/${creds.phoneNumberId}/messages`, creds.accessToken, body);
+  } catch (err) {
+    if (err.metaError) {
+      const { isMetaAuthError } = require('../integrations/meta-errors');
+      if (isMetaAuthError(err.metaError)) {
+        try { require('../integrations/service').markAuthFailed(db, creds.integrationId, err.message); } catch (_) {}
+      }
+    }
+    try {
+      convoSvc.addMessage(db, tenantId, conversationId, {
+        direction: 'outgoing', provider: 'whatsapp', body: `🛍️ ${headerText || 'Lista de productos'} (no enviada)`,
+        status: 'failed', byAdvisor: via === 'manual', byBot: via !== 'manual', errorReason: err.message,
+      });
+    } catch (_) { /* no enmascarar */ }
+    throw err;
+  }
+
+  try {
+    convoSvc.addMessage(db, tenantId, conversationId, {
+      externalId: r?.messages?.[0]?.id || null,
+      direction: 'outgoing', provider: 'whatsapp', body: `🛍️ ${headerText || 'Lista de productos'} (${sectionsMapped.reduce((n, s) => n + s.product_items.length, 0)} productos)`,
+      status: 'sent', byAdvisor: via === 'manual', byBot: via !== 'manual',
+    });
+  } catch (_) { /* el send ya salió */ }
 
   // Auditar cada producto enviado
   const ins = db.prepare(`

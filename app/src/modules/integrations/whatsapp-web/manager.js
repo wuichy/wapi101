@@ -101,6 +101,7 @@ function extractIncomingBody(message) {
 let onMessageCallback = null;
 let onConnectedCallback = null;
 let onDisconnectedCallback = null;
+let onMessageStatusCallback = null;
 
 // Auth state de Baileys: vive junto a la DB (DB_PATH). Si DB está fuera de iCloud,
 // las sesiones también, evitando corrupciones por sync.
@@ -117,10 +118,11 @@ function sessionDir(integrationId) {
   return dir;
 }
 
-function setHandlers({ onMessage, onConnected, onDisconnected }) {
+function setHandlers({ onMessage, onConnected, onDisconnected, onMessageStatus }) {
   if (onMessage) onMessageCallback = onMessage;
   if (onConnected) onConnectedCallback = onConnected;
   if (onDisconnected) onDisconnectedCallback = onDisconnected;
+  if (onMessageStatus) onMessageStatusCallback = onMessageStatus;
 }
 
 async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
@@ -215,6 +217,23 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
 
       try { onDisconnectedCallback?.(integrationId, { loggedOut, message: msg }); }
       catch (err) { console.error(`[wa-web ${integrationId}] onDisconnected error:`, err.message); }
+    }
+  });
+
+  // Acks de mensajes SALIENTES: antes no se escuchaba messages.update y todo
+  // outgoing por Lite quedaba 'sent' para siempre (nunca delivered/read).
+  // Códigos de ack Baileys: 2=server, 3=entregado, 4=leído, 5=reproducido.
+  sock.ev.on('messages.update', (updates) => {
+    if (!onMessageStatusCallback) return;
+    for (const u of (updates || [])) {
+      try {
+        if (!u?.key?.fromMe || !u.key.id) continue;
+        const ack = Number(u.update?.status);
+        if (!Number.isFinite(ack)) continue;
+        const status = ack >= 4 ? 'read' : (ack === 3 ? 'delivered' : null);
+        if (!status) continue;
+        onMessageStatusCallback(integrationId, { messageId: u.key.id, status });
+      } catch (_) { /* un update malformado no debe tumbar el batch */ }
     }
   });
 

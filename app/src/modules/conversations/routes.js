@@ -330,8 +330,41 @@ module.exports = function createConversationsRouter(db) {
     const convo = svc.getById(db, req.tenantId, convoId);
     if (!convo) return res.status(404).json({ error: 'Conversación no encontrada', errorCode: 'CONVERSATION_NOT_FOUND' });
 
-    const { body } = req.body;
+    const { body, clientTs } = req.body;
     if (!body || !body.trim()) return res.status(400).json({ error: 'El mensaje no puede estar vacío', errorCode: 'MESSAGE_EMPTY' });
+
+    // ─── Candado anti-atorados ─────────────────────────────────────
+    // Caso real (Dora 11-jun): un envío desde otro dispositivo quedó atorado
+    // (PWA suspendida / conexión flaky) y el navegador lo completó 17 MINUTOS
+    // tarde — aterrizó como "respuesta" a una pregunta nueva, fuera de
+    // contexto. Si el composer manda clientTs (hora en que se escribió) y el
+    // request llega >3 min tarde, se rechaza con aviso en vez de enviarse.
+    if (clientTs && Number(clientTs) > 0) {
+      const ageMin = (Date.now() - Number(clientTs)) / 60000;
+      if (ageMin > 3) {
+        console.warn(`[conversations] envío descartado por viejo (${ageMin.toFixed(1)} min) convo ${convoId}`);
+        return res.status(409).json({
+          error: `Mensaje descartado: se escribió hace ${Math.round(ageMin)} min (request atorado de otra sesión). Si aún aplica, envíalo de nuevo.`,
+          errorCode: 'STALE_SEND',
+        });
+      }
+    }
+
+    // ─── Candado anti-doble-tap ────────────────────────────────────
+    // Texto idéntico al último saliente hace <2 min y SIN mensaje entrante en
+    // medio = doble envío accidental (pasó 2 veces el 11-jun por conexión lenta).
+    try {
+      const last = db.prepare(
+        'SELECT direction, body, created_at FROM messages WHERE conversation_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+      ).get(convoId, req.tenantId);
+      if (last && last.direction === 'outgoing' && (last.body || '') === body.trim()
+          && (Math.floor(Date.now() / 1000) - last.created_at) < 120) {
+        return res.status(409).json({
+          error: 'Este mensaje es idéntico al que acabas de enviar — se descartó para no duplicar.',
+          errorCode: 'DUPLICATE_SEND',
+        });
+      }
+    } catch (_) { /* guard best-effort */ }
 
     try {
       const externalMsgId = await sendMessage(db, convo, body.trim());
@@ -366,10 +399,22 @@ module.exports = function createConversationsRouter(db) {
   // Response: { message, conversation, created } — created=true si la convo
   // se creó nueva, false si reutilizó una existente.
   router.post('/cross-channel-send', async (req, res) => {
-    const { contactId, integrationId, body } = req.body || {};
+    const { contactId, integrationId, body, clientTs } = req.body || {};
     if (!contactId)     return res.status(400).json({ error: 'contactId requerido' });
     if (!integrationId) return res.status(400).json({ error: 'integrationId requerido' });
     if (!body || !body.trim()) return res.status(400).json({ error: 'body vacío' });
+
+    // Candado anti-atorados (mismo que /:id/messages — ver comentario ahí)
+    if (clientTs && Number(clientTs) > 0) {
+      const ageMin = (Date.now() - Number(clientTs)) / 60000;
+      if (ageMin > 3) {
+        console.warn(`[conversations] cross-channel descartado por viejo (${ageMin.toFixed(1)} min) contacto ${contactId}`);
+        return res.status(409).json({
+          error: `Mensaje descartado: se escribió hace ${Math.round(ageMin)} min (request atorado de otra sesión). Si aún aplica, envíalo de nuevo.`,
+          errorCode: 'STALE_SEND',
+        });
+      }
+    }
 
     // Validar contacto pertenece al tenant
     const contact = db.prepare('SELECT * FROM contacts WHERE id = ? AND tenant_id = ?').get(contactId, req.tenantId);
@@ -416,6 +461,20 @@ module.exports = function createConversationsRouter(db) {
         return res.status(500).json({ error: 'error creando conversación: ' + err.message });
       }
     }
+
+    // Candado anti-doble-tap (texto idéntico al último saliente <2 min)
+    try {
+      const last = db.prepare(
+        'SELECT direction, body, created_at FROM messages WHERE conversation_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+      ).get(convo.id, req.tenantId);
+      if (last && last.direction === 'outgoing' && (last.body || '') === body.trim()
+          && (Math.floor(Date.now() / 1000) - last.created_at) < 120) {
+        return res.status(409).json({
+          error: 'Este mensaje es idéntico al que acabas de enviar — se descartó para no duplicar.',
+          errorCode: 'DUPLICATE_SEND',
+        });
+      }
+    } catch (_) { /* guard best-effort */ }
 
     try {
       const externalMsgId = await sendMessage(db, convo, body.trim());

@@ -8739,6 +8739,7 @@ function setupExpDetail() {
           contactId:     convo.contactId || convo.contact_id || (EXP_DETAIL && EXP_DETAIL.contactId),
           integrationId: selectedIntId,
           body,
+          clientTs: Date.now(),
         });
         msg = r.message;
         if (r.created && r.conversation && r.conversation.id) {
@@ -8749,15 +8750,19 @@ function setupExpDetail() {
         }
         toast('Mensaje enviado por canal alterno', 'success');
       } else {
-        msg = await api('POST', `/api/conversations/${convoId}/messages`, { body });
+        msg = await api('POST', `/api/conversations/${convoId}/messages`, { body, clientTs: Date.now() });
       }
       EXP_DETAIL_MSGS.push(msg);
       renderExpDetailMessages();
       // Reflect in convo list
       if (convo) { convo.lastMessage = body; }
     } catch (err) {
-      toast(err.message, 'error');
-      if (textarea) { textarea.value = body; }
+      if (err.data?.failedMessage) {
+        EXP_DETAIL_MSGS.push(err.data.failedMessage);
+        renderExpDetailMessages();
+      }
+      toast(err.message, 'error', 8000);
+      if (textarea && err.errorCode !== 'DUPLICATE_SEND') { textarea.value = body; }
     } finally {
       isSendingExpDetail = false;
     }
@@ -19351,6 +19356,7 @@ function setupReplyForm() {
           contactId:     convo.contactId || convo.contact_id,
           integrationId: selectedIntId,
           body,
+          clientTs: Date.now(),
         });
         msg = r.message;
         // Si se creó nueva convo, abrirla
@@ -19362,7 +19368,7 @@ function setupReplyForm() {
         }
         toast('Mensaje enviado por canal alterno', 'success');
       } else {
-        msg = await api('POST', `/api/conversations/${convoId}/messages`, { body });
+        msg = await api('POST', `/api/conversations/${convoId}/messages`, { body, clientTs: Date.now() });
       }
       CHAT_MESSAGES.push(msg);
       renderMessages();
@@ -19378,7 +19384,9 @@ function setupReplyForm() {
       // Errores de envío suelen ser largos (ej. instrucciones de token) — 8s
       // en vez de 3.5s para que se alcancen a leer.
       toast(err.message, 'error', 8000);
-      if (textarea) { textarea.value = body; }
+      // No restaurar el texto si se rechazó por duplicado — re-llenarlo invita
+      // a reenviar el mismo duplicado.
+      if (textarea && err.errorCode !== 'DUPLICATE_SEND') { textarea.value = body; }
     } finally {
       isSending = false;
     }
@@ -26334,7 +26342,7 @@ async function openMailConvo(convoId) {
       const btn = document.getElementById('mailReplySendBtn');
       btn.disabled = true;
       try {
-        await api('POST', `/api/conversations/${convoId}/messages`, { body: text });
+        await api('POST', `/api/conversations/${convoId}/messages`, { body: text, clientTs: Date.now() });
         await openMailConvo(convoId);
         await loadMailView();
         toast(t('mail.sent_ok'), 'success');

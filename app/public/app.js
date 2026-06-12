@@ -6019,6 +6019,20 @@ async function loadIntegrations() {
     INTEGRATIONS = data.items;
     renderIntegrations();
     updateMailNavVisibility();
+
+    // Detector: integración de mensajería CONECTADA sin routing = estado
+    // inválido (los chats nuevos no generan lead). Forzar el modal hasta que
+    // se configure — atrapa conexiones por OAuth, API o filas viejas.
+    if (!ROUTING_INTEGRATION_ID) {
+      const broken = (INTEGRATIONS || [])
+        .filter(p => INT_ROUTING_PROVIDERS.includes(p.key))
+        .flatMap(p => (p.integrations || []).map(i => ({ ...i, _provider: p.name })))
+        .find(i => i.status === 'connected' && !i.routing?.pipelineId);
+      if (broken) {
+        toast(`⚠️ ${broken.displayName || broken._provider} está conectado SIN pipeline para leads — configúralo ahora`, 'error', 6000);
+        openRoutingModal(broken.id, true);
+      }
+    }
   } catch (err) {
     console.error("Error cargando integraciones:", err);
   }
@@ -6869,6 +6883,26 @@ async function abortPendingQrIfNeeded() {
   }
 }
 
+// Canales cuyos webhooks crean contactos/leads → routing obligatorio al conectar
+const INT_ROUTING_PROVIDERS = ['whatsapp', 'whatsapp-lite', 'messenger', 'instagram', 'telegram'];
+
+// Lee y valida los selects de routing del modal de conexión. Devuelve el
+// routing {pipelineId, stageId, nombres} o null si el provider no lo requiere.
+// Lanza (con mensaje para el errBox) si es requerido y falta.
+function _readIntRoutingSelects(providerKey) {
+  if (!INT_ROUTING_PROVIDERS.includes(providerKey)) return null;
+  const pipeSel  = document.getElementById('intRoutingPipeline');
+  const stageSel = document.getElementById('intRoutingStage');
+  const pipelineId = Number(pipeSel?.value || 0);
+  const stageId    = Number(stageSel?.value || 0);
+  if (!pipelineId || !stageId) {
+    throw new Error('Elige el pipeline y la etapa donde caerán los leads entrantes — es obligatorio.');
+  }
+  const pipeline = (PIPELINES || []).find(p => p.id === pipelineId);
+  const stage    = pipeline?.stages?.find(s => s.id === stageId);
+  return { pipelineId, stageId, pipelineName: pipeline?.name || '', stageName: stage?.name || '' };
+}
+
 function openIntegrationModal(providerKey, instanceId = null) {
   const provider = INTEGRATIONS.find((p) => p.key === providerKey);
   if (!provider) return;
@@ -6974,6 +7008,39 @@ function openIntegrationModal(providerKey, instanceId = null) {
         if (btn) btn.addEventListener('click', launchWhatsAppEmbeddedSignup);
       }, 0);
     }
+  }
+
+  // ─── Routing OBLIGATORIO (pipeline + etapa de leads entrantes) ───────
+  // Canales de mensajería: sin esto los contactos nuevos NO generan lead
+  // (lección 11-jun: reconexión de WhatsApp sin routing = 2 días sin leads).
+  // El backend también lo exige — esto es la cara visible del candado.
+  document.getElementById('intRoutingBlock')?.remove();
+  const needsRouting = INT_ROUTING_PROVIDERS.includes(provider.key);
+  if (needsRouting) {
+    const cur = instance?.routing || {};
+    const block = document.createElement('div');
+    block.id = 'intRoutingBlock';
+    block.innerHTML = `
+      <div class="int-field" style="margin-top:12px;padding:12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px">
+        <label style="font-weight:600">📍 ¿A qué pipeline entran los leads de este canal? <span class="int-field-required">*</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+          <select id="intRoutingPipeline" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px"><option value="">— Pipeline —</option></select>
+          <select id="intRoutingStage" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px"><option value="">— Etapa —</option></select>
+        </div>
+        <div class="int-field-help">Obligatorio: cada contacto nuevo que escriba por este canal crea su lead en esa etapa. Sin esto, los chats quedan sin lead.</div>
+      </div>`;
+    fields.appendChild(block);
+    const pipeSel  = block.querySelector('#intRoutingPipeline');
+    const stageSel = block.querySelector('#intRoutingStage');
+    pipeSel.innerHTML = '<option value="">— Pipeline —</option>' + (PIPELINES || []).map(p =>
+      `<option value="${p.id}" ${Number(cur.pipelineId) === p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+    const fillStages = () => {
+      const p = (PIPELINES || []).find(x => x.id === Number(pipeSel.value));
+      stageSel.innerHTML = '<option value="">— Etapa —</option>' + (p?.stages || []).map(s =>
+        `<option value="${s.id}" ${Number(cur.stageId) === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+    };
+    pipeSel.addEventListener('change', fillStages);
+    fillStages();
   }
 
   // Webhook URL — mostrar siempre (al conectar usa la URL del provider, al editar usa la de la instancia)
@@ -7162,6 +7229,17 @@ async function startQrFlow() {
   const errBox = document.getElementById("intError");
 
   errBox.hidden = true;
+
+  // Routing obligatorio ANTES de generar el QR (mismo candado que el backend)
+  let routing = null;
+  try {
+    routing = _readIntRoutingSelects(provider.key);
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.hidden = false;
+    return;
+  }
+
   submitBtn.disabled = true;
   submitBtn.textContent = "Iniciando…";
   statusEl.textContent = "Iniciando sesión de WhatsApp Web…";
@@ -7170,7 +7248,7 @@ async function startQrFlow() {
 
   let integrationId = null;
   try {
-    const res = await api("POST", `/api/integrations/${provider.key}/connect`, {});
+    const res = await api("POST", `/api/integrations/${provider.key}/connect`, routing ? { routing } : {});
     integrationId = res?.item?.id;
     if (!integrationId) throw new Error("No se obtuvo el ID de la integración");
     INT_EDIT.instance = res.item; // recordar para refrescar al conectar
@@ -7235,8 +7313,17 @@ async function startQrFlow() {
 }
 
 // ─── Modal de routing (pipeline / etapa) ───
-function openRoutingModal(integrationId) {
+// mandatory=true → no se puede cerrar ni omitir hasta guardar (integración de
+// mensajería conectada SIN routing: estado inválido que deja chats sin lead).
+let ROUTING_MANDATORY = false;
+function openRoutingModal(integrationId, mandatory = false) {
   ROUTING_INTEGRATION_ID = integrationId;
+  ROUTING_MANDATORY = !!mandatory;
+  const skipBtn = document.getElementById('routingSkipBtn');
+  if (skipBtn) skipBtn.style.display = mandatory ? 'none' : '';
+  document.querySelectorAll('#routingModal [data-close-routing]').forEach(el => {
+    el.style.display = mandatory ? 'none' : '';
+  });
 
   // Poblar select de pipelines
   const pipelineSel = document.getElementById("routingPipelineSelect");
@@ -7268,17 +7355,26 @@ function openRoutingModal(integrationId) {
   document.getElementById("routingModal").hidden = false;
 }
 
-function closeRoutingModal() {
+function closeRoutingModal(force = false) {
+  if (ROUTING_MANDATORY && !force) {
+    toast('Elige el pipeline y la etapa para los leads entrantes — es obligatorio para este canal.', 'error', 5000);
+    return;
+  }
+  ROUTING_MANDATORY = false;
   document.getElementById("routingModal").hidden = true;
   ROUTING_INTEGRATION_ID = null;
 }
 
 async function saveRouting(skip = false) {
-  if (!ROUTING_INTEGRATION_ID) { closeRoutingModal(); return; }
+  if (!ROUTING_INTEGRATION_ID) { closeRoutingModal(true); return; }
 
   if (skip) {
+    if (ROUTING_MANDATORY) {
+      toast('Este canal necesita pipeline y etapa — no se puede omitir.', 'error', 5000);
+      return;
+    }
     closeRoutingModal();
-    toast("Se usará el primer pipeline disponible por defecto", "info", 3000);
+    toast("Ojo: sin routing, los contactos nuevos de este canal NO generan lead", "error", 6000);
     return;
   }
 
@@ -7295,8 +7391,9 @@ async function saveRouting(skip = false) {
       pipelineName: pipeline?.name || '',
       stageName: stage?.name || '',
     });
+    ROUTING_MANDATORY = false; // ya quedó guardado — liberar el candado
     await loadIntegrations();
-    closeRoutingModal();
+    closeRoutingModal(true);
     toast("Pipeline configurado correctamente", "success");
   } catch (err) {
     toast(`Error: ${err.message}`, "error");
@@ -7405,21 +7502,38 @@ function setupIntegrations() {
     const errBox = document.getElementById("intError");
     const submitBtn = document.getElementById("intSubmitBtn");
     errBox.hidden = true;
+
+    // Routing obligatorio para canales de mensajería — sin elegirlo no hay conexión.
+    let routing = null;
+    try {
+      routing = _readIntRoutingSelects(INT_EDIT.provider.key);
+    } catch (err) {
+      errBox.textContent = err.message;
+      errBox.hidden = false;
+      return;
+    }
+
     submitBtn.disabled = true;
     const orig = submitBtn.textContent;
     submitBtn.textContent = "Validando…";
     try {
       if (INT_EDIT.instance) {
         await api("PATCH", `/api/integrations/${INT_EDIT.instance.id}`, payload);
+        if (routing) {
+          await api("PATCH", `/api/integrations/${INT_EDIT.instance.id}/routing`, routing);
+        }
         closeIntegrationModal();
         await loadIntegrations();
         toast(`${INT_EDIT.provider.name} actualizado`, "success");
       } else {
+        if (routing) payload.routing = routing;
         const res = await api("POST", `/api/integrations/${INT_EDIT.provider.key}/connect`, payload);
         closeIntegrationModal();
         await loadIntegrations();
         toast(`${INT_EDIT.provider.name} conectado`, "success");
-        if (res?.item?.id) openRoutingModal(res.item.id);
+        // El routing ya viajó con el connect para mensajería; el modal extra
+        // solo aplica a providers sin el bloque inline.
+        if (res?.item?.id && !routing) openRoutingModal(res.item.id);
       }
     } catch (err) {
       errBox.textContent = err.message;

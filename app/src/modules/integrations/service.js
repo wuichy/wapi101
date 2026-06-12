@@ -92,12 +92,49 @@ function mergeCredentials(provider, existing, incoming) {
   return merged;
 }
 
+// Providers cuyos webhooks crean contactos/leads → routing OBLIGATORIO al
+// conectar. Lección 11-jun-2026: la reconexión de WhatsApp creó una fila nueva
+// sin config.routing y los contactos nuevos quedaron SIN lead durante 2 días.
+const ROUTING_REQUIRED_PROVIDERS = new Set(['whatsapp', 'whatsapp-lite', 'messenger', 'instagram', 'telegram']);
+
+// Valida {pipelineId, stageId} contra el tenant (etapa debe pertenecer al
+// pipeline). Devuelve routing normalizado con nombres, o null si no se mandó.
+function _validRouting(db, tenantId, routing) {
+  if (!routing || !routing.pipelineId || !routing.stageId) return null;
+  const row = db.prepare(`
+    SELECT p.name AS pname, s.name AS sname FROM stages s
+    JOIN pipelines p ON p.id = s.pipeline_id
+    WHERE s.id = ? AND p.id = ? AND p.tenant_id = ?
+  `).get(Number(routing.stageId), Number(routing.pipelineId), tenantId);
+  if (!row) throw new Error('El pipeline/etapa elegidos no existen en tu cuenta');
+  return { pipelineId: Number(routing.pipelineId), stageId: Number(routing.stageId), pipelineName: row.pname, stageName: row.sname };
+}
+
+function _applyRouting(db, tenantId, integrationId, routing) {
+  if (!routing) return;
+  const row = db.prepare('SELECT config FROM integrations WHERE id = ? AND tenant_id = ?').get(integrationId, tenantId);
+  let config = {};
+  try { config = row?.config ? (JSON.parse(row.config) || {}) : {}; } catch (_) {}
+  config.routing = routing;
+  db.prepare('UPDATE integrations SET config = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+    .run(JSON.stringify(config), integrationId, tenantId);
+}
+
+function _routingOf(row) {
+  try { return row?.config ? ((JSON.parse(row.config) || {}).routing || null) : null; } catch (_) { return null; }
+}
+
 async function connect(db, tenantId, providerKey, incomingCreds) {
   const provider = providers.get(providerKey);
   if (!provider) throw new Error(`Provider desconocido: ${providerKey}`);
 
+  // El routing viene en el payload pero NO es credencial: extraer y validar
+  // antes de la validación de campos/test del provider.
+  const routing = _validRouting(db, tenantId, incomingCreds?.routing);
+  if (incomingCreds && typeof incomingCreds === 'object') delete incomingCreds.routing;
+
   if (provider.meta?.authType === 'qr') {
-    return connectQr(db, tenantId, providerKey);
+    return connectQr(db, tenantId, providerKey, routing);
   }
 
   const missing = provider.fields
@@ -120,6 +157,12 @@ async function connect(db, tenantId, providerKey, incomingCreds) {
     ? db.prepare('SELECT * FROM integrations WHERE provider = ? AND external_id = ?').get(providerKey, externalId)
     : null;
 
+  // Guard OBLIGATORIO: sin routing (nuevo o heredado) no se conecta un canal
+  // de mensajería — si no, los contactos entrantes no generan lead.
+  if (ROUTING_REQUIRED_PROVIDERS.has(providerKey) && !routing && !_routingOf(existing)?.pipelineId) {
+    throw new Error('Elige el pipeline y la etapa donde caerán los leads entrantes — es obligatorio para conectar este canal.');
+  }
+
   let savedId;
   if (existing) {
     if (existing.tenant_id !== tenantId) {
@@ -139,6 +182,8 @@ async function connect(db, tenantId, providerKey, incomingCreds) {
     `).run(tenantId, providerKey, displayName, externalId, encrypted);
     savedId = result.lastInsertRowid;
   }
+
+  _applyRouting(db, tenantId, savedId, routing);
 
   if (providerKey === 'telegram' && provider.setWebhook) {
     const baseUrl = (process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
@@ -213,10 +258,15 @@ function disconnect(db, tenantId, id) {
 
 // Flujo QR: crea integración pendiente y arranca sesión Baileys.
 // El QR se obtiene con qrStatus(id) — frontend lo polea cada ~1.5s.
-async function connectQr(db, tenantId, providerKey) {
+async function connectQr(db, tenantId, providerKey, routing = null) {
   const existing = db.prepare(
-    `SELECT id FROM integrations WHERE provider = ? AND tenant_id = ? AND status IN ('pending','connecting') ORDER BY id DESC LIMIT 1`
+    `SELECT id, config FROM integrations WHERE provider = ? AND tenant_id = ? AND status IN ('pending','connecting') ORDER BY id DESC LIMIT 1`
   ).get(providerKey, tenantId);
+
+  // Mismo guard que connect(): canal de mensajería sin routing = leads sin crear.
+  if (ROUTING_REQUIRED_PROVIDERS.has(providerKey) && !routing && !_routingOf(existing)?.pipelineId) {
+    throw new Error('Elige el pipeline y la etapa donde caerán los leads entrantes — es obligatorio para conectar este canal.');
+  }
 
   let id;
   if (existing) {
@@ -230,6 +280,8 @@ async function connectQr(db, tenantId, providerKey) {
     `).run(tenantId, providerKey, providers.get(providerKey).meta.name);
     id = result.lastInsertRowid;
   }
+
+  _applyRouting(db, tenantId, id, routing);
 
   const manager = require('./whatsapp-web/manager');
   manager.startSession(id).catch(err => {

@@ -1,4 +1,5 @@
 const { encryptJson, decryptJson } = require('../../security/crypto');
+const { assertSafeUrlShape } = require('../../security/ssrf');
 
 function list(db, tenantId) {
   return db.prepare('SELECT * FROM outgoing_webhooks WHERE tenant_id = ? ORDER BY id DESC').all(tenantId).map(hydrate);
@@ -26,7 +27,7 @@ function hydrate(row) {
 
 function create(db, tenantId, { name, url, events = [], secret, active = true }) {
   if (!url) throw new Error('La URL es obligatoria');
-  if (!url.startsWith('http://') && !url.startsWith('https://')) throw new Error('La URL debe empezar con http:// o https://');
+  assertSafeUrlShape(url); // anti-SSRF: http(s) + no IP/host interno
   const secretEnc = secret ? encryptJson({ secret }) : null;
   const eventsJson = JSON.stringify(Array.isArray(events) ? events : []);
   const r = db.prepare(`
@@ -52,9 +53,7 @@ function update(db, tenantId, id, { name, url, events, secret, active }) {
     nextSecretEnc = encryptJson({ secret });
   }
 
-  if (nextUrl && !nextUrl.startsWith('http://') && !nextUrl.startsWith('https://')) {
-    throw new Error('La URL debe empezar con http:// o https://');
-  }
+  if (url !== undefined) assertSafeUrlShape(nextUrl); // anti-SSRF al cambiar la URL
 
   db.prepare(`
     UPDATE outgoing_webhooks

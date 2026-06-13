@@ -101,8 +101,12 @@ async function processDelivery(db, delivery) {
   let ok = false;
 
   try {
+    // Anti-SSRF: re-resolver y validar el destino JUSTO antes del fetch (cierra
+    // la ventana de DNS-rebinding). Si resuelve a IP interna/privada, no dispara.
+    await require('../../security/ssrf').assertSafeUrl(delivery.url);
     const res = await fetch(delivery.url, {
       method:  'POST',
+      redirect: 'error', // no seguir redirects (podrían apuntar a la red interna)
       headers: {
         'Content-Type':       'application/json',
         'User-Agent':         'Wapi101-Webhook/1.0',

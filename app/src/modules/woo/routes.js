@@ -512,6 +512,12 @@ function authRouter(db) {
   // PUT /api/apps/woo/config/credentials — guardar credenciales WC REST API
   router.put('/config/credentials', (req, res) => {
     const { site_url, wc_consumer_key, wc_consumer_secret } = req.body;
+    // Anti-SSRF: el site_url alimenta fetch() del servidor — rechazar IPs/hosts
+    // internos para que un tenant no pueda apuntar wapi a su red interna/metadata.
+    if (site_url) {
+      try { require('../../security/ssrf').assertSafeUrlShape(site_url); }
+      catch (e) { return res.status(400).json({ error: `URL de tienda inválida: ${e.message}` }); }
+    }
     db.prepare('UPDATE woo_config SET site_url=?, wc_consumer_key=?, wc_consumer_secret=?, updated_at=unixepoch() WHERE tenant_id=?')
       .run(site_url || '', wc_consumer_key || '', wc_consumer_secret || '', req.tenantId);
     res.json({ ok: true });

@@ -126,6 +126,7 @@ function _publicAccount(row) {
 // ─── Apps CRUD ────────────────────────────────────────────────────────────
 function createApp(db, devAccountId, { name, shortDescription, category, redirectUris, scopesRequested, webhookUrl, webhookEvents }) {
   if (!name) throw new Error('name es requerido');
+  if (webhookUrl) require('../../security/ssrf').assertSafeUrlShape(webhookUrl); // anti-SSRF
   const baseSlug = slugify(name);
   if (!baseSlug) throw new Error('name inválido');
 
@@ -198,6 +199,7 @@ function getAppById(db, id, devAccountId) {
 function updateApp(db, id, devAccountId, patch) {
   const app = db.prepare('SELECT * FROM apps WHERE id = ? AND dev_account_id = ?').get(id, devAccountId);
   if (!app) throw new Error('App no encontrada');
+  if (patch.webhook_url) require('../../security/ssrf').assertSafeUrlShape(patch.webhook_url); // anti-SSRF
 
   const fields = [];
   const params = [];

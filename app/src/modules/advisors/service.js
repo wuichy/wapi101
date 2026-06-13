@@ -31,16 +31,26 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// Hash de tokens opacos de sesión (alta entropía → sha256 basta, igual que
+// machine_tokens/password_reset_tokens). Se guarda el HASH en DB, nunca el
+// token en claro. Dual-read en getSession para no desloguear sesiones legacy.
+function _hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
 function createSession(db, advisorId, remember = false) {
   const token = generateToken();
   const days = remember ? 90 : 30; // "recuerda mi sesión" = 90 días; normal = 30
   const expiresAt = Math.floor(Date.now() / 1000) + days * 24 * 3600;
-  db.prepare('INSERT INTO advisor_sessions (token, advisor_id, expires_at) VALUES (?, ?, ?)').run(token, advisorId, expiresAt);
+  // Guardar el HASH del token, no el token en claro (defensa si la DB se filtra).
+  db.prepare('INSERT INTO advisor_sessions (token, advisor_id, expires_at) VALUES (?, ?, ?)').run(_hashToken(token), advisorId, expiresAt);
   return token;
 }
 
 function getSession(db, token) {
   if (!token) return null;
+  // Dual-read: nuevas sesiones guardan sha256; las legacy (token en claro)
+  // siguen funcionando por la 2ª rama hasta que expiren. Cero deslogueo.
   const row = db.prepare(`
     SELECT s.advisor_id, s.expires_at, s.impersonator_super_token, s.impersonator_super_admin_id, s.impersonated_at,
            a.id, a.name, a.username, a.email, a.role, a.permissions, a.active, a.tenant_id,
@@ -48,8 +58,8 @@ function getSession(db, token) {
     FROM advisor_sessions s
     JOIN advisors a ON a.id = s.advisor_id
     LEFT JOIN tenants t ON t.id = a.tenant_id
-    WHERE s.token = ? AND s.expires_at > unixepoch()
-  `).get(token);
+    WHERE (s.token = ? OR s.token = ?) AND s.expires_at > unixepoch()
+  `).get(_hashToken(token), token);
   if (!row || !row.active) return null;
   return {
     id:          row.id,
@@ -71,7 +81,8 @@ function getSession(db, token) {
 }
 
 function deleteSession(db, token) {
-  db.prepare('DELETE FROM advisor_sessions WHERE token = ?').run(token);
+  // Borra tanto la forma hasheada (nuevas) como en claro (legacy).
+  db.prepare('DELETE FROM advisor_sessions WHERE token = ? OR token = ?').run(_hashToken(token), token);
 }
 
 // Login multi-tenant.
@@ -253,4 +264,5 @@ module.exports = {
   login, createSession, getSession, deleteSession,
   list, create, update, remove, ensureFirstAdmin,
   requestPasswordReset, verifyResetToken, applyPasswordReset,
+  hashSessionToken: _hashToken, // para que super/service ubique la fila hasheada
 };

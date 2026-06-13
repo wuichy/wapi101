@@ -24,6 +24,12 @@ function generateOpaque(prefix = '') {
   return prefix + crypto.randomBytes(32).toString('hex');
 }
 
+// Hash de tokens opacos (sha256). Se guarda el HASH en app_oauth_tokens, nunca
+// el token en claro. Dual-read en verify/exchange para no romper tokens legacy.
+function _hashTok(t) {
+  return crypto.createHash('sha256').update(String(t)).digest('hex');
+}
+
 // ─── Authorization (paso 3) ──────────────────────────────────────────────
 // Llamado cuando el advisor (cliente) acepta el consent. Genera un code
 // de 10 min que la app canjea por tokens.
@@ -87,7 +93,7 @@ function exchangeRefreshToken(db, { clientId, clientSecret, refreshToken }) {
     throw new Error('invalid_client');
   }
 
-  const tokenRow = db.prepare('SELECT * FROM app_oauth_tokens WHERE refresh_token = ?').get(refreshToken);
+  const tokenRow = db.prepare('SELECT * FROM app_oauth_tokens WHERE refresh_token = ? OR refresh_token = ?').get(_hashTok(refreshToken), refreshToken);
   if (!tokenRow) throw new Error('invalid_grant');
   if (tokenRow.revoked_at) throw new Error('invalid_grant');
   if (tokenRow.refresh_expires_at <= Math.floor(Date.now() / 1000)) throw new Error('invalid_grant');
@@ -114,15 +120,15 @@ function verifyAccessToken(db, accessToken) {
       FROM app_oauth_tokens t
       JOIN dev_app_installs i ON i.id = t.install_id
       JOIN apps a ON a.id = i.app_id
-     WHERE t.token = ?
-  `).get(accessToken);
+     WHERE t.token = ? OR t.token = ?
+  `).get(_hashTok(accessToken), accessToken);
   if (!row) return null;
   if (row.revoked_at) return null;
   if (row.install_revoked) return null;
   if (row.expires_at <= Math.floor(Date.now() / 1000)) return null;
   if (row.app_status === 'suspended') return null;
-  // Toca last_used (best-effort, no falla si la BD está locked)
-  try { db.prepare('UPDATE app_oauth_tokens SET last_used_at = unixepoch() WHERE token = ?').run(accessToken); } catch {}
+  // Toca last_used (best-effort) — usa el valor REAL de la fila (ya hasheado).
+  try { db.prepare('UPDATE app_oauth_tokens SET last_used_at = unixepoch() WHERE token = ?').run(row.token); } catch {}
   return {
     tokenId:   row.token,
     installId: row.install_id,
@@ -138,11 +144,12 @@ function verifyAccessToken(db, accessToken) {
 
 // ─── Revoke (uninstall / logout app) ────────────────────────────────────
 function revokeToken(db, accessTokenOrRefresh) {
+  const h = _hashTok(accessTokenOrRefresh);
   const stmt = db.prepare(`
     UPDATE app_oauth_tokens SET revoked_at = unixepoch()
-     WHERE (token = ? OR refresh_token = ?) AND revoked_at IS NULL
+     WHERE (token = ? OR refresh_token = ? OR token = ? OR refresh_token = ?) AND revoked_at IS NULL
   `);
-  const r = stmt.run(accessTokenOrRefresh, accessTokenOrRefresh);
+  const r = stmt.run(h, h, accessTokenOrRefresh, accessTokenOrRefresh);
   return r.changes > 0;
 }
 
@@ -161,10 +168,11 @@ function _issueTokenPair(db, installId, scopes) {
   const now = Math.floor(Date.now() / 1000);
   const expiresAt        = now + ACCESS_TTL_SECS;
   const refreshExpiresAt = now + REFRESH_TTL_SECS;
+  // Guardar el HASH de ambos tokens, nunca en claro.
   db.prepare(`
     INSERT INTO app_oauth_tokens (token, refresh_token, install_id, scopes, expires_at, refresh_expires_at)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(accessToken, refreshToken, installId, JSON.stringify(scopes), expiresAt, refreshExpiresAt);
+  `).run(_hashTok(accessToken), _hashTok(refreshToken), installId, JSON.stringify(scopes), expiresAt, refreshExpiresAt);
   return {
     access_token:  accessToken,
     refresh_token: refreshToken,

@@ -19,6 +19,13 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png?v=3" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png?v=3" />
 
+  <!-- Preconnect a CDNs que el SPA carga en runtime → ahorra el handshake
+       TLS/DNS cuando se necesitan (rrweb/pdf.js/mammoth, FB SDK, Google Fonts). -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
+  <link rel="dns-prefetch" href="https://connect.facebook.net" />
+
   <link rel="stylesheet" href="/styles.css?v=20260608ai3366" />
 </head>
 <body>
@@ -4564,7 +4571,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script src="/app.js?v=20260611routing"></script>
+  <script defer src="/app.js?v=20260611routing"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

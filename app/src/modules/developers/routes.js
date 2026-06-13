@@ -40,9 +40,11 @@ module.exports = function createDevelopersRouter(db) {
   router.use(express.json({ limit: '1mb' }));
 
   // Rate limit en signup/login — anti spam
+  const _kip = (req) => require('../../util/client-ip').realClientIp(req); // IP real (CF)
   const signupLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1h
     max: 5,
+    keyGenerator: _kip,
     message: { error: 'Demasiados intentos. Intenta más tarde.' },
     standardHeaders: true,
     legacyHeaders: false,
@@ -50,6 +52,7 @@ module.exports = function createDevelopersRouter(db) {
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 min
     max: 10,
+    keyGenerator: _kip,
     message: { error: 'Demasiados intentos. Intenta más tarde.' },
     standardHeaders: true,
     legacyHeaders: false,

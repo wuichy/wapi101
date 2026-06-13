@@ -268,10 +268,20 @@ module.exports = function createConversationsRouter(db) {
         return res.status(400).json({ error: `Archivo de ${myMb}MB excede el máximo (${maxMb}MB) para ${mediaType} en ${convo.provider}`, errorCode: 'MEDIA_SIZE_EXCEEDED' });
       }
 
-      // Guardar copia local para mostrar en el chat propio
-      const ext = (filename || '').match(/\.([a-zA-Z0-9]{1,8})$/)?.[1]
-                || mimetype.split('/')[1]?.split(';')[0]
-                || 'bin';
+      // Guardar copia local — la extensión se deriva del MIME validado (con
+      // magic bytes arriba), NUNCA del filename del cliente: si no, un cliente
+      // podía subir "foto.html"/"x.svg" y servirse same-origin desde /uploads
+      // (XSS/polyglot). Mapa de extensiones seguras; cualquier otra → .bin.
+      const SAFE_EXT = {
+        'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp',
+        'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'video/3gpp': '3gp',
+        'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/amr': 'amr', 'audio/webm': 'weba',
+        'application/pdf': 'pdf', 'text/plain': 'txt', 'text/csv': 'csv',
+        'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/vnd.ms-excel': 'xls', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+        'application/vnd.ms-powerpoint': 'ppt', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+      };
+      const ext = SAFE_EXT[String(mimetype).split(';')[0].trim()] || 'bin';
       const localName = `c${convoId}-${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
       fs.writeFileSync(path.join(chatMediaDir, localName), buffer);
       const localUrl = `/uploads/chat-media/${localName}`;

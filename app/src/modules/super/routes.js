@@ -4,15 +4,11 @@
 
 const express = require('express');
 const service = require('./service');
+const { realClientIp } = require('../../util/client-ip');
 
-function clientIp(req) {
-  const xff = req.headers['x-forwarded-for'];
-  if (xff) {
-    const first = String(xff).split(',')[0].trim();
-    if (first) return first;
-  }
-  return req.ip || null;
-}
+// IP real del cliente vía CF-Connecting-IP (antes XFF[0] = IP rotativa de CF →
+// el rate-limit del login de super solo se ralentizaba, no bloqueaba).
+function clientIp(req) { return realClientIp(req); }
 
 function extractToken(req) {
   const auth = req.headers['authorization'] || '';

@@ -13,8 +13,14 @@ function hashPassword(password) {
 function verifyPassword(password, stored) {
   if (!stored || !stored.includes(':')) return false;
   const [salt, hash] = stored.split(':');
-  const test = crypto.pbkdf2Sync(String(password), salt, 100_000, 32, 'sha256').toString('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(test));
+  if (!salt || !hash) return false;
+  try {
+    const test = crypto.pbkdf2Sync(String(password), salt, 100_000, 32, 'sha256').toString('hex');
+    const a = Buffer.from(hash, 'hex'), b = Buffer.from(test, 'hex');
+    // timingSafeEqual lanza si difieren las longitudes — guard explícito.
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch (_) { return false; }
 }
 function generateToken() {
   return 'sa_' + crypto.randomBytes(24).toString('hex');

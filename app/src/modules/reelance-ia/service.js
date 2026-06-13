@@ -1126,6 +1126,12 @@ async function _dispatchPendingAbandonedCarts(db) {
         await _sendAbandonedTemplate(db, row, payload, cfg.abandoned_template_id);
         dispatchedAs = `template ${cfg.abandoned_template_id}`;
       } else if (row.bot_id) {
+        // Verificar que el bot exista y esté habilitado ANTES de marcar 'sent'
+        // (si no, el carrito quedaba 'sent' sin que nada se disparara). El
+        // resultado del envío en sí lo trackea el motor de bots (burbuja roja
+        // en el chat si el send falla — fix de auditoría previo).
+        const botRow = db.prepare("SELECT id, enabled FROM salsbots WHERE id = ? AND tenant_id = ?").get(row.bot_id, row.tenant_id);
+        if (!botRow || !botRow.enabled) throw new Error(`bot ${row.bot_id} no existe o está deshabilitado`);
         _fireBot(db, row.tenant_id, row.bot_id, row.contact_id, row.lead_id, {
           source: 'reelance-ia.abandoned_cart.delayed',
           cart: payload,

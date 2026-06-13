@@ -58,8 +58,10 @@ module.exports = function createBusinessRouter(db) {
     try {
       const { data, mimetype } = req.body || {};
       if (!data || !mimetype) return res.status(400).json({ error: 'data y mimetype requeridos' });
-      const allowed = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
-      if (!allowed.includes(mimetype)) return res.status(400).json({ error: 'Formato no permitido. Usa PNG, JPG, SVG o WebP.' });
+      // SVG NO permitido: puede llevar <script>/on* embebido y se sirve
+      // same-origin desde /uploads → XSS almacenado. Solo raster.
+      const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+      if (!allowed.includes(mimetype)) return res.status(400).json({ error: 'Formato no permitido. Usa PNG, JPG o WebP.' });
 
       const cleanB64 = String(data).replace(/^data:[^;]+;base64,/, '');
       const buffer = Buffer.from(cleanB64, 'base64');
@@ -70,7 +72,7 @@ module.exports = function createBusinessRouter(db) {
       const logosDir = path.join(uploadsDir, 'business-logos');
       if (!fs.existsSync(logosDir)) fs.mkdirSync(logosDir, { recursive: true });
 
-      const ext = mimetype === 'image/svg+xml' ? 'svg' : mimetype.split('/')[1];
+      const ext = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' })[mimetype] || 'png';
       const filename = `tenant${req.tenantId}-${Date.now()}.${ext}`;
       fs.writeFileSync(path.join(logosDir, filename), buffer);
       const logoUrl = `/uploads/business-logos/${filename}`;

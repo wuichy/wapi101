@@ -225,6 +225,14 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permite que webhook URLs reciban POSTs externos
 }));
 
+// Permissions-Policy: bloquear APIs del navegador que la app no usa (cámara,
+// micrófono, geolocalización, pagos, USB, etc.) — reduce superficie si hubiera XSS.
+app.use((_req, res, next) => {
+  res.set('Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()');
+  next();
+});
+
 // Sirve la página HTML del super-admin ANTES de montar el router (sino el
 // authMiddleware del router intercepta la GET /super y devuelve 401).
 app.get('/super', (_req, res) => {
@@ -378,13 +386,15 @@ const { oauthRateLimit } = require('./src/middleware/oauthRateLimit');
 // o capto de captcha tras N fallos por usuario), pero esto bloquea el brute force
 // trivial desde una sola IP.
 const rateLimit = require('express-rate-limit');
+const { realClientIp } = require('./src/util/client-ip');
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  // Trust proxy (Cloudflare) → usa X-Forwarded-For
-  keyGenerator: (req) => req.ip || req.connection?.remoteAddress || 'unknown',
+  // IP REAL del cliente (CF-Connecting-IP) — antes req.ip = IP rotativa de
+  // Cloudflare, así que el brute force solo se ralentizaba, no se bloqueaba.
+  keyGenerator: (req) => realClientIp(req),
   message: { error: 'Demasiados intentos. Espera 15 minutos.', code: 'RATE_LIMITED' },
 });
 // Habilitar trust proxy para que req.ip sea la IP real del cliente vía Cloudflare
@@ -456,7 +466,7 @@ function _forgotRateLimit(ip) {
 }
 
 app.post('/api/auth/forgot-password', async (req, res) => {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+  const ip = realClientIp(req);
   if (!_forgotRateLimit(ip)) {
     return res.status(429).json({ error: 'Demasiados intentos. Intenta más tarde.' });
   }

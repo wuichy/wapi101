@@ -176,10 +176,24 @@ function _calcStartsAt(offsetDays, timeHHMM) {
   return Math.floor(target.getTime() / 1000);
 }
 
+// Solape de agenda del MISMO asesor en [startsAt, endsAt). Defensa contra
+// doble-booking — bookManual ya lo validaba; book()/reschedule() del bot no.
+function _overlapsAdvisor(db, tenantId, advisorId, startsAt, endsAt, excludeId) {
+  if (!advisorId) return null;
+  const params = [tenantId, Number(advisorId), endsAt, startsAt];
+  let sql = `SELECT id FROM appointments WHERE tenant_id = ? AND advisor_id = ?
+             AND status IN ('scheduled','confirmed') AND starts_at < ? AND ends_at > ?`;
+  if (excludeId) { sql += ' AND id != ?'; params.push(Number(excludeId)); }
+  return db.prepare(sql + ' LIMIT 1').get(...params) || null;
+}
+
 function book(db, tenantId, { contactId, expedientId, convoId, advisorId, offsetDays, time, durationMin, notes, createdVia }) {
   const dur     = Number(durationMin) || 30;
   const startsAt = _calcStartsAt(offsetDays, time);
   const endsAt   = startsAt + dur * 60;
+
+  const clash = _overlapsAdvisor(db, tenantId, advisorId, startsAt, endsAt, null);
+  if (clash) throw Object.assign(new Error('El asesor ya tiene una cita en ese horario'), { code: 'SLOT_CONFLICT', conflictWith: clash.id });
 
   const res = db.prepare(`
     INSERT INTO appointments
@@ -257,13 +271,18 @@ function reschedule(db, tenantId, { contactId, expedientId, convoId, advisorId, 
      ORDER BY starts_at DESC LIMIT 1
   `).get(contactId, tenantId);
 
-  if (existing) {
-    db.prepare(`UPDATE appointments SET status = 'rescheduled', updated_at = unixepoch() WHERE id = ?`).run(existing.id);
-  }
-
   const dur      = Number(durationMin) || 30;
   const startsAt = _calcStartsAt(offsetDays, time);
   const endsAt   = startsAt + dur * 60;
+
+  // Validar choque ANTES de cancelar la cita previa (no dejar al lead sin cita
+  // si el nuevo horario está ocupado). Excluir la cita existente del chequeo.
+  const clash = _overlapsAdvisor(db, tenantId, advisorId, startsAt, endsAt, existing?.id);
+  if (clash) throw Object.assign(new Error('El asesor ya tiene una cita en ese horario'), { code: 'SLOT_CONFLICT', conflictWith: clash.id });
+
+  if (existing) {
+    db.prepare(`UPDATE appointments SET status = 'rescheduled', updated_at = unixepoch() WHERE id = ?`).run(existing.id);
+  }
 
   const res = db.prepare(`
     INSERT INTO appointments

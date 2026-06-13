@@ -160,11 +160,21 @@ function _renderRelatedLinks(currentPage) {
     </div>`;
 }
 
+// Recorta una meta description a ~158 chars cortando en palabra (Google trunca
+// ~160). Red de seguridad para no editar las 20 páginas a mano.
+function _clampDesc(s) {
+  const str = String(s || '');
+  if (str.length <= 160) return str;
+  const cut = str.slice(0, 157);
+  return cut.slice(0, cut.lastIndexOf(' ') > 120 ? cut.lastIndexOf(' ') : 157).trim() + '…';
+}
+
 function renderPage(page) {
   const isVs = page.type === 'vs';
   const jsonLd = isVs ? _jsonLdForVs(page) : _jsonLdForTopic(page);
   const faqJsonLd = _jsonLdForFaqs(page.faqs);
   const url = `https://wapi101.com/${page.slug}`;
+  const metaDesc = _clampDesc(page.description);
 
   const compTableHtml = isVs && Array.isArray(page.compRows) && page.compRows.length ? `
     <section class="comp-section">
@@ -223,7 +233,7 @@ function renderPage(page) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>${escHtml(page.title)}</title>
-  <meta name="description" content="${escHtml(page.description)}" />
+  <meta name="description" content="${escHtml(metaDesc)}" />
   ${page.keywords ? `<meta name="keywords" content="${escHtml(page.keywords)}" />` : ''}
   <link rel="canonical" href="${url}" />
   <meta name="theme-color" content="#2563eb" />
@@ -234,12 +244,16 @@ function renderPage(page) {
   <meta property="og:title" content="${escHtml(page.title)}" />
   <meta property="og:description" content="${escHtml(page.description)}" />
   <meta property="og:url" content="${url}" />
-  <meta property="og:image" content="https://wapi101.com/icons/wapi101-logo.svg" />
+  <meta property="og:image" content="https://wapi101.com/icons/og-wapi101.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Wapi101 — CRM con WhatsApp para LATAM" />
   <meta property="og:locale" content="es_MX" />
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escHtml(page.title)}" />
   <meta name="twitter:description" content="${escHtml(page.description)}" />
+  <meta name="twitter:image" content="https://wapi101.com/icons/og-wapi101.png" />
 
   <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
   <script type="application/ld+json">${JSON.stringify(_WAPI101_SOFTWARE_SCHEMA)}</script>
@@ -415,6 +429,8 @@ function renderPage(page) {
     <a href="/">Inicio</a> · ${crumbLabel}
   </nav>
 
+  <main>
+  <article>
   <header class="hero">
     <h1>${escHtml(page.title.split(':')[0])}${page.title.includes(':') ? `:<br/><span style="color:var(--text-soft);font-weight:600">${escHtml(page.title.split(':').slice(1).join(':').trim())}</span>` : ''}</h1>
     <p class="lead">${escHtml(page.hero || page.description)}</p>
@@ -424,6 +440,8 @@ function renderPage(page) {
   ${compTableHtml}
   ${sectionsHtml}
   ${faqHtml}
+  </article>
+  </main>
 
   ${_renderRelatedLinks(page)}
 

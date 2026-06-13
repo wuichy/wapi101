@@ -28,14 +28,17 @@
   <meta property="og:site_name" content="Wapi101" />
   <meta property="og:title" content="Wapi101 · CRM para WhatsApp Business en México y LATAM" />
   <meta property="og:description" content="WhatsApp + Messenger + Instagram + Telegram en una sola bandeja. Bots visuales, pipelines kanban, plantillas aprobadas. 14 días gratis." />
-  <meta property="og:image" content="https://wapi101.com/icons/wapi101-logo.svg" />
+  <meta property="og:image" content="https://wapi101.com/icons/og-wapi101.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Wapi101 — CRM con WhatsApp para LATAM" />
   <meta property="og:url" content="https://wapi101.com/" />
   <meta property="og:locale" content="es_MX" />
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Wapi101 · CRM para WhatsApp Business" />
   <meta name="twitter:description" content="CRM multicanal con bots visuales y pipelines kanban. Para PyMEs en México y LATAM. 14 días gratis." />
-  <meta name="twitter:image" content="https://wapi101.com/icons/wapi101-logo.svg" />
+  <meta name="twitter:image" content="https://wapi101.com/icons/og-wapi101.png" />
 
   <!-- SoftwareApplication — para que los LLMs entiendan el producto -->
   <script type="application/ld+json">
@@ -109,12 +112,27 @@
     "name": "Wapi101",
     "url": "https://wapi101.com/",
     "description": "CRM para WhatsApp Business en México y LATAM",
-    "inLanguage": "es-MX",
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": "https://wapi101.com/signup",
-      "query-input": "required name=search_term_string"
-    }
+    "inLanguage": "es-MX"
+  }
+  </script>
+
+  <!-- FAQPage en la home — Q&A citable por IA + posibles rich results -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "¿Qué es Wapi101?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Wapi101 es un CRM multicanal para WhatsApp Business, Messenger, Instagram y Telegram, con WhatsApp Cloud API nativo, bots visuales y pipelines kanban. Está diseñado para PyMEs en México y Latinoamérica, con precios en pesos mexicanos." } },
+      { "@type": "Question", "name": "¿Wapi101 usa la API oficial de WhatsApp?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Sí. Wapi101 se conecta directo a WhatsApp Cloud API (la API oficial de Meta), sin intermediarios. También soporta WhatsApp mediante código QR para números personales." } },
+      { "@type": "Question", "name": "¿Cuánto cuesta Wapi101?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Wapi101 tiene plan Básico desde 149 MXN al mes, Pro 299 MXN y Ultra 499 MXN. Hay 14 días de prueba gratis sin tarjeta." } },
+      { "@type": "Question", "name": "¿Wapi101 funciona en toda Latinoamérica?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Sí. Wapi101 está hecho para LATAM: interfaz y soporte en español, precios en pesos mexicanos y funciona en México, Colombia, Argentina, Chile, Perú, Ecuador y más." } },
+      { "@type": "Question", "name": "¿Puedo automatizar respuestas con bots?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Sí. Wapi101 incluye un constructor visual de bots con condiciones, esperas, botones y disparadores por palabra clave o etapa del pipeline, además de IA híbrida opcional." } }
+    ]
   }
   </script>
 

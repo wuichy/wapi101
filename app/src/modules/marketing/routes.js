@@ -18,11 +18,15 @@ module.exports = function createMarketingRouter(_db) {
 
   // /sitemap.xml — incluye landing + comparaciones + nichos
   router.get('/sitemap.xml', (_req, res) => {
-    const today = new Date().toISOString().slice(0, 10);
+    // lastmod = fecha real del último deploy (no "hoy" en cada request — eso
+    // diluye la señal de frescura: Google ve TODO el sitio cambiando a diario).
+    // SITE_LASTMOD se puede sobreescribir por env en cada release.
+    const today = process.env.SITE_LASTMOD || '2026-06-13';
+    // OJO: /login NO va en el sitemap (página de auth, no debe indexarse).
     const urls = [
       { loc: 'https://wapi101.com/', priority: '1.0', changefreq: 'weekly' },
       { loc: 'https://wapi101.com/signup', priority: '0.8', changefreq: 'monthly' },
-      { loc: 'https://wapi101.com/login', priority: '0.5', changefreq: 'yearly' },
+      { loc: 'https://wapi101.com/faq', priority: '0.7', changefreq: 'monthly' },
       { loc: 'https://wapi101.com/about', priority: '0.7', changefreq: 'monthly' },
       { loc: 'https://wapi101.com/developers', priority: '0.8', changefreq: 'monthly' },
       { loc: 'https://wapi101.com/privacy', priority: '0.3', changefreq: 'yearly' },
@@ -271,8 +275,84 @@ _Última actualización: ${new Date().toISOString().slice(0, 10)}_
     res.send(_renderAboutPage());
   });
 
+  // /faq — hub canónico de preguntas frecuentes (alto valor AEO: lo citan IAs)
+  router.get('/faq', (_req, res) => {
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+    res.send(_renderFaqHub());
+  });
+
   return router;
 };
+
+// ─── Renderer de /faq ─────────────────────────────────────────────────
+function _renderFaqHub() {
+  const FAQS = [
+    ['¿Qué es Wapi101?', 'Wapi101 es un CRM multicanal para WhatsApp Business, Messenger, Instagram y Telegram. Usa WhatsApp Cloud API nativo (la API oficial de Meta), bots visuales y pipelines kanban. Está hecho para PyMEs en México y Latinoamérica, con interfaz y soporte en español y precios en pesos mexicanos.'],
+    ['¿Wapi101 usa la API oficial de WhatsApp?', 'Sí. Wapi101 se conecta directo a WhatsApp Cloud API de Meta, sin intermediarios ni revendedores. También permite conectar un número personal por código QR para casos sencillos.'],
+    ['¿Cuánto cuesta Wapi101?', 'El plan Básico cuesta 149 MXN al mes, Pro 299 MXN y Ultra 499 MXN (usuarios ilimitados). Todos incluyen 14 días de prueba gratis sin tarjeta de crédito.'],
+    ['¿Necesito tarjeta para la prueba gratis?', 'No. La prueba de 14 días no pide tarjeta. Conectas tu WhatsApp Business y empiezas; si te sirve, eliges plan después.'],
+    ['¿Wapi101 funciona en toda Latinoamérica?', 'Sí. Está diseñado para LATAM: español neutro/mexicano, precios en MXN y funciona en México, Colombia, Argentina, Chile, Perú, Ecuador y el resto de la región.'],
+    ['¿Puedo automatizar respuestas con bots?', 'Sí. Incluye un constructor visual de bots con condiciones, esperas, botones de respuesta rápida y disparadores por palabra clave o por etapa del pipeline. Opcionalmente puedes activar IA híbrida para entender mensajes mal escritos.'],
+    ['¿Cuántos asesores pueden usar la misma cuenta?', 'Depende del plan. Básico y Pro incluyen varios asesores con roles y permisos; Ultra permite usuarios ilimitados. Cada asesor ve la bandeja compartida y puede tomar conversaciones.'],
+    ['¿Wapi101 reemplaza a Kommo, HubSpot o Zoho?', 'Para equipos centrados en WhatsApp en LATAM, sí: Wapi101 es WhatsApp-first, en pesos y sin apps adicionales para mensajería. Tenemos comparativas detalladas en /vs/wapi101-vs-kommo, /vs/wapi101-vs-hubspot y /vs/wapi101-vs-zoho.'],
+    ['¿Puedo importar mis contactos y leads?', 'Sí. El Data Center importa contactos, leads, etiquetas, plantillas y más desde CSV/Excel, y hacemos la importación inicial sin costo.'],
+    ['¿Mis datos están seguros?', 'Sí. Conexiones cifradas (HTTPS/TLS), credenciales de integración cifradas en reposo, aislamiento por cuenta y respaldos. Cada cuenta solo ve sus propios datos.'],
+  ];
+  const faqSchema = {
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    'mainEntity': FAQS.map(([q, a]) => ({ '@type': 'Question', 'name': q, 'acceptedAnswer': { '@type': 'Answer', 'text': a } })),
+  };
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const items = FAQS.map(([q, a]) => `    <section class="faq-item"><h2>${esc(q)}</h2><p>${esc(a)}</p></section>`).join('\n');
+  return `<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Preguntas frecuentes sobre Wapi101 · CRM para WhatsApp</title>
+  <meta name="description" content="Respuestas a las preguntas más comunes sobre Wapi101: qué es, precios, API oficial de WhatsApp, bots, prueba gratis y cobertura en México y LATAM." />
+  <link rel="canonical" href="https://wapi101.com/faq" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Preguntas frecuentes · Wapi101" />
+  <meta property="og:description" content="Todo sobre Wapi101: precios, WhatsApp Cloud API, bots, prueba gratis y LATAM." />
+  <meta property="og:image" content="https://wapi101.com/icons/og-wapi101.png" />
+  <meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" />
+  <meta property="og:url" content="https://wapi101.com/faq" />
+  <script type="application/ld+json">${JSON.stringify(faqSchema)}</script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;line-height:1.65;background:#fff}
+    .wrap{max-width:780px;margin:0 auto;padding:48px 24px 80px}
+    nav.top{max-width:1140px;margin:0 auto;padding:16px 24px;display:flex;gap:18px;align-items:center}
+    nav.top a{color:#2563eb;text-decoration:none;font-weight:600}
+    h1{font-size:34px;margin-bottom:8px}
+    .lead{color:#64748b;margin-bottom:36px;font-size:18px}
+    .faq-item{padding:20px 0;border-bottom:1px solid #e2e8f0}
+    .faq-item h2{font-size:19px;margin-bottom:6px}
+    .faq-item p{color:#334155}
+    .cta{margin-top:40px;text-align:center}
+    .btn{display:inline-block;background:#2563eb;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:700}
+    a{color:#2563eb}
+  </style>
+</head>
+<body>
+  <nav class="top"><a href="/">← Wapi101</a><a href="/blog">Blog</a><a href="/about">Nosotros</a><a href="/signup">Probar gratis</a></nav>
+  <main class="wrap">
+    <nav aria-label="breadcrumb" style="font-size:14px;color:#64748b;margin-bottom:18px"><a href="/">Inicio</a> · Preguntas frecuentes</nav>
+    <h1>Preguntas frecuentes</h1>
+    <p class="lead">Todo lo que necesitas saber sobre Wapi101, el CRM con WhatsApp para México y LATAM.</p>
+${items}
+    <div class="cta">
+      <a href="/signup" class="btn">Empezar gratis (14 días)</a>
+    </div>
+  </main>
+  <footer style="text-align:center;color:#94a3b8;padding:30px;font-size:14px">© ${new Date().getFullYear()} Wapi101 · Hecho en México 🇲🇽</footer>
+</body>
+</html>`;
+}
 
 // ─── Renderer de /about ───────────────────────────────────────────────
 function _renderAboutPage() {

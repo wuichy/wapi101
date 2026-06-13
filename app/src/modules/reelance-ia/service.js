@@ -767,18 +767,43 @@ function _routeOrderToPipeline(db, tenantId, lead, payload, cfg) {
   const items = payload.items || [];
   if (!items.length) return;
 
+  // Matcher tolerante de producto: exacto → sin variante (" — …") → prefijo
+  // bidireccional, todo normalizado (minúsculas, sin acentos, espacios
+  // colapsados). Evita que un rename leve en la config deje al cliente sin
+  // rutear (bug real 2026-06-12: pedido 80181 mandó "Gel Pomada Híbrida" y la
+  // config decía "Gel Pomada Híbrida Para Peinar" → match exacto fallaba).
+  const _norm = (s) => String(s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const _findDef = (rawName) => {
+    const full = _norm(rawName);
+    if (!full) return null;
+    const base = _norm(String(rawName).split(' — ')[0]); // nombre sin variante
+    let def = productDefs.find(p => _norm(p.name) === full)
+           || productDefs.find(p => _norm(p.name) === base);
+    if (def) return def;
+    return productDefs.find(p => {
+      const cfgName = _norm(p.name);
+      return cfgName && (
+        full.startsWith(cfgName) || cfgName.startsWith(full) ||
+        base.startsWith(cfgName) || cfgName.startsWith(base)
+      );
+    }) || null;
+  };
+
   // Calcular maxDays — duración del producto más larga × cantidad
   let maxDays = 0;
   for (const item of items) {
-    const name = String(item.productName || '').toLowerCase().trim();
-    const def  = productDefs.find(p => String(p.name || '').toLowerCase().trim() === name);
+    const def = _findDef(item.productName);
     if (def && def.duration_days) {
       const effective = Number(def.duration_days) * (Number(item.quantity) || 1);
       if (effective > maxDays) maxDays = effective;
     }
   }
   if (maxDays <= 0) {
-    console.log(`[reelance-ia] order ${payload.id} sin productos configurados — no se rutea`);
+    console.log(`[reelance-ia] order ${payload.id} sin productos configurados — no se rutea (items: ${items.map(i => i.productName).join(', ')})`);
     return;
   }
 

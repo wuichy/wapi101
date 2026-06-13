@@ -656,6 +656,39 @@ app.use('/api', (_req, res, next) => {
 app.use('/api', authMiddleware(db));
 app.use('/api', oauthRateLimit()); // no-op para advisors; enforza límite si req.appAuth
 
+// ─── Gate de SCOPES para tokens OAuth (apps de terceros) ───
+// Un token OAuth tenía acceso TOTAL a /api sin importar los scopes que el
+// usuario consintió. Esto enforza scopes con DENY-BY-DEFAULT: una app solo
+// toca los módulos de datos para los que tiene scope; todo lo administrativo
+// (super, dev, billing, advisors, data-center, integraciones, backups, etc.)
+// queda vedado a apps de terceros. NO afecta a advisors (rh_token) ni a
+// machine-tokens — solo a req.appAuth (OAuth).
+const OAUTH_SCOPE_MAP = [
+  [/^\/expedients/,                 'leads:read',        'leads:write'],
+  [/^\/contacts/,                   'contacts:read',     'contacts:write'],
+  [/^\/(conversations|templates|template-tags)/, 'messages:read', 'messages:send'],
+  [/^\/(bot|bots|bot-tags)\b/,      'bots:read',         'bots:write'],
+  [/^\/appointments/,               'appointments:read', 'appointments:write'],
+  [/^\/pipelines/,                  'pipelines:read',    null], // no existe pipelines:write
+  [/^\/(stats|analytics|reports)/,  'tenant:read',       null], // solo lectura
+  [/^\/(me|version)/,               'tenant:read',       'tenant:read'],
+];
+app.use('/api', (req, res, next) => {
+  if (!req.appAuth) return next(); // advisor o machine token — no aplica
+  const scopes = req.appAuth.scopes || [];
+  const isRead = req.method === 'GET' || req.method === 'HEAD';
+  for (const [re, readScope, writeScope] of OAUTH_SCOPE_MAP) {
+    if (re.test(req.path)) {
+      const need = isRead ? readScope : writeScope;
+      if (!need) return res.status(403).json({ error: 'Esta app no puede modificar esta sección', code: 'SCOPE_FORBIDDEN' });
+      if (scopes.includes(need)) return next();
+      return res.status(403).json({ error: `Esta app no tiene el permiso "${need}"`, code: 'SCOPE_MISSING', required: need, granted: scopes });
+    }
+  }
+  // Módulo no expuesto a apps de terceros → denegar por defecto.
+  return res.status(403).json({ error: 'Esta sección no está disponible para apps de terceros (OAuth)', code: 'SCOPE_NOT_ALLOWED' });
+});
+
 // API básica (protegida)
 app.get('/api/me', (req, res) => res.json({ advisor: req.advisor }));
 

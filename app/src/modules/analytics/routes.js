@@ -34,7 +34,7 @@ module.exports = function createAnalyticsRouter(db) {
   router.get('/funnel', (req, res, next) => {
     try {
       const pipelineId = Number(req.query.pipelineId);
-      const data = svc.getFunnel(db, req.tenantId, pipelineId);
+      const data = service.getFunnel(db, req.tenantId, pipelineId);
       res.json({ ok: true, ...data });
     } catch (err) { next(err); }
   });
@@ -43,7 +43,7 @@ module.exports = function createAnalyticsRouter(db) {
     try {
       const period = req.query.period || 'week';
       const advisorId = req.query.advisorId ? Number(req.query.advisorId) : null;
-      const data = svc.getEvolution(db, req.tenantId, { period, advisorId });
+      const data = service.getEvolution(db, req.tenantId, { period, advisorId });
       res.json({ ok: true, ...data });
     } catch (err) { next(err); }
   });

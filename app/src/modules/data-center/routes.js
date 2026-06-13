@@ -8,9 +8,22 @@
 
 const express = require('express');
 const svc = require('./service');
+const { checkLimit } = require('../billing/limits');
 
 module.exports = (db) => {
   const router = express.Router();
+
+  // ─── Gate de ADMIN ────────────────────────────────────────────────
+  // El Data Center importa/exporta TODA la base (contactos, leads, asesores,
+  // bots, config). Es una operación de administrador, no de asesor, y NUNCA
+  // de un token de máquina. Sin esto, un asesor o un OAuth token podía
+  // importar asesores con rol arbitrario (escalación de privilegios).
+  router.use((req, res, next) => {
+    if (req.appAuth) return res.status(403).json({ error: 'Los tokens de app no pueden usar el Data Center' });
+    if (req.advisor?._viaMachineToken) return res.status(403).json({ error: 'Los tokens de máquina no pueden usar el Data Center' });
+    if (req.advisor?.role !== 'admin') return res.status(403).json({ error: 'Solo administradores pueden importar/exportar datos' });
+    next();
+  });
 
   // GET /available — qué cards mostrar
   router.get('/available', (req, res) => {
@@ -206,9 +219,16 @@ async function _importContacts(db, tenantId, advisor, body) {
   }).filter(o => o.firstName || o.lastName || o.phone || o.email);
 
   // Procesar uno por uno para capturar los IDs creados (necesarios para leads)
-  const result = { created: 0, updated: 0, skipped: 0, errors: 0 };
+  const result = { created: 0, updated: 0, skipped: 0, errors: 0, skippedByLimit: 0 };
   const newContactIds = [];
   const allTargetIds = []; // tanto creados como actualizados (para crear leads en ambos casos si user pidió)
+
+  // Límite de plan: el import NO puede saltarse el cap de contactos. Se calcula
+  // el cupo una sola vez (eficiente para imports grandes) y se frena al llegar.
+  const { getLimits } = require('../billing/limits');
+  const _tenant = db.prepare('SELECT plan FROM tenants WHERE id = ?').get(tenantId) || {};
+  const _contactCap = getLimits(_tenant.plan).contacts; // null = ilimitado
+  const _contactBase = _contactCap === null ? 0 : (db.prepare('SELECT COUNT(*) AS n FROM contacts WHERE tenant_id = ?').get(tenantId)?.n || 0);
 
   const txn = db.transaction(() => {
     for (const r of items) {
@@ -238,6 +258,11 @@ async function _importContacts(db, tenantId, advisor, body) {
           }
         }
 
+        // Tope de plan alcanzado → no crear más (cuenta como skippedByLimit)
+        if (_contactCap !== null && (_contactBase + result.created) >= _contactCap) {
+          result.skippedByLimit++;
+          continue;
+        }
         // Crear nuevo
         const created = customers.create(db, tenantId, {
           firstName: r.firstName || '(Sin nombre)',
@@ -295,12 +320,19 @@ async function _importLeads(db, tenantId, advisor, body) {
     throw new Error('pipelineId y stageId son requeridos');
   }
 
-  let created = 0, skipped = 0, errors = 0;
+  let created = 0, skipped = 0, errors = 0, skippedByLimit = 0;
   const contactStrategy = options.contactStrategy || 'phone'; // phone | email | name | always_new
+
+  // Tope de plan (leads) — calculado una vez, frena el import al llegar.
+  const { getLimits: _getLimits } = require('../billing/limits');
+  const _tnt = db.prepare('SELECT plan FROM tenants WHERE id = ?').get(tenantId) || {};
+  const _leadCap = _getLimits(_tnt.plan).leads; // null = ilimitado
+  const _leadBase = _leadCap === null ? 0 : (db.prepare('SELECT COUNT(*) AS n FROM expedients WHERE tenant_id = ?').get(tenantId)?.n || 0);
 
   const txn = db.transaction(() => {
     for (const row of rows) {
       try {
+        if (_leadCap !== null && (_leadBase + created) >= _leadCap) { skippedByLimit++; continue; }
         const obj = {};
         headers.forEach((h, i) => {
           const dest = mapping[h];
@@ -346,7 +378,7 @@ async function _importLeads(db, tenantId, advisor, body) {
   });
   txn();
 
-  return { ok: true, created, skipped, errors };
+  return { ok: true, created, skipped, errors, skippedByLimit };
 }
 
 // ─── Importers: templates ─────────────────────────────────────────────
@@ -720,32 +752,39 @@ function _parseTimestamp(raw) {
 async function _importAdvisors(db, tenantId, body) {
   const { content, options = {} } = body;
   const crypto = require('crypto');
+  const advisorsSvc = require('../advisors/service');
   const arr = JSON.parse(content);
   const items = Array.isArray(arr) ? arr : (arr.advisors || arr.items || []);
   const sendInvites = options.sendInvites !== false;
+  const tenant = db.prepare('SELECT plan, extra_users FROM tenants WHERE id = ?').get(tenantId) || {};
 
-  const result = { created: 0, skipped: 0, invitesSent: 0, errors: 0 };
+  const result = { created: 0, skipped: 0, invitesSent: 0, errors: 0, skippedByLimit: 0 };
   for (const a of items) {
     if (!a.username || !a.email) { result.skipped++; continue; }
     try {
       const existing = db.prepare('SELECT id FROM advisors WHERE (username=? OR email=?) AND tenant_id=?')
         .get(a.username, a.email, tenantId);
       if (existing) { result.skipped++; continue; }
-      // Password aleatorio — el user reseteará al primer login
-      const tempPass = crypto.randomBytes(16).toString('hex');
-      const passHash = crypto.scryptSync(tempPass, 'wapi101-salt', 64).toString('hex');
-      db.prepare(`INSERT INTO advisors (tenant_id, name, username, email, password_hash, role, permissions, active, created_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, 1, unixepoch())`)
-        .run(tenantId, a.name || a.username, a.username, a.email, passHash,
-             a.role || 'asesor', JSON.stringify(a.permissions || { write: true, delete: false, manage_advisors: false }));
+      // Límite de plan: NO permitir saltarse el cap de usuarios vía import.
+      const limitErr = checkLimit(db, tenantId, tenant.plan, 'users', tenant.extra_users);
+      if (limitErr) { result.skippedByLimit++; continue; }
+      // Crear vía el servicio canónico: hash correcto (salt:hash por usuario) y
+      // rol FORZADO a 'asesor' — nunca confiar en a.role del archivo importado
+      // (evita que un import cree un admin). Password temporal aleatorio.
+      const tempPass = crypto.randomBytes(24).toString('hex');
+      const created = advisorsSvc.create(db, tenantId, {
+        name: a.name || a.username, username: a.username, email: a.email,
+        password: tempPass, role: 'asesor',
+        permissions: { write: true, delete: false, view_reports: false, manage_advisors: false },
+      });
       result.created++;
-      if (sendInvites) {
+      if (sendInvites && created?.id) {
         try {
-          // Crear reset_token y enviar email — el sistema ya tiene este flujo
-          // Reutilizamos password_reset_tokens
+          // password_reset_tokens real: (advisor_id, tenant_id, token_hash, expires_at)
           const token = crypto.randomBytes(32).toString('hex');
-          db.prepare('INSERT INTO password_reset_tokens (email, token, expires_at, created_at) VALUES (?, ?, ?, unixepoch())')
-            .run(a.email, token, Math.floor(Date.now() / 1000) + 7 * 24 * 3600);
+          const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+          db.prepare('INSERT INTO password_reset_tokens (advisor_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, unixepoch())')
+            .run(created.id, tenantId, tokenHash, Math.floor(Date.now() / 1000) + 7 * 24 * 3600);
           // Mailer puede no estar configurado — intentar suave
           try {
             const mailer = require('../mailer');

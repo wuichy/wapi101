@@ -426,7 +426,7 @@ async function callTool(db, tenantId, name, args = {}) {
       if (!tag) throw new Error('tag es requerido.');
       const c = _findContactByPhone(db, tenantId, args.phone);
       if (!c) throw new Error('Contacto no encontrado por ese teléfono.');
-      db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag) VALUES (?, ?)').run(c.id, tag);
+      db.prepare('INSERT OR IGNORE INTO contact_tags (tenant_id, contact_id, tag) VALUES (?, ?, ?)').run(tenantId, c.id, tag);
       return textContent({ ok: true, contactId: c.id, tag });
     }
 

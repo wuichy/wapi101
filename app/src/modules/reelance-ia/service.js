@@ -313,15 +313,16 @@ function _applyTag(db, { tenantId, contactId, leadId, tagName, target }) {
   const t = (target || 'contact').toLowerCase();
   if ((t === 'contact' || t === 'both') && contactId) {
     try {
-      // contact_tags no tiene tenant_id en su schema (legacy) — solo (contact_id, tag)
-      db.prepare('INSERT OR IGNORE INTO contact_tags (contact_id, tag) VALUES (?, ?)')
-        .run(contactId, tagName);
+      // contact_tags tiene tenant_id NOT NULL DEFAULT 1 — SIEMPRE pasarlo, si no
+      // las etiquetas de otros tenants caerían bajo el tenant 1 (fuga cross-tenant).
+      db.prepare('INSERT OR IGNORE INTO contact_tags (tenant_id, contact_id, tag) VALUES (?, ?, ?)')
+        .run(tenantId, contactId, tagName);
     } catch (_) {}
   }
   if ((t === 'lead' || t === 'both') && leadId) {
     try {
-      db.prepare('INSERT OR IGNORE INTO expedient_tags (expedient_id, tag) VALUES (?, ?)')
-        .run(leadId, tagName);
+      db.prepare('INSERT OR IGNORE INTO expedient_tags (tenant_id, expedient_id, tag) VALUES (?, ?, ?)')
+        .run(tenantId, leadId, tagName);
     } catch (_) {}
   }
 }

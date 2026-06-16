@@ -6948,8 +6948,10 @@ function openIntegrationModal(providerKey, instanceId = null) {
         connectOAuth(provider.key, provider.authType);
       });
     }, 0);
-  } else if (isOAuthProvider && !instance) {
-    // OAuth sin cuenta conectada: campo vacío, el botón Conectar dispara OAuth
+  } else if (isOAuthProvider && !instance && provider.key !== 'instagram') {
+    // OAuth sin cuenta conectada: campo vacío, el botón Conectar dispara OAuth.
+    // Instagram NO entra aquí: se trata como manual + botón OAuth arriba (el
+    // OAuth de IG depende de App Review aprobado; el manual es el fallback).
     fields.innerHTML = '';
   } else {
     const normalFields   = (provider.fields || []).filter(f => !f.advanced);
@@ -6969,7 +6971,7 @@ function openIntegrationModal(providerKey, instanceId = null) {
 
     // Si es WhatsApp Cloud y NO hay instance (primera conexión): ofrecer
     // Embedded Signup como opción rápida arriba del form manual.
-    const embeddedSignupBlock = (provider.key === 'whatsapp' && !instance) ? `
+    let embeddedSignupBlock = (provider.key === 'whatsapp' && !instance) ? `
       <div class="int-embedded-signup-block">
         <button type="button" class="btn btn--primary int-fb-login-btn" id="intFbLoginBtn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-3px;margin-right:6px"><path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.51 1.49-3.89 3.77-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.77l-.44 2.91h-2.33V22c4.78-.76 8.44-4.92 8.44-9.94z"/></svg>
@@ -6977,6 +6979,18 @@ function openIntegrationModal(providerKey, instanceId = null) {
         </button>
         <div class="int-or-divider">— o llena los datos manualmente —</div>
       </div>` : '';
+    // Instagram: botón OAuth (para tenants/clientes — requiere App Review
+    // aprobado) ARRIBA del form manual (para admin / cuando el OAuth falla).
+    if (provider.key === 'instagram' && !instance) {
+      embeddedSignupBlock = `
+      <div class="int-embedded-signup-block">
+        <button type="button" class="btn btn--primary int-fb-login-btn" id="intIgOAuthBtn" style="background:#e1306c">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-3px;margin-right:6px"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 3.25.15 4.77 1.69 4.92 4.92.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.15 3.23-1.66 4.77-4.92 4.92-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85s.01-3.58.07-4.85C2.38 3.92 3.9 2.38 7.15 2.23 8.42 2.17 8.8 2.16 12 2.16zm0 3.68a6.16 6.16 0 100 12.32 6.16 6.16 0 000-12.32zm0 10.16a4 4 0 110-8 4 4 0 010 8zm6.41-10.4a1.44 1.44 0 100 2.88 1.44 1.44 0 000-2.88z"/></svg>
+          Conectar con Instagram (login)
+        </button>
+        <div class="int-or-divider">— o pega tu token manualmente (admin) —</div>
+      </div>`;
+    }
 
     fields.innerHTML = embeddedSignupBlock + normalFields.map(renderField).join("") + (hasAdvanced ? `
       <div class="int-advanced-toggle" id="intAdvancedToggle">
@@ -7006,6 +7020,17 @@ function openIntegrationModal(providerKey, instanceId = null) {
       setTimeout(() => {
         const btn = document.getElementById('intFbLoginBtn');
         if (btn) btn.addEventListener('click', launchWhatsAppEmbeddedSignup);
+      }, 0);
+    }
+    // Botón OAuth de Instagram (login) — para tenants/clientes. El form manual
+    // de abajo es el fallback de admin. El OAuth requiere App Review aprobado.
+    if (provider.key === 'instagram' && !instance) {
+      setTimeout(() => {
+        const btn = document.getElementById('intIgOAuthBtn');
+        if (btn) btn.addEventListener('click', () => {
+          closeIntegrationModal();
+          connectOAuth('instagram', provider.authType || 'oauth_meta');
+        });
       }, 0);
     }
   }
@@ -7489,7 +7514,9 @@ function setupIntegrations() {
       return startQrFlow();
     }
     // Modo OAuth nueva conexión
-    if (INT_EDIT.provider.authType?.startsWith('oauth_') && !INT_EDIT.instance) {
+    // Instagram queda FUERA de este early-return: su botón "Conectar" hace el
+    // connect MANUAL (con token); el OAuth de IG va por su propio botón rosa.
+    if (INT_EDIT.provider.authType?.startsWith('oauth_') && !INT_EDIT.instance && INT_EDIT.provider.key !== 'instagram') {
       closeIntegrationModal();
       return connectOAuth(INT_EDIT.provider.key, INT_EDIT.provider.authType);
     }

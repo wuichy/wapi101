@@ -49,10 +49,14 @@ module.exports = {
     const { igUserId, accessToken } = credentials;
     if (!igUserId || !accessToken) return { ok: false, message: 'Faltan campos requeridos' };
     const version = process.env.META_GRAPH_VERSION || 'v22.0';
+    // token "IG..." = Instagram Login → graph.instagram.com (/me siempre resuelve
+    // con el token IGAA). token "EAA..." = Facebook Login → graph.facebook.com.
+    const isIgLogin = String(accessToken).startsWith('IG');
+    const url = isIgLogin
+      ? `https://graph.instagram.com/${version}/me?fields=user_id,username,name`
+      : `https://graph.facebook.com/${version}/${igUserId}?fields=username,name`;
     try {
-      const res = await fetch(`https://graph.facebook.com/${version}/${igUserId}?fields=username,name`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15000) });
       const data = await res.json();
       if (!res.ok) return { ok: false, message: data?.error?.message || `HTTP ${res.status}` };
       return {

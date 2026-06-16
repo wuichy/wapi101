@@ -404,13 +404,21 @@ async function sendMessengerMedia(db, convo, { publicUrl, mediaType }) {
   return data.message_id || null;
 }
 
+// Host de Graph para Instagram según el flujo de conexión:
+//  - token "IG..." = Instagram API con Instagram Login → graph.instagram.com
+//  - token "EAA..." = Instagram API con Facebook Login  → graph.facebook.com
+// Soporta ambos sin romper al que ya estuviera con Facebook Login.
+function _igGraphHost(token) {
+  return String(token || '').startsWith('IG') ? 'graph.instagram.com' : 'graph.facebook.com';
+}
+
 async function sendInstagram(db, convo, text) {
   const creds = getIntegrationCreds(db, convo.integrationId, convo);
   const token = creds?.accessToken;
   if (!token) throw new Error('No hay Access Token de Instagram configurado');
 
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
-  const res = await fetch(`https://graph.facebook.com/${version}/me/messages`, {
+  const res = await fetch(`https://${_igGraphHost(token)}/${version}/me/messages`, {
     method: 'POST',
     signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -434,7 +442,7 @@ async function sendInstagramMedia(db, convo, { publicUrl, mediaType }) {
   if (!publicUrl) throw new Error('Instagram requiere URL pública del archivo');
 
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
-  const res = await fetch(`https://graph.facebook.com/${version}/me/messages`, {
+  const res = await fetch(`https://${_igGraphHost(token)}/${version}/me/messages`, {
     method: 'POST',
     signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

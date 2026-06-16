@@ -9666,6 +9666,15 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .btn--danger-ghost:hover { background: #fee2e2; }
 .btn--sm { padding: 5px 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-primary); transition: all .15s; }
 .btn--sm:hover { background: var(--bg-card); }
+/* btn--sm trae su propio fondo gris (var(--bg-elevated)); al combinarse con
+   btn--primary, como tienen la MISMA especificidad y .btn--sm está después en
+   el archivo, ganaba el gris → el botón Guardar se veía BLANCO aunque hubiera
+   cambios. Estas reglas (specificity 0,2,0) restauran el azul cuando hay
+   cambios y dejan el gris cuando está limpio (.is-clean). */
+.btn--primary.btn--sm { background: var(--accent); color: #fff; border-color: transparent; }
+.btn--primary.btn--sm:hover { background: var(--accent-hover); border-color: transparent; }
+.btn--primary.btn--sm.is-clean { background: #e2e8f0; color: #94a3b8; border-color: transparent; }
+.btn--primary.btn--sm.is-clean:hover { background: #e2e8f0; }
 
 /* ─── Toast notifications ─── */
 .rh-toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 500; color: #fff; background: #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,.25); z-index: 9999; opacity: 0; transform: translateY(12px); transition: opacity .25s, transform .25s; pointer-events: none; max-width: 360px; }

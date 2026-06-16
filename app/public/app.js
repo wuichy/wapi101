@@ -5383,18 +5383,116 @@ const ROUTER = {
   },
 };
 
+// Bandera para saltarse la confirmación "cambios sin guardar" cuando somos
+// nosotros quienes re-disparamos la navegación tras la decisión del usuario.
+let _leadLeaveBypass = false;
+
 // Listener global de back/forward — restaura la vista guardada en el state.
 window.addEventListener('popstate', (e) => {
   const state = e.state || ROUTER.parse(location.hash);
+  // Si el detalle de lead tiene cambios sin guardar, interceptar el back/forward
+  // del navegador y preguntar antes de abandonar (el history ya retrocedió).
+  if (!_leadLeaveBypass && expDetailHasUnsavedChanges()) {
+    const leadId = EXP_DETAIL?.id, leadFrom = EXP_DETAIL_FROM;
+    _resolveLeaveLead().then(async (ok) => {
+      if (ok) {
+        _leadLeaveBypass = true;
+        try { if (state) await ROUTER.restore(state); }
+        finally { _leadLeaveBypass = false; }
+      } else if (leadId) {
+        // El usuario decidió quedarse → re-empujar el lead para deshacer el back
+        // y restaurar el deep-link (el botón back interno ya limpió localStorage).
+        ROUTER.push({ type: 'lead', id: leadId, from: leadFrom });
+        localStorage.setItem('lastView', 'exp-detail');
+        localStorage.setItem('lastExpDetailId', String(leadId));
+        localStorage.setItem('lastExpDetailFrom', leadFrom || 'expedientes');
+      }
+    });
+    return;
+  }
   if (state) ROUTER.restore(state);
   // Si no hay state ni hash, dejamos que el navegador maneje (probablemente sale de la app)
 });
+
+// Aviso nativo del navegador al refrescar/cerrar la pestaña con cambios sin
+// guardar en el detalle de lead (el texto lo fija el navegador, no se puede
+// personalizar). Para navegación interna usamos el modal de _resolveLeaveLead.
+window.addEventListener('beforeunload', (e) => {
+  if (expDetailHasUnsavedChanges()) { e.preventDefault(); e.returnValue = ''; return ''; }
+});
+
+// ─── Cambios sin guardar en el detalle de lead (Leads / Pipelines) ───
+// Devuelve true si el detalle de lead está abierto y algún campo cambió
+// respecto a su valor original (mismo criterio que checkForChanges()).
+function expDetailHasUnsavedChanges() {
+  if (document.body.dataset.viewActive !== 'exp-detail') return false;
+  const root = document.getElementById('expDetailInfo');
+  if (!root) return false;
+  let dirty = false;
+  root.querySelectorAll('.edf-input').forEach((input) => {
+    if (String(input.value) !== String(input.dataset.original || '')) dirty = true;
+  });
+  return dirty;
+}
+
+// Modal de 3 opciones. Resuelve 'save' | 'discard' | 'cancel'.
+function _confirmLeaveLeadModal() {
+  return new Promise((resolve) => {
+    document.getElementById('leadUnsavedOverlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'leadUnsavedOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px';
+    ov.innerHTML = `
+      <div role="dialog" aria-modal="true" style="background:var(--bg-card,#fff);border-radius:12px;max-width:420px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+        <h3 style="margin:0 0 8px;font-size:16px;font-weight:600;color:var(--text-primary,#0f172a)">Cambios sin guardar</h3>
+        <p style="margin:0 0 18px;font-size:13px;line-height:1.5;color:var(--text-muted,#64748b)">Hiciste cambios en este lead que todavía no guardas. ¿Qué quieres hacer?</p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button type="button" data-lu="save" class="btn btn--primary btn--sm" style="justify-content:center">Guardar y salir</button>
+          <button type="button" data-lu="discard" class="btn--sm" style="justify-content:center">Salir sin guardar</button>
+          <button type="button" data-lu="cancel" class="btn--sm" style="justify-content:center;border:none;background:transparent;color:var(--text-muted,#64748b)">Cancelar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const done = (v) => { ov.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = (ev) => { if (ev.key === 'Escape') done('cancel'); };
+    ov.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-lu]');
+      if (b) return done(b.dataset.lu);
+      if (ev.target === ov) done('cancel');
+    });
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+// Orquesta la decisión. Devuelve true si se puede navegar (salir del lead).
+async function _resolveLeaveLead() {
+  const choice = await _confirmLeaveLeadModal();
+  if (choice === 'cancel') return false;
+  if (choice === 'save') {
+    try { await saveExpDetailEdits(); } catch (_) {}
+    // Si tras intentar guardar SIGUE sucio, una validación abortó el guardado
+    // (ej. cambió pipeline sin etapa) → no navegar, dejar que el usuario corrija.
+    if (expDetailHasUnsavedChanges()) return false;
+  }
+  return true;
+}
 
 function showView(viewName) {
   // 'recordatorios' es alias legacy — redirige a calendario en sub-vista lista
   if (viewName === 'recordatorios') {
     showView('calendario');
     switchCalSubView('list');
+    return;
+  }
+
+  // Guard: salir del detalle de un lead con cambios sin guardar → confirmar.
+  // Cubre cambiar de tab (nav) y el botón back interno (cuando cae en showView).
+  if (!_leadLeaveBypass && viewName !== 'exp-detail' && expDetailHasUnsavedChanges()) {
+    _resolveLeaveLead().then((ok) => {
+      if (!ok) return;
+      _leadLeaveBypass = true;
+      try { showView(viewName); } finally { _leadLeaveBypass = false; }
+    });
     return;
   }
   const navItems = document.querySelectorAll(".nav-item");

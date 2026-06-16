@@ -23234,7 +23234,9 @@ async function saveTplLockedFields(existing) {
   }
 }
 
+let _tplSaving = false; // guard anti doble-submit: evita crear plantillas duplicadas si se hace doble clic
 async function saveTpl() {
+  if (_tplSaving) return; // ya hay un guardado en curso → ignorar clics repetidos
   const errEl = document.getElementById('tplError');
   // Si la plantilla está locked (pending/approved/rejected), solo permitimos
   // editar campos organizacionales (display_name + tags). Atajo aquí.
@@ -23348,6 +23350,9 @@ async function saveTpl() {
   }
   if (errEl) errEl.hidden = true;
 
+  _tplSaving = true;
+  const _saveBtn = document.getElementById('tplModalSave');
+  if (_saveBtn) _saveBtn.disabled = true;
   try {
     let saved;
     if (_tplEditId) {
@@ -23386,6 +23391,9 @@ async function saveTpl() {
     toast('Plantilla guardada', 'success');
   } catch (e) {
     if (errEl) { errEl.textContent = e.message; errEl.hidden = false; }
+  } finally {
+    _tplSaving = false;
+    if (_saveBtn) _saveBtn.disabled = false;
   }
 }
 

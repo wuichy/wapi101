@@ -6170,7 +6170,9 @@ function renderIntegrations() {
         </div>`;
     }).join("");
 
-    const connectBtn = isOAuth
+    // Instagram NO va directo a OAuth desde la tarjeta: abre el modal (manual),
+    // donde están AMBAS opciones (botón OAuth rosa + formulario con token).
+    const connectBtn = (isOAuth && p.key !== 'instagram')
       ? `<button class="btn btn--ghost" data-action="oauth" data-provider="${p.key}" data-auth="${p.authType}">${connected.length ? '+ Conectar otra' : 'Conectar'}</button>`
       : `<button class="btn btn--ghost" data-action="manual" data-provider="${p.key}">${connected.length ? '+ Conectar otra' : 'Conectar'}</button>`;
 

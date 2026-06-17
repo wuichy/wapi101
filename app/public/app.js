@@ -3191,7 +3191,11 @@ function renderMessages() {
       const isAudio = /\.(mp3|ogg|m4a|aac|opus|wav)$/i.test(url);
       const isPdfOrDoc = /\.(pdf|docx?|xlsx?|pptx?|txt)$/i.test(url);
       if (isImg) {
-        mediaHtml = `<a href="${escapeHtml(url)}" target="_blank" class="rh-msg-media-img"><img src="${escapeHtml(url)}" alt="adjunto" loading="lazy" /></a>`;
+        // SIN loading="lazy": Safari de escritorio tiene un bug con lazy-loading
+        // dentro de contenedores con scroll (el chat). Tras el auto-scroll al fondo
+        // no re-evalúa la visibilidad y la imagen nunca carga (queda en blanco).
+        // En Chrome/móvil sí carga. decoding="async" da el hint de perf sin el bug.
+        mediaHtml = `<a href="${escapeHtml(url)}" target="_blank" class="rh-msg-media-img"><img src="${escapeHtml(url)}" alt="adjunto" decoding="async" /></a>`;
       } else if (isVideo) {
         mediaHtml = `<video src="${escapeHtml(url)}" controls class="rh-msg-media-video" preload="metadata"></video>`;
       } else if (isAudio) {

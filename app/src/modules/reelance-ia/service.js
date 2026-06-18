@@ -739,6 +739,15 @@ function processOrderEvent(db, tenantId, payload) {
     //   - Hay reglas de pipeline_rules configuradas
     const hasTracking = (payload.trackingCarrier && payload.trackingNumber);
     const statusReady = ['COMPLETED', 'FULFILLED'].includes(payload.status);
+
+    // Llenar Paquetería + Número de Rastreo SIEMPRE que el evento traiga tracking,
+    // independiente del ruteo a pipeline. BUG (pedido 80201): el evento COMPLETED
+    // llegó con DHL + guía pero los campos quedaban VACÍOS porque el único lugar
+    // que los llenaba era _routeOrderToPipeline, que retorna antes (lead ya en su
+    // stage destino, o producto sin match en la config) → se saltaba el fill.
+    if (lead && payload.trackingCarrier) _setCustomField(db, tenantId, lead.id, 'paqueter', payload.trackingCarrier);
+    if (lead && payload.trackingNumber)  _setCustomField(db, tenantId, lead.id, 'rastreo|tracking', payload.trackingNumber);
+
     if (lead && hasTracking && statusReady) {
       try {
         _routeOrderToPipeline(db, tenantId, lead, payload, cfg);

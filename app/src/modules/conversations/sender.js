@@ -258,7 +258,17 @@ function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = fals
   }
   const manual = manualValues?.[idx];
   if (manual !== undefined && manual !== null && manual !== '') return manual;
-  if (autoFallback) return contact?.first_name || '';
+  if (autoFallback) {
+    // Evita mandar vacío a Meta (rechaza params vacíos). PERO el first_name
+    // como fallback SOLO tiene sentido para el PRIMER placeholder sin mapear
+    // (el saludo típico "Hola {{1}}"). Para los demás —o si está mapeado a un
+    // campo que vino vacío (ej. Paquetería/Rastreo aún sin guía)— usar el
+    // ejemplo o un guion, NUNCA el nombre del cliente (si no, sale el bug
+    // "Paquetería: Beatriz").
+    if (!ph?.contactField && idx === 0) return contact?.first_name || '';
+    const ex = ph?.example && String(ph.example).trim();
+    return ex || '-';
+  }
   return '';
 }
 

@@ -308,12 +308,23 @@ function update(db, tenantId, id, { pipelineId, stageId, name, value, tags, fiel
     if (trimmed && row.name_is_auto) { fields.push('name_is_auto = 0'); }
   }
   if (value !== undefined) { fields.push('value = ?'); params.push(Number(value) || 0); }
-  if (pipelineId !== undefined) { fields.push('pipeline_id = ?'); params.push(pipelineId); }
-  if (stageId !== undefined && stageId !== row.stage_id) {
+  // Pipeline/stage: validar que existan ANTES de escribir. Un id en 0/NaN (bug
+  // de un <select> de etapa vacío que se mandaba sin cambio de pipeline) reventaba
+  // con "FOREIGN KEY constraint failed". Ahora: ignoramos 0/NaN (no pisamos el
+  // valor válido) y validamos los >0 con mensaje claro.
+  const wantPipeline = pipelineId !== undefined && Number(pipelineId) > 0;
+  const wantStage    = stageId    !== undefined && Number(stageId)    > 0;
+  if (wantPipeline && Number(pipelineId) !== row.pipeline_id && !wantStage) {
+    throw new Error('Para cambiar de pipeline debes elegir también una etapa');
+  }
+  if (wantPipeline) {
+    if (!db.prepare('SELECT id FROM pipelines WHERE id = ? AND tenant_id = ?').get(pipelineId, t)) throw new Error('Pipeline no encontrado');
+    fields.push('pipeline_id = ?'); params.push(pipelineId);
+  }
+  if (wantStage) {
+    if (!db.prepare('SELECT id FROM stages WHERE id = ? AND tenant_id = ?').get(stageId, t)) throw new Error('Etapa no encontrada');
     fields.push('stage_id = ?'); params.push(stageId);
-    fields.push('stage_entered_at = unixepoch()');
-  } else if (stageId !== undefined) {
-    fields.push('stage_id = ?'); params.push(stageId);
+    if (stageId !== row.stage_id) fields.push('stage_entered_at = unixepoch()');
   }
   if (assignedAdvisorId !== undefined) {
     if (assignedAdvisorId === null) {
@@ -386,9 +397,13 @@ function setCustomFieldValues(db, tenantId, expedientId, values) {
     INSERT INTO custom_field_values (tenant_id, entity, record_id, field_id, value) VALUES (?, 'expedient', ?, ?, ?)
     ON CONFLICT(entity, record_id, field_id) DO UPDATE SET value = excluded.value
   `);
+  const defExists = db.prepare('SELECT 1 FROM custom_field_defs WHERE id = ? AND tenant_id = ?');
   for (const [fieldId, val] of Object.entries(values)) {
+    const fid = Number(fieldId);
+    // Saltar field_ids inválidos/inexistentes (evita "FOREIGN KEY constraint failed").
+    if (!fid || !defExists.get(fid, tenantId)) continue;
     const v = val === null || val === undefined ? null : String(val);
-    upsert.run(tenantId, expedientId, Number(fieldId), v);
+    upsert.run(tenantId, expedientId, fid, v);
   }
 }
 

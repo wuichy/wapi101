@@ -183,7 +183,7 @@ const MAX_BOT_CHAIN_DEPTH = 20;
 // Default 'moved' — históricamente la mayoría de callers eran moves.
 // El bot decide en qué modos quiere dispararse vía bot.trigger_modes (JSON array).
 // trigger_modes NULL/vacío == ['created','moved'] (compatibilidad con bots viejos).
-function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId, eventType = 'moved', chainDepth = 0, botCollisionPolicy = 'skip' }) {
+function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId, eventType = 'moved', chainDepth = 0, botCollisionPolicy = 'skip', orderTracking = null }) {
   _log('info', `triggerPipelineStage → expediente=${expedientId} contacto=${contactId} etapa=${stageId} event=${eventType} (chain=${chainDepth}, policy=${botCollisionPolicy})`);
 
   if (chainDepth > MAX_BOT_CHAIN_DEPTH) {
@@ -234,6 +234,7 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId,
         chainDepth,
         tenantId,
         botCollisionPolicy,
+        orderTracking,
       });
     }
   }
@@ -817,7 +818,27 @@ async function executeStep(db, step, ctx) {
       try {
         const convo = convoSvc.getById(db, null, ctx.convoId);
         if (!convo) return false;
-        const result = await sendWhatsAppTemplate(db, convo, templateId, c.manualValues || [], { autoFallback: true, leadId: ctx.expedientId || ctx.leadId || null });
+        // Fallback de tracking del pedido: si el bot se disparó por una orden con
+        // guía, inyectar carrier/número en las posiciones de los placeholders
+        // mapeados a Paquetería/Rastreo. Como _resolvePlaceholder prioriza el
+        // contactField, esto SOLO se usa si el custom field viene vacío (la carrera
+        // fill↔bot) → la plantilla nunca sale con "Paquetería: -" si la orden trae guía.
+        let _manualVals = Array.isArray(c.manualValues) ? [...c.manualValues] : [];
+        if (ctx.orderTracking && (ctx.orderTracking.carrier || ctx.orderTracking.number)) {
+          try {
+            const _tpl = require('../templates/service').getById(db, ctx.tenantId, templateId);
+            const _phs = Array.isArray(_tpl?.bodyPlaceholders) ? _tpl.bodyPlaceholders : [];
+            _phs.forEach((ph, i) => {
+              const _m = String(ph?.contactField || '').match(/^lf:(\d+)$/);
+              if (!_m) return;
+              const _def = db.prepare('SELECT label FROM custom_field_defs WHERE id = ? AND tenant_id = ?').get(Number(_m[1]), ctx.tenantId);
+              const _label = String(_def?.label || '').toLowerCase();
+              if (/paqueter/.test(_label)        && ctx.orderTracking.carrier && !_manualVals[i]) _manualVals[i] = ctx.orderTracking.carrier;
+              if (/(rastreo|tracking)/.test(_label) && ctx.orderTracking.number && !_manualVals[i]) _manualVals[i] = ctx.orderTracking.number;
+            });
+          } catch (_) { /* si falla, sigue con los manualValues normales */ }
+        }
+        const result = await sendWhatsAppTemplate(db, convo, templateId, _manualVals, { autoFallback: true, leadId: ctx.expedientId || ctx.leadId || null });
         convoSvc.addMessage(db, null, ctx.convoId, {
           externalId: result.externalId,
           direction: 'outgoing',

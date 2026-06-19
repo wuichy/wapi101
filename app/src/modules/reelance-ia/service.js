@@ -895,6 +895,14 @@ function _routeOrderToPipeline(db, tenantId, lead, payload, cfg) {
         expedientId: lead.id, contactId: lead.contact_id,
         pipelineId: rule.pipeline_id, stageId: rule.stage_id,
         eventType: 'moved',
+        // Tracking del pedido como FALLBACK para la plantilla del bot. Evita la
+        // carrera "fill de campos ↔ envío del bot": si el custom field aún no se
+        // escribió cuando el bot manda la plantilla, ésta usa la guía directo del
+        // pedido (bug real: pedido 80202 mandó "Paquetería: -" 2s después de
+        // llegar la guía DHL porque el bot le ganó al fill por un instante).
+        orderTracking: (payload.trackingCarrier || payload.trackingNumber)
+          ? { carrier: payload.trackingCarrier || null, number: payload.trackingNumber || null }
+          : null,
       });
     }
     console.log(`[reelance-ia] lead #${lead.id} (${maxDays}d) → pipeline ${rule.pipeline_id} stage ${rule.stage_id}`);

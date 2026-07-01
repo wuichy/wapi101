@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
   <link rel="dns-prefetch" href="https://connect.facebook.net" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260616lead" />
+  <link rel="stylesheet" href="/styles.css?v=20260701prog" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -540,6 +540,15 @@
                 <span data-i18n="attach.caption">Mensaje (opcional)</span>
                 <textarea id="rhAttachCaption" rows="3" data-i18n-placeholder="chat.attach.caption.placeholder" placeholder="Añade un texto al archivo…" maxlength="1024"></textarea>
               </label>
+              <div class="rh-attach-progress" id="rhAttachProgress" hidden>
+                <div class="rh-attach-progress__label">
+                  <span id="rhAttachProgressLabel">Subiendo…</span>
+                  <span class="rh-attach-progress__pct" id="rhAttachProgressPct">0%</span>
+                </div>
+                <div class="rh-attach-progress__track">
+                  <div class="rh-attach-progress__bar" id="rhAttachProgressBar"></div>
+                </div>
+              </div>
             </div>
             <footer class="modal-footer">
               <button class="btn btn--ghost" data-close-attach-preview data-i18n="btn.cancel">Cancelar</button>
@@ -4571,7 +4580,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script defer src="/app.js?v=20260625vid"></script>
+  <script defer src="/app.js?v=20260701prog"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

@@ -2165,6 +2165,50 @@ async function api(method, url, body) {
   return data;
 }
 
+// Igual que api() pero por XMLHttpRequest para exponer el progreso de SUBIDA
+// (fetch no da progreso de upload). Se usa al enviar media grande (videos de iPhone).
+// onProgress(fraction 0..1, phase) — phase='upload' mientras sube; phase='processing'
+// cuando el body terminó de subir y el server sigue trabajando (transcode + envío a WhatsApp, opaco).
+// Replica el contrato de errores de api(): err.errorCode / err.status / err.data.
+function apiUpload(method, url, body, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
+    xhr.setRequestHeader('Cache-Control', 'no-cache');
+    if (body !== undefined) xhr.setRequestHeader('Content-Type', 'application/json');
+    _trackRequestStart();
+    let ended = false;
+    const end = () => { if (!ended) { ended = true; _trackRequestEnd(); } };
+
+    if (xhr.upload && typeof onProgress === 'function') {
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total, 'upload'); };
+      // Subida completa → el server procesa (transcode + envío): fase opaca, sin %.
+      xhr.upload.onload = () => onProgress(1, 'processing');
+    }
+
+    xhr.onload = () => {
+      end();
+      const status = xhr.status;
+      if (status >= 500 && status !== 503) markConnFailure(); else markConnSuccess();
+      if (status === 401) { logout(); resolve(undefined); return; }
+      if (status === 204) { resolve(null); return; }
+      let data = {};
+      try { data = JSON.parse(xhr.responseText || '{}'); } catch (_) { data = {}; }
+      if (status >= 200 && status < 300) { resolve(data); return; }
+      const err = new Error(data.error || `HTTP ${status}`);
+      if (data.errorCode) err.errorCode = data.errorCode;
+      err.status = status;
+      err.data = data;
+      reject(err);
+    };
+    xhr.onerror = () => { end(); markConnFailure(); reject(new Error('Error de red al subir el archivo')); };
+    xhr.onabort = () => { end(); reject(new Error('Subida cancelada')); };
+
+    xhr.send(body !== undefined ? JSON.stringify(body) : null);
+  });
+}
+
 // Localiza un error lanzado por api(): si trae errorCode, busca la clave
 // error.<code_lowercase> en el diccionario i18n; si no, devuelve el mensaje raw.
 function localizeError(err) {
@@ -19506,14 +19550,42 @@ async function sendAttachmentNow() {
   }
   const caption = document.getElementById('rhAttachCaption').value.trim();
   const sendBtn = document.getElementById('rhAttachSendBtn');
+  // Barra de progreso: subida REAL (0-100%) + fase de servidor indeterminada (transcode/envío).
+  const progWrap = document.getElementById('rhAttachProgress');
+  const progBar = document.getElementById('rhAttachProgressBar');
+  const progLabel = document.getElementById('rhAttachProgressLabel');
+  const progPct = document.getElementById('rhAttachProgressPct');
+  const isVideo = att.type === 'video';
+  const setProgress = (fraction, phase) => {
+    if (!progWrap) return;
+    if (phase === 'processing' || fraction >= 1) {
+      // Fase de servidor (transcode + envío a WhatsApp): no medible → animación, sin % falso.
+      progBar.classList.add('rh-attach-progress__bar--indeterminate');
+      progLabel.textContent = isVideo ? 'Convirtiendo y enviando…' : 'Enviando…';
+      progPct.textContent = '';
+    } else {
+      progBar.classList.remove('rh-attach-progress__bar--indeterminate');
+      const pct = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+      progBar.style.width = pct + '%';
+      progLabel.textContent = isVideo ? 'Subiendo video…' : 'Subiendo…';
+      progPct.textContent = pct + '%';
+    }
+  };
+  if (progWrap) {
+    progBar.classList.remove('rh-attach-progress__bar--indeterminate');
+    progBar.style.width = '0%';
+    progLabel.textContent = isVideo ? 'Subiendo video…' : 'Subiendo…';
+    progPct.textContent = '0%';
+    progWrap.hidden = false;
+  }
   if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Enviando…'; }
   try {
-    const msg = await api('POST', `/api/conversations/${convoId}/media`, {
+    const msg = await apiUpload('POST', `/api/conversations/${convoId}/media`, {
       data: att.dataUrl,
       mimetype: att.mimetype,
       filename: att.filename,
       caption: caption || null,
-    });
+    }, setProgress);
     if (fromExpDetail) {
       EXP_DETAIL_MSGS.push(msg);
       renderExpDetailMessages();

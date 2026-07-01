@@ -11,6 +11,45 @@ const {
   sendInstagramMedia,
   sendTelegramMedia,
 } = require('./sender');
+const os = require('os');
+const { execFile } = require('child_process');
+const _execFile = require('util').promisify(execFile);
+
+// Transcodifica un video a MP4/H.264/AAC compatible con WhatsApp Cloud API.
+// iPhone graba en .mov/HEVC y WhatsApp Cloud API SOLO acepta mp4-h264 → antes
+// rebotaba "formato no aceptado". Devuelve un Buffer nuevo, o null si el video
+// YA es mp4/h264 (no hace falta transcodificar). Requiere ffmpeg/ffprobe.
+async function _transcodeVideoForWhatsApp(buffer, mime) {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const inPath = path.join(os.tmpdir(), `wa-in-${id}`);
+  const outPath = path.join(os.tmpdir(), `wa-out-${id}.mp4`);
+  fs.writeFileSync(inPath, buffer);
+  try {
+    let codec = '', fmt = '';
+    try {
+      const { stdout } = await _execFile('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=codec_name', '-show_entries', 'format=format_name',
+        '-of', 'default=nw=1', inPath], { timeout: 20000 });
+      codec = (stdout.match(/codec_name=(\S+)/)?.[1] || '').toLowerCase();
+      fmt   = (stdout.match(/format_name=(\S+)/)?.[1] || '').toLowerCase();
+    } catch (_) { /* si ffprobe falla, transcodificamos por si acaso */ }
+    // Ya es h264 dentro de un mp4 → WhatsApp lo acepta tal cual.
+    if (mime === 'video/mp4' && codec === 'h264' && /mp4/.test(fmt)) return null;
+    // h264 en otro container (ej. .mov) → remux rápido (sin re-encodear video).
+    // Otro códec (HEVC/H.265) → re-encodear a h264. Audio siempre a aac (barato).
+    const vArgs = codec === 'h264'
+      ? ['-c:v', 'copy']
+      : ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p'];
+    // nice -n 15: baja prioridad para no ahogar el CRM en el VPS de 2 cores.
+    await _execFile('nice', ['-n', '15', 'ffmpeg', '-y', '-i', inPath,
+      ...vArgs, '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', outPath],
+      { timeout: 180000 });
+    return fs.readFileSync(outPath);
+  } finally {
+    try { fs.unlinkSync(inPath); } catch (_) {}
+    try { fs.unlinkSync(outPath); } catch (_) {}
+  }
+}
 
 // Persiste un envío FALLIDO como message row (status='failed') para que el
 // chat muestre la burbuja roja y el badge deliveryFailure. Sin esto, un fallo
@@ -198,11 +237,11 @@ module.exports = function createConversationsRouter(db) {
     if (!convo) return res.status(404).json({ error: 'Conversación no encontrada', errorCode: 'CONVERSATION_NOT_FOUND' });
 
     try {
-      const { data, mimetype, filename, caption } = req.body || {};
+      let { data, mimetype, filename, caption } = req.body || {};
       if (!data || !mimetype) return res.status(400).json({ error: 'data y mimetype son requeridos', errorCode: 'MEDIA_DATA_REQUIRED' });
 
       const cleanB64 = String(data).replace(/^data:[^;]+;base64,/, '');
-      const buffer = Buffer.from(cleanB64, 'base64');
+      let buffer = Buffer.from(cleanB64, 'base64');
       if (!buffer.length) return res.status(400).json({ error: 'Archivo vacío', errorCode: 'FILE_EMPTY' });
 
       // ─── Validación de magic bytes ───
@@ -252,6 +291,24 @@ module.exports = function createConversationsRouter(db) {
       } catch (ftErr) {
         console.error('[upload] file-type validation error:', ftErr.message);
         return res.status(500).json({ error: 'Error validando archivo', errorCode: 'FILE_VALIDATION_ERROR' });
+      }
+
+      // iPhone graba video en .mov/HEVC; WhatsApp Cloud API solo acepta mp4/H.264.
+      // Transcodificamos ANTES de validar el provider — así el .mov del iPhone
+      // (que antes rebotaba "formato no aceptado") pasa ya convertido a mp4.
+      const _isWA = convo.provider === 'whatsapp' || convo.provider === 'whatsapp-lite';
+      if (_isWA && detectMediaType(mimetype) === 'video' && mimetype !== 'video/3gpp') {
+        try {
+          const conv = await _transcodeVideoForWhatsApp(buffer, mimetype);
+          if (conv && conv.length) {
+            buffer = conv;
+            mimetype = 'video/mp4';
+            filename = String(filename || 'video').replace(/\.[^.]+$/, '') + '.mp4';
+          }
+        } catch (txErr) {
+          console.error('[upload] transcode video falló:', txErr.message);
+          return res.status(400).json({ error: 'No se pudo convertir el video (formato de iPhone). Intenta con un video más corto.', errorCode: 'VIDEO_TRANSCODE_FAILED' });
+        }
       }
 
       const mediaType = detectMediaType(mimetype);

@@ -9052,7 +9052,7 @@ function setupExpDetailAttachMenu() {
       tmp.type = 'file';
       tmp.style.display = 'none';
       if (type === 'image')         tmp.accept = 'image/jpeg,image/png';
-      else if (type === 'video')    tmp.accept = 'video/mp4,video/3gpp,.mp4,.3gp';
+      else if (type === 'video')    tmp.accept = 'video/mp4,video/3gpp,video/quicktime,.mp4,.3gp,.mov,.m4v';
       else if (type === 'audio')    tmp.accept = 'audio/mpeg,audio/mp3,audio/ogg,audio/aac,audio/mp4,.mp3,.ogg,.aac,.m4a';
       else if (type === 'document') tmp.accept = 'application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,.doc,.docx,.xls,.xlsx,.txt';
       else if (type === 'record-audio') { startVoiceRecording(); _rhAttachOriginConvoId = Number(document.getElementById('expDetailReplyForm')?.dataset.convoId); return; }

@@ -8459,6 +8459,18 @@ function setupExpDetailEditing() {
 
   const saveBtn = document.getElementById('expDetailSaveBtn');
 
+  // ── Baseline anti "dirty falso" ──────────────────────────────────────────
+  // La detección de cambios compara input.value vs input.dataset.original. Pero
+  // el DOM NORMALIZA .value: un <select> sin <option> que haga match cae al 1er
+  // option; un type="date"/"datetime-local"/"number" con formato que no puede
+  // parsear se vacía. Entonces .value != data-original CRUDO (el del modelo) aun
+  // sin tocar nada → pedía "guardar cambios" al abrir el lead. Fix: re-anclar el
+  // original al valor YA normalizado del DOM, así "sin interacción = sin cambios"
+  // (y de paso evita que un guardado sin cambios borre el campo, ej. desasignar).
+  root.querySelectorAll('.edf-input').forEach((input) => {
+    input.dataset.original = input.value;
+  });
+
   // Update dot when stage select changes
   const stageSel = document.getElementById('edfStageSel');
   stageSel?.addEventListener('change', () => updateStageDot(stageSel));

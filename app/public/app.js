@@ -2012,16 +2012,36 @@ function logout() {
   window.location.href = '/login';
 }
 
-// Logout por DELEGACIÓN a nivel document (top-level → corre siempre al cargar el
-// script). Antes se enganchaba con getElementById('navLogoutBtn')?.addEventListener
-// DESPUÉS de un `await api('/api/me')` dentro del init; si ese init tronaba o se
-// colgaba antes de esa línea, el `?.` dejaba el botón SIN listener en silencio y
-// "no pasaba nada" al hacer clic. La delegación es inmune a eso y a re-renders.
+// ─── Botones del footer (logout + refrescar caché) por DELEGACIÓN top-level ───
+// Se enganchan al CARGAR el script (top-level → siempre corre), en fase de
+// CAPTURA (inmune a stopPropagation), por delegación en document (inmune a
+// re-render del sidebar). Antes se enganchaban con getElementById(id)?.addEventListener
+// DENTRO del init (DOMContentLoaded, dentro de un try gigante); si ese init
+// tronaba antes de esa línea, el `?.` dejaba AMBOS botones SIN listener en
+// silencio → "no pasaba nada" al hacer clic. Esto es inmune a todo eso.
+function _forceRefreshApp(btn) {
+  if (!confirm('¿Limpiar caché y recargar? Útil después de un deploy si no ves cambios.')) return;
+  try { btn?.classList.add('is-spinning'); if (btn) btn.disabled = true; } catch (_) {}
+  const cb = Date.now().toString(36);
+  document.querySelectorAll('link[rel="stylesheet"]').forEach((link) => {
+    try { const u = new URL(link.href, window.location.href); u.searchParams.set('_cb', cb); link.href = u.toString(); } catch (_) {}
+  });
+  (async () => {
+    try {
+      if ('caches' in window) { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); }
+      if ('serviceWorker' in navigator) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); }
+    } catch (err) { console.error('cache-clear', err); }
+    const url = new URL(window.location.href); url.searchParams.set('_cb', cb); window.location.replace(url.toString());
+  })();
+}
 document.addEventListener('click', (e) => {
-  if (e.target?.closest?.('#navLogoutBtn')) {
-    if (confirm('¿Cerrar sesión?')) logout();
+  const t = e.target;
+  if (t && t.closest) {
+    if (t.closest('#navLogoutBtn')) { if (confirm('¿Cerrar sesión?')) logout(); return; }
+    const cacheBtn = t.closest('#navCacheBtn');
+    if (cacheBtn) { _forceRefreshApp(cacheBtn); }
   }
-});
+}, true);
 
 // ─── User Switching: botón flotante "Volver a super-admin" ──────────────────
 // Se renderiza solo cuando la sesión actual fue creada vía impersonate.
@@ -21847,46 +21867,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // (El botón de logout ahora se maneja por delegación top-level junto a logout(),
   //  para que nunca quede sin listener si este init falla antes de esta línea.)
 
-  async function clearCacheAndReload(e) {
-    if (!confirm('¿Limpiar caché y recargar? Útil después de un deploy si no ves cambios.')) return;
-    const btn = e.currentTarget;
-    btn.classList.add('is-spinning');
-    btn.disabled = true;
-    const cb = Date.now().toString(36);
-
-    // 1) Refresh in-place de CSS — modifica el href de cada <link> con cache-buster.
-    //    Esto fuerza re-fetch del CSS (cache miss por URL distinta) y re-aplica estilos
-    //    SIN esperar el reload completo — el cambio visual es instantáneo.
-    document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
-      try {
-        const u = new URL(link.href, window.location.href);
-        u.searchParams.set('_cb', cb);
-        link.href = u.toString();
-      } catch (_) {}
-    });
-
-    // 2) Limpiar caches del Service Worker (si los hay) y desregistrar SW.
-    try {
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      }
-      if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister()));
-      }
-    } catch (err) {
-      console.error('cache-clear', err);
-    }
-
-    // 3) Hard reload con cache-buster en la URL — fuerza HTML+JS frescos.
-    //    Combinado con el middleware no-cache del server, los <script> y <link>
-    //    del HTML nuevo se piden con If-None-Match y Safari ya no los devuelve cacheados.
-    const url = new URL(window.location.href);
-    url.searchParams.set('_cb', cb);
-    window.location.replace(url.toString());
-  }
-  document.getElementById('navCacheBtn')?.addEventListener('click', clearCacheAndReload);
+  // (El botón de refrescar caché ahora se maneja por delegación top-level
+  //  (_forceRefreshApp), junto al de logout — ver arriba, cerca de logout().)
 
   // Bloquear autofill/sugerencias del navegador en inputs estáticos y dinámicos
   // Aplicar idioma guardado en boot ANTES de cualquier render

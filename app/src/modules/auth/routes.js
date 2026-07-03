@@ -88,7 +88,11 @@ module.exports = function createAuthRouter(db) {
     // Instagram usa Instagram Business Login (endpoint separado de Facebook, app ID distinto)
     if (provider === 'instagram') {
       const igAppId = process.env.META_IG_APP_ID || appId;
-      const igScope = encodeURIComponent('instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights');
+      // Solo los 3 permisos que wapi101 REALMENTE usa y que van a App Review
+      // (basic + DMs + comentarios). NO pedir content_publish ni manage_insights:
+      // no se usan en el código y ensucian el consent screen que ve el revisor de
+      // Meta (más superficie de rechazo). Ver reference_wapi101_infra (App Review IG).
+      const igScope = encodeURIComponent('instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments');
       const igUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${igAppId}&redirect_uri=${redirectUri}&response_type=code&scope=${igScope}&state=${state}`;
       return res.redirect(igUrl);
     }

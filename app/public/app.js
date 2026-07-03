@@ -2012,6 +2012,17 @@ function logout() {
   window.location.href = '/login';
 }
 
+// Logout por DELEGACIÓN a nivel document (top-level → corre siempre al cargar el
+// script). Antes se enganchaba con getElementById('navLogoutBtn')?.addEventListener
+// DESPUÉS de un `await api('/api/me')` dentro del init; si ese init tronaba o se
+// colgaba antes de esa línea, el `?.` dejaba el botón SIN listener en silencio y
+// "no pasaba nada" al hacer clic. La delegación es inmune a eso y a re-renders.
+document.addEventListener('click', (e) => {
+  if (e.target?.closest?.('#navLogoutBtn')) {
+    if (confirm('¿Cerrar sesión?')) logout();
+  }
+});
+
 // ─── User Switching: botón flotante "Volver a super-admin" ──────────────────
 // Se renderiza solo cuando la sesión actual fue creada vía impersonate.
 // Click → POST /api/auth/end-impersonation, restaura el super-token en
@@ -21833,9 +21844,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   } catch {}
 
-  document.getElementById('navLogoutBtn')?.addEventListener('click', () => {
-    if (confirm('¿Cerrar sesión?')) logout();
-  });
+  // (El botón de logout ahora se maneja por delegación top-level junto a logout(),
+  //  para que nunca quede sin listener si este init falla antes de esta línea.)
 
   async function clearCacheAndReload(e) {
     if (!confirm('¿Limpiar caché y recargar? Útil después de un deploy si no ves cambios.')) return;

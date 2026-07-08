@@ -37,32 +37,39 @@
     <div class="modal-backdrop" id="botCollisionBackdrop"></div>
     <div class="modal-card modal-card--md">
       <header class="modal-header">
-        <h3>⚠️ Bot ya está corriendo</h3>
+        <h3>⚠️ <span data-i18n="bc.title">Este lead ya tiene un bot activo</span></h3>
         <button class="modal-close" id="botCollisionClose" aria-label="Cerrar">×</button>
       </header>
       <div class="modal-body">
         <p id="botCollisionIntro" style="font-size:14px;margin:0 0 12px">…</p>
         <div id="botCollisionList" class="bc-list"><!-- JS render --></div>
-        <p style="font-size:13px;margin:16px 0 8px;font-weight:600">¿Qué quieres hacer?</p>
+        <p style="font-size:13px;margin:16px 0 8px;font-weight:600" data-i18n="bc.question">¿Qué quieres hacer?</p>
         <div class="bc-options">
-          <button type="button" class="bc-option bc-option--primary" data-bc-action="restart">
+          <button type="button" class="bc-option bc-option--primary" id="botCollisionRestart" data-bc-action="restart">
             <span class="bc-option-icon">🔄</span>
             <div class="bc-option-text">
-              <strong>Reiniciar el bot</strong>
-              <small>Cancela el viejo y arranca uno nuevo desde el paso 1 — recomendado para testing</small>
+              <strong data-i18n="bc.restart.title">Reiniciar desde cero</strong>
+              <small data-i18n="bc.restart.desc">Detén el bot actual y arranca el de la nueva etapa</small>
             </div>
           </button>
-          <button type="button" class="bc-option" data-bc-action="skip">
-            <span class="bc-option-icon">⛔</span>
+          <button type="button" class="bc-option" id="botCollisionSkip" data-bc-action="skip">
+            <span class="bc-option-icon">▶️</span>
             <div class="bc-option-text">
-              <strong>No iniciar bot nuevo</strong>
-              <small>El bot viejo sigue como está. El lead se mueve igual pero sin disparo extra</small>
+              <strong data-i18n="bc.skip.title">Dejar el bot como está</strong>
+              <small data-i18n="bc.skip.desc">Mueve el lead sin tocar el bot que ya corre</small>
+            </div>
+          </button>
+          <button type="button" class="bc-option" id="botCollisionStop" data-bc-action="stop">
+            <span class="bc-option-icon">⏹️</span>
+            <div class="bc-option-text">
+              <strong data-i18n="bc.stop.title">Parar el bot actual</strong>
+              <small data-i18n="bc.stop.desc">Detén el bot actual y no arranques ninguno</small>
             </div>
           </button>
         </div>
       </div>
       <footer class="modal-footer">
-        <button type="button" class="btn btn--ghost" id="botCollisionCancel">Cancelar movimiento</button>
+        <button type="button" class="btn btn--ghost" id="botCollisionCancel" data-i18n="bc.cancel">Cancelar movimiento</button>
       </footer>
     </div>
   </div>
@@ -4580,7 +4587,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script defer src="/app.js?v=20260703btns"></script>
+  <script defer src="/app.js?v=20260703bots"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

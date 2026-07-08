@@ -183,6 +183,24 @@ const MAX_BOT_CHAIN_DEPTH = 20;
 // Default 'moved' — históricamente la mayoría de callers eran moves.
 // El bot decide en qué modos quiere dispararse vía bot.trigger_modes (JSON array).
 // trigger_modes NULL/vacío == ['created','moved'] (compatibilidad con bots viejos).
+// Cancela TODOS los waits (status='waiting') y runs (running/paused) activos de un
+// contacto, sin arrancar nada. Usado por la política 'stop' del modal de colisión
+// ("Parar el bot actual"). Devuelve cuántos waits había.
+function _cancelActiveBotsForContact(db, contactId, tenantId) {
+  if (!contactId || !tenantId) return 0;
+  const waits = db.prepare(
+    "SELECT DISTINCT bot_id FROM bot_run_waits WHERE contact_id=? AND tenant_id=? AND status='waiting'"
+  ).all(contactId, tenantId);
+  db.prepare(
+    "UPDATE bot_run_waits SET status='cancelled' WHERE contact_id=? AND tenant_id=? AND status='waiting'"
+  ).run(contactId, tenantId);
+  const stale = db.prepare(
+    "SELECT id FROM bot_runs WHERE contact_id=? AND tenant_id=? AND status IN ('running','paused')"
+  ).all(contactId, tenantId);
+  for (const r of stale) killRun(db, r.id);
+  return waits.length;
+}
+
 function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId, eventType = 'moved', chainDepth = 0, botCollisionPolicy = 'skip', orderTracking = null }) {
   _log('info', `triggerPipelineStage → expediente=${expedientId} contacto=${contactId} etapa=${stageId} event=${eventType} (chain=${chainDepth}, policy=${botCollisionPolicy})`);
 
@@ -193,6 +211,15 @@ function triggerPipelineStage(db, { expedientId, contactId, pipelineId, stageId,
 
   const tenantId = _tenantFromContact(db, contactId);
   if (!tenantId) { _log('warn', `triggerPipelineStage: contacto ${contactId} sin tenant — abortando`); return; }
+
+  // botCollisionPolicy='stop': el usuario eligió "Parar el bot actual" al mover el lead.
+  // Cancela TODOS los waits + runs activos del contacto y NO dispara ningún bot de la
+  // etapa destino. Funciona igual aunque la etapa destino no tenga bot.
+  if (botCollisionPolicy === 'stop') {
+    const n = _cancelActiveBotsForContact(db, contactId, tenantId);
+    _log('info', `stop: ${n} bot(s) cancelado(s) para contacto ${contactId} — no se dispara ninguno`);
+    return;
+  }
 
   const bots = enabledBots(db, tenantId);
   _log('info', `bots habilitados: ${bots.length} → ${bots.map(b => `${b.name}(trigger=${b.trigger_type},value=${b.trigger_value})`).join(', ')}`);
@@ -267,6 +294,12 @@ function triggerPipelineStageLeave(db, { expedientId, contactId, pipelineId, sta
   }
   const tenantId = _tenantFromContact(db, contactId);
   if (!tenantId) { _log('warn', `triggerPipelineStageLeave: contacto ${contactId} sin tenant — abortando`); return; }
+  // botCollisionPolicy='stop' → el usuario quiere PARAR el bot actual: cancela waits/runs
+  // activos y NO dispares bots de salida tampoco (idempotente con el guard de entrada).
+  if (botCollisionPolicy === 'stop') {
+    _cancelActiveBotsForContact(db, contactId, tenantId);
+    return;
+  }
   const bots = enabledBots(db, tenantId);
   for (const bot of bots) {
     if (bot.trigger_type !== 'pipeline_stage_leave') continue;

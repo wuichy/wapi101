@@ -20,7 +20,7 @@ module.exports = function createExpedientsRouter(db) {
       const { ids, stageId, botCollisionPolicy } = req.body || {};
       if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids requerido', errorCode: 'IDS_REQUIRED' });
       if (!stageId) return res.status(400).json({ error: 'stageId requerido', errorCode: 'STAGE_ID_REQUIRED' });
-      const policy = botCollisionPolicy === 'restart' ? 'restart' : 'skip';
+      const policy = ['restart', 'stop'].includes(botCollisionPolicy) ? botCollisionPolicy : 'skip';
       const stage = db.prepare('SELECT name FROM stages WHERE id = ? AND tenant_id = ?').get(Number(stageId), req.tenantId);
       const label = `Moviendo ${ids.length} lead${ids.length === 1 ? '' : 's'} → ${stage?.name || 'etapa'}`;
       const job = jobRunner.enqueue(db, req.tenantId, {
@@ -276,7 +276,8 @@ module.exports = function createExpedientsRouter(db) {
         // botCollisionPolicy decide qué pasa si el bot tiene wait activo:
         //   'skip' (default) → no inicia nuevo run, deja el viejo
         //   'restart' → cancela el wait viejo + mata runs activos + arranca fresco
-        const policy = (req.body || {}).botCollisionPolicy === 'restart' ? 'restart' : 'skip';
+        const _bcp = (req.body || {}).botCollisionPolicy;
+        const policy = ['restart', 'stop'].includes(_bcp) ? _bcp : 'skip';
         // 1) Bot por SALIR de la etapa anterior
         if (prev.stageId) {
           botEngine.triggerPipelineStageLeave(db, {

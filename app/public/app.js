@@ -9,6 +9,19 @@ function escapeHtml(s) {
 // El resto del UI sigue en español hasta que se traduzca progresivamente.
 const I18N_TRANSLATIONS = {
   'es-MX': {
+    'bc.title': 'Este lead ya tiene un bot activo',
+    'bc.question': '¿Qué quieres hacer?',
+    'bc.restart.title': 'Reiniciar desde cero',
+    'bc.restart.desc': 'Detén el bot actual y arranca el de la nueva etapa',
+    'bc.skip.title': 'Dejar el bot como está',
+    'bc.skip.desc': 'Mueve el lead sin tocar el bot que ya corre',
+    'bc.stop.title': 'Parar el bot actual',
+    'bc.stop.desc': 'Detén el bot actual y no arranques ninguno',
+    'bc.cancel': 'Cancelar movimiento',
+    'bc.introHasBot': 'Vas a mover a {lead} a "{stage}". Este lead ya tiene {n} en marcha:',
+    'bc.introNoBot': 'Vas a mover a {lead} a "{stage}". Esa etapa no dispara ningún bot. ¿Qué hago con el que ya corre?',
+    'bc.waiting': 'En espera · vence {t}',
+    'bc.running': 'Ejecutándose ahora',
     // Nav sidebar
     'nav.inicio': 'Analíticas',
     'nav.chats': 'Chats',
@@ -966,6 +979,19 @@ const I18N_TRANSLATIONS = {
     'int.vote.custom.placeholder': 'Escribe el nombre (ej: Zendesk, Freshdesk...)',
   },
   'en': {
+    'bc.title': 'This lead already has a bot running',
+    'bc.question': 'What do you want to do?',
+    'bc.restart.title': 'Restart from scratch',
+    'bc.restart.desc': 'Stop the current bot and start the new stage bot',
+    'bc.skip.title': 'Leave the bot as is',
+    'bc.skip.desc': 'Move the lead without touching the running bot',
+    'bc.stop.title': 'Stop the current bot',
+    'bc.stop.desc': 'Stop the current bot and do not start any',
+    'bc.cancel': 'Cancel move',
+    'bc.introHasBot': 'You are moving {lead} to "{stage}". This lead already has {n} running:',
+    'bc.introNoBot': 'You are moving {lead} to "{stage}". That stage does not trigger any bot. What should I do with the one already running?',
+    'bc.waiting': 'Waiting · expires {t}',
+    'bc.running': 'Running now',
     // Nav sidebar
     'nav.inicio': 'Analytics',
     'nav.chats': 'Chats',
@@ -8625,6 +8651,7 @@ async function saveExpDetailEdits() {
       const decision = await checkBotCollision(exp.id, patch.stageId, exp.name || exp.contactName, targetStage?.name);
       if (decision === 'cancel') return;
       if (decision === 'restart') patch.botCollisionPolicy = 'restart';
+      if (decision === 'stop') patch.botCollisionPolicy = 'stop';
     } catch (_) {}
   }
 
@@ -16339,6 +16366,7 @@ function setupKanbanDragDrop() {
         const decision = await checkBotCollision(expId, stageId, exp.name || exp.contactName, targetStage?.name);
         if (decision === 'cancel') { renderPipelinesBoard(); return; }
         if (decision === 'restart') patch.botCollisionPolicy = 'restart';
+        if (decision === 'stop') patch.botCollisionPolicy = 'stop';
       } catch (_) {}
 
       try {
@@ -22140,25 +22168,34 @@ async function checkBotCollision(expedientId, stageId, leadName, stageName) {
     // Mostramos TODOS los bots con wait activo (no solo los que matchean el stage
     // destino) porque "Reiniciar" los va a cancelar a todos para evitar
     // interferencias de bots viejos de otras etapas.
-    return await _showBotCollisionModal(res.activeBots || [], leadName, stageName);
+    return await _showBotCollisionModal(res.activeBots || [], leadName, stageName, res.wouldFireBots || []);
   } catch (_) { return null; }
 }
 
-function _showBotCollisionModal(activeBots, leadName, stageName) {
+function _showBotCollisionModal(activeBots, leadName, stageName, wouldFireBots) {
   return new Promise(resolve => {
     const modal = document.getElementById('botCollisionModal');
     const intro = document.getElementById('botCollisionIntro');
     const list  = document.getElementById('botCollisionList');
-    const restartBtn = modal?.querySelector('[data-bc-action="restart"]');
     if (!modal || !intro || !list) return resolve('skip');
 
+    // ¿La etapa destino dispara algún bot? Si NO, la opción "Reiniciar" (que arranca el
+    // bot de la nueva etapa) no aplica → la ocultamos y "Dejar como está" pasa a primaria.
+    const destHasBot = Array.isArray(wouldFireBots) && wouldFireBots.length > 0;
+    const restartBtn = document.getElementById('botCollisionRestart');
+    const skipBtn    = document.getElementById('botCollisionSkip');
+    if (restartBtn) { restartBtn.hidden = !destHasBot; restartBtn.classList.toggle('bc-option--primary', destHasBot); }
+    if (skipBtn)    { skipBtn.classList.toggle('bc-option--primary', !destHasBot); }
+
     const count = activeBots.length;
-    intro.innerHTML = `Vas a mover a <strong>${escHtml(leadName || 'este lead')}</strong> a la etapa <strong>"${escHtml(stageName || '—')}"</strong>.<br>Este lead tiene <strong>${count} bot${count === 1 ? '' : 's'}</strong> corriendo:`;
+    const botsStr = count === 1 ? '1 bot' : `${count} bots`;
+    intro.innerHTML = (destHasBot ? t('bc.introHasBot') : t('bc.introNoBot'))
+      .replace('{lead}', `<strong>${escHtml(leadName || 'este lead')}</strong>`)
+      .replace('{stage}', `<strong>${escHtml(stageName || '—')}</strong>`)
+      .replace('{n}', `<strong>${botsStr}</strong>`);
 
     list.innerHTML = activeBots.map(b => {
-      const expiresStr = b.waitExpiresAt
-        ? `Expira ${relTime(b.waitExpiresAt)}`
-        : 'En ejecución';
+      const expiresStr = b.waitExpiresAt ? t('bc.waiting').replace('{t}', relTime(b.waitExpiresAt)) : t('bc.running');
       return `<div class="bc-bot-item">
         <span class="bc-bot-icon">🤖</span>
         <div class="bc-bot-info">
@@ -22167,16 +22204,6 @@ function _showBotCollisionModal(activeBots, leadName, stageName) {
         </div>
       </div>`;
     }).join('');
-
-    // Actualizar el texto del botón Reiniciar para que el user sepa que va a limpiar TODOS
-    if (restartBtn) {
-      const small = restartBtn.querySelector('small');
-      if (small) {
-        small.textContent = count > 1
-          ? `Cancela los ${count} bots viejos del lead y arranca el bot del stage destino fresco — evita interferencias futuras`
-          : 'Cancela el bot viejo y arranca uno fresco desde el paso 1 — recomendado para testing';
-      }
-    }
 
     const cleanup = () => {
       modal.hidden = true;
@@ -22192,7 +22219,7 @@ function _showBotCollisionModal(activeBots, leadName, stageName) {
     };
     const onKey = (e) => {
       if (e.key === 'Escape') { cleanup(); resolve('cancel'); }
-      else if (e.key === 'Enter') { cleanup(); resolve('restart'); }
+      else if (e.key === 'Enter') { cleanup(); resolve(destHasBot ? 'restart' : 'skip'); }
     };
     modal.addEventListener('click', onClick);
     document.addEventListener('keydown', onKey);

@@ -100,27 +100,11 @@ function _lastDeliveryFailure(db, tenantId, contactId) {
         resolved: false,
       };
     }
-    // 2) Si el último NO falló pero hubo failed en las últimas 48h → reportar como "reciente".
-    // Caso típico: cascada de 6 mensajes que fallaron por privacidad/bloqueo, y luego un
-    // template que pasó por excepción. El asesor debe saber que hubo problemas.
-    const recent = db.prepare(`
-      SELECT m.status, m.error_reason, m.created_at, m.provider, COUNT(*) OVER () as failed_count
-        FROM messages m
-        JOIN conversations c ON c.id = m.conversation_id
-       WHERE c.contact_id = ? AND c.tenant_id = ? AND m.direction = 'outgoing'
-         AND m.status = 'failed' AND m.created_at > unixepoch() - 172800
-       ORDER BY m.created_at DESC, m.id DESC
-       LIMIT 1
-    `).get(contactId, tenantId);
-    if (recent) {
-      return {
-        reason: recent.error_reason || 'Error desconocido',
-        at: recent.created_at,
-        provider: recent.provider,
-        resolved: true,
-        failedCount: recent.failed_count,
-      };
-    }
+    // El ícono de error en la tarjeta de lead refleja SOLO el estado ACTUAL: si el
+    // último mensaje saliente NO falló (salió bien, o va en camino), NO hay error que
+    // mostrar → se quita el ícono. Por pedido de wuichy (2026-07): en cuanto wapi logra
+    // enviar un mensaje exitoso al contacto, la alerta desaparece ("el error se resolvió").
+    // (Antes se mantenía 48h como "resuelto" tras una falla previa — se removió.)
   } catch (_) {}
   return null;
 }

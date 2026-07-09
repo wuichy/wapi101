@@ -21,6 +21,7 @@ const expedientSvc = require('../expedients/service');
 const botEngine = require('../bot/engine');
 const inboundRouter = require('../inbound-router/service');
 const pushSvc = require('../notifications/service');
+const reelanceIaSvc = require('../reelance-ia/service');
 const avatarsSvc = require('../customers/avatars');
 
 // Helper: push notification para mensaje entrante (colapsa por convo).
@@ -409,6 +410,12 @@ module.exports = function createWebhooksRouter(db) {
               contactName:   name,
             });
 
+            // Medido ANTES de insertar el mensaje: si el webhook llega repetido
+            // (redelivery de Meta) ya habrá un entrante y NO se re-notifica.
+            const hadInbound = db.prepare(
+              "SELECT 1 FROM messages WHERE conversation_id = ? AND direction = 'incoming' LIMIT 1"
+            ).get(convo.id);
+
             const insertedMsg = convoSvc.addMessage(db, tenantId, convo.id, {
               externalId: msgId,
               direction:  'incoming',
@@ -439,6 +446,18 @@ module.exports = function createWebhooksRouter(db) {
             }
 
             ensureExpedient(tenantId, convo.contact_id, routing);
+
+            // Conversación NUEVA (primer mensaje entrante) → avisar a la tienda
+            // para que dispare el evento "Contact" a Meta con el teléfono real.
+            if (!hadInbound && insertedMsg) {
+              reelanceIaSvc.notifyNewConversation(db, tenantId, {
+                phone:          `+${waId}`,
+                name,
+                provider:       'whatsapp',
+                conversationId: convo.id,
+                messageId:      msgId,
+              });
+            }
 
             inboundRouter.handleInboundMessage(db, {
               convoId:       convo.id,

@@ -75,6 +75,47 @@ function regenerateToken(db, tenantId) {
   return newToken;
 }
 
+// ─── Notificación wapi → tienda (conversación nueva de WhatsApp) ──────
+// Dirección INVERSA al resto del módulo: aquí wapi101 le avisa a la tienda
+// que un contacto NUEVO escribió por WhatsApp. La tienda lo convierte en un
+// evento "Contact" de Meta CAPI con el teléfono real → sube la calidad de
+// coincidencia del pixel. Auth: el MISMO bearer token compartido (la tienda
+// lo compara contra su WapiConfig). Fire-and-forget: jamás bloquea ni tumba
+// el intake del webhook de WhatsApp.
+function notifyNewConversation(db, tenantId, { phone, name, provider, conversationId, messageId }) {
+  try {
+    const cfg = getConfigByTenant(db, tenantId);
+    if (!cfg || !cfg.enabled || !cfg.token) return;
+    const base = String(cfg.site_url || '').replace(/\/+$/, '');
+    if (!base) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    fetch(`${base}/api/wapi/contact`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cfg.token}`,
+      },
+      body: JSON.stringify({
+        event:          'conversation.started',
+        provider:       provider || 'whatsapp',
+        phone:          phone || null,
+        name:           name || null,
+        conversationId: conversationId ?? null,
+        messageId:      messageId || null,
+        occurredAt:     Math.floor(Date.now() / 1000),
+      }),
+      signal: controller.signal,
+    }).then((res) => {
+      if (!res.ok) console.warn(`[reelance-ia] notify conversation.started → HTTP ${res.status}`);
+    }).catch((err) => {
+      console.warn('[reelance-ia] notify conversation.started error:', err.message);
+    }).finally(() => clearTimeout(timer));
+  } catch (err) {
+    console.warn('[reelance-ia] notifyNewConversation error:', err.message);
+  }
+}
+
 // ─── Helpers compartidos ──────────────────────────────────────────────
 
 // Normaliza teléfono a E.164. Si no tiene prefijo de país, asume MX (+52).
@@ -1252,6 +1293,7 @@ module.exports = {
   ensureConfig,
   updateConfig,
   regenerateToken,
+  notifyNewConversation,
   processOrderEvent,
   processAbandonedCartEvent,
   startAbandonedCartPoller, _routeOrderToPipeline, deleteOrderEvents };

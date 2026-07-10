@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
   <link rel="dns-prefetch" href="https://connect.facebook.net" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260701prog" />
+  <link rel="stylesheet" href="/styles.css?v=20260709errlib" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -2746,6 +2746,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6m4-6v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
               <span>Papelera</span>
             </button>
+            <button class="settings-tab" data-settings="biblioteca">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              <span>Biblioteca</span>
+            </button>
             <button class="settings-tab" data-settings="respaldos" data-admin-only>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3"/><polyline points="21 4 21 10 15 10"/></svg>
               <span>Respaldos</span>
@@ -3588,6 +3592,17 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                   <p data-i18n="trash.empty">La papelera está vacía</p>
                 </div>
               </div>
+            </div>
+
+            <!-- ─── Biblioteca de errores ─── -->
+            <div class="settings-pane" data-settings="biblioteca">
+              <div class="settings-head">
+                <div>
+                  <h2>Biblioteca de errores</h2>
+                  <p>Qué significa cada icono de error que ves en los chats y en las tarjetas de leads, explicado sin tecnicismos, y qué hacer en cada caso.</p>
+                </div>
+              </div>
+              <div id="errorLibraryList" class="err-lib-list"></div>
             </div>
 
             <!-- ─── Configuraciones ─── -->
@@ -4587,7 +4602,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script defer src="/app.js?v=20260703bots"></script>
+  <script defer src="/app.js?v=20260709errlib"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

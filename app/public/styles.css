@@ -4104,6 +4104,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .rh-delivery-error-badge.window_closed,
 .rh-delivery-error-badge.template,
+.rh-delivery-error-badge.marketing_limit,
 .rh-delivery-error-badge.privacy {
   background: #fef3c7; color: #78350f; border-color: #fcd34d;
 }
@@ -4138,6 +4139,7 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 }
 .pl-card-deliv-err.window_closed,
 .pl-card-deliv-err.template,
+.pl-card-deliv-err.marketing_limit,
 .pl-card-deliv-err.privacy,
 .pl-card-deliv-err.rate_limit,
 .pl-card-deliv-err.other {
@@ -4167,10 +4169,38 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .rh-deliv-err-icon.suspended { background: #fee2e2; color: #dc2626; }
 .rh-deliv-err-icon.window_closed,
 .rh-deliv-err-icon.template,
+.rh-deliv-err-icon.marketing_limit,
 .rh-deliv-err-icon.privacy,
 .rh-deliv-err-icon.rate_limit,
 .rh-deliv-err-icon.other { background: #fef3c7; color: #d97706; }
 .rh-deliv-err-icon svg { width: 28px; height: 28px; }
+
+/* Settings → Biblioteca de errores */
+.err-lib-list { display: flex; flex-direction: column; gap: 12px; max-width: 780px; }
+.err-lib-item {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: #fff;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.err-lib-icon.rh-deliv-err-icon { width: 40px; height: 40px; margin: 2px 0 0; flex-shrink: 0; }
+.err-lib-icon.rh-deliv-err-icon svg { width: 20px; height: 20px; }
+.err-lib-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #0f172a);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.err-lib-codes { font-size: 11px; font-weight: 500; color: var(--text-muted, #64748b); background: #f1f5f9; border-radius: 6px; padding: 2px 7px; }
+.err-lib-desc { font-size: 13px; line-height: 1.55; color: var(--text-soft, #475569); margin: 0 0 6px; }
+.err-lib-action { font-size: 13px; line-height: 1.55; color: var(--text, #0f172a); margin: 0; }
 .rh-deliv-err-desc {
   font-size: 14px;
   line-height: 1.5;

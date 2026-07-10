@@ -3003,6 +3003,10 @@ async function openConversation(convoId) {
 // icono específico. Más específico = mejor; el resto cae a 'other'.
 function classifyDeliveryError(reason) {
   const r = String(reason || '').toLowerCase();
+  // 131049 (tope de marketing de Meta) VA PRIMERO: su texto contiene "plantilla"
+  // y "marketing", y sin este check caía a la categoría 'template' ("plantilla
+  // rechazada") — confundía al usuario: su plantilla SÍ está aprobada.
+  if (r.includes('131049') || r.includes('ecosystem engagement') || (r.includes('marketing') && r.includes('limit'))) return 'marketing_limit';
   if (r.includes('bloqueó') || r.includes('blocked') || r.includes('blocked tus mensajes')) return 'blocked';
   if (r.includes('sin whatsapp') || r.includes('no registrado') || r.includes('not on whatsapp')) return 'no_whatsapp';
   if (r.includes('no es válido') || r.includes('no válido') || r.includes('formato')) return 'invalid_number';
@@ -3017,6 +3021,7 @@ function classifyDeliveryError(reason) {
 // Etiqueta corta para el badge (cabe poco). Click abre detalle.
 function deliveryErrorShortLabel(category) {
   return ({
+    marketing_limit: 'Límite marketing',
     blocked:        'Bloqueado',
     no_whatsapp:    'Sin WhatsApp',
     invalid_number: 'Número inválido',
@@ -3032,6 +3037,7 @@ function deliveryErrorShortLabel(category) {
 // Icono SVG por categoría — todos en stroke currentColor para tomar el color del badge.
 function deliveryErrorIconSvg(category) {
   const svgs = {
+    marketing_limit: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M3 8v4l8 3V5L3 8z"/><path d="M14 8a3.5 3.5 0 0 1 0 4"/><line x1="4" y1="16" x2="16" y2="4"/></svg>`,
     blocked: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><circle cx="10" cy="10" r="7"/><line x1="5" y1="5" x2="15" y2="15"/></svg>`,
     no_whatsapp: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M5 11a5 5 0 0 1 10 0v3a2 2 0 0 1-2 2h-1v-4h2"/><path d="M5 11v3a2 2 0 0 0 2 2h1v-4H6"/><line x1="3" y1="3" x2="17" y2="17"/></svg>`,
     invalid_number: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M5 4h2l2 4-2 1a8 8 0 0 0 4 4l1-2 4 2v2a2 2 0 0 1-2 2A12 12 0 0 1 3 6a2 2 0 0 1 2-2z"/><line x1="3" y1="3" x2="17" y2="17"/></svg>`,
@@ -3049,6 +3055,11 @@ function deliveryErrorIconSvg(category) {
 function deliveryErrorDetail(category, reason, provider) {
   const providerLabel = (PROVIDER_LABEL && PROVIDER_LABEL[provider]) || provider || 'el canal';
   const map = {
+    marketing_limit: {
+      title: '📣 Meta pausó las promos a este lead',
+      desc: 'Tu plantilla está APROBADA y tu cuenta está bien — esto NO es un rechazo ni un bloqueo. Meta pone un tope a cuántos mensajes de MARKETING puede recibir una persona que no te ha contestado últimamente. Este lead ya recibió varias promos sin responder, así que Meta frenó esta para no saturarlo (error 131049).',
+      action: 'Espera a que el lead te escriba (eso reabre todo), o mándale una plantilla de UTILIDAD (confirmación, rastreo de pedido) en vez de otra promo. Insistir con más promos seguidas solo hace que Meta también las frene.',
+    },
     blocked: {
       title: '🚫 El lead te bloqueó',
       desc: 'El destinatario te bloqueó en ' + providerLabel + ', así que no recibe tus mensajes.',
@@ -3097,6 +3108,50 @@ function deliveryErrorDetail(category, reason, provider) {
   };
   return map[category] || map.other;
 }
+
+// ─── Settings → Biblioteca de errores ────────────────────────────────────────
+// Lista cada categoría de error de envío con SU icono (el mismo que sale en
+// chats y tarjetas de leads), qué significa con peras y manzanas, y qué hacer.
+// Se genera desde deliveryErrorDetail/deliveryErrorIconSvg → nunca se desalinea.
+function renderErrorLibrary() {
+  const wrap = document.getElementById('errorLibraryList');
+  if (!wrap || wrap.dataset.rendered) return;
+  const cats = [
+    { cat: 'marketing_limit', codes: '131049' },
+    { cat: 'window_closed',   codes: '131047' },
+    { cat: 'blocked',         codes: '131026' },
+    { cat: 'privacy',         codes: '131026' },
+    { cat: 'no_whatsapp',     codes: '131026' },
+    { cat: 'invalid_number',  codes: '100 · 131030' },
+    { cat: 'template',        codes: '132000 · 132001 · 132012' },
+    { cat: 'suspended',       codes: '' },
+    { cat: 'rate_limit',      codes: '130429 · 131048 · 131056' },
+    { cat: 'other',           codes: '' },
+  ];
+  wrap.innerHTML = cats.map(({ cat, codes }) => {
+    const det = deliveryErrorDetail(cat, '', 'whatsapp');
+    const title = det.title.replace(/^\S+\s+/, ''); // sin el emoji inicial — el icono ya lo dice
+    return `
+    <div class="err-lib-item">
+      <div class="rh-deliv-err-icon err-lib-icon ${cat}">${deliveryErrorIconSvg(cat)}</div>
+      <div class="err-lib-body">
+        <div class="err-lib-title">
+          ${escapeHtml(title)}
+          <span class="rh-delivery-error-badge ${cat}" style="cursor:default">${deliveryErrorIconSvg(cat)} ${escapeHtml(deliveryErrorShortLabel(cat))}</span>
+          ${codes ? `<span class="err-lib-codes">Código Meta: ${escapeHtml(codes)}</span>` : ''}
+        </div>
+        <p class="err-lib-desc">${escapeHtml(det.desc)}</p>
+        <p class="err-lib-action"><strong>¿Qué hacer?</strong> ${escapeHtml(det.action)}</p>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.dataset.rendered = '1';
+}
+// Render al abrir la pestaña (delegación top-level: corre siempre) + intento inicial.
+document.addEventListener('click', (e) => {
+  if (e.target?.closest?.('.settings-tab[data-settings="biblioteca"]')) renderErrorLibrary();
+});
+try { renderErrorLibrary(); } catch (_) {}
 
 function showDeliveryErrorModal(convo) {
   const failure = convo.deliveryFailure;

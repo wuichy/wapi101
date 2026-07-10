@@ -167,7 +167,7 @@ function buildWaAudience(db, tenantId, { pipelineId, stageId } = {}) {
 // no soporta variables en botones URL, y el botón-con-token es el corazón del
 // rastreo). Crea/reutiliza la conversación para que el mensaje viva en el inbox
 // y sus estados (entregado/leído) fluyan por el webhook normal.
-async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyParams, buttonParams, preview, headerImageUrl }) {
+async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyParams, autoParams, buttonParams, preview, headerImageUrl }) {
   const spec = { headerImageUrl };
   const sender = require('../conversations/sender');
   const digits = String(phone || '').replace(/\D/g, '');
@@ -178,6 +178,37 @@ async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyP
     provider: 'whatsapp', externalId: digits, integrationId: null,
     contactPhone: `+${digits}`, contactName: null,
   });
+
+  // Modo autoParams: armar los bodyParams desde los placeholders de la
+  // plantilla LOCAL + los datos reales del contacto. 'fijo' usa su valor;
+  // sin dato del contacto cae al ejemplo (los tests salen con "Luis"/etc).
+  if (autoParams && (!Array.isArray(bodyParams) || !bodyParams.length)) {
+    try {
+      const tplRow = db.prepare(
+        "SELECT body, body_placeholders FROM message_templates WHERE tenant_id = ? AND name = ? AND type = 'wa_api' LIMIT 1"
+      ).get(tenantId, String(template));
+      const varCount = ((tplRow?.body || '').match(/\{\{\d+\}\}/g) || []).length;
+      if (varCount > 0) {
+        let phs = [];
+        try { phs = JSON.parse(tplRow?.body_placeholders || '[]'); } catch { /* sin placeholders */ }
+        const contact = db.prepare('SELECT first_name, last_name FROM contacts WHERE id = ?').get(convo.contactId || convo.contact_id) || {};
+        bodyParams = Array.from({ length: varCount }, (_, i) => {
+          const ph = phs[i] || {};
+          const label = String(ph.label || '').toLowerCase();
+          let v = null;
+          if (label === 'nombre') v = (contact.first_name || '').trim() || ph.example || 'qué tal';
+          else if (label === 'apellido') v = (contact.last_name || '').trim() || ph.example || '';
+          else v = ph.value || ph.example || `Ejemplo ${i + 1}`;
+          return String(v || ph.example || '·');
+        });
+      } else {
+        bodyParams = [];
+      }
+    } catch (err) {
+      console.warn('[reelance-ia] autoParams:', err.message);
+    }
+  }
+
   const creds = sender.getIntegrationCreds(db, null, convo);
   if (!creds?.phoneNumberId || !creds?.accessToken) return { ok: false, error: 'integración WhatsApp sin credenciales' };
 
@@ -299,7 +330,14 @@ async function createWaTemplate(db, tenantId, spec) {
       headerMediaUrl: headerMediaHandle ? mediaUrl : null,
       headerMediaHandle,
       buttons,
-      bodyPlaceholders: [{ label: 'nombre', example: 'Ana' }],
+      // Placeholders de la tienda: [{label:'nombre'|'apellido'|'fijo', example, value?}]
+      bodyPlaceholders: (Array.isArray(spec.bodyPlaceholders) && spec.bodyPlaceholders.length)
+        ? spec.bodyPlaceholders.map((p) => ({
+            label: String(p?.label || 'fijo'),
+            example: String(p?.example || 'Ejemplo').slice(0, 60),
+            ...(p?.value ? { value: String(p.value).slice(0, 120) } : {}),
+          }))
+        : [{ label: 'nombre', example: 'Ana' }],
     });
     // Sello de origen: etiqueta 'Reelance' (rosa de marca) para distinguir en
     // la UI de wapi qué plantillas nacieron en la tienda.

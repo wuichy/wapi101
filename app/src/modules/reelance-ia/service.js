@@ -285,40 +285,78 @@ async function createWaTemplate(db, tenantId, spec) {
   }
 }
 
-// Templates APROBADOS del WABA (para el dropdown del tablero de la tienda).
+// Plantillas de la TIENDA: solo las que llevan la etiqueta 'Reelance' en la
+// tabla local (los estados llegan solos por el webhook de Meta a wapi). Las
+// plantillas de bots/asesores de wapi NO se muestran a la tienda.
 async function listWaTemplates(db, tenantId) {
-  const row = db.prepare(
-    "SELECT credentials_enc FROM integrations WHERE provider = 'whatsapp' AND status = 'connected' AND tenant_id = ? ORDER BY id DESC LIMIT 1"
-  ).get(tenantId);
-  if (!row?.credentials_enc) return { ok: false, error: 'sin integración WhatsApp' };
-  const creds = decryptJson(row.credentials_enc);
-  if (!creds?.wabaId || !creds?.accessToken) return { ok: false, error: 'credenciales incompletas' };
-  const version = process.env.META_GRAPH_VERSION || 'v22.0';
   try {
-    const res = await fetch(
-      `https://graph.facebook.com/${version}/${creds.wabaId}/message_templates?fields=name,status,language,components&limit=100`,
-      { headers: { Authorization: `Bearer ${creds.accessToken}` }, signal: AbortSignal.timeout(20_000) },
-    );
-    const data = await res.json().catch(() => ({}));
-    if (data.error) return { ok: false, error: data.error.message };
-    const templates = (data.data || [])
-      .map((t) => {
-        const body = (t.components || []).find((c) => c.type === 'BODY')?.text || '';
-        const header = (t.components || []).find((c) => c.type === 'HEADER');
-        const urlBtn = ((t.components || []).find((c) => c.type === 'BUTTONS')?.buttons || [])
-          .find((b) => b.type === 'URL');
-        return {
-          name: t.name, language: t.language, body,
-          status: t.status,
-          headerFormat: header?.format || null,
-          hasUrlVar: !!(urlBtn && /\{\{1\}\}/.test(urlBtn.url || '')),
-          bodyVars: (body.match(/\{\{\d+\}\}/g) || []).length,
-        };
-      });
+    const rows = db.prepare(`
+      SELECT t.id, t.name, t.language, t.body, t.wa_status, t.header_type, t.buttons, t.wa_id
+        FROM message_templates t
+        JOIN template_tag_assignments a ON a.template_id = t.id AND a.tenant_id = t.tenant_id
+        JOIN template_tags tt ON tt.id = a.tag_id
+       WHERE t.tenant_id = ? AND t.type = 'wa_api' AND tt.name = 'Reelance'
+       ORDER BY t.id DESC
+    `).all(tenantId);
+    const templates = rows.map((r) => {
+      let hasUrlVar = false;
+      try {
+        const btns = JSON.parse(r.buttons || '[]');
+        hasUrlVar = btns.some((b) => b?.type === 'URL' && /\{\{1\}\}/.test(b.url || ''));
+      } catch { /* buttons ilegibles */ }
+      return {
+        id: r.id,
+        name: r.name,
+        language: r.language || 'es_MX',
+        body: r.body || '',
+        status: String(r.wa_status || 'draft').toUpperCase(),
+        headerFormat: r.header_type && r.header_type !== 'TEXT' ? r.header_type : null,
+        hasUrlVar,
+        bodyVars: ((r.body || '').match(/\{\{\d+\}\}/g) || []).length,
+      };
+    });
     return { ok: true, templates };
   } catch (err) {
     return { ok: false, error: err.message };
   }
+}
+
+// Borra una plantilla de la tienda: en META (por nombre, best-effort) y en la
+// tabla local. SOLO acepta plantillas etiquetadas 'Reelance'.
+async function deleteWaTemplate(db, tenantId, { id }) {
+  const tplSvc = require('../templates/service');
+  const row = db.prepare(`
+    SELECT t.id, t.name FROM message_templates t
+      JOIN template_tag_assignments a ON a.template_id = t.id AND a.tenant_id = t.tenant_id
+      JOIN template_tags tt ON tt.id = a.tag_id
+     WHERE t.id = ? AND t.tenant_id = ? AND tt.name = 'Reelance'
+  `).get(Number(id), tenantId);
+  if (!row) return { ok: false, error: 'plantilla no encontrada o no es de la tienda' };
+
+  // Meta primero (best-effort): si falla seguimos con el borrado local para
+  // que la tienda no quede atorada por un glitch del Graph.
+  let metaDeleted = false;
+  try {
+    const cred = db.prepare(
+      "SELECT credentials_enc FROM integrations WHERE provider = 'whatsapp' AND status = 'connected' AND tenant_id = ? ORDER BY id DESC LIMIT 1"
+    ).get(tenantId);
+    const creds = cred?.credentials_enc ? decryptJson(cred.credentials_enc) : null;
+    if (creds?.wabaId && creds?.accessToken) {
+      const version = process.env.META_GRAPH_VERSION || 'v22.0';
+      const res = await fetch(
+        `https://graph.facebook.com/${version}/${creds.wabaId}/message_templates?name=${encodeURIComponent(row.name)}`,
+        { method: 'DELETE', headers: { Authorization: `Bearer ${creds.accessToken}` }, signal: AbortSignal.timeout(20_000) },
+      );
+      const data = await res.json().catch(() => ({}));
+      metaDeleted = !!data.success;
+      if (!metaDeleted) console.warn('[reelance-ia] Meta no borró la plantilla:', JSON.stringify(data).slice(0, 150));
+    }
+  } catch (err) {
+    console.warn('[reelance-ia] borrando plantilla en Meta:', err.message);
+  }
+
+  tplSvc.remove(db, tenantId, row.id);
+  return { ok: true, metaDeleted };
 }
 
 // ─── Notificación wapi → tienda (conversación nueva de WhatsApp) ──────
@@ -1547,6 +1585,7 @@ module.exports = {
   sendCampaignTemplate,
   listWaTemplates,
   createWaTemplate,
+  deleteWaTemplate,
   processOrderEvent,
   processAbandonedCartEvent,
   startAbandonedCartPoller, _routeOrderToPipeline, deleteOrderEvents };

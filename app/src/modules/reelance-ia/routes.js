@@ -111,6 +111,13 @@ function webhookRouter(db) {
     res.status(out.ok ? 200 : 422).json(out);
   });
 
+  router.post('/wa-template-delete', express.json(), async (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    const out = await svc.deleteWaTemplate(db, cfg.tenant_id, req.body || {});
+    res.status(out.ok ? 200 : 422).json(out);
+  });
+
   router.post('/wa-send', express.json(), async (req, res) => {
     const cfg = svc.getConfigByToken(db, _extractBearer(req));
     if (!cfg) return res.status(401).json({ error: 'invalid_token' });

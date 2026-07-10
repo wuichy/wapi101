@@ -361,7 +361,7 @@ async function createWaTemplate(db, tenantId, spec) {
 async function listWaTemplates(db, tenantId) {
   try {
     const rows = db.prepare(`
-      SELECT t.id, t.name, t.language, t.body, t.wa_status, t.header_type, t.buttons, t.wa_id
+      SELECT t.id, t.name, t.language, t.body, t.footer, t.header, t.header_media_url, t.wa_status, t.header_type, t.buttons, t.wa_id
         FROM message_templates t
         JOIN template_tag_assignments a ON a.template_id = t.id AND a.tenant_id = t.tenant_id
         JOIN template_tags tt ON tt.id = a.tag_id
@@ -369,18 +369,21 @@ async function listWaTemplates(db, tenantId) {
        ORDER BY t.id DESC
     `).all(tenantId);
     const templates = rows.map((r) => {
-      let hasUrlVar = false;
-      try {
-        const btns = JSON.parse(r.buttons || '[]');
-        hasUrlVar = btns.some((b) => b?.type === 'URL' && /\{\{1\}\}/.test(b.url || ''));
-      } catch { /* buttons ilegibles */ }
+      let btns = [];
+      try { btns = JSON.parse(r.buttons || '[]'); } catch { btns = []; }
+      if (!Array.isArray(btns)) btns = [];
+      const hasUrlVar = btns.some((b) => b?.type === 'URL' && /\{\{1\}\}/.test(b.url || ''));
       return {
         id: r.id,
         name: r.name,
         language: r.language || 'es_MX',
         body: r.body || '',
+        footer: r.footer || null,
+        headerText: r.header_type === 'TEXT' ? (r.header || null) : null,
         status: String(r.wa_status || 'draft').toUpperCase(),
         headerFormat: r.header_type && r.header_type !== 'TEXT' ? r.header_type : null,
+        headerMediaUrl: r.header_media_url || null,
+        buttons: btns.map((b) => ({ type: b?.type || 'URL', text: b?.text || '' })).filter((b) => b.text),
         hasUrlVar,
         bodyVars: ((r.body || '').match(/\{\{\d+\}\}/g) || []).length,
       };

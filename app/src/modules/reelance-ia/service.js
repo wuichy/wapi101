@@ -258,7 +258,7 @@ async function createWaTemplate(db, tenantId, spec) {
     const row = tplSvc.create(db, tenantId, {
       type: 'wa_api',
       name,
-      displayName: spec.name,
+      displayName: `${spec.name} · Reelance`,
       category: spec.category || 'MARKETING',
       language: spec.language || 'es_MX',
       body: spec.bodyText.trim(),
@@ -269,6 +269,15 @@ async function createWaTemplate(db, tenantId, spec) {
       buttons: [{ type: 'URL', text: spec.buttonText.trim(), url: spec.buttonUrl || 'https://reelance.mx/w/{{1}}' }],
       bodyPlaceholders: [{ label: 'nombre', example: 'Ana' }],
     });
+    // Sello de origen: etiqueta 'Reelance' (rosa de marca) para distinguir en
+    // la UI de wapi qué plantillas nacieron en la tienda.
+    try {
+      db.prepare("INSERT OR IGNORE INTO template_tags (tenant_id, name, color) VALUES (?, 'Reelance', '#E82779')").run(tenantId);
+      const tag = db.prepare("SELECT id FROM template_tags WHERE tenant_id = ? AND name = 'Reelance'").get(tenantId);
+      if (tag) tplSvc.setTags(db, tenantId, row.id, [tag.id]);
+    } catch (err) {
+      console.warn('[reelance-ia] tag Reelance:', err.message);
+    }
     const sub = await tplSvc.submitToMeta(db, tenantId, row.id);
     return { ok: true, id: row.id, name, waId: sub.waId, status: 'pending' };
   } catch (err) {

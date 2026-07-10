@@ -110,7 +110,12 @@ function buildComponents(template) {
         out.push({ type: 'QUICK_REPLY', text: b.text });
       } else if (b.type === 'URL') {
         if (!b.url) continue;
-        out.push({ type: 'URL', text: b.text, url: b.url });
+        const urlBtn = { type: 'URL', text: b.text, url: b.url };
+        // URL dinámica ({{1}} al final): Meta EXIGE un example al registrar.
+        if (/\{\{1\}\}/.test(b.url)) {
+          urlBtn.example = [b.example || b.url.replace('{{1}}', 'ejemplo123')];
+        }
+        out.push(urlBtn);
       } else if (b.type === 'PHONE_NUMBER') {
         if (!b.phone_number) continue;
         out.push({ type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number });

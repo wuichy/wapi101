@@ -104,6 +104,13 @@ function webhookRouter(db) {
     res.json(await svc.listWaTemplates(db, cfg.tenant_id));
   });
 
+  router.post('/wa-template-create', express.json({ limit: '1mb' }), async (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    const out = await svc.createWaTemplate(db, cfg.tenant_id, req.body || {});
+    res.status(out.ok ? 200 : 422).json(out);
+  });
+
   router.post('/wa-send', express.json(), async (req, res) => {
     const cfg = svc.getConfigByToken(db, _extractBearer(req));
     if (!cfg) return res.status(401).json({ error: 'invalid_token' });

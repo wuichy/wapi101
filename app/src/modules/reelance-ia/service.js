@@ -167,7 +167,8 @@ function buildWaAudience(db, tenantId, { pipelineId, stageId } = {}) {
 // no soporta variables en botones URL, y el botón-con-token es el corazón del
 // rastreo). Crea/reutiliza la conversación para que el mensaje viva en el inbox
 // y sus estados (entregado/leído) fluyan por el webhook normal.
-async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyParams, buttonParams, preview }) {
+async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyParams, buttonParams, preview, headerImageUrl }) {
+  const spec = { headerImageUrl };
   const sender = require('../conversations/sender');
   const digits = String(phone || '').replace(/\D/g, '');
   if (digits.length < 10) return { ok: false, error: 'teléfono inválido' };
@@ -181,6 +182,9 @@ async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyP
   if (!creds?.phoneNumberId || !creds?.accessToken) return { ok: false, error: 'integración WhatsApp sin credenciales' };
 
   const components = [];
+  if (spec && spec.headerImageUrl) {
+    components.push({ type: 'header', parameters: [{ type: 'image', image: { link: String(spec.headerImageUrl) } }] });
+  }
   if (Array.isArray(bodyParams) && bodyParams.length) {
     components.push({ type: 'body', parameters: bodyParams.map((t) => ({ type: 'text', text: String(t) })) });
   }
@@ -222,6 +226,56 @@ async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyP
   return { ok: true, waMessageId: wamid };
 }
 
+// Crea una plantilla COMPLETA desde la tienda usando el módulo de plantillas
+// de wapi (queda visible en ambas UIs y su estado se sincroniza): registro
+// local + subida de imagen de encabezado a Meta (handle) + submit a revisión.
+async function createWaTemplate(db, tenantId, spec) {
+  const tplSvc = require('../templates/service');
+  const name = String(spec.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+  if (!name) return { ok: false, error: 'nombre inválido' };
+  if (!spec.bodyText?.trim()) return { ok: false, error: 'falta el texto del mensaje' };
+  if (!spec.buttonText?.trim()) return { ok: false, error: 'falta el texto del botón' };
+
+  // Imagen de encabezado (opcional): se descarga de la URL pública y se sube
+  // a Meta por la Resumable Upload API para obtener el header_handle.
+  let headerMediaHandle = null;
+  if (spec.headerImageUrl) {
+    try {
+      const imgRes = await fetch(spec.headerImageUrl, { signal: AbortSignal.timeout(20_000) });
+      if (!imgRes.ok) return { ok: false, error: `imagen: HTTP ${imgRes.status}` };
+      const mime = imgRes.headers.get('content-type') || 'image/jpeg';
+      if (!/^image\/(jpe?g|png)/.test(mime)) return { ok: false, error: `imagen debe ser JPG/PNG (es ${mime})` };
+      const buffer = Buffer.from(await imgRes.arrayBuffer());
+      if (buffer.length > 5 * 1024 * 1024) return { ok: false, error: 'imagen >5MB' };
+      headerMediaHandle = await tplSvc.uploadHeaderToMeta(db, tenantId, buffer, mime);
+    } catch (err) {
+      return { ok: false, error: `subiendo imagen: ${err.message}` };
+    }
+  }
+
+  try {
+    const row = tplSvc.create(db, tenantId, {
+      type: 'wa_api',
+      name,
+      displayName: spec.name,
+      category: spec.category || 'MARKETING',
+      language: spec.language || 'es_MX',
+      body: spec.bodyText.trim(),
+      footer: (spec.footerText ?? 'Responde BAJA para no recibir promos').trim() || null,
+      headerType: headerMediaHandle ? 'IMAGE' : 'TEXT',
+      headerMediaUrl: headerMediaHandle ? spec.headerImageUrl : null,
+      headerMediaHandle,
+      buttons: [{ type: 'URL', text: spec.buttonText.trim(), url: spec.buttonUrl || 'https://reelance.mx/w/{{1}}' }],
+      bodyPlaceholders: [{ label: 'nombre', example: 'Ana' }],
+    });
+    const sub = await tplSvc.submitToMeta(db, tenantId, row.id);
+    return { ok: true, id: row.id, name, waId: sub.waId, status: 'pending' };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 // Templates APROBADOS del WABA (para el dropdown del tablero de la tienda).
 async function listWaTemplates(db, tenantId) {
   const row = db.prepare(
@@ -239,13 +293,15 @@ async function listWaTemplates(db, tenantId) {
     const data = await res.json().catch(() => ({}));
     if (data.error) return { ok: false, error: data.error.message };
     const templates = (data.data || [])
-      .filter((t) => t.status === 'APPROVED')
       .map((t) => {
         const body = (t.components || []).find((c) => c.type === 'BODY')?.text || '';
+        const header = (t.components || []).find((c) => c.type === 'HEADER');
         const urlBtn = ((t.components || []).find((c) => c.type === 'BUTTONS')?.buttons || [])
           .find((b) => b.type === 'URL');
         return {
           name: t.name, language: t.language, body,
+          status: t.status,
+          headerFormat: header?.format || null,
           hasUrlVar: !!(urlBtn && /\{\{1\}\}/.test(urlBtn.url || '')),
           bodyVars: (body.match(/\{\{\d+\}\}/g) || []).length,
         };
@@ -1481,6 +1537,7 @@ module.exports = {
   buildWaAudience,
   sendCampaignTemplate,
   listWaTemplates,
+  createWaTemplate,
   processOrderEvent,
   processAbandonedCartEvent,
   startAbandonedCartPoller, _routeOrderToPipeline, deleteOrderEvents };

@@ -84,6 +84,33 @@ function webhookRouter(db) {
   // Health check (sin auth — para que la tienda Next.js verifique conectividad)
   router.get('/ping', (_req, res) => res.json({ ok: true, app: 'reelance-ia', version: '1.0.0' }));
 
+  // ── Campañas de WhatsApp (la tienda orquesta; wapi es el cartero) ──
+  router.get('/pipelines', (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    res.json({ ok: true, pipelines: svc.listPipelines(db, cfg.tenant_id) });
+  });
+
+  router.post('/wa-audience', express.json(), (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    const audience = svc.buildWaAudience(db, cfg.tenant_id, req.body || {});
+    res.json({ ok: true, count: audience.length, audience });
+  });
+
+  router.get('/wa-templates', async (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    res.json(await svc.listWaTemplates(db, cfg.tenant_id));
+  });
+
+  router.post('/wa-send', express.json(), async (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    const out = await svc.sendCampaignTemplate(db, cfg.tenant_id, req.body || {});
+    res.status(out.ok ? 200 : 422).json(out);
+  });
+
   return router;
 }
 

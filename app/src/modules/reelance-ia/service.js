@@ -13,6 +13,7 @@
 
 const crypto = require('crypto');
 const convoSvc = require('../conversations/service');
+const { decryptJson } = require('../../security/crypto');
 
 // ─── Token helpers ────────────────────────────────────────────────────
 
@@ -73,6 +74,186 @@ function regenerateToken(db, tenantId) {
   const newToken = generateToken();
   db.prepare('UPDATE reelance_ia_config SET token = ?, updated_at = unixepoch() WHERE tenant_id = ?').run(newToken, tenantId);
   return newToken;
+}
+
+// ─── Campañas de WhatsApp (la tienda ordena, wapi reparte) ────────────
+
+// POST fire-and-forget a la tienda; comparte el patrón de notifyNewConversation.
+function _notifyStore(db, tenantId, payload) {
+  try {
+    const cfg = getConfigByTenant(db, tenantId);
+    if (!cfg || !cfg.enabled || !cfg.token) return;
+    const base = String(cfg.site_url || '').replace(/\/+$/, '');
+    if (!base) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    fetch(`${base}/api/wapi/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
+      body: JSON.stringify({ ...payload, occurredAt: Math.floor(Date.now() / 1000) }),
+      signal: controller.signal,
+    }).then((res) => {
+      if (!res.ok) console.warn(`[reelance-ia] notify ${payload.event} → HTTP ${res.status}`);
+    }).catch((err) => {
+      console.warn(`[reelance-ia] notify ${payload.event} error:`, err.message);
+    }).finally(() => clearTimeout(timer));
+  } catch (err) {
+    console.warn('[reelance-ia] _notifyStore error:', err.message);
+  }
+}
+
+// Estado de mensaje (la tienda cruza por wamid; sin match lo ignora barato).
+function notifyMessageStatus(db, tenantId, { waMessageId, status }) {
+  _notifyStore(db, tenantId, { event: 'message.status', waMessageId, status });
+}
+
+// BAJA de marketing por WhatsApp → lista de exclusión de la tienda.
+function notifyOptOut(db, tenantId, { phone, name }) {
+  _notifyStore(db, tenantId, { event: 'wa.optout', phone, name: name || null });
+}
+
+// Pipelines + etapas (con conteo de expedientes) — para el selector de
+// audiencia del tablero de campañas de la tienda.
+function listPipelines(db, tenantId) {
+  const pipes = db.prepare('SELECT id, name FROM pipelines WHERE tenant_id = ? ORDER BY sort_order, name').all(tenantId);
+  const stages = db.prepare(`
+    SELECT s.id, s.pipeline_id, s.name, s.sort_order, COUNT(e.id) AS expedients
+      FROM stages s
+      LEFT JOIN expedients e ON e.stage_id = s.id AND e.tenant_id = s.tenant_id
+     WHERE s.tenant_id = ?
+     GROUP BY s.id
+     ORDER BY s.pipeline_id, s.sort_order
+  `).all(tenantId);
+  return pipes.map((p) => ({
+    id: p.id,
+    name: p.name,
+    stages: stages.filter((s) => s.pipeline_id === p.id).map((s) => ({ id: s.id, name: s.name, expedients: s.expedients })),
+  }));
+}
+
+// Audiencia para campañas: toda la base o contactos con expediente en un
+// pipeline/etapa. Solo contactos con teléfono utilizable; dedupe por teléfono.
+function buildWaAudience(db, tenantId, { pipelineId, stageId } = {}) {
+  let rows;
+  if (stageId) {
+    rows = db.prepare(`
+      SELECT DISTINCT c.id, c.first_name, c.last_name, c.phone
+        FROM contacts c JOIN expedients e ON e.contact_id = c.id
+       WHERE e.tenant_id = ? AND e.stage_id = ? AND c.phone IS NOT NULL
+    `).all(tenantId, Number(stageId));
+  } else if (pipelineId) {
+    rows = db.prepare(`
+      SELECT DISTINCT c.id, c.first_name, c.last_name, c.phone
+        FROM contacts c JOIN expedients e ON e.contact_id = c.id
+       WHERE e.tenant_id = ? AND e.pipeline_id = ? AND c.phone IS NOT NULL
+    `).all(tenantId, Number(pipelineId));
+  } else {
+    rows = db.prepare(
+      'SELECT id, first_name, last_name, phone FROM contacts WHERE tenant_id = ? AND phone IS NOT NULL'
+    ).all(tenantId);
+  }
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    const digits = String(r.phone || '').replace(/\D/g, '');
+    if (digits.length < 10 || seen.has(digits)) continue;
+    seen.add(digits);
+    out.push({ phone: digits, name: [r.first_name, r.last_name].filter(Boolean).join(' ').trim() || null });
+  }
+  return out;
+}
+
+// Envío de UN template de campaña vía Graph DIRECTO (sender.sendWhatsAppTemplate
+// no soporta variables en botones URL, y el botón-con-token es el corazón del
+// rastreo). Crea/reutiliza la conversación para que el mensaje viva en el inbox
+// y sus estados (entregado/leído) fluyan por el webhook normal.
+async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyParams, buttonParams, preview }) {
+  const sender = require('../conversations/sender');
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length < 10) return { ok: false, error: 'teléfono inválido' };
+  if (!template) return { ok: false, error: 'falta template' };
+
+  const convo = convoSvc.findOrCreate(db, tenantId, {
+    provider: 'whatsapp', externalId: digits, integrationId: null,
+    contactPhone: `+${digits}`, contactName: null,
+  });
+  const creds = sender.getIntegrationCreds(db, null, convo);
+  if (!creds?.phoneNumberId || !creds?.accessToken) return { ok: false, error: 'integración WhatsApp sin credenciales' };
+
+  const components = [];
+  if (Array.isArray(bodyParams) && bodyParams.length) {
+    components.push({ type: 'body', parameters: bodyParams.map((t) => ({ type: 'text', text: String(t) })) });
+  }
+  if (Array.isArray(buttonParams) && buttonParams.length) {
+    components.push({ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: String(buttonParams[0]) }] });
+  }
+
+  const version = process.env.META_GRAPH_VERSION || 'v22.0';
+  let data;
+  try {
+    const res = await fetch(`https://graph.facebook.com/${version}/${creds.phoneNumberId}/messages`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(20_000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${creds.accessToken}` },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: sender.waCloudRecipient(digits),
+        type: 'template',
+        template: { name: String(template), language: { code: lang || 'es_MX' }, components },
+      }),
+    });
+    data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      return { ok: false, error: data?.error?.message || `HTTP ${res.status}` };
+    }
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+
+  const wamid = data?.messages?.[0]?.id || null;
+  try {
+    convoSvc.addMessage(db, tenantId, convo.id, {
+      externalId: wamid, direction: 'outgoing', provider: 'whatsapp',
+      body: preview || `[campaña] ${template}`, status: 'sent',
+    });
+  } catch (err) {
+    console.warn('[reelance-ia] campaña: no se registró el mensaje en inbox:', err.message);
+  }
+  return { ok: true, waMessageId: wamid };
+}
+
+// Templates APROBADOS del WABA (para el dropdown del tablero de la tienda).
+async function listWaTemplates(db, tenantId) {
+  const row = db.prepare(
+    "SELECT credentials_enc FROM integrations WHERE provider = 'whatsapp' AND status = 'connected' AND tenant_id = ? ORDER BY id DESC LIMIT 1"
+  ).get(tenantId);
+  if (!row?.credentials_enc) return { ok: false, error: 'sin integración WhatsApp' };
+  const creds = decryptJson(row.credentials_enc);
+  if (!creds?.wabaId || !creds?.accessToken) return { ok: false, error: 'credenciales incompletas' };
+  const version = process.env.META_GRAPH_VERSION || 'v22.0';
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${version}/${creds.wabaId}/message_templates?fields=name,status,language,components&limit=100`,
+      { headers: { Authorization: `Bearer ${creds.accessToken}` }, signal: AbortSignal.timeout(20_000) },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (data.error) return { ok: false, error: data.error.message };
+    const templates = (data.data || [])
+      .filter((t) => t.status === 'APPROVED')
+      .map((t) => {
+        const body = (t.components || []).find((c) => c.type === 'BODY')?.text || '';
+        const urlBtn = ((t.components || []).find((c) => c.type === 'BUTTONS')?.buttons || [])
+          .find((b) => b.type === 'URL');
+        return {
+          name: t.name, language: t.language, body,
+          hasUrlVar: !!(urlBtn && /\{\{1\}\}/.test(urlBtn.url || '')),
+          bodyVars: (body.match(/\{\{\d+\}\}/g) || []).length,
+        };
+      });
+    return { ok: true, templates };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 }
 
 // ─── Notificación wapi → tienda (conversación nueva de WhatsApp) ──────
@@ -1294,6 +1475,12 @@ module.exports = {
   updateConfig,
   regenerateToken,
   notifyNewConversation,
+  notifyMessageStatus,
+  notifyOptOut,
+  listPipelines,
+  buildWaAudience,
+  sendCampaignTemplate,
+  listWaTemplates,
   processOrderEvent,
   processAbandonedCartEvent,
   startAbandonedCartPoller, _routeOrderToPipeline, deleteOrderEvents };

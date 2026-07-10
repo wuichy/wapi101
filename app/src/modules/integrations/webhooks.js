@@ -447,6 +447,11 @@ module.exports = function createWebhooksRouter(db) {
 
             ensureExpedient(tenantId, convo.contact_id, routing);
 
+            // BAJA de marketing → lista de exclusión de campañas en la tienda
+            if (/^\s*baja\s*$/i.test(body)) {
+              reelanceIaSvc.notifyOptOut(db, tenantId, { phone: `+${waId}`, name });
+            }
+
             // Conversación NUEVA (primer mensaje entrante) → avisar a la tienda
             // para que dispare el evento "Contact" a Meta con el teléfono real.
             if (!hadInbound && insertedMsg) {
@@ -574,6 +579,12 @@ module.exports = function createWebhooksRouter(db) {
           db.prepare('UPDATE messages SET status = ? WHERE id = ?').run(status, msg.id);
         }
         console.log(`[webhook status] msg wa_id=${id} → ${status}${metaErrObj ? ` (Meta ${metaErrObj.code}: ${errorReason})` : ''}`);
+
+        // Relay a la tienda (campañas de reelance): cruza por wamid; los
+        // mensajes que no son de campaña simplemente no matchean allá.
+        if (tenantId && ['sent', 'delivered', 'read', 'failed'].includes(status)) {
+          reelanceIaSvc.notifyMessageStatus(db, tenantId, { waMessageId: id, status });
+        }
 
         if (status === 'failed') {
           try {

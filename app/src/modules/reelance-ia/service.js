@@ -181,9 +181,23 @@ async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyP
   const creds = sender.getIntegrationCreds(db, null, convo);
   if (!creds?.phoneNumberId || !creds?.accessToken) return { ok: false, error: 'integración WhatsApp sin credenciales' };
 
+  // Header multimedia: el formato se deriva de la PLANTILLA LOCAL (fuente de
+  // verdad) y si no llega URL se usa la guardada al crearla (los tests y las
+  // campañas sin campo de imagen salen solos).
   const components = [];
-  if (spec && spec.headerImageUrl) {
-    components.push({ type: 'header', parameters: [{ type: 'image', image: { link: String(spec.headerImageUrl) } }] });
+  let mediaLink = spec?.headerImageUrl || null;
+  let mediaFormat = null;
+  try {
+    const localTpl = db.prepare(
+      "SELECT header_type, header_media_url FROM message_templates WHERE tenant_id = ? AND name = ? AND type = 'wa_api' LIMIT 1"
+    ).get(tenantId, String(template));
+    if (localTpl && localTpl.header_type && localTpl.header_type !== 'TEXT') {
+      mediaFormat = String(localTpl.header_type).toLowerCase();
+      if (!mediaLink) mediaLink = localTpl.header_media_url || null;
+    }
+  } catch { /* sin tabla local no hay header multimedia */ }
+  if (mediaFormat && mediaLink) {
+    components.push({ type: 'header', parameters: [{ type: mediaFormat, [mediaFormat]: { link: String(mediaLink) } }] });
   }
   if (Array.isArray(bodyParams) && bodyParams.length) {
     components.push({ type: 'body', parameters: bodyParams.map((t) => ({ type: 'text', text: String(t) })) });
@@ -235,24 +249,41 @@ async function createWaTemplate(db, tenantId, spec) {
     .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
   if (!name) return { ok: false, error: 'nombre inválido' };
   if (!spec.bodyText?.trim()) return { ok: false, error: 'falta el texto del mensaje' };
-  if (!spec.buttonText?.trim()) return { ok: false, error: 'falta el texto del botón' };
+  if (!spec.buttonText?.trim() && !(Array.isArray(spec.buttons) && spec.buttons.length)) return { ok: false, error: 'falta al menos un botón' };
 
-  // Imagen de encabezado (opcional): se descarga de la URL pública y se sube
-  // a Meta por la Resumable Upload API para obtener el header_handle.
+  // Encabezado multimedia (opcional): IMAGE/VIDEO/DOCUMENT — se descarga de la
+  // URL pública y se sube a Meta (Resumable Upload) para el header_handle.
+  const MEDIA_RULES = {
+    IMAGE:    { re: /^image\/(jpe?g|png)/,      max: 5 * 1024 * 1024,  err: 'imagen JPG/PNG ≤5MB' },
+    VIDEO:    { re: /^video\/(mp4|3gpp)/,       max: 16 * 1024 * 1024, err: 'video MP4 ≤16MB' },
+    DOCUMENT: { re: /^application\/pdf/,        max: 16 * 1024 * 1024, err: 'documento PDF ≤16MB' },
+  };
+  const mediaUrl = spec.headerMediaUrl || spec.headerImageUrl || null;
+  const headerFormat = String(spec.headerFormat || (mediaUrl ? 'IMAGE' : 'TEXT')).toUpperCase();
   let headerMediaHandle = null;
-  if (spec.headerImageUrl) {
+  if (mediaUrl && MEDIA_RULES[headerFormat]) {
+    const rule = MEDIA_RULES[headerFormat];
     try {
-      const imgRes = await fetch(spec.headerImageUrl, { signal: AbortSignal.timeout(20_000) });
-      if (!imgRes.ok) return { ok: false, error: `imagen: HTTP ${imgRes.status}` };
-      const mime = imgRes.headers.get('content-type') || 'image/jpeg';
-      if (!/^image\/(jpe?g|png)/.test(mime)) return { ok: false, error: `imagen debe ser JPG/PNG (es ${mime})` };
-      const buffer = Buffer.from(await imgRes.arrayBuffer());
-      if (buffer.length > 5 * 1024 * 1024) return { ok: false, error: 'imagen >5MB' };
+      const mRes = await fetch(mediaUrl, { signal: AbortSignal.timeout(30_000) });
+      if (!mRes.ok) return { ok: false, error: `media: HTTP ${mRes.status}` };
+      const mime = mRes.headers.get('content-type') || '';
+      if (!rule.re.test(mime)) return { ok: false, error: `${rule.err} (recibí ${mime})` };
+      const buffer = Buffer.from(await mRes.arrayBuffer());
+      if (buffer.length > rule.max) return { ok: false, error: rule.err };
       headerMediaHandle = await tplSvc.uploadHeaderToMeta(db, tenantId, buffer, mime);
     } catch (err) {
-      return { ok: false, error: `subiendo imagen: ${err.message}` };
+      return { ok: false, error: `subiendo media: ${err.message}` };
     }
   }
+
+  // Botones (máx 3): default el rastreable de campañas. Formato local de wapi.
+  let buttons = Array.isArray(spec.buttons) && spec.buttons.length
+    ? spec.buttons.slice(0, 3).map((b) => ({
+        type: b.type === 'QUICK_REPLY' ? 'QUICK_REPLY' : 'URL',
+        text: String(b.text || '').slice(0, 25),
+        ...(b.type !== 'QUICK_REPLY' ? { url: String(b.url || 'https://reelance.mx/w/{{1}}') } : {}),
+      })).filter((b) => b.text)
+    : [{ type: 'URL', text: (spec.buttonText || 'VER LA TIENDA').trim().slice(0, 25), url: spec.buttonUrl || 'https://reelance.mx/w/{{1}}' }];
 
   try {
     const row = tplSvc.create(db, tenantId, {
@@ -262,11 +293,12 @@ async function createWaTemplate(db, tenantId, spec) {
       category: spec.category || 'MARKETING',
       language: spec.language || 'es_MX',
       body: spec.bodyText.trim(),
-      footer: (spec.footerText ?? 'Responde BAJA para no recibir promos').trim() || null,
-      headerType: headerMediaHandle ? 'IMAGE' : 'TEXT',
-      headerMediaUrl: headerMediaHandle ? spec.headerImageUrl : null,
+      footer: (spec.footerText ?? 'Responde BAJA para no recibir promos').trim().slice(0, 60) || null,
+      header: headerFormat === 'TEXT' ? (spec.headerText?.trim() || null) : null,
+      headerType: headerMediaHandle ? headerFormat : 'TEXT',
+      headerMediaUrl: headerMediaHandle ? mediaUrl : null,
       headerMediaHandle,
-      buttons: [{ type: 'URL', text: spec.buttonText.trim(), url: spec.buttonUrl || 'https://reelance.mx/w/{{1}}' }],
+      buttons,
       bodyPlaceholders: [{ label: 'nombre', example: 'Ana' }],
     });
     // Sello de origen: etiqueta 'Reelance' (rosa de marca) para distinguir en

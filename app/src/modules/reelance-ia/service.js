@@ -245,7 +245,7 @@ async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyP
 // local + subida de imagen de encabezado a Meta (handle) + submit a revisión.
 async function createWaTemplate(db, tenantId, spec) {
   const tplSvc = require('../templates/service');
-  const name = String(spec.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const name = String(spec.internalName || spec.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
   if (!name) return { ok: false, error: 'nombre inválido' };
   if (!spec.bodyText?.trim()) return { ok: false, error: 'falta el texto del mensaje' };

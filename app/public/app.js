@@ -3007,6 +3007,13 @@ function classifyDeliveryError(reason) {
   // y "marketing", y sin este check caía a la categoría 'template' ("plantilla
   // rechazada") — confundía al usuario: su plantilla SÍ está aprobada.
   if (r.includes('131049') || r.includes('ecosystem engagement') || (r.includes('marketing') && r.includes('limit'))) return 'marketing_limit';
+  // Tanda 2026-07-09: códigos específicos ANTES de los checks genéricos por palabra
+  if (r.includes('131042') || (r.includes('pago') && r.includes('meta'))) return 'payment_issue';
+  if (r.includes('132015') || r.includes('132016') || r.includes('pausada por meta') || r.includes('desactivada permanentemente')) return 'template_paused';
+  if (r.includes('130472') || r.includes('experimento de meta')) return 'meta_experiment';
+  if (r.includes('131031') || (r.includes('tu cuenta') && (r.includes('bloqueada') || r.includes('restringida')))) return 'account_restricted';
+  if (r.includes('131016') || r.includes('131000') || r.includes('servidores de meta') || r.includes('error interno de meta')) return 'meta_down';
+  if (r.includes('131021') || r.includes('a ti mismo')) return 'self_send';
   if (r.includes('bloqueó') || r.includes('blocked') || r.includes('blocked tus mensajes')) return 'blocked';
   if (r.includes('sin whatsapp') || r.includes('no registrado') || r.includes('not on whatsapp')) return 'no_whatsapp';
   if (r.includes('no es válido') || r.includes('no válido') || r.includes('formato')) return 'invalid_number';
@@ -3022,6 +3029,12 @@ function classifyDeliveryError(reason) {
 function deliveryErrorShortLabel(category) {
   return ({
     marketing_limit: 'Límite marketing',
+    payment_issue:   'Pago Meta',
+    template_paused: 'Plantilla pausada',
+    meta_experiment: 'Experimento Meta',
+    account_restricted: 'Cuenta restringida',
+    meta_down:       'Falla de Meta',
+    self_send:       'Auto-envío',
     blocked:        'Bloqueado',
     no_whatsapp:    'Sin WhatsApp',
     invalid_number: 'Número inválido',
@@ -3038,6 +3051,12 @@ function deliveryErrorShortLabel(category) {
 function deliveryErrorIconSvg(category) {
   const svgs = {
     marketing_limit: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M3 8v4l8 3V5L3 8z"/><path d="M14 8a3.5 3.5 0 0 1 0 4"/><line x1="4" y1="16" x2="16" y2="4"/></svg>`,
+    payment_issue: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><rect x="2.5" y="5" width="15" height="11" rx="2"/><line x1="2.5" y1="9" x2="17.5" y2="9"/><line x1="5.5" y1="13" x2="9" y2="13"/></svg>`,
+    template_paused: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><rect x="3" y="3" width="14" height="14" rx="2"/><line x1="8.5" y1="7.5" x2="8.5" y2="12.5"/><line x1="11.5" y1="7.5" x2="11.5" y2="12.5"/></svg>`,
+    meta_experiment: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M8 3h4"/><path d="M9 3v5l-4.2 7a1.8 1.8 0 0 0 1.6 2.7h7.2a1.8 1.8 0 0 0 1.6-2.7L11 8V3"/><line x1="6.3" y1="13" x2="13.7" y2="13"/></svg>`,
+    account_restricted: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M10 2.5l6 2.5v4c0 4-2.7 7-6 8.5-3.3-1.5-6-4.5-6-8.5v-4l6-2.5z"/><line x1="10" y1="7" x2="10" y2="10.5"/><circle cx="10" cy="13.2" r="0.6" fill="currentColor"/></svg>`,
+    meta_down: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M6 15a3.5 3.5 0 0 1-.3-7A5 5 0 0 1 15.4 9.5 3 3 0 0 1 14.5 15H6z"/><line x1="3" y1="17" x2="17" y2="3"/></svg>`,
+    self_send: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M4 8a6 6 0 0 1 10.4-2.6"/><polyline points="15 2 15 6 11 6"/><path d="M16 12a6 6 0 0 1-10.4 2.6"/><polyline points="5 18 5 14 9 14"/></svg>`,
     blocked: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><circle cx="10" cy="10" r="7"/><line x1="5" y1="5" x2="15" y2="15"/></svg>`,
     no_whatsapp: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M5 11a5 5 0 0 1 10 0v3a2 2 0 0 1-2 2h-1v-4h2"/><path d="M5 11v3a2 2 0 0 0 2 2h1v-4H6"/><line x1="3" y1="17" x2="17" y2="3"/></svg>`,
     invalid_number: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13"><path d="M5 4h2l2 4-2 1a8 8 0 0 0 4 4l1-2 4 2v2a2 2 0 0 1-2 2A12 12 0 0 1 3 6a2 2 0 0 1 2-2z"/><line x1="3" y1="17" x2="17" y2="3"/></svg>`,
@@ -3059,6 +3078,36 @@ function deliveryErrorDetail(category, reason, provider) {
       title: '📣 Meta pausó las promos a este lead',
       desc: 'Tu plantilla está APROBADA y tu cuenta está bien — esto NO es un rechazo ni un bloqueo. Meta pone un tope a cuántos mensajes de MARKETING puede recibir una persona que no te ha contestado últimamente. Este lead ya recibió varias promos sin responder, así que Meta frenó esta para no saturarlo (error 131049).',
       action: 'Espera a que el lead te escriba (eso reabre todo), o mándale una plantilla de UTILIDAD (confirmación, rastreo de pedido) en vez de otra promo. Insistir con más promos seguidas solo hace que Meta también las frene.',
+    },
+    payment_issue: {
+      title: '💳 Problema de pago en TU cuenta de Meta',
+      desc: 'Meta no pudo cobrar los mensajes: tu método de pago está vencido, fue rechazado o falta configurarlo en tu cuenta de WhatsApp Business (error 131042). No tiene nada que ver con el lead — es de tu lado, y frena TODOS los envíos.',
+      action: 'Entra a business.facebook.com → Facturación y arregla el método de pago. En cuanto quede, los envíos vuelven a salir solos.',
+    },
+    template_paused: {
+      title: '⏸️ Meta pausó esta plantilla por mala calidad',
+      desc: 'La plantilla estaba aprobada, pero muchos usuarios la reportaron o bloquearon al recibirla, y Meta la pausó (132015) o la desactivó permanente (132016). No es que esté rechazada: se ganó mala fama con la gente.',
+      action: 'Ve a Plantillas: si está pausada, edítala o espera a que se reactive sola (horas o días). Si está desactivada, crea una versión nueva con otro texto. Mientras tanto, usa otra plantilla.',
+    },
+    meta_experiment: {
+      title: '🧪 El lead está en un experimento de Meta',
+      desc: 'Meta elige un pequeño porcentaje de usuarios al azar y NO les entrega mensajes de marketing, como prueba interna suya (error 130472). Tu plantilla, tu cuenta y el lead están perfectamente bien — es cosa de Meta.',
+      action: 'Nada que hacer: no depende de ti. Los mensajes de UTILIDAD y las respuestas dentro de la ventana de 24h sí le llegan normal.',
+    },
+    account_restricted: {
+      title: '🚧 TU cuenta está restringida por Meta',
+      desc: 'Meta bloqueó o restringió temporalmente TU cuenta de WhatsApp Business (errores 368 / 131031), normalmente por violaciones de política o acumulación de reportes. Afecta TODOS tus envíos, no solo este lead.',
+      action: 'Entra a business.facebook.com, revisa el estado de la cuenta y sigue el proceso de apelación si aplica. Mientras tanto baja el volumen de promos.',
+    },
+    meta_down: {
+      title: '🔧 Falló Meta (no es tu culpa)',
+      desc: 'Los servidores de Meta tuvieron una falla temporal al procesar este mensaje (errores 131016 / 131000). Tu cuenta, tu plantilla y el lead están bien.',
+      action: 'Reintenta en unos minutos. Si pasa mucho en poco tiempo, revisa el estado de la plataforma de Meta (metastatus.com).',
+    },
+    self_send: {
+      title: '🪞 Te estás escribiendo a ti mismo',
+      desc: 'El número destino es el MISMO número de tu WhatsApp Business (error 131021). WhatsApp no permite que un número se mande mensajes a sí mismo.',
+      action: 'Revisa el número del contacto — seguramente se capturó tu propio número por error.',
     },
     blocked: {
       title: '🚫 El lead te bloqueó',
@@ -3117,15 +3166,24 @@ function renderErrorLibrary() {
   const wrap = document.getElementById('errorLibraryList');
   if (!wrap || wrap.dataset.rendered) return;
   const cats = [
+    // Del lado del LEAD / la conversación
     { cat: 'marketing_limit', codes: '131049' },
+    { cat: 'meta_experiment', codes: '130472' },
     { cat: 'window_closed',   codes: '131047' },
     { cat: 'blocked',         codes: '131026' },
     { cat: 'privacy',         codes: '131026' },
-    { cat: 'no_whatsapp',     codes: '131026' },
-    { cat: 'invalid_number',  codes: '100 · 131030' },
+    { cat: 'no_whatsapp',     codes: '131026 · 133015' },
+    { cat: 'invalid_number',  codes: '100 · 133010' },
+    { cat: 'suspended',       codes: '131057 · 133000' },
+    { cat: 'self_send',       codes: '131021' },
+    // De PLANTILLAS
     { cat: 'template',        codes: '132000 · 132001 · 132012' },
-    { cat: 'suspended',       codes: '' },
-    { cat: 'rate_limit',      codes: '130429 · 131048 · 131056' },
+    { cat: 'template_paused', codes: '132015 · 132016' },
+    // De TU CUENTA / de Meta
+    { cat: 'payment_issue',   codes: '131042' },
+    { cat: 'account_restricted', codes: '368 · 131031' },
+    { cat: 'rate_limit',      codes: '130429 · 131048 · 131056 · 80007' },
+    { cat: 'meta_down',       codes: '131016 · 131000' },
     { cat: 'other',           codes: '' },
   ];
   wrap.innerHTML = cats.map(({ cat, codes }) => {

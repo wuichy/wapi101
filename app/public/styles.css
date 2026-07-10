@@ -4099,12 +4099,18 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .rh-delivery-error-badge.blocked,
 .rh-delivery-error-badge.no_whatsapp,
 .rh-delivery-error-badge.invalid_number,
+.rh-delivery-error-badge.payment_issue,
+.rh-delivery-error-badge.account_restricted,
 .rh-delivery-error-badge.suspended {
   background: #fee2e2; color: #991b1b; border-color: #fca5a5;
 }
 .rh-delivery-error-badge.window_closed,
 .rh-delivery-error-badge.template,
 .rh-delivery-error-badge.marketing_limit,
+.rh-delivery-error-badge.template_paused,
+.rh-delivery-error-badge.meta_experiment,
+.rh-delivery-error-badge.meta_down,
+.rh-delivery-error-badge.self_send,
 .rh-delivery-error-badge.privacy {
   background: #fef3c7; color: #78350f; border-color: #fcd34d;
 }
@@ -4134,12 +4140,18 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .pl-card-deliv-err.blocked,
 .pl-card-deliv-err.no_whatsapp,
 .pl-card-deliv-err.invalid_number,
+.pl-card-deliv-err.payment_issue,
+.pl-card-deliv-err.account_restricted,
 .pl-card-deliv-err.suspended {
   background: #fee2e2; color: #dc2626; border-color: #fca5a5;
 }
 .pl-card-deliv-err.window_closed,
 .pl-card-deliv-err.template,
 .pl-card-deliv-err.marketing_limit,
+.pl-card-deliv-err.template_paused,
+.pl-card-deliv-err.meta_experiment,
+.pl-card-deliv-err.meta_down,
+.pl-card-deliv-err.self_send,
 .pl-card-deliv-err.privacy,
 .pl-card-deliv-err.rate_limit,
 .pl-card-deliv-err.other {
@@ -4166,10 +4178,16 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .rh-deliv-err-icon.blocked,
 .rh-deliv-err-icon.no_whatsapp,
 .rh-deliv-err-icon.invalid_number,
+.rh-deliv-err-icon.payment_issue,
+.rh-deliv-err-icon.account_restricted,
 .rh-deliv-err-icon.suspended { background: #fee2e2; color: #dc2626; }
 .rh-deliv-err-icon.window_closed,
 .rh-deliv-err-icon.template,
 .rh-deliv-err-icon.marketing_limit,
+.rh-deliv-err-icon.template_paused,
+.rh-deliv-err-icon.meta_experiment,
+.rh-deliv-err-icon.meta_down,
+.rh-deliv-err-icon.self_send,
 .rh-deliv-err-icon.privacy,
 .rh-deliv-err-icon.rate_limit,
 .rh-deliv-err-icon.other { background: #fef3c7; color: #d97706; }

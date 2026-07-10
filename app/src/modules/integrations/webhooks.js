@@ -536,6 +536,14 @@ module.exports = function createWebhooksRouter(db) {
       131008: 'Mensaje inválido — falta un parámetro requerido (revisa la plantilla/variables)',
       100:    'Parámetro inválido en el mensaje (revisa variables de la plantilla o el formato del número)',
       80007:  'Límite de velocidad de envío alcanzado (rate limit de Meta) — espera unos minutos',
+      // Tanda 2026-07-09 (el número de código va EN el texto: el frontend clasifica por él):
+      131042: '💳 Problema de PAGO en tu cuenta de Meta (131042): método de pago vencido, rechazado o sin configurar en la WABA. Frena TODOS tus envíos — arréglalo en business.facebook.com → Facturación',
+      132015: 'Plantilla PAUSADA por Meta (132015) por mala calidad (usuarios la reportaron/bloquearon) — edítala o usa otra mientras se reactiva',
+      132016: 'Plantilla DESACTIVADA permanentemente por Meta (132016) tras pausas repetidas por mala calidad — crea una plantilla nueva',
+      130472: 'El número del lead está en un EXPERIMENTO de Meta (130472): Meta no le entrega marketing como prueba interna suya. No es tu culpa — los mensajes de utilidad sí llegan',
+      131016: 'Falla temporal de los SERVIDORES DE META (131016) — no es tu culpa, reintenta en unos minutos',
+      131000: 'Error interno de Meta (131000) — algo falló de su lado, reintenta en unos minutos',
+      131021: 'Te estás enviando un mensaje A TI MISMO (131021): el número destino es tu propio número de WhatsApp Business',
     };
     return map[codeNum] || fallbackTitle || fallbackDetails || `Error desconocido (código ${code || '?'})`;
   }

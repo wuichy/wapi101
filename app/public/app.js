@@ -3350,6 +3350,48 @@ function _isChatAtBottom(root) {
   return (root.scrollHeight - root.scrollTop - root.clientHeight) < _CHAT_BOTTOM_THRESHOLD;
 }
 
+// ─── Descarga de media del chat (botón + arrastrar al escritorio) ────────────
+// Botón de descarga en cada video/imagen/audio, y drag-to-desktop nativo vía
+// el tipo "DownloadURL" del dataTransfer (Chrome/Edge/Safari sueltan el archivo
+// en Finder/Escritorio). Se envuelve el media en .rh-msg-media-wrap con
+// data-dl-url / data-dl-name / data-dl-mime.
+function _mediaDownloadBtn() {
+  return `<button type="button" class="rh-media-dl-btn" title="Descargar (o arrastra al escritorio)" aria-label="Descargar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M10 3v9"/><polyline points="6.5 8.5 10 12 13.5 8.5"/><line x1="4.5" y1="16" x2="15.5" y2="16"/></svg></button>`;
+}
+async function _downloadMedia(url, filename) {
+  try {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl; a.download = filename || 'archivo';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+  } catch (_) {
+    window.open(url, '_blank'); // fallback: abrir en pestaña
+  }
+}
+// Delegación top-level (corre siempre, inmune a re-render del chat):
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('.rh-media-dl-btn');
+  if (!btn) return;
+  const wrap = btn.closest('[data-dl-url]');
+  if (wrap) { e.preventDefault(); e.stopPropagation(); _downloadMedia(wrap.dataset.dlUrl, wrap.dataset.dlName); }
+});
+document.addEventListener('dragstart', (e) => {
+  const wrap = e.target?.closest?.('[data-dl-url]');
+  if (!wrap || !e.dataTransfer) return;
+  try {
+    const abs = new URL(wrap.dataset.dlUrl, window.location.origin).href;
+    const mime = wrap.dataset.dlMime || 'application/octet-stream';
+    const name = wrap.dataset.dlName || 'archivo';
+    // Formato del tipo DownloadURL: "mime:filename:absolute-url"
+    e.dataTransfer.setData('DownloadURL', `${mime}:${name}:${abs}`);
+    e.dataTransfer.effectAllowed = 'copy';
+  } catch (_) {}
+});
+
 function renderMessages() {
   const root = document.getElementById("rhMessages");
   if (!root) return;
@@ -3404,16 +3446,21 @@ function renderMessages() {
       const isVideo = /\.(mp4|3gp|mov|webm)$/i.test(url);
       const isAudio = /\.(mp3|ogg|m4a|aac|opus|wav)$/i.test(url);
       const isPdfOrDoc = /\.(pdf|docx?|xlsx?|pptx?|txt)$/i.test(url);
+      // Nombre + mime para descargar / arrastrar al escritorio
+      const _base = (url.split('?')[0].split('/').pop() || '').trim();
+      const _dlName = escapeHtml(/\.[a-z0-9]{2,5}$/i.test(_base) ? _base : (isVideo ? 'video.mp4' : isImg ? 'imagen.jpg' : isAudio ? 'audio.mp3' : 'archivo'));
+      const _dlMime = isVideo ? 'video/mp4' : isImg ? 'image/jpeg' : isAudio ? 'audio/mpeg' : 'application/octet-stream';
+      const _dlAttrs = `draggable="true" data-dl-url="${escapeHtml(url)}" data-dl-name="${_dlName}" data-dl-mime="${_dlMime}"`;
       if (isImg) {
         // SIN loading="lazy": Safari de escritorio tiene un bug con lazy-loading
         // dentro de contenedores con scroll (el chat). Tras el auto-scroll al fondo
         // no re-evalúa la visibilidad y la imagen nunca carga (queda en blanco).
         // En Chrome/móvil sí carga. decoding="async" da el hint de perf sin el bug.
-        mediaHtml = `<a href="${escapeHtml(url)}" target="_blank" class="rh-msg-media-img"><img src="${escapeHtml(url)}" alt="adjunto" decoding="async" /></a>`;
+        mediaHtml = `<div class="rh-msg-media-wrap" ${_dlAttrs}><a href="${escapeHtml(url)}" target="_blank" class="rh-msg-media-img"><img src="${escapeHtml(url)}" alt="adjunto" decoding="async" draggable="false" /></a>${_mediaDownloadBtn()}</div>`;
       } else if (isVideo) {
-        mediaHtml = `<video src="${escapeHtml(url)}" controls class="rh-msg-media-video" preload="metadata"></video>`;
+        mediaHtml = `<div class="rh-msg-media-wrap" ${_dlAttrs}><video src="${escapeHtml(url)}" controls class="rh-msg-media-video" preload="metadata"></video>${_mediaDownloadBtn()}</div>`;
       } else if (isAudio) {
-        mediaHtml = `<audio src="${escapeHtml(url)}" controls class="rh-msg-media-audio" preload="metadata"></audio>`;
+        mediaHtml = `<div class="rh-msg-media-wrap is-audio" ${_dlAttrs}><audio src="${escapeHtml(url)}" controls class="rh-msg-media-audio" preload="metadata"></audio>${_mediaDownloadBtn()}</div>`;
       } else if (isPdfOrDoc) {
         const filename = url.split('/').pop() || 'documento';
         const ext = (filename.match(/\.([a-zA-Z0-9]{1,8})$/)?.[1] || 'doc').toUpperCase();

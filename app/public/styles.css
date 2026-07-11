@@ -4864,6 +4864,54 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
   margin: 4px;
 }
 
+/* Wrapper de media con botón de descarga + arrastrar al escritorio */
+.rh-msg-media-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 320px;
+  border-radius: 8px;
+  cursor: grab;
+}
+.rh-msg-media-wrap:active { cursor: grabbing; }
+.rh-msg-media-wrap.is-audio { display: block; cursor: default; }
+.rh-media-dl-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, .62);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s, background .15s, transform .1s;
+  z-index: 3;
+  backdrop-filter: blur(2px);
+}
+.rh-msg-media-wrap:hover .rh-media-dl-btn,
+.rh-media-dl-btn:focus-visible { opacity: 1; }
+.rh-media-dl-btn:hover { background: rgba(15, 23, 42, .85); }
+.rh-media-dl-btn:active { transform: scale(.9); }
+/* En audio el botón va al lado, no encima de los controles */
+.rh-msg-media-wrap.is-audio .rh-media-dl-btn {
+  position: static;
+  opacity: .7;
+  background: rgba(15, 23, 42, .12);
+  color: var(--text, #0f172a);
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.rh-msg-media-wrap.is-audio:hover .rh-media-dl-btn { opacity: 1; }
+/* Táctil: sin hover, el botón siempre visible */
+@media (hover: none) {
+  .rh-media-dl-btn { opacity: .85; }
+}
+
 /* Overlay y panel de grabación de audio en vivo */
 .rh-recorder-overlay {
   position: fixed;

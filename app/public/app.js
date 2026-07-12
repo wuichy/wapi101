@@ -8160,6 +8160,94 @@ async function openExpDetail(id, from = 'expedientes') {
   ROUTER.push({ type: 'lead', id: Number(id), from });
 }
 
+// ─── Caja negra del lead: timeline unificado (mensajes + IA/router + bots/etapas) ───
+let _blackboxEvents = [];
+let _blackboxFilter = 'all';
+
+async function _openBlackbox() {
+  const exp = (typeof EXP_DETAIL !== 'undefined') ? EXP_DETAIL : null;
+  const id = exp?.id;
+  if (!id) { toast('Abre un lead primero', 'warning'); return; }
+  const modal = document.getElementById('blackboxModal');
+  const body  = document.getElementById('blackboxBody');
+  const nameEl = document.getElementById('blackboxLeadName');
+  const noteEl = document.getElementById('blackboxNote');
+  if (!modal || !body) return;
+  if (nameEl) nameEl.textContent = exp?.name || exp?.contactName || ('#' + id);
+  _blackboxFilter = 'all';
+  document.querySelectorAll('.bb-filter').forEach(b => b.classList.toggle('is-active', b.dataset.bbFilter === 'all'));
+  body.innerHTML = '<div class="blackbox-loading">Cargando línea de tiempo…</div>';
+  modal.hidden = false;
+  try {
+    const r = await api('GET', `/api/expedients/${id}/blackbox`);
+    _blackboxEvents = (r && r.events) || [];
+    if (noteEl) noteEl.textContent = r?.note || '';
+    _renderBlackbox();
+  } catch (err) {
+    body.innerHTML = `<div class="blackbox-loading">Error: ${escapeHtml(err.message || 'no se pudo cargar')}</div>`;
+  }
+}
+
+function _blackboxFmt(ev) {
+  if (ev.kind === 'message') {
+    const out = ev.direction === 'outgoing';
+    const sMap = {
+      read:      { t: 'Leído ✓✓',     c: 'bb-read' },
+      delivered: { t: 'Entregado ✓✓', c: 'bb-ok' },
+      sent:      { t: 'Enviado ✓',    c: 'bb-ok' },
+      failed:    { t: 'Falló ✕',       c: 'bb-fail' },
+    };
+    const st = out ? (sMap[ev.status] || { t: ev.status || '', c: '' }) : { t: 'Entrante', c: 'bb-in' };
+    const txt = ev.body ? escapeHtml(ev.body) : (ev.hasMedia ? '(archivo)' : '(sin texto)');
+    return {
+      cls: out ? 'bb-msg-out' : 'bb-msg-in', icon: out ? '↗' : '↘',
+      title: `${out ? 'Tú' : 'Lead'}: ${ev.hasMedia ? '📎 ' : ''}${txt}`,
+      sub: `<span class="bb-badge ${st.c}">${st.t}</span>${ev.error ? ` · <span class="bb-badge bb-fail">${escapeHtml(String(ev.error)).slice(0, 70)}</span>` : ''}`,
+    };
+  }
+  if (ev.kind === 'router') {
+    const dMap = { bot_start: 'Arrancó un bot', bot_resume: 'Reanudó un bot', human: 'Modo humano (bot no responde)', ai_active: 'Respondió la IA', idle: 'Sin acción del bot' };
+    return {
+      cls: 'bb-router', icon: ev.matcherUsed ? '🧠' : '⚙️',
+      title: dMap[ev.decision] || ev.decision || 'Decisión del router',
+      sub: `${ev.reason ? escapeHtml(ev.reason) : ''}${ev.botId ? ` · bot #${ev.botId}` : ''}${ev.matcherUsed ? ` · matcher IA${ev.matcherMs ? ' ' + ev.matcherMs + 'ms' : ''}` : ''}`,
+    };
+  }
+  const tMap = {
+    bot_start: ['▶️', 'Bot iniciado'], bot_done: ['✅', 'Bot terminó'], bot_killed: ['⏹️', 'Bot cancelado'],
+    bot_error: ['⚠️', 'Bot con error'], bot_paused_manual: ['⏸️', 'Bot pausado a mano'], bot_wait_adjusted: ['⏱️', 'Timer del bot ajustado'],
+    stage_change: ['➡️', 'Cambió de etapa'], pipeline_change: ['🔀', 'Cambió de pipeline'], tag_add: ['🏷️', 'Etiqueta agregada'],
+    created: ['✨', 'Lead creado'], contact_name_change: ['✏️', 'Nombre de contacto cambiado'], name_change: ['✏️', 'Nombre del lead cambiado'], email_change: ['✉️', 'Email cambiado'],
+  };
+  const [ic, lbl] = tMap[ev.type] || ['•', ev.type || 'Actividad'];
+  return { cls: 'bb-activity', icon: ic, title: lbl, sub: `${ev.description ? escapeHtml(ev.description) : ''}${ev.advisor ? ` · ${escapeHtml(ev.advisor)}` : ''}` };
+}
+
+function _renderBlackbox() {
+  const body = document.getElementById('blackboxBody');
+  if (!body) return;
+  const evs = _blackboxFilter === 'all' ? _blackboxEvents : _blackboxEvents.filter(e => e.kind === _blackboxFilter);
+  if (!evs.length) { body.innerHTML = '<div class="blackbox-loading">Sin eventos para este filtro.</div>'; return; }
+  body.innerHTML = evs.map(ev => {
+    const f = _blackboxFmt(ev);
+    const when = ev.at ? new Date(ev.at * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    return `<div class="bb-row ${f.cls}"><span class="bb-ico">${f.icon}</span><div class="bb-content"><div class="bb-title">${f.title}</div>${f.sub ? `<div class="bb-sub">${f.sub}</div>` : ''}</div><span class="bb-when">${escapeHtml(when)}</span></div>`;
+  }).join('');
+}
+
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (!t || !t.closest) return;
+  if (t.closest('#expDetailBlackboxBtn')) { _openBlackbox(); return; }
+  if (t.closest('#blackboxClose') || t.id === 'blackboxModal') { const m = document.getElementById('blackboxModal'); if (m) m.hidden = true; return; }
+  const filt = t.closest('.bb-filter');
+  if (filt) {
+    _blackboxFilter = filt.dataset.bbFilter || 'all';
+    document.querySelectorAll('.bb-filter').forEach(b => b.classList.toggle('is-active', b === filt));
+    _renderBlackbox();
+  }
+});
+
 function renderExpDetailInfo() {
   const exp = EXP_DETAIL;
   if (!exp) return;

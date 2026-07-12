@@ -78,6 +78,69 @@ module.exports = function createExpedientsRouter(db) {
     } catch (e) { next(e); }
   });
 
+  // ─── Caja negra del lead: línea de tiempo unificada de TODO lo que pasó ───
+  // Junta mensajes (con status leído/entregado/fallido), decisiones del router/IA
+  // (inbound_router_log) y actividad del expediente (bot_start/done/killed,
+  // stage_change, etc.) en un solo timeline ordenado. NOTA HONESTA: NO hay
+  // presencia/"online" — la WhatsApp Cloud API de Meta no la expone.
+  router.get('/:id/blackbox', (req, res, next) => {
+    try {
+      const expId = Number(req.params.id);
+      const exp = service.getById(db, req.tenantId, expId);
+      if (!exp) return res.status(404).json({ error: 'Expediente no encontrado', errorCode: 'EXPEDIENT_NOT_FOUND' });
+      const cid = exp.contactId;
+      const LIMIT = Math.min(Number(req.query.limit) || 300, 1000);
+      const events = [];
+
+      if (cid) {
+        // 1) Mensajes (via conversaciones del contacto)
+        db.prepare(`
+          SELECT m.id, m.direction, m.status, m.provider, m.body, m.media_url, m.error_reason, m.created_at
+            FROM messages m JOIN conversations c ON c.id = m.conversation_id
+           WHERE c.contact_id = ? AND c.tenant_id = ?
+           ORDER BY m.created_at DESC, m.id DESC LIMIT ?
+        `).all(cid, req.tenantId, LIMIT).forEach(m => events.push({
+          at: m.created_at, kind: 'message',
+          direction: m.direction, status: m.status, provider: m.provider,
+          body: (m.body || '').slice(0, 140), hasMedia: !!m.media_url,
+          error: m.error_reason || null,
+        }));
+
+        // 2) Decisiones del router / IA
+        db.prepare(`
+          SELECT r.decision, r.reason, r.bot_id, r.matcher_used, r.matcher_ms, r.created_at
+            FROM inbound_router_log r JOIN conversations c ON c.id = r.conversation_id
+           WHERE c.contact_id = ? AND r.tenant_id = ?
+           ORDER BY r.created_at DESC LIMIT ?
+        `).all(cid, req.tenantId, LIMIT).forEach(r => events.push({
+          at: r.created_at, kind: 'router',
+          decision: r.decision, reason: r.reason || null, botId: r.bot_id || null,
+          matcherUsed: !!r.matcher_used, matcherMs: r.matcher_ms || null,
+        }));
+      }
+
+      // 3) Actividad del expediente (bots, etapas, tags, etc.)
+      db.prepare(`
+        SELECT type, description, advisor_name, created_at
+          FROM expedient_activity
+         WHERE expedient_id = ? AND tenant_id = ?
+         ORDER BY created_at DESC, id DESC LIMIT ?
+      `).all(expId, req.tenantId, LIMIT).forEach(a => events.push({
+        at: a.created_at, kind: 'activity',
+        type: a.type, description: a.description || null, advisor: a.advisor_name || null,
+      }));
+
+      events.sort((x, y) => (y.at || 0) - (x.at || 0));
+      res.json({
+        expedientId: expId,
+        contactId: cid,
+        // Read receipt = lo más cercano a "online" que da WhatsApp Cloud API.
+        note: 'WhatsApp Cloud API no expone presencia/online. Lo más cercano es el status "leído" de tus mensajes.',
+        events: events.slice(0, LIMIT),
+      });
+    } catch (e) { next(e); }
+  });
+
   // Bulk delete — encola un job en background
   router.post('/bulk-delete', (req, res, next) => {
     try {

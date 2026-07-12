@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
   <link rel="dns-prefetch" href="https://connect.facebook.net" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260709dl" />
+  <link rel="stylesheet" href="/styles.css?v=20260709bbox" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -1103,6 +1103,30 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
                 <span class="exp-detail-back-label" data-i18n="nav.expedientes">Leads</span>
               </button>
+              <button class="btn btn--ghost btn--sm exp-detail-blackbox-btn" id="expDetailBlackboxBtn" title="Caja negra: línea de tiempo de TODO lo que pasó con este lead">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8" cy="11" r="1.6"/><path d="M12 11h5M12 14h3"/><path d="M8 20h8"/></svg>
+                <span>Caja negra</span>
+              </button>
+            </div>
+
+            <!-- Modal caja negra del lead -->
+            <div class="modal-backdrop" id="blackboxModal" hidden>
+              <div class="modal-box blackbox-box">
+                <header class="modal-header">
+                  <h2>🛰️ Caja negra del lead <span id="blackboxLeadName" class="blackbox-lead"></span></h2>
+                  <button class="modal-close" id="blackboxClose" aria-label="Cerrar">×</button>
+                </header>
+                <div class="blackbox-toolbar">
+                  <div class="blackbox-filters" id="blackboxFilters">
+                    <button class="bb-filter is-active" data-bb-filter="all">Todo</button>
+                    <button class="bb-filter" data-bb-filter="message">Mensajes</button>
+                    <button class="bb-filter" data-bb-filter="router">IA / Router</button>
+                    <button class="bb-filter" data-bb-filter="activity">Bots / Etapas</button>
+                  </div>
+                  <span class="blackbox-note" id="blackboxNote"></span>
+                </div>
+                <div class="modal-body blackbox-body" id="blackboxBody"></div>
+              </div>
             </div>
 
             <div class="exp-detail-info" id="expDetailInfo"><!-- JS --></div>
@@ -4602,7 +4626,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script defer src="/app.js?v=20260709dl"></script>
+  <script defer src="/app.js?v=20260709bbox"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

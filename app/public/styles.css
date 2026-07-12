@@ -4247,6 +4247,24 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .bb-badge.bb-ok   { background: #dcfce7; color: #15803d; }
 .bb-badge.bb-fail { background: #fee2e2; color: #b91c1c; }
 .bb-badge.bb-in   { background: #ecfccb; color: #4d7c0f; }
+
+/* ─── Monitor (logs + sesiones web) ─── */
+.monitor-subtabs { display: flex; gap: 8px; margin: 4px 0 14px; border-bottom: 1px solid var(--border, #e2e8f0); }
+.mon-subtab { font-size: 13px; padding: 8px 14px; border: none; background: transparent; color: var(--text-soft, #64748b); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.mon-subtab.is-active { color: var(--accent, #2563eb); border-bottom-color: var(--accent, #2563eb); font-weight: 600; }
+.mon-online-badge { font-size: 11px; font-weight: 600; color: #15803d; margin-left: 4px; }
+.mon-pane { max-height: 62vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.bb-mon-error { border-left-color: #ef4444; }
+.bb-mon-router { border-left-color: #a855f7; }
+.bb-mon-alert { border-left-color: #f59e0b; }
+.bb-mon-activity { border-left-color: #64748b; }
+.mon-web-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px; border-radius: 8px; }
+.mon-web-row:hover { background: var(--surface-1, #f8fafc); }
+.mon-web-row.is-online { background: #f0fdf4; }
+.mon-web-dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; flex-shrink: 0; margin-top: 5px; }
+.mon-web-dot.on { background: #22c55e; box-shadow: 0 0 0 3px #22c55e33; animation: monPulse 1.6s infinite; }
+@keyframes monPulse { 0%,100% { box-shadow: 0 0 0 3px #22c55e33; } 50% { box-shadow: 0 0 0 5px #22c55e22; } }
+.mon-web-live { display: inline-block; font-size: 9.5px; font-weight: 700; color: #fff; background: #22c55e; padding: 1px 5px; border-radius: 4px; letter-spacing: .04em; vertical-align: 1px; }
 .rh-deliv-err-desc {
   font-size: 14px;
   line-height: 1.5;

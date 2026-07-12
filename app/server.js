@@ -946,6 +946,7 @@ mountSafe('/auth', require('./src/modules/auth/routes'));
 mountSafe('/api/contacts',           require('./src/modules/customers/routes'));
 mountSafe('/api/pipelines',          require('./src/modules/pipelines/routes'));
 mountSafe('/api/expedients',         require('./src/modules/expedients/routes'));
+mountSafe('/api/monitor',            require('./src/modules/monitor/routes'));
 mountSafe('/api/integrations',       require('./src/modules/integrations/routes'));
 mountSafe('/api/integration-votes',  require('./src/modules/integration-votes/routes'));
 mountSafe('/api/outgoing-webhooks',  require('./src/modules/outgoing-webhooks/routes'));

@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
   <link rel="dns-prefetch" href="https://connect.facebook.net" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260709bbox" />
+  <link rel="stylesheet" href="/styles.css?v=20260709mon" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -2774,6 +2774,10 @@ Ana, , ana@hotmail.com, 5551112222</pre>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
               <span>Biblioteca</span>
             </button>
+            <button class="settings-tab" data-settings="monitor" data-admin-only>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+              <span>Monitor</span>
+            </button>
             <button class="settings-tab" data-settings="respaldos" data-admin-only>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3"/><polyline points="21 4 21 10 15 10"/></svg>
               <span>Respaldos</span>
@@ -3627,6 +3631,23 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 </div>
               </div>
               <div id="errorLibraryList" class="err-lib-list"></div>
+            </div>
+
+            <!-- ─── Monitor: logs del sistema + sesiones web ─── -->
+            <div class="settings-pane" data-settings="monitor">
+              <div class="settings-head">
+                <div>
+                  <h2>Monitor</h2>
+                  <p>Logs del sistema (errores, IA/bots, alertas) y sesiones web de reelance.mx en tiempo real. <strong>Nota:</strong> el "en línea ahora" es de la WEB — WhatsApp no expone presencia.</p>
+                </div>
+                <button class="btn btn--ghost btn--sm" id="monitorRefresh">↻ Actualizar</button>
+              </div>
+              <div class="monitor-subtabs">
+                <button class="mon-subtab is-active" data-mon-sub="logs">🖥️ Logs del sistema</button>
+                <button class="mon-subtab" data-mon-sub="web">🌐 Sesiones web <span id="monWebOnline" class="mon-online-badge" hidden></span></button>
+              </div>
+              <div class="mon-pane" id="monPaneLogs"></div>
+              <div class="mon-pane" id="monPaneWeb" hidden></div>
             </div>
 
             <!-- ─── Configuraciones ─── -->
@@ -4626,7 +4647,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script defer src="/app.js?v=20260709bbox"></script>
+  <script defer src="/app.js?v=20260709mon"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

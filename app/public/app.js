@@ -8248,6 +8248,57 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// ─── Monitor: consola de logs global + sesiones web (en línea ahora) ───
+let _monSub = 'logs';
+async function _loadMonitor() {
+  if (_monSub === 'logs') {
+    const el = document.getElementById('monPaneLogs');
+    if (!el) return;
+    el.innerHTML = '<div class="blackbox-loading">Cargando logs…</div>';
+    try {
+      const r = await api('GET', '/api/monitor/logs');
+      const evs = (r && r.events) || [];
+      if (!evs.length) { el.innerHTML = '<div class="blackbox-loading">Sin eventos recientes — el sistema está tranquilo. 🎉</div>'; return; }
+      el.innerHTML = evs.map(ev => {
+        const icon = ({ error: '⛔', router: '🧠', alert: '🔔', activity: '📋' })[ev.kind] || '•';
+        const when = ev.at ? new Date(ev.at * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+        return `<div class="bb-row bb-mon-${ev.kind}"><span class="bb-ico">${icon}</span><div class="bb-content"><div class="bb-title">${escapeHtml(ev.title || '')}</div>${ev.detail ? `<div class="bb-sub">${escapeHtml(ev.detail)}${ev.meta ? ` · ${escapeHtml(ev.meta)}` : ''}</div>` : ''}</div><span class="bb-when">${escapeHtml(when)}</span></div>`;
+      }).join('');
+    } catch (err) { el.innerHTML = `<div class="blackbox-loading">Error: ${escapeHtml(err.message || '')}</div>`; }
+  } else {
+    const el = document.getElementById('monPaneWeb');
+    if (!el) return;
+    el.innerHTML = '<div class="blackbox-loading">Cargando sesiones…</div>';
+    try {
+      const r = await api('GET', '/api/monitor/web-sessions');
+      const ss = (r && r.sessions) || [];
+      const badge = document.getElementById('monWebOnline');
+      if (badge) { if (r.onlineNow > 0) { badge.textContent = `🟢 ${r.onlineNow} en línea`; badge.hidden = false; } else badge.hidden = true; }
+      if (!ss.length) { el.innerHTML = '<div class="blackbox-loading">Aún no hay visitantes web registrados.</div>'; return; }
+      el.innerHTML = ss.map(s => {
+        const when = s.last_seen_at ? new Date(s.last_seen_at * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+        const geo = [s.city, s.region, s.country].filter(Boolean).join(', ') || '—';
+        const src = s.utm_source ? `${escapeHtml(s.utm_source)}${s.utm_campaign ? ' / ' + escapeHtml(s.utm_campaign) : ''}` : (s.referrer ? escapeHtml(String(s.referrer).replace(/^https?:\/\//, '').slice(0, 40)) : 'directo');
+        return `<div class="mon-web-row${s.online ? ' is-online' : ''}"><span class="mon-web-dot${s.online ? ' on' : ''}"></span><div class="bb-content"><div class="bb-title">${s.online ? '<span class="mon-web-live">EN LÍNEA</span> ' : ''}${escapeHtml(geo)}</div><div class="bb-sub">${escapeHtml(s.landing_page || '/')} · vía ${src}</div></div><span class="bb-when">${escapeHtml(when)}</span></div>`;
+      }).join('');
+    } catch (err) { el.innerHTML = `<div class="blackbox-loading">Error: ${escapeHtml(err.message || '')}</div>`; }
+  }
+}
+document.addEventListener('click', (e) => {
+  const t = e.target; if (!t || !t.closest) return;
+  if (t.closest('.settings-tab[data-settings="monitor"]')) { setTimeout(_loadMonitor, 40); return; }
+  if (t.closest('#monitorRefresh')) { _loadMonitor(); return; }
+  const sub = t.closest('.mon-subtab');
+  if (sub) {
+    _monSub = sub.dataset.monSub || 'logs';
+    document.querySelectorAll('.mon-subtab').forEach(b => b.classList.toggle('is-active', b === sub));
+    const lp = document.getElementById('monPaneLogs'), wp = document.getElementById('monPaneWeb');
+    if (lp) lp.hidden = _monSub !== 'logs';
+    if (wp) wp.hidden = _monSub !== 'web';
+    _loadMonitor();
+  }
+});
+
 function renderExpDetailInfo() {
   const exp = EXP_DETAIL;
   if (!exp) return;

@@ -12,6 +12,7 @@ module.exports = (db) => {
         ai.installed_at
       FROM marketplace_apps a
       LEFT JOIN app_installs ai ON ai.app_id = a.id AND ai.tenant_id = ?
+      WHERE COALESCE(a.hidden, 0) = 0 OR ai.id IS NOT NULL
       ORDER BY a.is_system DESC, a.name
     `).all(tenantId);
     res.json({ apps });

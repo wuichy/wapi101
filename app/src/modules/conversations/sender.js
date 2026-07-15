@@ -275,7 +275,7 @@ function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = fals
 // Envía una plantilla wa_api APROBADA al cliente.
 //   templateId    → id en message_templates de la plantilla a enviar
 //   manualValues  → array (index = placeholder N-1) con valores para los Manual
-async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { autoFallback = false, leadId = null } = {}) {
+async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { autoFallback = false, leadId = null, buttonParams = null } = {}) {
   convo = _normalizeConvo(convo);
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
 
@@ -331,9 +331,35 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
     components.push({ type: 'body', parameters: params });
   }
 
-  // BUTTONS — si la plantilla tiene URL buttons con variables {{N}} habría que
-  // pasar parameters. Por ahora soportamos botones sin variables (fijos), así
-  // que no se incluyen en components al enviar (Meta usa los del template).
+  // BUTTONS — si la plantilla trae un URL button DINÁMICO (url con {{1}} al final),
+  // Meta EXIGE que mandemos el parámetro o rechaza el envío (#131008 "Button ... of
+  // type Url requires a parameter"). Rellenamos ese {{1}} con el id del contacto
+  // para que la URL identifique QUIÉN es (reelance resuelve el contacto vía wapi en
+  // /r?u={id}). Se puede sobre-escribir con opts.buttonParams[0]. Los botones fijos
+  // (sin {{}}) no se tocan: Meta usa el del template. El `index` es la posición del
+  // botón dentro del arreglo registrado en la plantilla (0-based).
+  const _btnList = Array.isArray(tpl.buttons) ? tpl.buttons : [];
+  const _dynIdx = _btnList.findIndex(
+    (b) => b && String(b.type).toUpperCase() === 'URL' && /\{\{\d+\}\}/.test(b.url || '')
+  );
+  if (_dynIdx >= 0) {
+    const _btnValue =
+      Array.isArray(buttonParams) && buttonParams[0] != null && buttonParams[0] !== ''
+        ? String(buttonParams[0])
+        : contact?.id != null
+        ? String(contact.id)
+        : '';
+    if (_btnValue) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: String(_dynIdx),
+        parameters: [{ type: 'text', text: _btnValue }],
+      });
+    } else {
+      _log('warn', `template ${templateId}: URL button dinámico pero sin valor para {{1}} (contacto sin id) — Meta lo rechazará`);
+    }
+  }
 
   const payload = {
     messaging_product: 'whatsapp',

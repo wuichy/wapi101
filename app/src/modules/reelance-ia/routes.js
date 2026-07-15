@@ -84,6 +84,17 @@ function webhookRouter(db) {
   // Health check (sin auth — para que la tienda Next.js verifique conectividad)
   router.get('/ping', (_req, res) => res.json({ ok: true, app: 'reelance-ia', version: '1.0.0' }));
 
+  // Resuelve un contacto por ID → nombre/teléfono. La tienda lo llama desde el
+  // link /r/{id} de una campaña de WhatsApp para saber QUIÉN dio click.
+  router.get('/contact/:id', (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    if (!cfg.enabled) return res.status(403).json({ error: 'app_disabled' });
+    const out = svc.resolveContact(db, cfg.tenant_id, req.params.id);
+    if (!out) return res.status(404).json({ error: 'not_found' });
+    res.json(out);
+  });
+
   // ── Campañas de WhatsApp (la tienda orquesta; wapi es el cartero) ──
   router.get('/pipelines', (req, res) => {
     const cfg = svc.getConfigByToken(db, _extractBearer(req));

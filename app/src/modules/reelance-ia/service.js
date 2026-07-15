@@ -1644,9 +1644,21 @@ function deleteOrderEvents(db, tenantId, externalId) {
   return { ok: true, externalId, deletedEvents, deletedQueue, leadIds: events.map(e => e.lead_id).filter(Boolean) };
 }
 
+// Resuelve un contacto por su ID → nombre/teléfono. Lo usa la tienda (link
+// /r/{id} de una campaña de WhatsApp) para saber QUIÉN dio click.
+function resolveContact(db, tenantId, id) {
+  const cid = parseInt(String(id).replace(/\D/g, ''), 10);
+  if (!cid) return null;
+  const c = db.prepare('SELECT id, first_name, last_name, phone FROM contacts WHERE id = ? AND tenant_id = ?').get(cid, tenantId);
+  if (!c) return null;
+  const name = [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || null;
+  return { id: c.id, name, phone: c.phone || null };
+}
+
 module.exports = {
   generateToken,
   getConfigByToken,
+  resolveContact,
   getConfigByTenant,
   ensureConfig,
   updateConfig,

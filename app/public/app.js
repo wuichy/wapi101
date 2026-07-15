@@ -23563,6 +23563,7 @@ const CONTACT_FIELD_DEFAULTS = {
   full_name:  { label: 'Nombre completo', example: 'Luis Pérez' },
   phone:      { label: 'Teléfono',        example: '+5213311234567' },
   email:      { label: 'Email',           example: 'cliente@gmail.com' },
+  contact_id: { label: 'ID de rastreo (reelance)', example: '9522' },
 };
 
 // Sample por field_type para auto-llenar el ejemplo que Meta requiere
@@ -23612,6 +23613,7 @@ function renderTplPlaceholdersBox() {
           ${opt('full_name',  'Nombre completo')}
           ${opt('phone',      'Teléfono')}
           ${opt('email',      'Email')}
+          ${opt('contact_id', 'ID de rastreo (reelance)')}
           ${(typeof EXP_FIELD_DEFS !== 'undefined' ? EXP_FIELD_DEFS : []).filter(f => f.entity === 'contact').map(f => opt('cf:' + f.id, escapeHtml(f.label))).join('')}
         </optgroup>
         ${(() => {
@@ -23649,14 +23651,27 @@ function renderTplPlaceholdersBox() {
 }
 
 function _collectTplPlaceholders() {
-  const rows = document.querySelectorAll('#tplPlaceholdersList .tpl-placeholder-row');
+  // Recorremos el ESTADO (_tplDraftPlaceholders), no el DOM: las filas MAPEADAS
+  // no tienen inputs de label/example (se auto-llenan), así que si solo leyéramos
+  // el DOM se perdería el contactField al guardar (bug: quedaba [{"label":"","example":""}]).
   const out = [];
-  rows.forEach(row => {
-    const i = Number(row.dataset.i);
-    out[i] = {
-      label:   row.querySelector('.tpl-ph-label')?.value.trim()   || '',
-      example: row.querySelector('.tpl-ph-example')?.value.trim() || '',
-    };
+  _tplDraftPlaceholders.forEach((ph, i) => {
+    if (ph && ph.contactField) {
+      // Mapeado a un campo del contacto/lead → conservar contactField + ejemplo auto.
+      const def = _getPlaceholderMeta(ph.contactField);
+      out[i] = {
+        contactField: ph.contactField,
+        label:   ph.label   || def.label   || '',
+        example: ph.example || def.example || '',
+      };
+    } else {
+      // Manual → leer lo que el usuario escribió en los inputs de la fila.
+      const row = document.querySelector(`#tplPlaceholdersList .tpl-placeholder-row[data-i="${i}"]`);
+      out[i] = {
+        label:   row?.querySelector('.tpl-ph-label')?.value.trim()   || '',
+        example: row?.querySelector('.tpl-ph-example')?.value.trim() || '',
+      };
+    }
   });
   return out;
 }
@@ -23929,6 +23944,7 @@ function _resolvePlaceholderForPreview(ph, convo, contact) {
   }
   if (cf === 'phone') return contact?.phone || convo?.phone || '';
   if (cf === 'email') return contact?.email || '';
+  if (cf === 'contact_id') return (contact?.id != null) ? String(contact.id) : (convo?.contactId != null ? String(convo.contactId) : '');
   return null;
 }
 

@@ -231,6 +231,10 @@ function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = fals
     if (cf === 'full_name')   return [contact?.first_name, contact?.last_name].filter(Boolean).join(' ');
     if (cf === 'phone')       return contact?.phone || '';
     if (cf === 'email')       return contact?.email || '';
+    // ID de rastreo (reelance): el id del contacto en wapi. Se usa dentro de la
+    // URL del cuerpo (reelance.mx/r?...&u={{1}}) para que reelance identifique
+    // QUIÉN abrió el link (lo resuelve vía wapi /contact/{id}).
+    if (cf === 'contact_id')  return contact?.id != null ? String(contact.id) : '';
 
     // Valor monetario del lead (expedients.value)
     if (cf === 'lead_value' && ctx.db && ctx.leadId) {

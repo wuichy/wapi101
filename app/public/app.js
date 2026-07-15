@@ -8437,6 +8437,12 @@ function renderExpDetailInfo() {
           <input class="edf-input" type="email" value="${escapeHtml(exp.contactEmail || '')}" data-original="${escapeHtml(exp.contactEmail || '')}" />
         </div>
       </div>
+      <div class="exp-detail-field" data-field-id="contactId" data-field-type="readonly" title="Id del contacto en wapi. reelance lo usa para rastrear quién abre las ligas (…/r?u=ID). Se asigna solo y no se edita.">
+        <span class="exp-detail-field-label">ID de rastreo</span>
+        <div class="edf-cell">
+          <span class="exp-detail-field-value edf-display">${exp.contactId != null ? '#' + escapeHtml(String(exp.contactId)) : '<span class="edf-empty">—</span>'}</span>
+        </div>
+      </div>
     </div>
 
     ${customFields.length ? `

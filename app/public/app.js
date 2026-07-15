@@ -17221,6 +17221,17 @@ function setupPipelines() {
     const plId  = Number(item.dataset.plId);
     const expId = Number(item.dataset.expId);
     document.getElementById('plGlobalSearchPanel').hidden = true;
+    // LIMPIAR la búsqueda antes de cambiar de pipeline. Sin esto, PL_SEARCH seguía
+    // con el término (ej. un teléfono) que NO matchea en el pipeline destino → el
+    // board se filtraba a cero ("Sin leads" en todas las columnas), la tarjeta nunca
+    // se renderizaba y el scroll/highlight no encontraba nada. Se cancela también el
+    // debounce pendiente para que no vuelva a aplicar el filtro después de limpiar.
+    clearTimeout(_plSearchDebounce);
+    const _searchInput = document.getElementById('topbarSearchInput');
+    if (_searchInput) _searchInput.value = '';
+    PL_FILTERS.q = '';
+    PL_SEARCH = '';
+    updateFilterBadge('pl');
     PL_ACTIVE_ID = plId;
     localStorage.setItem('lastPipelineId', String(PL_ACTIVE_ID));
     await loadPipelinesKanban();

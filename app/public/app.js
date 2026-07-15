@@ -3772,6 +3772,7 @@ function renderCustomers() {
         <div class="customer-avatar">${getInitials(c)}</div>
         <div>
           <div class="customer-name">${escapeHtml(c.firstName)} ${escapeHtml(c.lastName || "")}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:1px" title="ID de rastreo (reelance) — se usa en reelance.mx/r?u=${c.id}">ID de rastreo #${c.id}</div>
         </div>
       </div>
       <div>${escapeHtml(c.phone || "—")}</div>
@@ -3908,7 +3909,7 @@ function renderTagChips() {
 
 async function openCustomerModal(customer = null) {
   editingCustomerId = customer?.id || null;
-  document.getElementById("customerModalTitle").textContent = customer ? t('contact.modal.edit') : t('contact.modal.new');
+  document.getElementById("customerModalTitle").textContent = customer ? `${t('contact.modal.edit')} · ID de rastreo #${customer.id}` : t('contact.modal.new');
   const form = document.getElementById("customerForm");
   form.firstName.value = customer?.firstName || "";
   form.lastName.value = customer?.lastName || "";

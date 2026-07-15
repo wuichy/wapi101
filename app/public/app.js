@@ -3909,12 +3909,19 @@ function renderTagChips() {
 
 async function openCustomerModal(customer = null) {
   editingCustomerId = customer?.id || null;
-  document.getElementById("customerModalTitle").textContent = customer ? `${t('contact.modal.edit')} · ID de rastreo #${customer.id}` : t('contact.modal.new');
+  document.getElementById("customerModalTitle").textContent = customer ? t('contact.modal.edit') : t('contact.modal.new');
   const form = document.getElementById("customerForm");
   form.firstName.value = customer?.firstName || "";
   form.lastName.value = customer?.lastName || "";
   form.phone.value = customer?.phone || "";
   form.email.value = customer?.email || "";
+  // ID de rastreo (reelance) — solo lectura; visible al editar un contacto existente.
+  const _trackField = document.getElementById("customerTrackIdField");
+  const _trackVal   = document.getElementById("customerTrackIdValue");
+  if (_trackField && _trackVal) {
+    if (customer?.id != null) { _trackVal.textContent = `#${customer.id}`; _trackField.hidden = false; }
+    else { _trackField.hidden = true; }
+  }
   CURRENT_TAGS = customer ? [...customer.tags] : [];
   renderTagChips();
   document.getElementById("tagInputField").value = "";
@@ -4009,7 +4016,7 @@ function renderEditExpedients() {
       <div class="edit-exp-row ${exp._isNew ? "is-new" : ""}" data-idx="${idx}">
         <label>
           <span>Nombre del lead</span>
-          <input type="text" data-field="name" value="${escapeHtml(exp.name || "")}" placeholder="Ej: Serum Facial" />
+          <input type="text" data-field="name" value="${(exp.name && exp.id && String(exp.name) === String(exp.id)) ? '' : escapeHtml(exp.name || "")}" placeholder="Ej: Serum Facial" />
         </label>
         <label>
           <span>Pipeline</span>

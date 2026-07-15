@@ -455,12 +455,16 @@ module.exports = function createWebhooksRouter(db) {
             // Conversación NUEVA (primer mensaje entrante) → avisar a la tienda
             // para que dispare el evento "Contact" a Meta con el teléfono real.
             if (!hadInbound && insertedMsg) {
+              // Extrae el token de sesión que el botón de reelance metió al mensaje
+              // ("…(ref:7483C4)") → la tienda liga el nombre de WhatsApp a esa sesión.
+              const _refMatch = String(body || '').match(/\(ref:([A-Za-z0-9]{4,12})\)/i);
               reelanceIaSvc.notifyNewConversation(db, tenantId, {
                 phone:          `+${waId}`,
                 name,
                 provider:       'whatsapp',
                 conversationId: convo.id,
                 messageId:      msgId,
+                ref:            _refMatch ? _refMatch[1] : null,
               });
             }
 

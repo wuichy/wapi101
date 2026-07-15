@@ -439,7 +439,7 @@ async function deleteWaTemplate(db, tenantId, { id }) {
 // coincidencia del pixel. Auth: el MISMO bearer token compartido (la tienda
 // lo compara contra su WapiConfig). Fire-and-forget: jamás bloquea ni tumba
 // el intake del webhook de WhatsApp.
-function notifyNewConversation(db, tenantId, { phone, name, provider, conversationId, messageId }) {
+function notifyNewConversation(db, tenantId, { phone, name, provider, conversationId, messageId, ref }) {
   try {
     const cfg = getConfigByTenant(db, tenantId);
     if (!cfg || !cfg.enabled || !cfg.token) return;
@@ -461,6 +461,7 @@ function notifyNewConversation(db, tenantId, { phone, name, provider, conversati
         conversationId: conversationId ?? null,
         messageId:      messageId || null,
         occurredAt:     Math.floor(Date.now() / 1000),
+        ref:            ref || null,   // shortCode de la sesión del navegador (del mensaje "…(ref:XXXX)")
       }),
       signal: controller.signal,
     }).then((res) => {

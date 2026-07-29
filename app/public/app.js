@@ -606,6 +606,7 @@ const I18N_TRANSLATIONS = {
     'chat.ctx.botResume': 'Reanudar bot',
     'chat.ctx.contact': 'Ver ficha del contacto',
     'chat.ctx.expedient': 'Abrir lead',
+    'chat.ctx.copyName': 'Copiar nombre',
     'chat.ctx.copyPhone': 'Copiar teléfono',
     'chat.ctx.mute1h': 'Silenciar 1h',
     'chat.ctx.unmute': 'Quitar silencio',
@@ -1576,6 +1577,7 @@ const I18N_TRANSLATIONS = {
     'chat.ctx.botResume': 'Resume bot',
     'chat.ctx.contact': 'View contact card',
     'chat.ctx.expedient': 'Open lead',
+    'chat.ctx.copyName': 'Copy name',
     'chat.ctx.copyPhone': 'Copy phone',
     'chat.ctx.mute1h': 'Mute 1h',
     'chat.ctx.unmute': 'Unmute',
@@ -3261,7 +3263,11 @@ async function openContactCardFromChat(contactId) {
   let customer = CUSTOMERS.find(c => c.id === contactId);
   if (!customer) {
     try {
-      const data = await api('GET', `/api/customers/${contactId}`);
+      // OJO: el módulo de contactos se monta en /api/contacts (NO /api/customers).
+      // Con la ruta mala esto tiraba "HTTP 404" al clickear el nombre en el header
+      // del chat cuando el contacto no estaba en el caché CUSTOMERS (caso normal:
+      // el caché solo se llena al entrar a la página de Contactos).
+      const data = await api('GET', `/api/contacts/${contactId}`);
       customer = data.item || data;
     } catch (err) {
       toast(err.message || 'No se pudo abrir el contacto', 'error');
@@ -19295,11 +19301,27 @@ async function handleChatContextAction(action) {
         if (convo.contactId) openContactCardFromChat(convo.contactId);
         break;
       case 'expedient': {
-        const exp = (PL_EXP_CACHE || []).find(e => e.contactId === convo.contactId && (e.stageKind === 'in_progress' || !e.stageKind));
+        let exp = (PL_EXP_CACHE || []).find(e => e.contactId === convo.contactId && (e.stageKind === 'in_progress' || !e.stageKind));
+        // PL_EXP_CACHE solo trae los leads del pipeline ACTIVO — si el lead vive
+        // en otro pipeline el caché falla y antes decíamos "no tiene lead".
+        // Fallback: pedir el contacto hidratado, que trae TODOS sus expedientes.
+        if (!exp && convo.contactId) {
+          try {
+            const data = await api('GET', `/api/contacts/${convo.contactId}`);
+            const all = (data.item || data)?.expedients || [];
+            exp = all.find(e => e.stageKind === 'in_progress' || !e.stageKind) || all[0] || null;
+          } catch (_) {}
+        }
         if (exp) openExpDetail(exp.id, 'chats');
         else toast('Este contacto no tiene lead abierto', 'info');
         break;
       }
+      case 'copyName':
+        try {
+          await navigator.clipboard.writeText(convo.name || convo.contactName || '');
+          toast('Nombre copiado', 'success');
+        } catch { toast('No se pudo copiar al portapapeles', 'error'); }
+        break;
       case 'copyPhone':
         try {
           await navigator.clipboard.writeText(convo.phone || convo.contactPhone || '');
@@ -19352,6 +19374,29 @@ function setupChatContextMenu() {
   }, { passive: true });
   list.addEventListener('touchend', () => { clearTimeout(longPressTimer); });
   list.addEventListener('touchmove', () => { clearTimeout(longPressTimer); });
+
+  // Mismo menú en el HEADER de la conversación abierta (nombre / teléfono /
+  // avatar / pill de pipeline). Antes ahí no había click derecho útil: la única
+  // acción era el click izquierdo en el nombre.
+  const header = document.querySelector('.rh-conversation-header');
+  if (header) {
+    const inHeading = (target) => target.closest('.rh-conversation-heading, .rh-header-av-wrap');
+    header.addEventListener('contextmenu', (e) => {
+      if (!inHeading(e.target) || !ACTIVE_CONVO_ID) return;
+      e.preventDefault();
+      openChatContextMenu(e.clientX, e.clientY, ACTIVE_CONVO_ID);
+    });
+    let hdrTimer = null;
+    header.addEventListener('touchstart', (e) => {
+      if (!inHeading(e.target) || !ACTIVE_CONVO_ID) return;
+      hdrTimer = setTimeout(() => {
+        const t = e.touches[0];
+        openChatContextMenu(t.clientX, t.clientY, ACTIVE_CONVO_ID);
+      }, 500);
+    }, { passive: true });
+    header.addEventListener('touchend', () => { clearTimeout(hdrTimer); });
+    header.addEventListener('touchmove', () => { clearTimeout(hdrTimer); });
+  }
 
   // Click en una opción del menú
   menu.addEventListener('click', (e) => {

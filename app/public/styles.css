@@ -4232,6 +4232,59 @@ mark.rh-chat-hl { background: #fef08a; border-radius: 2px; padding: 0 1px; color
 .err-lib-desc { font-size: 13px; line-height: 1.55; color: var(--text-soft, #475569); margin: 0 0 6px; }
 .err-lib-action { font-size: 13px; line-height: 1.55; color: var(--text, #0f172a); margin: 0; }
 
+/* ─── Catálogo crudo de códigos de Meta (debajo de la biblioteca) ─── */
+.meta-codes-search { max-width: 780px; margin-bottom: 12px; }
+.meta-codes-list { display: flex; flex-direction: column; gap: 8px; max-width: 780px; }
+.meta-codes-empty { font-size: 13px; color: var(--text-muted, #64748b); padding: 10px 2px; margin: 0; }
+.meta-code-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: #fff;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 11px 14px;
+}
+.meta-code-num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  color: #475569;
+  min-width: 72px;
+  text-align: center;
+}
+/* Los 2388xxx llegan como error_subcode junto a code 100 — se marcan distinto
+   para que no se confundan con un code de primer nivel. */
+.meta-code-num.subcode { background: rgba(37, 99, 235, .1); color: #2563eb; }
+.meta-code-body { min-width: 0; }
+.meta-code-title { font-size: 13.5px; font-weight: 600; color: var(--text, #0f172a); margin-bottom: 3px; }
+.meta-code-fix { font-size: 12.5px; line-height: 1.5; color: var(--text-soft, #475569); margin: 0; }
+
+/* ─── Aviso en vivo de reglas de Meta en el editor de plantillas ─── */
+.tpl-body-warn {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, .1);
+  border: 1px solid rgba(245, 158, 11, .35);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #92400e;
+}
+.tpl-body-warn ul { margin: 6px 0 0; padding-left: 18px; }
+.tpl-body-warn li + li { margin-top: 4px; }
+.tpl-body-warn code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  background: rgba(146, 64, 14, .12);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
 /* ─── Caja negra del lead ─── */
 .exp-detail-blackbox-btn { margin-left: 6px; }
 .blackbox-box { max-width: 640px; width: 100%; display: flex; flex-direction: column; max-height: 85vh; }

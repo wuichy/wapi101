@@ -3207,9 +3207,49 @@ function renderErrorLibrary() {
   }).join('');
   wrap.dataset.rendered = '1';
 }
+// ── Catálogo crudo de códigos de Meta (Settings → Biblioteca) ──
+// Se sirve desde el backend (misma tabla que traduce los errores en vivo), así
+// que lo que ves aquí es EXACTAMENTE lo que te va a salir cuando algo falle.
+let _META_CODES_CACHE = null;
+async function loadMetaErrorCodes() {
+  const list = document.getElementById('metaCodesList');
+  if (!list || list.dataset.loaded) return;
+  list.dataset.loaded = '1';
+  list.innerHTML = '<p class="meta-codes-empty">Cargando…</p>';
+  try {
+    const data = await api('GET', '/api/integrations/meta-error-codes');
+    _META_CODES_CACHE = data.items || [];
+    renderMetaErrorCodes('');
+  } catch (err) {
+    list.dataset.loaded = '';
+    list.innerHTML = `<p class="meta-codes-empty">No se pudo cargar el catálogo: ${escapeHtml(err.message || '')}</p>`;
+  }
+}
+function renderMetaErrorCodes(q) {
+  const list = document.getElementById('metaCodesList');
+  if (!list || !_META_CODES_CACHE) return;
+  const needle = String(q || '').trim().toLowerCase();
+  const rows = _META_CODES_CACHE.filter(r => !needle
+    || String(r.code).includes(needle)
+    || r.title.toLowerCase().includes(needle)
+    || r.fix.toLowerCase().includes(needle));
+  if (!rows.length) { list.innerHTML = '<p class="meta-codes-empty">Sin resultados.</p>'; return; }
+  list.innerHTML = rows.map(r => `
+    <div class="meta-code-item">
+      <span class="meta-code-num ${r.kind}" title="${r.kind === 'subcode' ? 'error_subcode (llega junto a code 100)' : 'code'}">${r.code}</span>
+      <div class="meta-code-body">
+        <div class="meta-code-title">${escapeHtml(r.title)}</div>
+        <p class="meta-code-fix">${escapeHtml(r.fix)}</p>
+      </div>
+    </div>`).join('');
+}
+
 // Render al abrir la pestaña (delegación top-level: corre siempre) + intento inicial.
+document.addEventListener('input', (e) => {
+  if (e.target?.id === 'metaCodesSearch') renderMetaErrorCodes(e.target.value);
+}, true);
 document.addEventListener('click', (e) => {
-  if (e.target?.closest?.('.settings-tab[data-settings="biblioteca"]')) renderErrorLibrary();
+  if (e.target?.closest?.('.settings-tab[data-settings="biblioteca"]')) { renderErrorLibrary(); loadMetaErrorCodes(); }
 });
 try { renderErrorLibrary(); } catch (_) {}
 
@@ -23607,7 +23647,45 @@ function addTplButton() {
 
 // Detecta {{1}}, {{2}}, ... en el body y sincroniza el array de placeholders.
 // Mantiene los labels/ejemplos que el usuario ya puso para placeholders existentes.
+// Mismas reglas que valida el backend antes de mandar a Meta (validateForMeta
+// en templates/service.js). Aquí es solo aviso visual, en vivo, mientras
+// escribes — el backend es el que manda.
+// OJO: solo aplica a wa_api. Las free_form usan {nombre} con llave sencilla a
+// propósito y nunca pasan por Meta.
+function renderTplBodyWarnings() {
+  const box = document.getElementById('tplBodyWarn');
+  if (!box) return;
+  const isWa = document.getElementById('tplTypeWaApi')?.checked;
+  const body = document.getElementById('tplBody')?.value || '';
+  if (!isWa || !body.trim()) { box.hidden = true; box.innerHTML = ''; return; }
+
+  const warns = [];
+  const trimmed = body.trim();
+  if (/^\{\{\d+\}\}/.test(trimmed)) {
+    warns.push('Meta no permite que el cuerpo <b>empiece</b> con una variable. Pon una palabra antes — ej: <code>Hola {{1}}, …</code>');
+  }
+  if (/\{\{\d+\}\}$/.test(trimmed)) {
+    warns.push('Meta no permite que el cuerpo <b>termine</b> con una variable. Agrega una línea después — ej: <code>Te esperamos 💚</code>');
+  }
+  const nums = [...body.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
+  if (nums.length) {
+    const unique = [...new Set(nums)].sort((a, b) => a - b);
+    if (unique.join(',') !== unique.map((_, i) => i + 1).join(',')) {
+      warns.push(`Las variables van numeradas 1, 2, 3… sin saltos. Tienes: ${unique.map(n => `{{${n}}}`).join(', ')}.`);
+    }
+  }
+  const single = body.replace(/\{\{\d+\}\}/g, '').match(/\{[^{}]+\}/g);
+  if (single) {
+    warns.push(`Doble llave para Meta: <code>${escapeHtml(single.slice(0, 3).join(', '))}</code> debería ser <code>{{1}}</code>, <code>{{2}}</code>…`);
+  }
+
+  if (!warns.length) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = `<strong>⚠️ Meta rechazaría esta plantilla:</strong><ul>${warns.map(w => `<li>${w}</li>`).join('')}</ul>`;
+}
+
 function syncTplPlaceholdersFromBody() {
+  renderTplBodyWarnings();
   const body = document.getElementById('tplBody')?.value || '';
   const nums = [...body.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
   if (!nums.length) {

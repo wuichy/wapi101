@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
   <link rel="dns-prefetch" href="https://connect.facebook.net" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260709modal" />
+  <link rel="stylesheet" href="/styles.css?v=20260731meta" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -1762,6 +1762,9 @@ Ana, , ana@hotmail.com, 5551112222</pre>
             <div class="int-field">
               <label for="tplBody"><span data-i18n="tpl.field.body">Cuerpo del mensaje</span> <span style="color:#dc2626">*</span></label>
               <textarea class="int-input tpl-body-input" id="tplBody" rows="5" placeholder="Hola {{1}}, tu pedido {{2}} ya está en camino."></textarea>
+              <!-- Avisos en vivo de reglas de Meta (solo wa_api) — evita mandar
+                   una plantilla que Meta va a rechazar y quemar el nombre 30 días -->
+              <div class="tpl-body-warn" id="tplBodyWarn" hidden></div>
               <div class="tpl-var-row">
                 <!-- Variables numeradas — solo wa_api (Meta API) -->
                 <span class="tpl-var-group tpl-var-group--num">
@@ -3636,6 +3639,18 @@ Ana, , ana@hotmail.com, 5551112222</pre>
                 </div>
               </div>
               <div id="errorLibraryList" class="err-lib-list"></div>
+
+              <!-- Catálogo crudo de códigos de Meta. Se llena desde
+                   GET /api/integrations/meta-error-codes (misma tabla que
+                   traduce los errores en vivo). -->
+              <div class="settings-head" style="margin-top:28px">
+                <div>
+                  <h2>Códigos de error de Meta</h2>
+                  <p>La lista oficial de códigos que devuelve la API de WhatsApp, con qué significan y cómo se arreglan. Cuando algo falla, wapi101 te muestra el texto literal de Meta más su código — búscalo aquí. <a href="https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/" target="_blank" rel="noopener">Documentación de Meta ↗</a></p>
+                </div>
+              </div>
+              <input type="text" class="int-input meta-codes-search" id="metaCodesSearch" placeholder="Buscar por código o palabra (ej: 2388299, plantilla, token)…" />
+              <div id="metaCodesList" class="meta-codes-list"></div>
             </div>
 
             <!-- ─── Monitor: logs del sistema + sesiones web ─── -->
@@ -4652,7 +4667,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script defer src="/app.js?v=20260729ctx"></script>
+  <script defer src="/app.js?v=20260731meta"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

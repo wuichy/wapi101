@@ -117,6 +117,21 @@ module.exports = function createIntegrationsRouter(db) {
     } catch (err) { res.status(400).json({ error: err.message }); }
   });
 
+  // Catálogo de errores de Meta para la Biblioteca (Settings → Biblioteca).
+  // Se sirve desde meta-errors.js — la MISMA tabla que traduce los errores en
+  // vivo, para que la biblioteca nunca se desincronice de lo que ves en pantalla.
+  // OJO: va ANTES de '/:id' o Express lo trata como un id.
+  router.get('/meta-error-codes', (_req, res) => {
+    const { META_CODES, META_SUBCODES } = require('./meta-errors');
+    const toList = (obj, kind) => Object.entries(obj)
+      .map(([code, v]) => ({ code: Number(code), kind, title: v.t, fix: v.f }))
+      .sort((a, b) => a.code - b.code);
+    res.json({
+      items: [...toList(META_SUBCODES, 'subcode'), ...toList(META_CODES, 'code')],
+      source: 'https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/',
+    });
+  });
+
   router.get('/', (req, res, next) => {
     try { res.json({ items: service.listAll(db, req.tenantId) }); }
     catch (err) { next(err); }

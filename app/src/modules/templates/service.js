@@ -58,6 +58,43 @@ function metaRequest(db, tenantId, method, path, body = null) {
   });
 }
 
+// Reglas de Meta que podemos verificar ANTES de gastar la llamada. Importa
+// porque cada intento fallido con el mismo "name" bloquea ese nombre 30 días
+// aunque Meta lo haya rechazado — mejor atajarlo aquí.
+// Devuelve un array de mensajes; vacío = todo bien.
+function validateForMeta(template) {
+  const errs = [];
+  const body = String(template.body || '');
+  if (!body.trim()) { errs.push('El cuerpo de la plantilla está vacío.'); return errs; }
+
+  // 1) No puede empezar ni terminar con una variable (Meta subcode 2388299).
+  const trimmed = body.trim();
+  if (/^\{\{\d+\}\}/.test(trimmed)) {
+    errs.push('El cuerpo EMPIEZA con una variable — Meta no lo permite. Pon una palabra antes (ej: "Hola {{1}}, ...").');
+  }
+  if (/\{\{\d+\}\}$/.test(trimmed)) {
+    errs.push('El cuerpo TERMINA con una variable — Meta no lo permite. Agrega una línea después (ej: "Te esperamos 💚") o mueve la variable a media frase.');
+  }
+
+  // 2) Las variables deben ir numeradas 1..N sin huecos ni repetir salto.
+  const nums = [...body.matchAll(/\{\{(\d+)\}\}/g)].map(m => Number(m[1]));
+  if (nums.length) {
+    const unique = [...new Set(nums)].sort((a, b) => a - b);
+    const esperado = unique.map((_, i) => i + 1);
+    if (unique.join(',') !== esperado.join(',')) {
+      errs.push(`Las variables deben numerarse 1, 2, 3… sin saltos. Tienes: ${unique.map(n => `{{${n}}}`).join(', ')}.`);
+    }
+  }
+
+  // 3) Llave sencilla {nombre} — error clásico, Meta lo rechaza sin decir cuál.
+  const single = body.replace(/\{\{\d+\}\}/g, '').match(/\{[^{}]+\}/g);
+  if (single) {
+    errs.push(`Usa doble llave: ${single.slice(0, 3).join(', ')} debería ser {{1}}, {{2}}…`);
+  }
+
+  return errs;
+}
+
 // Build Meta API components array from template fields
 function buildComponents(template) {
   const components = [];
@@ -321,6 +358,13 @@ async function submitToMeta(db, tenantId, id) {
   const { wabaId } = getWAConfig(db, tenantId);
   if (!wabaId) throw new Error('WABA ID no encontrado (revisa la integración WhatsApp o WHATSAPP_BUSINESS_ACCOUNT_ID en .env)');
 
+  // Pre-vuelo: si ya sabemos que Meta la va a rechazar, ni la mandamos —
+  // así no se quema el nombre por 30 días.
+  const preErrs = validateForMeta(tmpl);
+  if (preErrs.length) {
+    throw new Error('✋ Meta rechazaría esta plantilla. Arregla esto primero:\n  • ' + preErrs.join('\n  • '));
+  }
+
   const components = buildComponents(tmpl);
   const payload = {
     name: tmpl.name,
@@ -421,4 +465,4 @@ function reorder(db, tenantId, orderedIds) {
   trx();
 }
 
-module.exports = { list, getById, create, update, remove, reorder, setTags, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta, findByWaId };
+module.exports = { list, getById, create, update, remove, reorder, setTags, submitToMeta, syncFromMeta, syncAll, uploadHeaderToMeta, findByWaId, validateForMeta };

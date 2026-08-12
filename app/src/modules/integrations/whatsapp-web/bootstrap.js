@@ -40,6 +40,55 @@ function ensureExpedient(db, tenantId, contactId, routing) {
   }
 }
 
+// ── Ventana de gracia para las desconexiones de WA Lite ───────────────────
+// Baileys se cae y se reconecta solo TODO el tiempo, y cada caída mandaba un
+// push. Medido en el journal del server (2026-08-12): 6 caídas, la más corta
+// 2.7s, la más larga 5.9s, promedio 4.6s — TODAS se recuperaron solas. O sea:
+// el 100% de esas notificaciones era ruido.
+//
+// Ahora la alerta no sale al instante: se PROGRAMA. Si el canal se reconecta
+// antes de que venza la ventana, se cancela y nadie se entera. Si vence y
+// sigue caído, entonces sí es un problema de verdad y se avisa (diciendo
+// cuánto lleva caído).
+//
+// EXCEPCIÓN: `loggedOut` (cerraron la sesión desde el celular) avisa AL
+// INSTANTE — eso no se arregla solo, necesita escanear el QR otra vez.
+//
+// Ajustable con WA_DOWN_GRACE_MIN en .env (minutos). Con los datos de arriba
+// hasta 1 minuto bastaría; 10 da margen para que el celular se quede sin
+// internet un rato sin que te llegue una falsa alarma.
+const DOWN_GRACE_MS = Math.max(1, Number(process.env.WA_DOWN_GRACE_MIN) || 10) * 60_000;
+const _downPending = new Map(); // integrationId → { timer, since }
+const _downAlerted = new Set(); // integrationId que YA alertó (para avisar cuando vuelva)
+
+function _clearDownTimer(integrationId) {
+  const p = _downPending.get(integrationId);
+  if (p) { clearTimeout(p.timer); _downPending.delete(integrationId); }
+  return p || null;
+}
+
+// Manda la alerta de canal caído por push + campanita in-app.
+function _alertDown(db, tenantId, integrationId, title, body) {
+  pushSvc.sendToAll(db, tenantId, {
+    title, body,
+    tag: `wa-${integrationId}-down`,
+    url: '/?view=integraciones',
+    // Sin integrationId a propósito: aunque el canal esté silenciado con la
+    // campanita, si se CAE hay que enterarse o pierdes mensajes sin saberlo.
+  }, { kind: 'integration_down', cooldownKey: String(integrationId), cooldownMs: 5 * 60_000 })
+    .catch(err => console.warn('[push] down:', err.message));
+
+  if (!tenantId) return;
+  try {
+    for (const adv of db.prepare('SELECT id FROM advisors WHERE tenant_id = ?').all(tenantId)) {
+      pushSvc.createNotification(db, {
+        tenantId, advisorId: adv.id, type: 'general',
+        title: '⚠️ Integración desconectada', body, link: '/?view=integraciones',
+      });
+    }
+  } catch (ne) { console.warn('[wa-web] in-app notif error:', ne.message); }
+}
+
 function init(db) {
   manager.setHandlers({
     // Acks de salida (delivered/read) — actualiza el status del mensaje en DB
@@ -149,19 +198,31 @@ function init(db) {
         const { tenantId } = getIntegrationContext(db, integrationId);
         const phone = session.phoneNumber || '';
         const display = phone ? `WhatsApp +${phone}` : 'WhatsApp Lite';
-        const wasError = db.prepare("SELECT status FROM integrations WHERE id = ?").get(integrationId)?.status;
         db.prepare(`
           UPDATE integrations
           SET status = 'connected', display_name = ?, external_id = ?,
               connected_at = unixepoch(), updated_at = unixepoch(), last_error = NULL
           WHERE id = ?
         `).run(display, phone || null, integrationId);
-        if (wasError && wasError !== 'connected' && wasError !== 'connecting' && wasError !== 'pending') {
+
+        // Se reconectó antes de que venciera la gracia → cancelar la alerta
+        // programada. Este es el caso normal (caídas de ~5s).
+        const pending = _clearDownTimer(integrationId);
+        if (pending) {
+          const seg = Math.round((Date.now() - pending.since) / 1000);
+          console.log(`[wa-web ${integrationId}] reconectó en ${seg}s — alerta cancelada`);
+        }
+
+        // Solo avisamos "reconectado" si de verdad llegamos a alertar de la
+        // caída. Antes esto se decidía leyendo integrations.status, que en las
+        // caídas transitorias NUNCA cambiaba de 'connected' → el aviso de
+        // recuperación no salió jamás (1 solo registro en 3 meses de alert_log).
+        if (_downAlerted.delete(integrationId)) {
           pushSvc.sendToAll(db, tenantId, {
-            title: 'WhatsApp reconectado',
-            body:  phone ? `+${phone} volvió a estar en línea ✓` : 'Volvió a estar en línea ✓',
-            tag:   `wa-${integrationId}`,
-            url:   '/',
+            title: '✅ WhatsApp reconectado',
+            body:  phone ? `+${phone} volvió a estar en línea` : 'Volvió a estar en línea',
+            tag:   `wa-${integrationId}-down`,
+            url:   '/?view=integraciones',
           }, { kind: 'integration_recovered', cooldownKey: String(integrationId), cooldownMs: 60_000 })
             .catch(err => console.warn('[push] recovered:', err.message));
         }
@@ -175,48 +236,46 @@ function init(db) {
         const { tenantId } = getIntegrationContext(db, integrationId);
         const row = db.prepare("SELECT display_name, external_id FROM integrations WHERE id = ?").get(integrationId);
         const displayName = row?.display_name || 'WhatsApp Lite';
-        let notifBody;
+
+        // ── Cerraron sesión desde el celular: esto NO se arregla solo ──
         if (info.loggedOut) {
+          _clearDownTimer(integrationId);
           db.prepare(`UPDATE integrations SET status = 'disconnected', last_error = ?, updated_at = unixepoch() WHERE id = ?`)
             .run('Sesión cerrada en el dispositivo', integrationId);
-          notifBody = `${displayName} cerró sesión. Reconecta escaneando QR de nuevo.`;
-          pushSvc.sendToAll(db, tenantId, {
-            title: '⚠️ WhatsApp desconectado',
-            body:  notifBody,
-            tag:   `wa-${integrationId}-logout`,
-            url:   '/?view=integraciones',
-          }, { kind: 'integration_down', cooldownKey: String(integrationId), cooldownMs: 5 * 60_000 })
-            .catch(err => console.warn('[push] logout:', err.message));
-        } else {
-          db.prepare(`UPDATE integrations SET last_error = ?, updated_at = unixepoch() WHERE id = ?`)
-            .run(info.message || 'Desconectado', integrationId);
-          notifBody = `${displayName} perdió conexión. Reintentando…`;
-          pushSvc.sendToAll(db, tenantId, {
-            title: '⚠️ WhatsApp desconectado',
-            body:  notifBody,
-            tag:   `wa-${integrationId}-down`,
-            url:   '/?view=integraciones',
-          }, { kind: 'integration_down', cooldownKey: String(integrationId), cooldownMs: 10 * 60_000 })
-            .catch(err => console.warn('[push] disconnect:', err.message));
+          _downAlerted.add(integrationId);
+          _alertDown(db, tenantId, integrationId, '⚠️ WhatsApp desconectado',
+            `${displayName} cerró sesión. Reconecta escaneando QR de nuevo.`);
+          return;
         }
-        // In-app bell: notificar a todos los asesores del tenant
-        if (tenantId) {
+
+        // ── Caída transitoria: NO avisar todavía ──
+        db.prepare(`UPDATE integrations SET last_error = ?, updated_at = unixepoch() WHERE id = ?`)
+          .run(info.message || 'Desconectado', integrationId);
+
+        // Ya hay una cuenta regresiva corriendo → no reiniciarla. Si no, el
+        // ciclo caída→reintento→caída la reiniciaría eternamente y la alerta
+        // no saldría nunca aunque el canal lleve horas muerto.
+        if (_downPending.has(integrationId)) return;
+
+        const since = Date.now();
+        const timer = setTimeout(() => {
+          _downPending.delete(integrationId);
           try {
-            const advisors = db.prepare('SELECT id FROM advisors WHERE tenant_id = ?').all(tenantId);
-            for (const adv of advisors) {
-              pushSvc.createNotification(db, {
-                tenantId,
-                advisorId: adv.id,
-                type:  'general',
-                title: '⚠️ Integración desconectada',
-                body:  notifBody,
-                link:  '/?view=integraciones',
-              });
-            }
-          } catch (ne) {
-            console.warn('[wa-web] in-app notif error:', ne.message);
+            // ¿Sigue caído de verdad? Le preguntamos al manager, que es quien
+            // tiene el estado en vivo — no a la DB, que en las transitorias
+            // se queda en 'connected'.
+            if (manager.getStatus(integrationId)?.status === 'connected') return;
+            const min = Math.round((Date.now() - since) / 60000);
+            _downAlerted.add(integrationId);
+            _alertDown(db, tenantId, integrationId, '⚠️ WhatsApp lleva rato caído',
+              `${displayName} no se ha podido reconectar en ${min} min. Revisa que el celular tenga internet.`);
+          } catch (e) {
+            console.warn(`[wa-web ${integrationId}] alerta de caída:`, e.message);
           }
-        }
+        }, DOWN_GRACE_MS);
+        timer.unref?.();
+        _downPending.set(integrationId, { timer, since });
+        console.log(`[wa-web ${integrationId}] caído — alerta programada en ${DOWN_GRACE_MS / 60000} min si no reconecta`);
       } catch (err) {
         console.error(`[wa-web ${integrationId}] onDisconnected DB error:`, err.message);
       }

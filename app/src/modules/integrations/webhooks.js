@@ -461,12 +461,15 @@ module.exports = function createWebhooksRouter(db) {
               reelanceIaSvc.notifyOptOut(db, tenantId, { phone: `+${waId}`, name });
             }
 
-            // Conversación NUEVA (primer mensaje entrante) → avisar a la tienda
-            // para que dispare el evento "Contact" a Meta con el teléfono real.
-            if (!hadInbound && insertedMsg) {
-              // Extrae el token de sesión que el botón de reelance metió al mensaje
-              // ("…(ref:7483C4)") → la tienda liga el nombre de WhatsApp a esa sesión.
-              const _refMatch = String(body || '').match(/\(ref:([A-Za-z0-9]{4,12})\)/i);
+            // Avisar a la tienda: (a) SIEMPRE en el primer mensaje de la conversación
+            // (dispara "Contact" a Meta con el teléfono real), y (b) TAMBIÉN si el
+            // mensaje trae ref, aunque no sea el primero — el ref es lo que liga el
+            // nombre de WhatsApp a la sesión del navegador en el log de reelance, y
+            // eso sirve cada vez que alguien escribe, no solo la primera vez de su
+            // vida. Antes un cliente recurrente (ya había escrito hace semanas) volvía
+            // a escribir y la tienda nunca se enteraba (caso Ana Espino, 22-jul-2026).
+            const _refMatch = String(body || '').match(/\(ref:([A-Za-z0-9]{4,12})\)/i);
+            if ((!hadInbound || _refMatch) && insertedMsg) {
               reelanceIaSvc.notifyNewConversation(db, tenantId, {
                 phone:          `+${waId}`,
                 name,

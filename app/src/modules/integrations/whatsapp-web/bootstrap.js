@@ -212,7 +212,10 @@ function init(db) {
 
         console.log(`[wa-web ${integrationId}] msg ${payload.messageId} → convo #${convo.id} (tenant ${tenantId})`);
       } catch (err) {
-        console.error(`[wa-web ${integrationId}] error procesando mensaje:`, err.message);
+        // El número y la dirección son lo primero que necesitas para diagnosticar:
+        // sin ellos, un "UNIQUE constraint failed" no dice a quién le pasó.
+        console.error(`[wa-web ${integrationId}] error procesando mensaje`
+          + ` (${payload?.fromMe ? 'saliente' : 'entrante'} ${payload?.externalId || '?'}):`, err.message);
       }
     },
 

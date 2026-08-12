@@ -105,7 +105,17 @@ step "Revisando sintaxis de lo que entró"
 JS="$(printf '%s\n' "$CHANGED" | grep '\.js$' || true)"
 
 if [[ -n "$JS" ]]; then
-  BAD="$(ssh "$HOST" "cd $REMOTE && for f in $(printf '%s ' $JS); do [ -f \"\$f\" ] && node --check \"\$f\" 2>&1 | head -3 && echo \"FALLA: \$f\"; done" || true)"
+  # OJO: `node --check "$f" | head -3` NO sirve para detectar el error — el
+  # código de salida de un pipe es el del ÚLTIMO comando (head), que siempre
+  # devuelve 0. Así TODOS los archivos salían como fallidos. Hay que evaluar
+  # el status de node --check directamente.
+  BAD="$(ssh "$HOST" "cd $REMOTE && for f in $(printf '%s ' $JS); do
+      [ -f \"\$f\" ] || continue
+      if ! out=\$(node --check \"\$f\" 2>&1); then
+        echo \"FALLA: \$f\"
+        echo \"\$out\" | head -3
+      fi
+    done" || true)"
   if printf '%s' "$BAD" | grep -q 'FALLA:'; then
     say "$BAD"
     die "Hay un error de sintaxis. NO reinicié — el sitio sigue vivo con la versión anterior."

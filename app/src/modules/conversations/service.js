@@ -6,6 +6,7 @@
 // (en findOrCreate) o de la conversación referenciada (en addMessage, etc.).
 
 const customerService = require('../customers/service');
+const pushSvc = require('../notifications/service');
 
 // Nombre amigable cuando un mensaje entrante no trae nombre (típico cuando
 // el token del provider está caducado y no podemos llamar a la Graph API
@@ -108,6 +109,9 @@ function hydrateConvo(db, tenantId, row) {
     pinned:         !!row.pinned,
     archived:       !!row.archived,
     mutedUntil:     row.muted_until || null,
+    // Canal con la campanita apagada en Integraciones. El chat se ve y se
+    // contesta igual; solo no suena ni suma al badge rojo (ver app.js).
+    silenced:       pushSvc.isIntegrationSilenced(db, row.integration_id),
     deliveryFailure,
     createdAt:      row.created_at,
     tenantId:       row.tenant_id,

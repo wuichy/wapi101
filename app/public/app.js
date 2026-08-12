@@ -2422,8 +2422,10 @@ async function loadConversations() {
       elUnread.textContent = totalUnread || '';
       elUnread.style.display = totalUnread ? '' : 'none';
     }
-    // Badge en la nav lateral — suma de las convos cargadas (lo que el usuario realmente ve)
-    updateChatsNavBadge(CONVERSATIONS.reduce((s, c) => s + (c.unreadCount || 0), 0));
+    // Badge en la nav lateral — suma de las convos cargadas (lo que el usuario realmente ve).
+    // Los canales con la campanita apagada (c.silenced) NO suman: silenciar
+    // significa que ese número no te grita, ni con push ni con el circulito rojo.
+    updateChatsNavBadge(CONVERSATIONS.reduce((s, c) => s + (c.silenced ? 0 : (c.unreadCount || 0)), 0));
   } catch (err) {
     console.error('loadConversations', err);
   }
@@ -2668,7 +2670,7 @@ function decrementUnreadBadge(convoId) {
     el.style.display = next ? '' : 'none';
   }
   // Recalcular el badge de la nav lateral con el total actualizado
-  const totalUnread = CONVERSATIONS.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+  const totalUnread = CONVERSATIONS.reduce((sum, c) => sum + (c.silenced ? 0 : (c.unreadCount || 0)), 0);
   updateChatsNavBadge(totalUnread);
 }
 
@@ -6548,6 +6550,10 @@ function oauthIcon(providerKey, hasExisting) {
   return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0C5.373 0 0 4.973 0 11.111c0 3.497 1.745 6.616 4.472 8.652V24l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111C24 4.973 18.627 0 12 0zm1.194 14.963-3.055-3.26-5.963 3.26 6.559-6.963 3.13 3.26 5.957-3.26-6.628 6.963z"/></svg> ${t('oauth.connect.facebook')}`;
 }
 
+// Campanita por canal (Integraciones). Prendida = suena; tachada = silencio.
+const BELL_ON_SVG  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+const BELL_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
+
 function renderIntegrations() {
   const root = document.getElementById("integrationsGrid");
   if (!root) return;
@@ -6580,6 +6586,13 @@ function renderIntegrations() {
             <div class="int-account-meta ${metaClass}">${metaText}</div>
           </div>
           <div class="int-account-actions">
+            <button class="int-bell-toggle${inst.notifications === false ? ' is-off' : ''}"
+                    data-action="notif-toggle" data-id="${inst.id}"
+                    data-on="${inst.notifications === false ? '0' : '1'}"
+                    aria-pressed="${inst.notifications === false ? 'false' : 'true'}"
+                    title="${inst.notifications === false ? 'Notificaciones apagadas — click para prender' : 'Notificaciones prendidas — click para silenciar este canal'}">
+              ${inst.notifications === false ? BELL_OFF_SVG : BELL_ON_SVG}
+            </button>
             <button class="btn btn--xs btn--ghost" data-action="routing" data-id="${inst.id}" title="Configurar pipeline">Pipeline</button>
             <button class="btn btn--xs btn--ghost" data-action="edit-instance" data-provider="${p.key}" data-id="${inst.id}" title="Editar">${isOAuth ? 'Ver' : 'Editar'}</button>
             <button class="btn btn--xs btn--danger-ghost" data-action="disconnect" data-id="${inst.id}" data-name="${escapeHtml(inst.displayName || p.name)}" title="Desconectar">✕</button>
@@ -6638,6 +6651,22 @@ function bindIntegrationListeners(root) {
   });
   root.querySelectorAll('[data-action="routing"]').forEach((btn) => {
     btn.addEventListener("click", () => openRoutingModal(Number(btn.dataset.id)));
+  });
+  root.querySelectorAll('[data-action="notif-toggle"]').forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const enabled = btn.dataset.on !== '1';   // lo que quedará DESPUÉS del click
+      btn.disabled = true;
+      try {
+        await api('PATCH', `/api/integrations/${btn.dataset.id}/notifications`, { enabled });
+        await loadIntegrations();
+        toast(enabled ? '🔔 Notificaciones prendidas para este canal'
+                      : '🔕 Canal silenciado — los chats siguen llegando, pero sin avisarte',
+              'success', 4000);
+      } catch (err) {
+        btn.disabled = false;
+        toast(`Error: ${err.message}`, 'error');
+      }
+    });
   });
   root.querySelectorAll('[data-action="wa-guide"]').forEach((btn) => {
     btn.addEventListener("click", () => openWhatsAppGuide());
@@ -7518,6 +7547,18 @@ function openIntegrationModal(providerKey, instanceId = null) {
     if (isQrProvider) {
       document.getElementById("intFormFields").hidden = true;
       document.getElementById("intWebhookBox").hidden = true;
+
+      // El bloque de routing (pipeline + etapa) se construyó DENTRO de
+      // #intFormFields, que se acaba de ocultar. Sin sacarlo de ahí, el candado
+      // de routing es imposible de satisfacer: "Generar QR" exige pipeline y
+      // etapa, pero el selector para elegirlos está escondido, así que WhatsApp
+      // Lite no se podía conectar NUNCA (bug encontrado el 11-ago-2026).
+      // Se mueve justo debajo del recuadro del QR, que es donde el usuario ya
+      // está mirando cuando le sale el error.
+      const routingBlock = document.getElementById("intRoutingBlock");
+      if (routingBlock && qrBox.parentNode) {
+        qrBox.parentNode.insertBefore(routingBlock, qrBox.nextSibling);
+      }
       const refreshBtn = document.getElementById("intQrRefreshBtn");
       if (isQrConnect) {
         document.getElementById("intSubmitBtn").textContent = "Generar QR";

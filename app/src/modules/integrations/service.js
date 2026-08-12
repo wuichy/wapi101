@@ -33,6 +33,9 @@ function hydrate(row) {
     externalId: row.external_id,
     config,
     routing: config.routing || null,
+    // Campanita del canal. Por defecto TODO notifica — solo se apaga si el
+    // usuario lo pidió explícitamente (config.notifications === false).
+    notifications: config.notifications !== false,
     credentials: publicCreds,
     webhookUrl,
     lastError: row.last_error,
@@ -436,6 +439,20 @@ function _notifyDisconnected(db, integrationId, errorMessage) {
   }
 }
 
+// Prende o apaga las notificaciones de UN canal. No toca nada más: los
+// mensajes siguen llegando, guardándose y visibles en Chats — solo deja de
+// mandarse el push y de contar para el badge rojo.
+function updateNotifications(db, tenantId, id, enabled) {
+  const row = db.prepare('SELECT config FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
+  if (!row) throw new Error('Integración no encontrada');
+  let config = {};
+  try { config = row.config ? (JSON.parse(row.config) || {}) : {}; } catch (_) {}
+  config.notifications = !!enabled;
+  db.prepare('UPDATE integrations SET config = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+    .run(JSON.stringify(config), id, tenantId);
+  return getById(db, tenantId, id);
+}
+
 function updateRouting(db, tenantId, id, { pipelineId, stageId, pipelineName, stageName }) {
   const row = db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) throw new Error('Integración no encontrada');
@@ -486,4 +503,4 @@ function startTokenProbePoller(db) {
   console.log('[integrations] token probe poller iniciado (cada 6h)');
 }
 
-module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting, markAuthFailed, startTokenProbePoller };
+module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting, updateNotifications, markAuthFailed, startTokenProbePoller };

@@ -42,13 +42,22 @@ function pushIncomingMessage(db, tenantId, convo, body, senderName) {
       isUrgent = !!(row && row.is_urgent);
     } catch (_) {}
     const title = isUrgent ? `🚨 ${name}` : name;
+    // integrationId → sendToAll respeta la campanita del canal (Integraciones).
+    // El convo puede venir del caller sin la columna, así que se relee de DB.
+    let integrationId = convo.integration_id ?? convo.integrationId ?? null;
+    if (integrationId == null) {
+      try {
+        integrationId = db.prepare('SELECT integration_id FROM conversations WHERE id = ?')
+          .get(convo.id)?.integration_id ?? null;
+      } catch (_) {}
+    }
     pushSvc.sendToAll(db, tenantId, {
       title,
       body:  preview,
       tag:   `chat-${convo.id}`,
       url:   `/?view=chats&convo=${convo.id}`,
       chatId: convo.id,
-    }, { kind: 'message' }).catch(err => console.warn('[push] msg:', err.message));
+    }, { kind: 'message', integrationId }).catch(err => console.warn('[push] msg:', err.message));
   } catch (_) {}
 }
 

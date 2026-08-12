@@ -296,6 +296,13 @@ module.exports = function createIntegrationsRouter(db) {
     } catch (err) { res.status(400).json({ error: err.message }); }
   });
 
+  router.patch('/:id/notifications', (req, res) => {
+    try {
+      const item = service.updateNotifications(db, req.tenantId, Number(req.params.id), !!req.body?.enabled);
+      res.json({ item });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
   router.post('/:id/telegram-webhook', async (req, res, next) => {
     try {
       const item = service.getById(db, req.tenantId, Number(req.params.id));

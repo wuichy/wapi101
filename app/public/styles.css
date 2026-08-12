@@ -1568,7 +1568,31 @@ body.nav-collapsed .nav-notif-panel {
 .int-account-meta { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .int-account-meta.is-error { color: var(--danger); }
 .int-account-meta.is-connecting { color: #d97706; font-weight: 600; }
-.int-account-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.int-account-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+
+/* Campanita por canal — prendida = suena; tachada = silencio total */
+.int-bell-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.int-bell-toggle:hover { background: var(--bg, #f1f5f9); color: var(--text, #0f172a); }
+.int-bell-toggle:disabled { opacity: .5; cursor: default; }
+.int-bell-toggle.is-off {
+  color: #b45309;
+  background: rgba(245, 158, 11, .12);
+  border-color: rgba(245, 158, 11, .35);
+}
+.int-bell-toggle.is-off:hover { background: rgba(245, 158, 11, .2); color: #92400e; }
 
 /* OAuth connect button */
 .btn--oauth {

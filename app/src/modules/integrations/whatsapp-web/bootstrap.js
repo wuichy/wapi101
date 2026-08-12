@@ -134,7 +134,8 @@ function init(db) {
           tag:   `chat-${convo.id}`,
           url:   `/?view=chats&convo=${convo.id}`,
           chatId: convo.id,
-        }, { kind: 'message' })
+          // integrationId → sendToAll respeta la campanita del canal.
+        }, { kind: 'message', integrationId })
           .catch(err => console.warn('[push] msg:', err.message));
 
         console.log(`[wa-web ${integrationId}] msg ${payload.messageId} → convo #${convo.id} (tenant ${tenantId})`);

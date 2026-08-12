@@ -74,8 +74,36 @@ function isOnCooldown(kind, key, ms) {
 // tenantId puede ser null para callers internos sin contexto auth (webhooks,
 // bootstrap). En ese caso envía a TODOS — válido en single-tenant. Para
 // multi-tenant los callers deben pasar tenantId explícito.
-async function sendToAll(db, tenantId, payload, { kind = 'manual', cooldownKey = null, cooldownMs = 0 } = {}) {
+// ¿Este canal está en silencio? (Integraciones → campanita apagada.)
+// Se guarda en integrations.config.notifications = false. Caché corta para no
+// pegarle a la DB en cada push de una ráfaga de mensajes.
+let _silencedCache = { at: 0, ids: new Set() };
+function silencedIntegrationIds(db) {
+  const now = Date.now();
+  if (now - _silencedCache.at < 5000) return _silencedCache.ids;
+  const ids = new Set();
+  try {
+    for (const r of db.prepare("SELECT id, config FROM integrations WHERE config LIKE '%notifications%'").all()) {
+      try { if (JSON.parse(r.config)?.notifications === false) ids.add(r.id); } catch (_) {}
+    }
+  } catch (_) { /* si falla la query, mejor notificar de más que de menos */ }
+  _silencedCache = { at: now, ids };
+  return ids;
+}
+function isIntegrationSilenced(db, integrationId) {
+  if (!integrationId) return false;
+  return silencedIntegrationIds(db).has(Number(integrationId));
+}
+
+// Pasa `integrationId` cuando el push pertenece a un canal concreto (mensajes
+// entrantes). Así el silencio se aplica en UN solo lugar y ningún call site
+// nuevo se puede olvidar de respetarlo. Las alertas de "canal caído" NO deben
+// pasarlo: aunque el canal esté en silencio, si se cae quieres enterarte.
+async function sendToAll(db, tenantId, payload, { kind = 'manual', cooldownKey = null, cooldownMs = 0, integrationId = null } = {}) {
   if (!ensureConfigured()) return { sent: 0, failed: 0, skipped: true };
+  if (integrationId && isIntegrationSilenced(db, integrationId)) {
+    return { sent: 0, failed: 0, silenced: true };
+  }
   if (cooldownMs && cooldownKey && isOnCooldown(kind, cooldownKey, cooldownMs)) {
     return { sent: 0, failed: 0, cooldownActive: true };
   }
@@ -177,6 +205,8 @@ module.exports = {
   removeSubscription,
   listSubscriptions,
   sendToAll,
+  isIntegrationSilenced,
+  silencedIntegrationIds,
   // in-app
   createNotification,
   getNotifications,

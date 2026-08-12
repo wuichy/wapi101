@@ -142,6 +142,29 @@ function init(db) {
           }
         }
 
+        // ── Lo escribiste TÚ desde la app de WhatsApp del celular ──
+        // Se guarda como saliente y AQUÍ SE ACABA: no es un mensaje del
+        // cliente, así que nada de bots, IA, push ni crear leads.
+        if (payload.fromMe) {
+          convoSvc.addMessage(db, tenantId, convo.id, {
+            externalId: payload.messageId,
+            direction:  'outgoing',
+            provider:   'whatsapp-lite',
+            body:       payload.body,
+            status:     'sent',        // los acuses llegan por messages.update
+            createdAt:  payload.timestamp,
+            // byAdvisor: lo mandó un humano. Además de marcarlo como tal, esto
+            // arranca la "ventana humano" (last_human_msg_at) para que la IA y
+            // los bots NO contesten encima de lo que ya respondiste desde el
+            // celu, y limpia el 🚨 de urgente.
+            byAdvisor:  true,
+          });
+          // Si contestaste desde el celular, ese chat ya lo viste.
+          try { convoSvc.markRead(db, tenantId, convo.id); } catch (_) {}
+          console.log(`[wa-web ${integrationId}] saliente desde el celu → convo #${convo.id}`);
+          return;
+        }
+
         convoSvc.addMessage(db, tenantId, convo.id, {
           externalId: payload.messageId,
           direction:  'incoming',

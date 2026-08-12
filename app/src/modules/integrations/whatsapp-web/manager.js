@@ -246,7 +246,15 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
 
     for (const msg of messages) {
       if (!msg?.message) continue;
-      if (msg.key?.fromMe) continue;
+
+      // fromMe = lo escribiste TÚ desde la app de WhatsApp del celular.
+      // Antes se descartaba con un `continue` y wapi101 solo veía la mitad de
+      // la conversación: entraba lo del cliente y tu respuesta desde el celu
+      // no aparecía nunca (1331 entrantes vs 10 salientes en WA Lite).
+      // Ahora se pasa al bootstrap marcado, que lo guarda como saliente.
+      // OJO: en un fromMe, remoteJid es el DESTINATARIO — que es justo el
+      // contacto de la conversación, así que la resolución de número es igual.
+      const fromMe = !!msg.key?.fromMe;
 
       const remoteJid = msg.key?.remoteJid || '';
       // Aceptar @s.whatsapp.net (normal) y @lid (cuentas WA nuevas con LID addressing).
@@ -288,7 +296,10 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
           externalId:    phone,                           // E.164 sin '+'
           messageId:     msg.key.id,
           body,
-          pushName:      msg.pushName || null,
+          // En un fromMe, pushName es TU nombre, no el del contacto — pasarlo
+          // renombraría al cliente contigo. Solo se manda en los entrantes.
+          pushName:      fromMe ? null : (msg.pushName || null),
+          fromMe,
           timestamp:     Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
           messageType,
         });

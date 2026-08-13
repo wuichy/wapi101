@@ -6645,10 +6645,13 @@ function renderIntegrations() {
                      : routingLabel;
       return `
         <div class="int-account-row">
-          <div class="int-account-avatar" style="background:${p.color}">${icon}</div>
-          <div class="int-account-info">
-            <div class="int-account-name">${escapeHtml(inst.displayName || p.name)}</div>
-            <div class="int-account-meta ${metaClass}">${metaText}</div>
+          <div class="int-account-head">
+            <div class="int-account-avatar" style="background:${p.color}">${icon}</div>
+            <div class="int-account-info">
+              <div class="int-account-name">${escapeHtml(inst.displayName || p.name)}</div>
+              <div class="int-account-meta ${metaClass}">${metaText}</div>
+            </div>
+            <button class="btn btn--xs btn--danger-ghost int-account-x" data-action="disconnect" data-id="${inst.id}" data-name="${escapeHtml(inst.displayName || p.name)}" title="Desconectar">✕</button>
           </div>
           <div class="int-account-actions">
             <button class="int-bell-toggle${inst.bots === false ? ' is-off' : ''}"
@@ -6667,7 +6670,6 @@ function renderIntegrations() {
             ${p.key === 'whatsapp-lite' ? `<button class="btn btn--xs btn--ghost" data-action="wa-groups" data-id="${inst.id}" title="Elegir qué grupos entran al CRM">Grupos${(inst.groups || []).length ? ` (${inst.groups.length})` : ''}</button>` : ''}
             <button class="btn btn--xs btn--ghost" data-action="routing" data-id="${inst.id}" title="Configurar pipeline">Pipeline</button>
             <button class="btn btn--xs btn--ghost" data-action="edit-instance" data-provider="${p.key}" data-id="${inst.id}" title="Editar">${isOAuth ? 'Ver' : 'Editar'}</button>
-            <button class="btn btn--xs btn--danger-ghost" data-action="disconnect" data-id="${inst.id}" data-name="${escapeHtml(inst.displayName || p.name)}" title="Desconectar">✕</button>
           </div>
         </div>`;
     }).join("");

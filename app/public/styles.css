@@ -1546,14 +1546,26 @@ body.nav-collapsed .nav-notif-panel {
   margin-top: 4px;
 }
 .int-account-row {
+  /* Dos renglones: arriba identidad + ✕ (destructiva, lejos del uso diario);
+     abajo los controles. Antes iba todo en una línea y con el switch de bots,
+     la campanita y Grupos el número quedaba cortado ("+52 1 ..."). */
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
   padding: 10px 12px;
   background: #f7f8fa;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 13px;
+}
+.int-account-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.int-account-x { margin-left: auto; flex-shrink: 0; }
+.int-account-row .int-account-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-left: 40px;   /* alineado con el texto, no con el avatar */
 }
 .int-account-avatar {
   width: 32px; height: 32px;

@@ -71,18 +71,52 @@ function isGroupConversation(convo) {
   return ext.includes('@g.us');
 }
 
-function _assertCanSendToGroup(convo, allowGroup, qué) {
-  if (!isGroupConversation(convo)) return;
-  if (allowGroup) return;
-  throw new Error(
-    `Bloqueado: ${qué} a un grupo de WhatsApp. Los grupos solo se contestan a mano ` +
-    `desde Chats — un mensaje automático le llegaría a todos los miembros.`
-  );
+// Canales marcados "solo humano" (Integraciones → switch del robot). Caso real
+// que lo motivó (13-ago-2026): Dario mandó un PDF llamado "Certificado de
+// calidad LOT 171-172 4 Julio 2026.pdf" al celular PERSONAL. El nombre del
+// archivo contiene "Julio", que es palabra clave del bot 76, y su paso de IA
+// contestó 4 segundos después en medio de una negociación real.
+let _noBotsCache = { at: 0, ids: new Set() };
+function _noBotsIntegrationIds(db) {
+  const now = Date.now();
+  if (now - _noBotsCache.at < 5000) return _noBotsCache.ids;
+  const ids = new Set();
+  try {
+    for (const r of db.prepare("SELECT id, config FROM integrations WHERE config LIKE '%bots%'").all()) {
+      try { if (JSON.parse(r.config)?.bots === false) ids.add(r.id); } catch (_) {}
+    }
+  } catch (_) { /* si falla la query, no bloqueamos de más */ }
+  _noBotsCache = { at: now, ids };
+  return ids;
+}
+function isHumanOnlyChannel(db, convo) {
+  const integrationId = convo?.integrationId ?? convo?.integration_id ?? null;
+  if (!db || !integrationId) return false;
+  return _noBotsIntegrationIds(db).has(Number(integrationId));
 }
 
-async function sendMessage(db, convo, text, { allowGroup = false } = {}) {
+// `human: true` = lo está mandando una persona desde la pantalla de Chats.
+// Va en false por defecto → bots, IA y plantillas quedan bloqueados solos, sin
+// tener que parchear cada punto del engine.
+function _assertHumanSend(db, convo, human, qué) {
+  if (human) return;
+  if (isGroupConversation(convo)) {
+    throw new Error(
+      `Bloqueado: ${qué} a un grupo de WhatsApp. Los grupos solo se contestan a mano ` +
+      `desde Chats — un mensaje automático le llegaría a todos los miembros.`
+    );
+  }
+  if (isHumanOnlyChannel(db, convo)) {
+    throw new Error(
+      `Bloqueado: ${qué} por un canal marcado como solo-humano en Integraciones. ` +
+      `Ese número lo contestas tú a mano.`
+    );
+  }
+}
+
+async function sendMessage(db, convo, text, { human = false } = {}) {
   convo = _normalizeConvo(convo);
-  _assertCanSendToGroup(convo, allowGroup, 'no se manda un mensaje automático');
+  _assertHumanSend(db, convo, human, 'no se manda un mensaje automático');
   if (convo.provider === 'whatsapp')        return sendWhatsApp(db, convo, text);
   if (convo.provider === 'whatsapp-lite')   return sendWhatsAppLite(db, convo, text);
   if (convo.provider === 'messenger')       return sendMessenger(db, convo, text);
@@ -102,8 +136,8 @@ async function sendWhatsAppLite(db, convo, text) {
   return manager.sendText(convo.integrationId, convo.externalId, text);
 }
 
-async function sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, caption, mediaType, allowGroup = false }) {
-  _assertCanSendToGroup(convo, allowGroup, 'no se manda un archivo automático');
+async function sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, caption, mediaType, human = false }) {
+  _assertHumanSend(db, convo, human, 'no se manda un archivo automático');
   if (!convo.integrationId) throw new Error('Conversación sin integración asociada');
   const manager = require('../integrations/whatsapp-web/manager');
   return manager.sendMedia(convo.integrationId, convo.externalId, { buffer, mimetype, filename, caption, mediaType });
@@ -312,7 +346,7 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
   // plantillas son de Cloud API, así que no debería llegar aquí nunca. Si
   // algún día se cruzan los caminos, que falle claro y no mande una promo
   // a 30 personas.
-  _assertCanSendToGroup(convo, false, 'no se manda una plantilla');
+  _assertHumanSend(db, convo, false, 'no se manda una plantilla');
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
 
   // Cargar plantilla con sus campos parseados (buttons, bodyPlaceholders).
@@ -684,4 +718,4 @@ function getIntegrationCreds(db, integrationId, convo = null) {
   return decryptJson(row.credentials_enc) || null;
 }
 
-module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendMessengerMedia, sendInstagram, sendInstagramMedia, sendTelegram, sendTelegramMedia, getIntegrationCreds, waCloudRecipient, isGroupConversation };
+module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendMessengerMedia, sendInstagram, sendInstagramMedia, sendTelegram, sendTelegramMedia, getIntegrationCreds, waCloudRecipient, isGroupConversation, isHumanOnlyChannel };

@@ -315,6 +315,13 @@ module.exports = function createIntegrationsRouter(db) {
     } catch (err) { res.status(400).json({ error: err.message }); }
   });
 
+  router.patch('/:id/bots', (req, res) => {
+    try {
+      const item = service.updateBots(db, req.tenantId, Number(req.params.id), !!req.body?.enabled);
+      res.json({ item });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
   router.patch('/:id/wa-groups', (req, res) => {
     try {
       const item = service.updateGroups(db, req.tenantId, Number(req.params.id), req.body?.groups);

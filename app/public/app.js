@@ -6614,6 +6614,8 @@ document.addEventListener('click', (e) => {
 }, true);
 
 // Campanita por canal (Integraciones). Prendida = suena; tachada = silencio.
+const BOT_ON_SVG  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V5"/><circle cx="12" cy="3.5" r="1.5"/><path d="M9 13h.01M15 13h.01M9 17h6"/></svg>';
+const BOT_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V5"/><circle cx="12" cy="3.5" r="1.5"/><path d="M9 13h.01M15 13h.01"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
 const BELL_ON_SVG  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
 const BELL_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
 
@@ -6649,6 +6651,12 @@ function renderIntegrations() {
             <div class="int-account-meta ${metaClass}">${metaText}</div>
           </div>
           <div class="int-account-actions">
+            <button class="int-bell-toggle${inst.bots === false ? ' is-off' : ''}"
+                    data-action="bots-toggle" data-id="${inst.id}"
+                    data-on="${inst.bots === false ? '0' : '1'}"
+                    title="${inst.bots === false ? 'Bots e IA APAGADOS en este canal — click para prender' : 'Bots e IA activos — click para apagarlos en este canal'}">
+              ${inst.bots === false ? BOT_OFF_SVG : BOT_ON_SVG}
+            </button>
             <button class="int-bell-toggle${inst.notifications === false ? ' is-off' : ''}"
                     data-action="notif-toggle" data-id="${inst.id}"
                     data-on="${inst.notifications === false ? '0' : '1'}"
@@ -6715,6 +6723,19 @@ function bindIntegrationListeners(root) {
   });
   root.querySelectorAll('[data-action="routing"]').forEach((btn) => {
     btn.addEventListener("click", () => openRoutingModal(Number(btn.dataset.id)));
+  });
+  root.querySelectorAll('[data-action="bots-toggle"]').forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const enabled = btn.dataset.on !== '1';
+      btn.disabled = true;
+      try {
+        await api('PATCH', `/api/integrations/${btn.dataset.id}/bots`, { enabled });
+        await loadIntegrations();
+        toast(enabled ? '🤖 Bots e IA activos en este canal'
+                      : '🔒 Canal solo-humano — ningún bot ni la IA pueden escribir por aquí',
+              'success', 4500);
+      } catch (err) { btn.disabled = false; toast(`Error: ${err.message}`, 'error'); }
+    });
   });
   root.querySelectorAll('[data-action="wa-groups"]').forEach((btn) => {
     btn.addEventListener("click", () => openWaGroupsModal(Number(btn.dataset.id)));

@@ -55,8 +55,34 @@ function waCloudRecipient(extId) {
   return hadPlus ? '+' + d : d;
 }
 
-async function sendMessage(db, convo, text) {
+// ── Grupos de WhatsApp: candado de seguridad ─────────────────────────────────
+// Un grupo es UNA conversación con N personas dentro. Si un bot o la IA
+// contestan ahí, le llega notificación a los 30 que estén en el grupo — gente
+// que nunca pidió nada. Es la forma más rápida de que te reporten y WhatsApp
+// te tumbe el número, y con WA Lite el número es tu celular personal.
+//
+// Por eso el candado es POR DEFECTO: `allowGroup` va en false, así que
+// CUALQUIER llamada que no lo pida explícitamente queda bloqueada. Bots, IA,
+// plantillas y todo lo automático caen aquí sin tener que parchear cada uno de
+// los ~8 lugares del engine donde se resuelve una conversación. Solo el envío
+// que escribe un humano en la pantalla de Chats pasa `allowGroup: true`.
+function isGroupConversation(convo) {
+  const ext = String(convo?.externalId ?? convo?.external_id ?? '');
+  return ext.includes('@g.us');
+}
+
+function _assertCanSendToGroup(convo, allowGroup, qué) {
+  if (!isGroupConversation(convo)) return;
+  if (allowGroup) return;
+  throw new Error(
+    `Bloqueado: ${qué} a un grupo de WhatsApp. Los grupos solo se contestan a mano ` +
+    `desde Chats — un mensaje automático le llegaría a todos los miembros.`
+  );
+}
+
+async function sendMessage(db, convo, text, { allowGroup = false } = {}) {
   convo = _normalizeConvo(convo);
+  _assertCanSendToGroup(convo, allowGroup, 'no se manda un mensaje automático');
   if (convo.provider === 'whatsapp')        return sendWhatsApp(db, convo, text);
   if (convo.provider === 'whatsapp-lite')   return sendWhatsAppLite(db, convo, text);
   if (convo.provider === 'messenger')       return sendMessenger(db, convo, text);
@@ -76,7 +102,8 @@ async function sendWhatsAppLite(db, convo, text) {
   return manager.sendText(convo.integrationId, convo.externalId, text);
 }
 
-async function sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, caption, mediaType }) {
+async function sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, caption, mediaType, allowGroup = false }) {
+  _assertCanSendToGroup(convo, allowGroup, 'no se manda un archivo automático');
   if (!convo.integrationId) throw new Error('Conversación sin integración asociada');
   const manager = require('../integrations/whatsapp-web/manager');
   return manager.sendMedia(convo.integrationId, convo.externalId, { buffer, mimetype, filename, caption, mediaType });
@@ -281,6 +308,11 @@ function _resolvePlaceholder(ph, contact, manualValues, idx, autoFallback = fals
 //   manualValues  → array (index = placeholder N-1) con valores para los Manual
 async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { autoFallback = false, leadId = null, buttonParams = null } = {}) {
   convo = _normalizeConvo(convo);
+  // Defensa en profundidad: hoy los grupos solo existen en WA Lite y las
+  // plantillas son de Cloud API, así que no debería llegar aquí nunca. Si
+  // algún día se cruzan los caminos, que falle claro y no mande una promo
+  // a 30 personas.
+  _assertCanSendToGroup(convo, false, 'no se manda una plantilla');
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
 
   // Cargar plantilla con sus campos parseados (buttons, bodyPlaceholders).
@@ -652,4 +684,4 @@ function getIntegrationCreds(db, integrationId, convo = null) {
   return decryptJson(row.credentials_enc) || null;
 }
 
-module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendMessengerMedia, sendInstagram, sendInstagramMedia, sendTelegram, sendTelegramMedia, getIntegrationCreds, waCloudRecipient };
+module.exports = { sendMessage, sendWhatsApp, sendWhatsAppMedia, sendWhatsAppTemplate, sendWhatsAppLite, sendWhatsAppLiteMedia, sendMessenger, sendMessengerMedia, sendInstagram, sendInstagramMedia, sendTelegram, sendTelegramMedia, getIntegrationCreds, waCloudRecipient, isGroupConversation };

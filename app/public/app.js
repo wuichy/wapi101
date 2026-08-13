@@ -6550,6 +6550,69 @@ function oauthIcon(providerKey, hasExisting) {
   return `<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0C5.373 0 0 4.973 0 11.111c0 3.497 1.745 6.616 4.472 8.652V24l4.086-2.242c1.09.301 2.246.464 3.442.464 6.627 0 12-4.974 12-11.111C24 4.973 18.627 0 12 0zm1.194 14.963-3.055-3.26-5.963 3.26 6.559-6.963 3.13 3.26 5.957-3.26-6.628 6.963z"/></svg> ${t('oauth.connect.facebook')}`;
 }
 
+// ── Elegir qué grupos de WhatsApp entran al CRM ──
+// Los grupos NUNCA entran solos: hasta que no marcas uno aquí, wapi101 los
+// ignora por completo (el filtro real está en el backend, bootstrap.js).
+let _waGroupsIntegrationId = null;
+
+async function openWaGroupsModal(integrationId) {
+  _waGroupsIntegrationId = integrationId;
+  const modal = document.getElementById('waGroupsModal');
+  const list  = document.getElementById('waGroupsList');
+  if (!modal || !list) return;
+  list.innerHTML = '<p class="wa-groups-empty">Cargando tus grupos…</p>';
+  modal.hidden = false;
+  try {
+    const data = await api('GET', `/api/integrations/${integrationId}/wa-groups`);
+    const sel = new Set(data.selected || []);
+    const items = data.items || [];
+    if (!items.length) {
+      list.innerHTML = '<p class="wa-groups-empty">Este número no está en ningún grupo.</p>';
+      return;
+    }
+    list.innerHTML = items.map(g => `
+      <label class="wa-group-row">
+        <input type="checkbox" value="${escapeHtml(g.jid)}" ${sel.has(g.jid) ? 'checked' : ''} />
+        <span class="wa-group-name">${escapeHtml(g.name)}</span>
+        <span class="wa-group-count">${g.participants} ${g.participants === 1 ? 'persona' : 'personas'}</span>
+      </label>`).join('');
+  } catch (err) {
+    list.innerHTML = `<p class="wa-groups-empty">No se pudieron cargar: ${escapeHtml(err.message || '')}</p>`;
+  }
+}
+
+function closeWaGroupsModal() {
+  const m = document.getElementById('waGroupsModal');
+  if (m) m.hidden = true;
+  _waGroupsIntegrationId = null;
+}
+
+async function saveWaGroups() {
+  if (!_waGroupsIntegrationId) return;
+  const checks = document.querySelectorAll('#waGroupsList input[type="checkbox"]');
+  const groups = [...checks].filter(c => c.checked).map(c => c.value);
+  const btn = document.getElementById('waGroupsSave');
+  if (btn) btn.disabled = true;
+  try {
+    await api('PATCH', `/api/integrations/${_waGroupsIntegrationId}/wa-groups`, { groups });
+    closeWaGroupsModal();
+    await loadIntegrations();
+    toast(groups.length
+      ? `${groups.length} grupo${groups.length === 1 ? '' : 's'} en el CRM`
+      : 'Ningún grupo entra al CRM', 'success');
+  } catch (err) {
+    toast(`Error: ${err.message}`, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Delegación top-level: inmune a re-render y a que el modal no exista al init.
+document.addEventListener('click', (e) => {
+  if (e.target?.closest?.('#waGroupsClose, #waGroupsCancel, #waGroupsBackdrop')) closeWaGroupsModal();
+  if (e.target?.closest?.('#waGroupsSave')) saveWaGroups();
+}, true);
+
 // Campanita por canal (Integraciones). Prendida = suena; tachada = silencio.
 const BELL_ON_SVG  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
 const BELL_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
@@ -6593,6 +6656,7 @@ function renderIntegrations() {
                     title="${inst.notifications === false ? 'Notificaciones apagadas — click para prender' : 'Notificaciones prendidas — click para silenciar este canal'}">
               ${inst.notifications === false ? BELL_OFF_SVG : BELL_ON_SVG}
             </button>
+            ${p.key === 'whatsapp-lite' ? `<button class="btn btn--xs btn--ghost" data-action="wa-groups" data-id="${inst.id}" title="Elegir qué grupos entran al CRM">Grupos${(inst.groups || []).length ? ` (${inst.groups.length})` : ''}</button>` : ''}
             <button class="btn btn--xs btn--ghost" data-action="routing" data-id="${inst.id}" title="Configurar pipeline">Pipeline</button>
             <button class="btn btn--xs btn--ghost" data-action="edit-instance" data-provider="${p.key}" data-id="${inst.id}" title="Editar">${isOAuth ? 'Ver' : 'Editar'}</button>
             <button class="btn btn--xs btn--danger-ghost" data-action="disconnect" data-id="${inst.id}" data-name="${escapeHtml(inst.displayName || p.name)}" title="Desconectar">✕</button>
@@ -6651,6 +6715,9 @@ function bindIntegrationListeners(root) {
   });
   root.querySelectorAll('[data-action="routing"]').forEach((btn) => {
     btn.addEventListener("click", () => openRoutingModal(Number(btn.dataset.id)));
+  });
+  root.querySelectorAll('[data-action="wa-groups"]').forEach((btn) => {
+    btn.addEventListener("click", () => openWaGroupsModal(Number(btn.dataset.id)));
   });
   root.querySelectorAll('[data-action="notif-toggle"]').forEach((btn) => {
     btn.addEventListener("click", async () => {

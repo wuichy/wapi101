@@ -36,6 +36,7 @@ function hydrate(row) {
     // Campanita del canal. Por defecto TODO notifica — solo se apaga si el
     // usuario lo pidió explícitamente (config.notifications === false).
     notifications: config.notifications !== false,
+    groups: Array.isArray(config.groups) ? config.groups : [],
     credentials: publicCreds,
     webhookUrl,
     lastError: row.last_error,
@@ -453,6 +454,21 @@ function updateNotifications(db, tenantId, id, enabled) {
   return getById(db, tenantId, id);
 }
 
+// Grupos de WhatsApp autorizados para esta integración. Lista vacía = ninguno,
+// que es el default: los grupos NUNCA entran solos.
+function updateGroups(db, tenantId, id, jids) {
+  const row = db.prepare('SELECT config FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
+  if (!row) throw new Error('Integración no encontrada');
+  let config = {};
+  try { config = row.config ? (JSON.parse(row.config) || {}) : {}; } catch (_) {}
+  config.groups = (Array.isArray(jids) ? jids : [])
+    .map(j => String(j).trim())
+    .filter(j => j.endsWith('@g.us'));
+  db.prepare('UPDATE integrations SET config = ?, updated_at = unixepoch() WHERE id = ? AND tenant_id = ?')
+    .run(JSON.stringify(config), id, tenantId);
+  return getById(db, tenantId, id);
+}
+
 function updateRouting(db, tenantId, id, { pipelineId, stageId, pipelineName, stageName }) {
   const row = db.prepare('SELECT * FROM integrations WHERE id = ? AND tenant_id = ?').get(id, tenantId);
   if (!row) throw new Error('Integración no encontrada');
@@ -503,4 +519,4 @@ function startTokenProbePoller(db) {
   console.log('[integrations] token probe poller iniciado (cada 6h)');
 }
 
-module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting, updateNotifications, markAuthFailed, startTokenProbePoller };
+module.exports = { listAll, getById, connect, connectQr, qrStatus, update, testExisting, disconnect, getCredentialsPlain, connectRaw, updateRouting, updateNotifications, updateGroups, markAuthFailed, startTokenProbePoller };

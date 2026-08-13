@@ -21,6 +21,16 @@ function getIntegrationContext(db, integrationId) {
   return { tenantId: row.tenant_id, routing };
 }
 
+// Grupos de WhatsApp que el usuario autorizó para esta integración.
+// Vive en integrations.config.groups = ['1203...@g.us', ...]. Vacío = ninguno.
+function getIntegrationGroups(db, integrationId) {
+  try {
+    const row = db.prepare('SELECT config FROM integrations WHERE id = ?').get(integrationId);
+    const g = row?.config ? JSON.parse(row.config)?.groups : null;
+    return Array.isArray(g) ? g : [];
+  } catch (_) { return []; }
+}
+
 function ensureExpedient(db, tenantId, contactId, routing) {
   if (!routing?.pipelineId || !routing?.stageId) return;
   if (!tenantId || !contactId) return;
@@ -58,6 +68,7 @@ function ensureExpedient(db, tenantId, contactId, routing) {
 // hasta 1 minuto bastaría; 10 da margen para que el celular se quede sin
 // internet un rato sin que te llegue una falsa alarma.
 const DOWN_GRACE_MS = Math.max(1, Number(process.env.WA_DOWN_GRACE_MIN) || 10) * 60_000;
+const _groupNames = new Map(); // groupJid → nombre, para no pedirlo en cada mensaje
 const _downPending = new Map(); // integrationId → { timer, since }
 const _downAlerted = new Set(); // integrationId que YA alertó (para avisar cuando vuelva)
 
@@ -114,6 +125,15 @@ function init(db) {
           return;
         }
 
+        // ── Grupos: solo entran los que el usuario eligió ──
+        // NUNCA entran todos solos. Este número puede ser el celular personal
+        // y sus grupos (familia, cuates) no tienen por qué acabar en el CRM.
+        // La lista vive en integrations.config.groups (JSON, sin migración).
+        if (payload.isGroup) {
+          const permitidos = getIntegrationGroups(db, integrationId);
+          if (!permitidos.includes(payload.externalId)) return;
+        }
+
         // Dedup: si ya tenemos ese message_id en ESTE tenant no procesar otra vez
         if (payload.messageId) {
           const dup = db.prepare(
@@ -122,13 +142,31 @@ function init(db) {
           if (dup) return;
         }
 
+        // En un grupo el "contacto" ES el grupo: un grupo = un lead. No tiene
+        // teléfono, así que se identifica por su JID (el external_id de la
+        // conversación) y se nombra con el asunto del grupo.
         const convo = convoSvc.findOrCreate(db, tenantId, {
           provider:      'whatsapp-lite',
           externalId:    payload.externalId,
           integrationId,
-          contactPhone:  `+${payload.externalId}`,
-          contactName:   payload.pushName,
+          contactPhone:  payload.isGroup ? null : `+${payload.externalId}`,
+          contactName:   payload.isGroup
+            ? (_groupNames.get(payload.externalId) || 'Grupo de WhatsApp')
+            : payload.pushName,
         });
+
+        // El nombre real del grupo se pide una vez a WhatsApp (async) y se
+        // guarda en el contacto. Sin esto quedaría como "Grupo de WhatsApp".
+        if (payload.isGroup && convo.contact_id && !_groupNames.has(payload.externalId)) {
+          manager.getGroupName(integrationId, payload.externalId).then(nombre => {
+            if (!nombre) return;
+            _groupNames.set(payload.externalId, nombre);
+            try {
+              db.prepare('UPDATE contacts SET first_name = ? WHERE id = ? AND tenant_id = ?')
+                .run(nombre, convo.contact_id, tenantId);
+            } catch (_) {}
+          }).catch(() => {});
+        }
 
         // Fire-and-forget: jala la foto de perfil de WhatsApp si el contacto
         // no tiene una o lleva más de 7 días sin actualizarse.
@@ -165,16 +203,31 @@ function init(db) {
           return;
         }
 
+        // En grupo, anteponer quién escribió. v1 pragmático: va en el propio
+        // body para que se vea sin tocar el frontend.
+        const autor = payload.isGroup
+          ? (payload.authorName || (payload.authorPhone ? `+${payload.authorPhone}` : null))
+          : null;
         convoSvc.addMessage(db, tenantId, convo.id, {
           externalId: payload.messageId,
           direction:  'incoming',
           provider:   'whatsapp-lite',
-          body:       payload.body,
+          body:       autor ? `${autor}: ${payload.body}` : payload.body,
           status:     'delivered',
           createdAt:  payload.timestamp,
         });
 
         ensureExpedient(db, tenantId, convo.contact_id, routing);
+
+        // ── Los grupos terminan aquí ──
+        // Nada de inbound router ni bots: una respuesta automática dentro de un
+        // grupo le llega a TODOS sus miembros. El candado de verdad está en
+        // sender.js (_assertCanSendToGroup, bloqueado por defecto); esto evita
+        // además que se arranquen runs de bot que igual no podrían mandar.
+        if (payload.isGroup) {
+          console.log(`[wa-web ${integrationId}] grupo ${payload.externalId} → convo #${convo.id}`);
+          return;
+        }
 
         inboundRouter.handleInboundMessage(db, {
           convoId:       convo.id,

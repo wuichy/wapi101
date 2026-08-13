@@ -257,11 +257,14 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
       const fromMe = !!msg.key?.fromMe;
 
       const remoteJid = msg.key?.remoteJid || '';
-      // Aceptar @s.whatsapp.net (normal) y @lid (cuentas WA nuevas con LID addressing).
-      // Ignorar grupos (@g.us), broadcasts, etc.
+      // Aceptar @s.whatsapp.net (normal), @lid (cuentas WA nuevas con LID
+      // addressing) y @g.us (grupos). Difusiones y estados siguen fuera.
+      // Los grupos NO entran solos: el bootstrap revisa la lista opt-in de la
+      // integración y descarta los que el usuario no eligió.
       const isPhone = remoteJid.endsWith('@s.whatsapp.net');
       const isLid   = remoteJid.endsWith('@lid');
-      if (!isPhone && !isLid) continue;
+      const isGroup = remoteJid.endsWith('@g.us');
+      if (!isPhone && !isLid && !isGroup) continue;
 
       // Para 'append', solo procesar mensajes de los últimos 10 minutos
       if (type === 'append') {
@@ -272,7 +275,11 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
       // Resolver número de teléfono: @lid requiere lookup en archivo de mapping inverso
       // que Baileys escribe como lid-mapping-{lid}_reverse.json en el auth state dir.
       let phone;
-      if (isPhone) {
+      if (isGroup) {
+        // En un grupo el "externalId" de la conversación es el JID del grupo.
+        // Quién escribió va aparte, en key.participant.
+        phone = remoteJid;
+      } else if (isPhone) {
         phone = remoteJid.replace('@s.whatsapp.net', '');
       } else {
         const lid = remoteJid.replace('@lid', '');
@@ -300,6 +307,14 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
           // renombraría al cliente contigo. Solo se manda en los entrantes.
           pushName:      fromMe ? null : (msg.pushName || null),
           fromMe,
+          isGroup,
+          // Quién escribió DENTRO del grupo. Si es tuyo (fromMe) no hay
+          // participant, eres tú. Se guarda para pintarlo en la burbuja:
+          // sin esto un grupo se ve como un montón de mensajes sin autor.
+          authorPhone:   isGroup && !fromMe
+            ? String(msg.key?.participant || msg.participant || '').split('@')[0] || null
+            : null,
+          authorName:    isGroup && !fromMe ? (msg.pushName || null) : null,
           timestamp:     Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
           messageType,
         });
@@ -317,13 +332,41 @@ async function sendText(integrationId, externalId, text) {
   if (!session?.sock) throw new Error('Sesión de WhatsApp Web no inicializada');
   if (session.status !== 'connected') throw new Error(`WhatsApp Web no conectado (estado: ${session.status})`);
 
-  // Normalizar a JID: si viene como '+5215555...' o '5215555...', convertir
-  const num = String(externalId).replace(/[^0-9]/g, '');
-  if (!num) throw new Error('Número inválido');
-  const jid = `${num}@s.whatsapp.net`;
-
+  const jid = toJid(externalId);
   const result = await session.sock.sendMessage(jid, { text });
   return result?.key?.id || null;
+}
+
+// Convierte el external_id de una conversación al JID que espera Baileys.
+// Un grupo YA viene como JID completo ('1203...@g.us') — si le quitáramos lo
+// no-numérico como a un teléfono, quedaría basura y el envío iría al vacío.
+function toJid(externalId) {
+  const raw = String(externalId || '').trim();
+  if (raw.endsWith('@g.us') || raw.endsWith('@s.whatsapp.net') || raw.endsWith('@lid')) return raw;
+  const num = raw.replace(/[^0-9]/g, '');
+  if (!num) throw new Error('Número inválido');
+  return `${num}@s.whatsapp.net`;
+}
+
+// Lista los grupos donde está la cuenta, para que el usuario elija cuáles
+// entran al CRM. Sin esto no hay forma de armar la pantalla de selección.
+async function listGroups(integrationId) {
+  const s = sessions.get(integrationId);
+  if (!s?.sock || s.status !== 'connected') throw new Error('WhatsApp Lite no conectado');
+  const all = await s.sock.groupFetchAllParticipating();
+  return Object.values(all || {}).map(g => ({
+    jid:          g.id,
+    name:         g.subject || '(sin nombre)',
+    participants: Array.isArray(g.participants) ? g.participants.length : 0,
+  })).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+}
+
+// Nombre de UN grupo. Se usa al crear el contacto del grupo en el CRM.
+async function getGroupName(integrationId, groupJid) {
+  const s = sessions.get(integrationId);
+  if (!s?.sock || s.status !== 'connected') return null;
+  try { return (await s.sock.groupMetadata(groupJid))?.subject || null; }
+  catch (_) { return null; }
 }
 
 // Envía un archivo (imagen/documento/video/audio) por Baileys.
@@ -334,9 +377,7 @@ async function sendMedia(integrationId, externalId, { buffer, mimetype, filename
   if (session.status !== 'connected') throw new Error(`WhatsApp Web no conectado (estado: ${session.status})`);
   if (!buffer || !buffer.length) throw new Error('Archivo vacío');
 
-  const num = String(externalId).replace(/[^0-9]/g, '');
-  if (!num) throw new Error('Número inválido');
-  const jid = `${num}@s.whatsapp.net`;
+  const jid = toJid(externalId);
 
   let payload;
   if (mediaType === 'image')      payload = { image: buffer, caption: caption || '' };
@@ -421,6 +462,9 @@ module.exports = {
   sendText,
   sendMedia,
   getStatus,
+  listGroups,
+  getGroupName,
+  toJid,
   stopSession,
   listSessions,
   restoreAll,

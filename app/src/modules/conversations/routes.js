@@ -351,7 +351,7 @@ module.exports = function createConversationsRouter(db) {
       if (convo.provider === 'whatsapp') {
         externalMsgId = await sendWhatsAppMedia(db, convo, { buffer, mimetype, filename, caption, mediaType });
       } else if (convo.provider === 'whatsapp-lite') {
-        externalMsgId = await sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, caption, mediaType });
+        externalMsgId = await sendWhatsAppLiteMedia(db, convo, { buffer, mimetype, filename, caption, mediaType, allowGroup: true });
       } else if (convo.provider === 'messenger') {
         if (!publicUrl) return res.status(500).json({ error: 'APP_BASE_URL no configurado — Messenger requiere URL pública' });
         externalMsgId = await sendMessengerMedia(db, convo, { publicUrl, mediaType });
@@ -434,7 +434,9 @@ module.exports = function createConversationsRouter(db) {
     } catch (_) { /* guard best-effort */ }
 
     try {
-      const externalMsgId = await sendMessage(db, convo, body.trim());
+      // allowGroup: este es el envío que teclea un HUMANO en Chats — el único
+      // camino autorizado hacia un grupo (ver sender.js _assertCanSendToGroup).
+      const externalMsgId = await sendMessage(db, convo, body.trim(), { allowGroup: true });
 
       const msg = svc.addMessage(db, req.tenantId, convoId, {
         externalId: externalMsgId,
@@ -544,7 +546,9 @@ module.exports = function createConversationsRouter(db) {
     } catch (_) { /* guard best-effort */ }
 
     try {
-      const externalMsgId = await sendMessage(db, convo, body.trim());
+      // allowGroup: este es el envío que teclea un HUMANO en Chats — el único
+      // camino autorizado hacia un grupo (ver sender.js _assertCanSendToGroup).
+      const externalMsgId = await sendMessage(db, convo, body.trim(), { allowGroup: true });
       const msg = svc.addMessage(db, req.tenantId, convo.id, {
         externalId: externalMsgId,
         direction:  'outgoing',

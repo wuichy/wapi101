@@ -303,6 +303,25 @@ module.exports = function createIntegrationsRouter(db) {
     } catch (err) { res.status(400).json({ error: err.message }); }
   });
 
+  // Grupos de WhatsApp Lite: listar los disponibles y elegir cuáles entran.
+  router.get('/:id/wa-groups', async (req, res) => {
+    try {
+      const it = service.getById(db, req.tenantId, Number(req.params.id));
+      if (!it) return res.status(404).json({ error: 'Integración no encontrada' });
+      if (it.provider !== 'whatsapp-lite') return res.status(400).json({ error: 'Solo WhatsApp Lite tiene grupos' });
+      const manager = require('./whatsapp-web/manager');
+      const items = await manager.listGroups(Number(req.params.id));
+      res.json({ items, selected: it.groups || [] });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
+  router.patch('/:id/wa-groups', (req, res) => {
+    try {
+      const item = service.updateGroups(db, req.tenantId, Number(req.params.id), req.body?.groups);
+      res.json({ item });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
   router.post('/:id/telegram-webhook', async (req, res, next) => {
     try {
       const item = service.getById(db, req.tenantId, Number(req.params.id));

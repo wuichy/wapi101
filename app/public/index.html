@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://connect.facebook.net" crossorigin />
   <link rel="dns-prefetch" href="https://connect.facebook.net" />
 
-  <link rel="stylesheet" href="/styles.css?v=20260812bell" />
+  <link rel="stylesheet" href="/styles.css?v=20260812grupos" />
 </head>
 <body>
   <div id="globalLoader" class="global-loader" aria-hidden="true"></div>
@@ -1674,6 +1674,32 @@ Ana, , ana@hotmail.com, 5551112222</pre>
       </section>
 
       <!-- ─── MODAL: Plantilla ─── -->
+      <!-- Elegir qué grupos de WhatsApp entran al CRM (WA Lite) -->
+      <div class="modal" id="waGroupsModal" hidden>
+        <div class="modal-backdrop" id="waGroupsBackdrop"></div>
+        <div class="modal-card">
+          <div class="modal-head">
+            <h3>Grupos de WhatsApp</h3>
+            <button class="icon-btn" id="waGroupsClose" aria-label="Cerrar">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="wa-groups-intro">
+              Elige qué grupos entran al CRM. Cada grupo marcado se vuelve <strong>un lead</strong>
+              y sus mensajes aparecen en Chats. Los que dejes sin marcar son invisibles para wapi101.
+            </p>
+            <p class="wa-groups-warn">
+              🔒 Los bots y la IA <strong>nunca</strong> escriben en un grupo, aunque lo marques.
+              A un grupo solo se le contesta a mano desde Chats.
+            </p>
+            <div id="waGroupsList" class="wa-groups-list"></div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn--secondary" id="waGroupsCancel">Cancelar</button>
+            <button class="btn btn--primary" id="waGroupsSave">Guardar</button>
+          </div>
+        </div>
+      </div>
+
       <div class="modal" id="tplModal" hidden>
         <div class="modal-backdrop" id="tplModalBackdrop"></div>
         <div class="modal-card modal-card--md tpl-modal-card">
@@ -4667,7 +4693,7 @@ Ana, , ana@hotmail.com, 5551112222</pre>
 
   <!-- rrweb-record (Live Support — co-browsing). Solo se carga cuando el
        cliente arranca una sesión (lazy via dynamic import en app.js). -->
-  <script defer src="/app.js?v=20260812bell"></script>
+  <script defer src="/app.js?v=20260812grupos"></script>
   <!-- ─── Picker de plantillas (compartido, posicionado por JS) ─── -->
   <div class="rh-tpl-picker" id="rhTplPicker" hidden>
     <div class="rh-tpl-picker-head">

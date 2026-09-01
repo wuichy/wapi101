@@ -118,7 +118,7 @@ function hydrateConvo(db, tenantId, row) {
   };
 }
 
-function list(db, tenantId, { search, provider, unreadOnly, contactId, includeArchived = false, page = 1, pageSize = 50, pipelineIds = null, includeOrphans = false } = {}) {
+function list(db, tenantId, { search, provider, unreadOnly, contactId, includeArchived = false, page = 1, pageSize = 50, pipelineIds = null, includeOrphans = false, splitCompany = null, splitPipelinesB = null } = {}) {
   const allowedSizes = [20, 50, 100, 200];
   pageSize = allowedSizes.includes(Number(pageSize)) ? Number(pageSize) : 50;
   page = Math.max(1, Number(page) || 1);
@@ -166,6 +166,42 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
       )`);
     }
     params.push(...pipelineIds);
+  }
+
+  // ── Split por empresa (Ajustes → Chat/Mail Split) ─────────────────────────
+  // REGLA (2026-09-01): el CANAL decide primero, el contacto solo desempata.
+  // Antes se clasificaba cada chat por el pipeline del LEAD del contacto, y un
+  // mismo contacto puede chatear por DOS canales (el número de trabajo y el
+  // personal). Rb Beard Daddy es cliente Reelance (lead en pipeline 3) → hasta
+  // su chat por el número PERSONAL caía en "Empresa A". 15 de 91 convos del
+  // canal personal se fugaban así.
+  //
+  //   esB(convo) =  el canal de la convo está ruteado a un pipeline de B
+  //              OR (el contacto tiene lead en B  Y  ningún lead fuera de B)
+  //
+  // La 2ª cláusula conserva el caso legítimo del diseño original: un lead de
+  // WAPI101 (pipeline 18) que escribe por el número de trabajo sigue saliendo
+  // bajo B. Huérfanos (sin lead) en canales de A → A; en canales de B → B.
+  if ((splitCompany === 'a' || splitCompany === 'b')
+      && Array.isArray(splitPipelinesB) && splitPipelinesB.length > 0) {
+    const ph = splitPipelinesB.map(() => '?').join(',');
+    const isB = `(
+      (SELECT CAST(json_extract(i.config, '$.routing.pipelineId') AS INTEGER)
+         FROM integrations i WHERE i.id = c.integration_id) IN (${ph})
+      OR (
+        EXISTS (SELECT 1 FROM expedients e
+                 WHERE e.contact_id = c.contact_id AND e.tenant_id = c.tenant_id
+                   AND e.pipeline_id IN (${ph}))
+        AND NOT EXISTS (SELECT 1 FROM expedients e2
+                 WHERE e2.contact_id = c.contact_id AND e2.tenant_id = c.tenant_id
+                   AND e2.pipeline_id NOT IN (${ph}))
+      )
+    )`;
+    // COALESCE: una convo SIN integración (871 viejas tienen integration_id
+    // NULL) hace que el subquery del canal dé NULL, y en SQL `NULL OR falso`
+    // = NULL → la convo desaparecía de LAS DOS vistas. NULL debe ser "no es B".
+    conditions.push(splitCompany === 'b' ? `COALESCE(${isB}, 0)` : `NOT COALESCE(${isB}, 0)`);
+    params.push(...splitPipelinesB, ...splitPipelinesB, ...splitPipelinesB);
   }
   if (search) {
     // Buscador expandido. Campos de contacto (nombre/tel/email/external_id/

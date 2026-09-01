@@ -2313,8 +2313,10 @@ let _chatPollTimer = null;
 let SPLIT_CONFIG = { enabled: false };
 let SPLIT_ACTIVE_COMPANY = 'a';
 let SPLIT_ACTIVE_MAIL_COMPANY = 'a';
-let CHAT_PIPELINE_FILTER = [];
-let CHAT_SPLIT_ORPHANS   = false;
+// Split por empresa: 'a' | 'b' | null (apagado) + pipelines de Empresa B.
+// El backend clasifica cada convo con la regla canal-primero (service.js).
+let CHAT_SPLIT_COMPANY = null;
+let CHAT_SPLIT_PLB     = [];
 
 const PROVIDER_LABEL = { whatsapp: 'WhatsApp Business API', 'whatsapp-lite': 'WhatsApp Lite', messenger: 'Messenger', instagram: 'Instagram', telegram: 'Telegram', tiktok: 'TikTok' };
 
@@ -2377,8 +2379,6 @@ async function loadConversations() {
       const params = new URLSearchParams();
       if (window.PERSONAL_SHOW_HIDDEN) params.set('showHidden', '1');
       params.set('limit', '200');
-      if (CHAT_PIPELINE_FILTER && CHAT_PIPELINE_FILTER.length > 0) params.set('pipelineIds', CHAT_PIPELINE_FILTER.join(','));
-      if (CHAT_SPLIT_ORPHANS) params.set('includeOrphans', '1');
       data = await api('GET', `/api/personal-chat/conversations?${params}`);
       // El endpoint personal devuelve campos planos — normalizar a la forma esperada por renderChatList
       data.items = (data.items || []).map(r => ({
@@ -2403,8 +2403,10 @@ async function loadConversations() {
       if (CHAT_SEARCH) params.set('q', CHAT_SEARCH);
       if (CHAT_FILTER_PROVIDER) params.set('provider', CHAT_FILTER_PROVIDER);
       if (CHAT_FILTER_UNREAD) params.set('unread', '1');
-      if (CHAT_PIPELINE_FILTER && CHAT_PIPELINE_FILTER.length > 0) params.set('pipelineIds', CHAT_PIPELINE_FILTER.join(','));
-      if (CHAT_SPLIT_ORPHANS) params.set('includeOrphans', '1');
+      if (CHAT_SPLIT_COMPANY && CHAT_SPLIT_PLB.length > 0) {
+        params.set('splitCompany', CHAT_SPLIT_COMPANY);
+        params.set('splitPipelinesB', CHAT_SPLIT_PLB.join(','));
+      }
       data = await api('GET', `/api/conversations?${params}`);
     }
     const EMAIL_PROVIDERS_SET = new Set(['email', 'gmail', 'outlook', 'icloud_mail', 'yahoo_mail']);
@@ -2465,8 +2467,8 @@ function applySplitUI() {
     if (mailSwitcher) mailSwitcher.style.display = 'none';
     if (mainEl)    mainEl.style.background    = '';
     if (sidebarEl) sidebarEl.style.background = '';
-    CHAT_PIPELINE_FILTER = [];
-    CHAT_SPLIT_ORPHANS   = false;
+    CHAT_SPLIT_COMPANY = null;
+    CHAT_SPLIT_PLB     = [];
     return;
   }
   const nameA = SPLIT_CONFIG.nameA || 'Empresa A';
@@ -2494,15 +2496,13 @@ function applySplitUI() {
 }
 
 function applyChatSplitFilter() {
-  if (!SPLIT_CONFIG.enabled) {
-    CHAT_PIPELINE_FILTER = [];
-    CHAT_SPLIT_ORPHANS   = false;
+  if (!SPLIT_CONFIG.enabled || !(SPLIT_CONFIG.pipelinesB || []).length) {
+    CHAT_SPLIT_COMPANY = null;
+    CHAT_SPLIT_PLB     = [];
   } else {
-    const ids = SPLIT_ACTIVE_COMPANY === 'a'
-      ? (SPLIT_CONFIG.pipelinesA || [])
-      : (SPLIT_CONFIG.pipelinesB || []);
-    CHAT_PIPELINE_FILTER = ids;
-    CHAT_SPLIT_ORPHANS   = SPLIT_ACTIVE_COMPANY === 'a';
+    // Solo hace falta la lista de B: el backend deriva A como su complemento.
+    CHAT_SPLIT_COMPANY = SPLIT_ACTIVE_COMPANY === 'b' ? 'b' : 'a';
+    CHAT_SPLIT_PLB     = SPLIT_CONFIG.pipelinesB;
   }
   loadConversations();
 }

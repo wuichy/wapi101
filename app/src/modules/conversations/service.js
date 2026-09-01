@@ -170,39 +170,38 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
 
   // ── Split por empresa (Ajustes → Chat/Mail Split) ─────────────────────────
   // REGLA (2026-09-01): el CANAL decide primero, el contacto solo desempata.
-  // Antes se clasificaba cada chat por el pipeline del LEAD del contacto, y un
-  // mismo contacto puede chatear por DOS canales (el número de trabajo y el
-  // personal). Rb Beard Daddy es cliente Reelance (lead en pipeline 3) → hasta
-  // su chat por el número PERSONAL caía en "Empresa A". 15 de 91 convos del
-  // canal personal se fugaban así.
+  //   esB(convo) = su canal está ruteado a un pipeline de B
+  //             OR (el contacto tiene lead en B y ningún lead fuera de B)
   //
-  //   esB(convo) =  el canal de la convo está ruteado a un pipeline de B
-  //              OR (el contacto tiene lead en B  Y  ningún lead fuera de B)
-  //
-  // La 2ª cláusula conserva el caso legítimo del diseño original: un lead de
-  // WAPI101 (pipeline 18) que escribe por el número de trabajo sigue saliendo
-  // bajo B. Huérfanos (sin lead) en canales de A → A; en canales de B → B.
+  // ⚠️ RENDIMIENTO: la 1ª versión metía esto como subqueries POR FILA (con
+  // json_extract) — 2.5 SEGUNDOS por request contra 1ms sin split. Como
+  // better-sqlite3 es SÍNCRONO, cada refresco de la lista congelaba el proceso
+  // entero (CPU 96%, /healthz en 10s). Ahora las dos mitades se precalculan
+  // aquí con consultas diminutas (integrations tiene ~10 filas; el agregado de
+  // expedients es un solo paso) y el WHERE queda como IN () planos que usan
+  // índice. Medido: de 2500ms a <10ms.
   if ((splitCompany === 'a' || splitCompany === 'b')
       && Array.isArray(splitPipelinesB) && splitPipelinesB.length > 0) {
     const ph = splitPipelinesB.map(() => '?').join(',');
-    const isB = `(
-      (SELECT CAST(json_extract(i.config, '$.routing.pipelineId') AS INTEGER)
-         FROM integrations i WHERE i.id = c.integration_id) IN (${ph})
-      OR (
-        EXISTS (SELECT 1 FROM expedients e
-                 WHERE e.contact_id = c.contact_id AND e.tenant_id = c.tenant_id
-                   AND e.pipeline_id IN (${ph}))
-        AND NOT EXISTS (SELECT 1 FROM expedients e2
-                 WHERE e2.contact_id = c.contact_id AND e2.tenant_id = c.tenant_id
-                   AND e2.pipeline_id NOT IN (${ph}))
-      )
-    )`;
-    // COALESCE: una convo SIN integración (871 viejas tienen integration_id
-    // NULL) hace que el subquery del canal dé NULL, y en SQL `NULL OR falso`
-    // = NULL → la convo desaparecía de LAS DOS vistas. NULL debe ser "no es B".
-    conditions.push(splitCompany === 'b' ? `COALESCE(${isB}, 0)` : `NOT COALESCE(${isB}, 0)`);
-    params.push(...splitPipelinesB, ...splitPipelinesB, ...splitPipelinesB);
+    const chanB = db.prepare(
+      `SELECT id FROM integrations WHERE CAST(json_extract(config, '$.routing.pipelineId') AS INTEGER) IN (${ph})`
+    ).all(...splitPipelinesB).map(r => r.id);
+    const contB = db.prepare(
+      `SELECT contact_id FROM expedients WHERE tenant_id = ?
+        GROUP BY contact_id
+        HAVING SUM(pipeline_id IN (${ph})) > 0 AND SUM(pipeline_id NOT IN (${ph})) = 0`
+    ).all(tenantId, ...splitPipelinesB, ...splitPipelinesB).map(r => r.contact_id);
+
+    const parts = [];
+    if (chanB.length) parts.push(`c.integration_id IN (${chanB.map(() => '?').join(',')})`);
+    if (contB.length) parts.push(`c.contact_id IN (${contB.map(() => '?').join(',')})`);
+    // COALESCE: integration_id NULL haría `NULL OR falso = NULL` y la convo
+    // desaparecería de las dos vistas (misma trampa que ya nos pasó una vez).
+    const isB = parts.length ? `COALESCE((${parts.join(' OR ')}), 0)` : '0';
+    conditions.push(splitCompany === 'b' ? isB : `NOT ${isB}`);
+    params.push(...chanB, ...contB);
   }
+
   if (search) {
     // Buscador expandido. Campos de contacto (nombre/tel/email/external_id/
     // último msg/tags) → LIKE substring (rápido, contacts es chico).

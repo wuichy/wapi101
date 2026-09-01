@@ -3707,6 +3707,7 @@ body[data-view-active="chats"] .main { background: #f2f2f7; }
 }
 .rh-chat-item:hover { background: rgba(0, 0, 0, 0.04); }
 .rh-chat-item.rh-active { background: var(--rh-brand-soft); }
+.rh-chat-item:focus-visible { outline: 2px solid var(--rh-brand); outline-offset: -2px; }
 .rh-chat-item.rh-pinned { background: #fdfaef; }
 .rh-chat-item.rh-pinned:hover { background: #f7efd6; }
 

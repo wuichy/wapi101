@@ -19661,6 +19661,45 @@ function setupChatContextMenu() {
   list.addEventListener('scroll', closeChatContextMenu, { passive: true });
 }
 
+// ════════ Navegación con teclado en la lista de chats ════════
+// ↑/↓ cambian de chat, Enter abre el enfocado. Delegación top-level: la lista
+// se redibuja con cada poll y un listener por elemento moriría con el render.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter') return;
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  const list = document.getElementById('rhChatList');
+  if (!list || !list.offsetParent) return;                       // no estamos en Chats
+  // Nunca secuestrar las flechas mientras se escribe (búsqueda, respuesta, notas…)
+  const t = e.target;
+  const tag = t?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return;
+  if (document.querySelector('.modal:not([hidden])')) return;   // hay un modal abierto
+  const ctx = document.getElementById('rhChatCtxMenu');
+  if (ctx && !ctx.hidden) return;                                // menú contextual abierto
+
+  const items = [...list.querySelectorAll('.rh-chat-item')];
+  if (!items.length) return;
+
+  if (e.key === 'Enter') {
+    const focused = t?.closest?.('.rh-chat-item');
+    if (!focused) return;
+    e.preventDefault();
+    openConversation(Number(focused.dataset.id));
+    return;
+  }
+
+  // Punto de partida: el chat activo (sobrevive al re-render) o el enfocado.
+  const cur = list.querySelector('.rh-chat-item.rh-active') || t?.closest?.('.rh-chat-item') || null;
+  let idx = cur ? items.indexOf(cur) : -1;
+  idx = e.key === 'ArrowDown' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
+  const next = items[idx];
+  e.preventDefault();                                            // que no haga scroll la página
+  if (!next || next === cur) return;                             // ya estás en el extremo
+  next.focus({ preventScroll: true });
+  next.scrollIntoView({ block: 'nearest' });
+  openConversation(Number(next.dataset.id));
+});
+
 // ════════ Personal tags (modo /chat) — etiquetas privadas por asesor ════════
 let _personalTags = [];           // todas mis etiquetas
 let _personalTagsForContact = []; // las asignadas al contacto activo

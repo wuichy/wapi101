@@ -19673,7 +19673,14 @@ document.addEventListener('keydown', (e) => {
   const t = e.target;
   const tag = t?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return;
-  if (document.querySelector('.modal:not([hidden])')) return;   // hay un modal abierto
+  // ¿Hay un modal abierto? OJO: NO usar `.modal:not([hidden])` — el HTML tiene
+  // al menos un `.modal` sin atributo hidden (lo oculta su contenedor padre),
+  // así que ese selector siempre encontraba "un modal abierto" y las flechas
+  // nunca funcionaron para nadie (bug del 2-sep-2026). getClientRects() da 0
+  // cajas si el elemento o CUALQUIER ancestro está display:none, y funciona
+  // aunque el modal sea position:fixed (donde offsetParent sería null).
+  const modalAbierto = [...document.querySelectorAll('.modal')].some(m => m.getClientRects().length > 0);
+  if (modalAbierto) return;
   const ctx = document.getElementById('rhChatCtxMenu');
   if (ctx && !ctx.hidden) return;                                // menú contextual abierto
 

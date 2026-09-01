@@ -438,9 +438,14 @@ module.exports = function createConversationsRouter(db) {
     // medio = doble envío accidental (pasó 2 veces el 11-jun por conexión lenta).
     try {
       const last = db.prepare(
-        'SELECT direction, body, created_at FROM messages WHERE conversation_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+        'SELECT direction, body, status, created_at FROM messages WHERE conversation_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
       ).get(convoId, req.tenantId);
-      if (last && last.direction === 'outgoing' && (last.body || '') === body.trim()
+      // status !== 'failed': reintentar un mensaje QUE FALLÓ no es doble-tap,
+      // es lo que cualquiera hace. Sin esta condición, tras un envío fallido el
+      // guard bloqueaba el reintento del mismo texto por 2 min y el asesor
+      // quedaba trabado sin poder responder (caso Jesús León, 1-sep-2026).
+      if (last && last.direction === 'outgoing' && last.status !== 'failed'
+          && (last.body || '') === body.trim()
           && (Math.floor(Date.now() / 1000) - last.created_at) < 120) {
         return res.status(409).json({
           error: 'Este mensaje es idéntico al que acabas de enviar — se descartó para no duplicar.',
@@ -550,9 +555,14 @@ module.exports = function createConversationsRouter(db) {
     // Candado anti-doble-tap (texto idéntico al último saliente <2 min)
     try {
       const last = db.prepare(
-        'SELECT direction, body, created_at FROM messages WHERE conversation_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+        'SELECT direction, body, status, created_at FROM messages WHERE conversation_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
       ).get(convo.id, req.tenantId);
-      if (last && last.direction === 'outgoing' && (last.body || '') === body.trim()
+      // status !== 'failed': reintentar un mensaje QUE FALLÓ no es doble-tap,
+      // es lo que cualquiera hace. Sin esta condición, tras un envío fallido el
+      // guard bloqueaba el reintento del mismo texto por 2 min y el asesor
+      // quedaba trabado sin poder responder (caso Jesús León, 1-sep-2026).
+      if (last && last.direction === 'outgoing' && last.status !== 'failed'
+          && (last.body || '') === body.trim()
           && (Math.floor(Date.now() / 1000) - last.created_at) < 120) {
         return res.status(409).json({
           error: 'Este mensaje es idéntico al que acabas de enviar — se descartó para no duplicar.',

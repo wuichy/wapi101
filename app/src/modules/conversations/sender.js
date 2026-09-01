@@ -200,7 +200,13 @@ async function sendWhatsApp(db, convo, text) {
   convo = _normalizeConvo(convo);
   const { phoneNumberId, accessToken } = _getWAClientCreds(db, convo);
   const version = process.env.META_GRAPH_VERSION || 'v22.0';
-  const res = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
+  // Reintento único ante fallo de RED (timeout/DNS/conexión) — NO ante un
+  // error que Meta sí respondió. El 1-sep-2026 un parpadeo de red de ~1 min
+  // en el VPS tiró un envío con "aborted due to timeout" y la respuesta al
+  // cliente se perdió. Riesgo asumido: si el timeout ocurre DESPUÉS de que
+  // Meta recibió el mensaje, el reintento lo duplica — un "hola" doble es
+  // mucho menos malo que una respuesta que nunca llega.
+  const _doFetch = () => fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
     method:  'POST',
     signal: AbortSignal.timeout(20_000),
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -211,6 +217,14 @@ async function sendWhatsApp(db, convo, text) {
       text: { body: text },
     }),
   });
+  let res;
+  try {
+    res = await _doFetch();
+  } catch (netErr) {
+    console.warn(`[sender] envío WA convo ${convo.id} falló por red (${netErr.message}) — reintentando en 2s`);
+    await new Promise(r => setTimeout(r, 2000));
+    res = await _doFetch();   // si también falla, propaga y el mensaje queda 'failed'
+  }
   const data = await _safeJson(res);
   if (!res.ok || data.error) {
     const msg = friendlyMetaError(data.error) || `HTTP ${res.status}`;

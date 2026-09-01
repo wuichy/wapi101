@@ -205,14 +205,28 @@ module.exports = function createConversationsRouter(db) {
     const convo = svc.getById(db, req.tenantId, convoId);
     if (!convo) return res.status(404).json({ error: 'Conversación no encontrada', errorCode: 'CONVERSATION_NOT_FOUND' });
 
-    const { templateId, manualValues = [] } = req.body || {};
+    const { templateId, manualValues = [], leadId: leadIdRaw } = req.body || {};
     if (!templateId) return res.status(400).json({ error: 'templateId requerido', errorCode: 'TEMPLATE_ID_REQUIRED' });
     if (convo.provider !== 'whatsapp') {
       return res.status(400).json({ error: 'Solo se pueden enviar templates wa_api en conversaciones whatsapp', errorCode: 'TEMPLATE_PROVIDER_MISMATCH' });
     }
 
+    // Los campos `lf:*` (Paquetería, Número de Rastreo, # Pedido) viven en el LEAD,
+    // no en el contacto. Este envío manual nunca mandaba el lead, así que esos
+    // placeholders salían como "el contacto no tiene lf:4" aunque el lead los
+    // tuviera llenos — y el botón dinámico tampoco hallaba la guía. El bot sí lo
+    // mandaba (engine.js), por eso el bug solo se veía enviando a mano.
+    // Si el frontend no lo manda, se toma el lead más reciente del contacto.
+    let leadId = Number(leadIdRaw) || null;
+    if (!leadId && convo.contactId) {
+      const row = db.prepare(
+        'SELECT id FROM expedients WHERE contact_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1'
+      ).get(convo.contactId, req.tenantId);
+      leadId = row?.id || null;
+    }
+
     try {
-      const result = await sendWhatsAppTemplate(db, convo, templateId, manualValues);
+      const result = await sendWhatsAppTemplate(db, convo, templateId, manualValues, { leadId });
       const msg = svc.addMessage(db, req.tenantId, convoId, {
         externalId: result.externalId,
         direction:  'outgoing',

@@ -403,23 +403,63 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
 
   // BUTTONS — si la plantilla trae un URL button DINÁMICO (url con {{1}} al final),
   // Meta EXIGE que mandemos el parámetro o rechaza el envío (#131008 "Button ... of
-  // type Url requires a parameter"). Rellenamos ese {{1}} con el id del contacto
-  // para que la URL identifique QUIÉN es (reelance resuelve el contacto vía wapi en
-  // /r?u={id}). Se puede sobre-escribir con opts.buttonParams[0]. Los botones fijos
-  // (sin {{}}) no se tocan: Meta usa el del template. El `index` es la posición del
-  // botón dentro del arreglo registrado en la plantilla (0-based).
+  // type Url requires a parameter"). Qué valor entra en ese {{1}} depende de a
+  // dónde apunte el botón:
+  //   /t/{{1}}   → NÚMERO DE GUÍA  (reelance resuelve QUÉ pedido es)
+  //   otras      → id del contacto (reelance resuelve QUIÉN es, vía wapi)
+  // Se puede sobre-escribir con opts.buttonParams[0]. Los botones fijos (sin {{}})
+  // no se tocan: Meta usa el del template. El `index` es la posición del botón
+  // dentro del arreglo registrado en la plantilla (0-based).
   const _btnList = Array.isArray(tpl.buttons) ? tpl.buttons : [];
   const _dynIdx = _btnList.findIndex(
     (b) => b && String(b.type).toUpperCase() === 'URL' && /\{\{\d+\}\}/.test(b.url || '')
   );
   if (_dynIdx >= 0) {
+    // Orden de resolución del {{1}} del botón:
+    //   1. buttonParams[0]        — forzado por el caller
+    //   2. btn.contactField       — el campo elegido en el editor (la "lista" del botón)
+    //   3. URL /t/ → NÚMERO DE GUÍA del lead — /w/ y /r?u= preguntan "¿quién es?";
+    //      /t/ pregunta "¿cuál pedido?", y la guía responde eso sin caducar, así
+    //      que el link le sirve al cliente meses después.
+    //   4. id del contacto        — respaldo para nunca mandar el parámetro vacío
+    //      (Meta rechaza con #131008); reelance, al no hallar guía, cae a /rastreo.
+    const _btn = _btnList[_dynIdx];
+    const _btnUrl = String(_btn.url || '');
+    let _mapeado = '';
+    if (_btn.contactField) {
+      try {
+        _mapeado = String(_resolvePlaceholder({ contactField: _btn.contactField }, contact, [], 0, false, { db, leadId }) ?? '').trim();
+      } catch (_) { /* campo mapeado ilegible: siguen los respaldos */ }
+    }
+    let _guia = '';
+    if (!_mapeado && /\/t\/\{\{\d+\}\}\s*$/.test(_btnUrl) && leadId) {
+      try {
+        const _def = db.prepare(
+          "SELECT id FROM custom_field_defs WHERE lower(label) LIKE '%rastreo%' OR lower(label) LIKE '%tracking%' ORDER BY id LIMIT 1"
+        ).get();
+        if (_def) {
+          const _row = db.prepare(
+            "SELECT value FROM custom_field_values WHERE entity='expedient' AND record_id=? AND field_id=?"
+          ).get(leadId, _def.id);
+          _guia = String(_row?.value ?? '').trim();
+        }
+      } catch (_) { /* sin campo de guía: se usa el id del contacto */ }
+    }
     const _btnValue =
       Array.isArray(buttonParams) && buttonParams[0] != null && buttonParams[0] !== ''
         ? String(buttonParams[0])
+        : _mapeado
+        ? _mapeado
+        : _guia
+        ? _guia
         : contact?.id != null
         ? String(contact.id)
         : '';
     if (_btnValue) {
+      // Caja negra: qué valor viajó en el botón y POR QUÉ ese y no otro. Sin esto,
+      // un botón que aterriza mal es imposible de diagnosticar después.
+      console.log(`[sender] template ${templateId}: botón dinámico → "${_btnValue}" ` +
+        `(${Array.isArray(buttonParams) && buttonParams[0] ? 'forzado al enviar' : _mapeado ? `campo mapeado ${_btn.contactField}` : _guia ? 'número de guía del pedido' : 'id del contacto'})`);
       components.push({
         type: 'button',
         sub_type: 'url',
@@ -427,7 +467,9 @@ async function sendWhatsAppTemplate(db, convo, templateId, manualValues = [], { 
         parameters: [{ type: 'text', text: _btnValue }],
       });
     } else {
-      _log('warn', `template ${templateId}: URL button dinámico pero sin valor para {{1}} (contacto sin id) — Meta lo rechazará`);
+      // (Venía como `_log`, que no existe en este archivo: era una bomba dormida —
+      // nunca se había ejecutado esta rama, así que nadie notó que tronaba.)
+      console.warn(`[sender] template ${templateId}: URL button dinámico pero sin valor para {{1}} (contacto sin id) — Meta lo rechazará`);
     }
   }
 

@@ -81,6 +81,136 @@ function webhookRouter(db) {
     }
   });
 
+  // ── Evento de paquetería (reelance → wapi, 20-ago-2026) ──────────────────
+  // El vigilante de rastreo de reelance avisa cuando una guía quedó ENTREGADA
+  // o traé PROBLEMA. Aquí se despiertan los pasos `wait_courier_event` que los
+  // bots dejaron suspendidos para ese contacto (la escalera de la etapa 1 de
+  // los pipelines "New"): entregado → brinca a la etapa 2; problema → manda el
+  // aviso con el link de reporte y vuelve a esperar.
+  //
+  // Es AGNÓSTICO de paquetería a propósito: reelance lo dispara por el cambio
+  // de estado del pedido, dé quien dé el evento (DHL, FedEx, o UPS mañana).
+  //
+  // Body: { phone, event: 'entregado' | 'problema' }. El contacto se casa por
+  // los últimos 10 dígitos del teléfono (mismo criterio que el resto del
+  // módulo: los prefijos +52/+521 bailan entre sistemas).
+  router.post('/courier-event', express.json({ limit: '256kb' }), async (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    if (!cfg.enabled) return res.status(403).json({ error: 'app_disabled' });
+    try {
+      const { phone, event } = req.body || {};
+      if (event !== 'entregado' && event !== 'problema') {
+        return res.status(400).json({ error: "event debe ser 'entregado' o 'problema'" });
+      }
+      const digits = String(phone || '').replace(/\D/g, '');
+      if (digits.length < 10) return res.status(400).json({ error: 'phone inválido' });
+      const cola = digits.slice(-10);
+
+      const rows = db.prepare(
+        'SELECT id, phone FROM contacts WHERE tenant_id = ? AND phone IS NOT NULL'
+      ).all(cfg.tenant_id);
+      const contact = rows.find((r) => String(r.phone || '').replace(/\D/g, '').slice(-10) === cola);
+      if (!contact) {
+        console.log(`[reelance-ia] courier-event ${event}: sin contacto para …${cola} (se ignora)`);
+        return res.json({ ok: true, matched: false, resumed: 0 });
+      }
+
+      // Cuántas esperas vivas tiene ANTES de despertar (para reportarlo): el
+      // resume en sí es idempotente — sin esperas, no pasa nada.
+      const esperas = db.prepare(
+        "SELECT COUNT(*) AS n FROM bot_run_waits WHERE contact_id = ? AND status = 'waiting'"
+      ).get(contact.id).n;
+
+      const engine = require('../bot/engine');
+      await engine.resumeWaitsForContact(db, contact.id, event);
+
+      console.log(`[reelance-ia] courier-event ${event} → contacto ${contact.id} (…${cola}) · esperas vivas: ${esperas}`);
+      res.json({ ok: true, matched: true, contactId: contact.id, waiting: esperas });
+    } catch (err) {
+      console.error('[reelance-ia] courier-event error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── POST /group-notify — aviso al grupo de la paquetería ──────────────────
+  //
+  // Lo dispara reelance cuando un cliente llena el formulario de /reporte: sus
+  // referencias del domicilio van DIRECTO al grupo donde está Logiboost, que es
+  // quien puede destrabar el paquete. Antes eso vivía nada más en la bitácora
+  // del servidor y había que copiarlo a mano.
+  //
+  // ⚠️ Este endpoint CRUZA a propósito el candado de grupos de sender.js
+  // (`_assertHumanSend`), que bloquea todo envío automático a un grupo porque
+  // le suena a todos los miembros y en WA Lite el número es el celular PERSONAL
+  // de Luis. Decisión suya, con el riesgo enfrente (21-ago-2026). Por eso el
+  // candado general NO se tocó —bots, IA y plantillas siguen bloqueados igual—
+  // y en su lugar esta puerta trae la suya, más angosta:
+  //
+  //   1. El grupo NO viaja en el request. Sale de `alert_group_ext_id` en la
+  //      config, así que ni reelance ni nadie con el token puede apuntarle a
+  //      otro chat. Sin grupo configurado, no manda.
+  //   2. Solo grupos (@g.us) y solo por whatsapp-lite: si la conversación
+  //      resulta ser una persona, se rechaza.
+  //   3. Antirrebote de 2 min por texto idéntico, igual que el envío a mano.
+  router.post('/group-notify', express.json({ limit: '64kb' }), async (req, res) => {
+    const cfg = svc.getConfigByToken(db, _extractBearer(req));
+    if (!cfg) return res.status(401).json({ error: 'invalid_token' });
+    if (!cfg.enabled) return res.status(403).json({ error: 'app_disabled' });
+    try {
+      const text = String(req.body?.text || '').trim();
+      if (!text) return res.status(400).json({ error: 'text vacío' });
+      if (text.length > 4000) return res.status(400).json({ error: 'text muy largo (máx 4000)' });
+
+      const grupo = String(cfg.alert_group_ext_id || '').trim();
+      if (!grupo) {
+        console.warn('[reelance-ia] group-notify: no hay alert_group_ext_id configurado — no se manda');
+        return res.status(400).json({ error: 'sin grupo configurado' });
+      }
+      if (!grupo.endsWith('@g.us')) {
+        return res.status(400).json({ error: 'el grupo configurado no es un grupo de WhatsApp' });
+      }
+
+      const convo = db.prepare(
+        'SELECT id, external_id, provider, integration_id FROM conversations WHERE external_id = ? AND tenant_id = ?'
+      ).get(grupo, cfg.tenant_id);
+      if (!convo) return res.status(404).json({ error: 'el grupo configurado no existe en wapi' });
+      if (convo.provider !== 'whatsapp-lite') {
+        return res.status(400).json({ error: `los grupos solo van por whatsapp-lite (este es ${convo.provider})` });
+      }
+
+      // Antirrebote: el mismo texto dos veces en 2 min es un doble click, no dos
+      // reportes. Se responde ok para que reelance no lo tome como falla.
+      const last = db.prepare(
+        'SELECT body, direction, created_at FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1'
+      ).get(convo.id);
+      if (last && last.direction === 'outgoing' && (last.body || '') === text
+          && (Math.floor(Date.now() / 1000) - last.created_at) < 120) {
+        console.log(`[reelance-ia] group-notify: texto idéntico hace <2min — se descarta (convo ${convo.id})`);
+        return res.json({ ok: true, sent: false, reason: 'duplicado' });
+      }
+
+      const manager = require('../integrations/whatsapp-web/manager');
+      const externalMsgId = await manager.sendText(convo.integration_id, convo.external_id, text);
+
+      // Queda en el hilo del grupo para que se vea en Chats como cualquier otro.
+      const convosSvc = require('../conversations/service');
+      convosSvc.addMessage(db, cfg.tenant_id, convo.id, {
+        externalId: externalMsgId,
+        direction:  'outgoing',
+        provider:   convo.provider,
+        body:       text,
+        status:     'sent',
+      });
+
+      console.log(`[reelance-ia] group-notify → grupo ${grupo} (convo ${convo.id}) · ${text.length} chars · msg ${externalMsgId}`);
+      res.json({ ok: true, sent: true, conversationId: convo.id, messageId: externalMsgId });
+    } catch (err) {
+      console.error('[reelance-ia] group-notify error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Health check (sin auth — para que la tienda Next.js verifique conectividad)
   router.get('/ping', (_req, res) => res.json({ ok: true, app: 'reelance-ia', version: '1.0.0' }));
 

@@ -623,6 +623,50 @@ async function execute(db, bot, ctx) {
     }
   }
 
+  // ── Canal SOLO-HUMANO: ni siquiera arrancar ────────────────────────────
+  // Antes el bot arrancaba, moría en el paso 1 con "Bloqueado: canal
+  // solo-humano" y dejaba un bot_run en estado 'error'. Caso real (Dario,
+  // +5213311471446): 3 etapas seguidas —14, 17 y 19 de agosto— con el mismo
+  // error, y el lead igual terminó en Etapa 3 sin haber recibido un solo
+  // mensaje. Se veía como avance y estaba hueco.
+  //
+  // El canal marcado como solo-humano en Integraciones significa "ese número
+  // lo contesto yo", así que lo correcto es NO correr el bot, no correrlo y
+  // fallar. Se omite igual que una pausa manual: con aviso, sin error.
+  {
+    try {
+      const { isHumanOnlyChannel } = require('../conversations/sender');
+      // Si el disparador no trajo la conversación (p. ej. new_contact), se
+      // busca la más reciente del contacto: el candado tiene que valer para
+      // TODOS los caminos, no solo para el ruteo por etapa.
+      const convo = ctx.convoId
+        ? db.prepare('SELECT id, integration_id, external_id FROM conversations WHERE id = ? AND tenant_id = ?')
+            .get(ctx.convoId, ctx.tenantId)
+        : (ctx.contactId
+            ? db.prepare('SELECT id, integration_id, external_id FROM conversations WHERE contact_id = ? AND tenant_id = ? ORDER BY last_message_at DESC LIMIT 1')
+                .get(ctx.contactId, ctx.tenantId)
+            : null);
+      if (convo && isHumanOnlyChannel(db, convo)) {
+        _log('warn', `bot ${bot.id} "${bot.name}": contacto ${ctx.contactId} está en un canal SOLO-HUMANO (convo ${convo.id}) — se omite sin error. Ese número se contesta a mano.`);
+        if (ctx.expedientId) {
+          try {
+            activitySvc.log(db, {
+              expedientId: ctx.expedientId,
+              contactId:   ctx.contactId,
+              type:        'bot_skip',
+              description: `Bot "${bot.name}" omitido: el canal está marcado como solo-humano`,
+            });
+          } catch (_) {}
+        }
+        return;
+      }
+    } catch (e) {
+      // Si la comprobación falla, se sigue como antes: es un guardia extra,
+      // no debe impedir que corran los bots del resto de los contactos.
+      _log('warn', `no se pudo comprobar canal solo-humano: ${e.message}`);
+    }
+  }
+
   const totalSteps = bot.steps?.length || 0;
   _log('info', `ejecutando bot ${bot.id} "${bot.name}" para contacto ${ctx.contactId} (${totalSteps} pasos)`);
 
@@ -1581,6 +1625,21 @@ async function executeStep(db, step, ctx) {
       return true;
     }
 
+    case 'wait_courier_event': {
+      // Suspende el bot hasta que la paquetería reporte, en vez de avanzar
+      // por reloj. Reusa TODA la mecánica de wait_response (bot_run_waits,
+      // poller de timeout, resumeWait); lo único distinto es quién despierta:
+      //
+      //   wait_response       → lo despierta el cliente al contestar
+      //   wait_courier_event  → lo despierta reelance al ver el evento de DHL
+      //                         o FedEx, llamando resumeWaitsForContact con
+      //                         la rama "entregado" o "problema".
+      //
+      // El timeout NO es el camino normal: es el paracaídas para cuando la
+      // paquetería nunca dice nada y el cliente se quedaría atorado.
+      return executeStep(db, { ...step, type: 'wait_response' }, ctx);
+    }
+
     case 'wait_response': {
       // Suspende el run hasta que llegue una señal: respuesta del lead,
       // timeout, o falla de entrega. Persiste el estado en bot_run_waits.
@@ -1900,8 +1959,8 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     : [wait.wait_step_index];
   const located = _walkStepPath(allSteps, path);
   const waitStep = located?.step;
-  if (!waitStep || (waitStep.type !== 'wait_response' && waitStep.type !== 'timer' && waitStep.type !== 'template')) {
-    _log('error', `resumeRun: no se encontró wait_response/timer/template en path ${JSON.stringify(path)} (got ${waitStep?.type})`);
+  if (!waitStep || (waitStep.type !== 'wait_response' && waitStep.type !== 'timer' && waitStep.type !== 'template' && waitStep.type !== 'wait_courier_event')) {
+    _log('error', `resumeRun: no se encontró wait_response/timer/template/wait_courier_event en path ${JSON.stringify(path)} (got ${waitStep?.type})`);
     return;
   }
   const isTimer = waitStep.type === 'timer';
@@ -1967,6 +2026,11 @@ async function resumeWait(db, waitId, branch, extraCtx = {}) {
     } else if (branch === 'on_delivery_fail') {
       branchSteps = Array.isArray(otherBranches.on_delivery_fail) ? otherBranches.on_delivery_fail : [];
     }
+  } else if (waitStep.type === 'wait_courier_event') {
+    // wait_courier_event guarda sus ramas en other_branches (reusa la maquinaria
+    // del template en el editor). branch = 'entregado' | 'problema'.
+    const ob = waitStep.config?.other_branches || {};
+    branchSteps = Array.isArray(ob[branch]) ? ob[branch] : [];
   } else {
     const branches = waitStep.config?.branches || {};
     branchSteps = Array.isArray(branches[branch]) ? branches[branch] : [];

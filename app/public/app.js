@@ -408,6 +408,7 @@ const I18N_TRANSLATIONS = {
     'bot.step.assign': 'Asignar responsable',
     'bot.step.ai_reply': 'Respuesta IA',
     'bot.step.wait_response': 'Esperar respuesta del lead',
+    'bot.step.wait_courier_event': 'Esperar evento de paqueteria',
     'bot.step.stop_bot': 'Parar bot',
     'bot.step.stop_and_start': 'Parar este e iniciar otro bot',
     'bot.step.book_appointment': 'Agendar Cita',
@@ -1379,6 +1380,7 @@ const I18N_TRANSLATIONS = {
     'bot.step.assign': 'Assign agent',
     'bot.step.ai_reply': 'AI Reply',
     'bot.step.wait_response': 'Wait for lead reply',
+    'bot.step.wait_courier_event': 'Wait for courier event',
     'bot.step.stop_bot': 'Stop bot',
     'bot.step.stop_and_start': 'Stop this bot and start another',
     'bot.step.book_appointment': 'Book appointment',
@@ -10571,6 +10573,19 @@ const BOT_STEP_REGISTRY = {
       return `${n} rama${n !== 1 ? 's' : ''}${hasDefault ? ' + default' : ''}`;
     },
   },
+  wait_courier_event: {
+    group: 'Flujo',
+    label:   { es: 'Esperar evento de paqueteria', en: 'Wait for courier event' },
+    icon:    '<path d="M2 6h10v8H2z"/><path d="M12 9h3l3 3v2h-6z"/><circle cx="5.5" cy="15.5" r="1.5"/><circle cx="14.5" cy="15.5" r="1.5"/>',
+    summary: (step) => {
+      const c = step.config || {};
+      const t = Number(c.timeoutMinutes || 10080);
+      const dias = Math.round(t / 1440);
+      const b = c.other_branches || c.branches || {};
+      const ramas = ['entregado', 'problema'].filter(k => Array.isArray(b[k]) && b[k].length).length;
+      return `Espera a DHL/FedEx · ${ramas} rama${ramas === 1 ? '' : 's'} · sin evento en ${dias}d continua`;
+    },
+  },
   wait_response: {
     group: 'Flujo',
     label:   { es: 'Esperar respuesta del lead', en: 'Wait for lead reply' },
@@ -12273,6 +12288,51 @@ function buildStepBody(step) {
           💡 <strong>Tip serum pestañas:</strong> usa 30 segundos aquí + "Continuar" + agrega un mensaje "¿algo más en que te pueda ayudar?" como paso siguiente. Si el cliente escribe antes de los 30s, se cancela el envío automático y la IA o el bot que matchee toma el control.
         </p>`;
     }
+    case 'wait_courier_event': {
+      // Paso "esperar evento de paquetería": suspende el bot hasta que reelance
+      // reporte. Dos ramas fijas (entregado / problema) guardadas en other_branches
+      // — reusa la maquinaria de ramas del template (_renderBranchSubStepCard +
+      // collectStepConfig por prefijo __other__ + _resolveBranchStepArray).
+      const _ob = (c.other_branches && typeof c.other_branches === 'object') ? c.other_branches : {};
+      const _tMin = Number(c.timeoutMinutes || 10080); // 7 días de paracaídas
+      const _tDias = Math.max(1, Math.round(_tMin / 1440));
+      const renderCourierBranch = (key, label, steps, bg, accent) => {
+        const arr = Array.isArray(steps) ? steps : [];
+        const lastIsStop = arr.length > 0 && (arr[arr.length - 1].type === 'stop_bot' || arr[arr.length - 1].type === 'stop_and_start');
+        const caseId = `__other__${key}`;
+        const subHtml = arr.map((ss, si) =>
+          (typeof _renderBranchSubStepCard === 'function')
+            ? _renderBranchSubStepCard(sid, caseId, ss, si > 0 ? arr[si - 1] : null)
+            : ''
+        ).join('');
+        return `
+          <div class="sb-tpl-branch-block" style="background:${bg};border-color:${accent}33">
+            <div class="sb-tpl-branch-block-head" style="color:${accent}">${label}</div>
+            <div class="sb-rem-substeps" data-case-substeps="${escHtml(caseId)}">
+              ${subHtml}
+            </div>
+            ${!lastIsStop ? `<button type="button" class="sb-branch-case-add-step-btn sb-rem-add-step-btn"
+              data-parent-sid="${escHtml(sid)}" data-case-id="${escHtml(caseId)}">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
+              Agregar paso
+            </button>` : ''}
+          </div>`;
+      };
+      return `
+        <div class="sb-wait-tree-diagram">
+          <div class="sb-wait-tree-head">El bot se pausa aquí hasta que reelance reporte el paquete. El flujo se separa en dos ramas segun lo que pase:</div>
+        </div>
+        <label style="margin-top:12px">Ramas del evento</label>
+        <p style="font-size:11px;color:var(--text-muted);margin:0 0 8px">Cada rama tiene su propio flujo. Agrega los pasos que quieras (mensaje, mover de etapa, etiqueta...). Reelance despierta el bot con "entregado" o "problema".</p>
+        ${renderCourierBranch('entregado', 'Si se ENTREGO &rarr;', _ob.entregado, 'rgba(22,163,74,0.10)', '#15803d')}
+        ${renderCourierBranch('problema', 'Si hubo PROBLEMA / error &rarr;', _ob.problema, 'rgba(220,38,38,0.10)', '#b91c1c')}
+        <label style="margin-top:12px">Sin evento en (paracaidas)</label>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <input type="number" min="1" data-field="waitAmount" data-sid="${sid}" value="${_tDias}" style="width:80px" />
+          <input type="hidden" data-field="waitUnit" data-sid="${sid}" value="d" />
+          <span style="font-size:12px;color:var(--text-muted)">dias sin reporte &rarr; el bot continua</span>
+        </div>`;
+    }
     case 'book_appointment':
       return `
         <div class="sb-info-box">
@@ -12387,6 +12447,13 @@ function _findStepLocation(steps, sid, depthInfo = []) {
       }
       const ob = s.config?.other_branches || {};
       for (const [bk, arr] of Object.entries(ob)) {
+        const r = _findStepLocation(arr, sid, [...depthInfo, { parentStep: s, label: bk }]);
+        if (r) return r;
+      }
+    }
+    if (s.type === 'wait_courier_event') {
+      const obc = s.config?.other_branches || {};
+      for (const [bk, arr] of Object.entries(obc)) {
         const r = _findStepLocation(arr, sid, [...depthInfo, { parentStep: s, label: bk }]);
         if (r) return r;
       }
@@ -12534,16 +12601,19 @@ function _addStepTag(sid, name) {
   const { tags } = _getStepTagsArray(sid);
   if (tags.includes(trimmed)) return;
   _setStepTagsArray(sid, [...tags, trimmed]);
+  markBotDirty();
 }
 function _removeStepTagAt(sid, idx) {
   const { tags } = _getStepTagsArray(sid);
   tags.splice(idx, 1);
   _setStepTagsArray(sid, tags);
+  markBotDirty();
 }
 function _removeLastStepTag(sid) {
   const { tags } = _getStepTagsArray(sid);
   if (!tags.length) return;
   _setStepTagsArray(sid, tags.slice(0, -1));
+  markBotDirty();
 }
 
 // Resolver el body element del step. Cuando el editor visual está abierto
@@ -12822,7 +12892,7 @@ function setupBot() {
         '.sb-branch-case-del-v2, .sb-branch-add-rule, .sb-branch-rule-del, ' +
         '.sb-branch-case-add-step-btn, .sb-rem-add-step-btn, .sb-insert-between, ' +
         '.sb-step-del, .sb-step-card-del, [data-del-substep], [data-del-case-id], ' +
-        '.kw-chip-remove, .sb-tag-remove, #botBuilderAddStep'
+        '.kw-chip-remove, .sb-tag-remove, .sb-tag-chip-x, .bot-tag-remove, #botBuilderAddStep'
       )) {
         setTimeout(() => markBotDirty(), 0);
       }
@@ -15655,6 +15725,7 @@ function setupBot() {
       const id = Number(remove.dataset.removeTag);
       sbTagIds = sbTagIds.filter(x => x !== id);
       renderBotBuilderTags();
+      markBotDirty();
       return;
     }
     if (e.target.closest('#botBuilderAddTagBtn')) openBotBuilderTagPicker();
@@ -15664,6 +15735,7 @@ function setupBot() {
       const id = Number(assign.dataset.assignTag);
       if (!sbTagIds.includes(id)) sbTagIds.push(id);
       renderBotBuilderTags();
+      markBotDirty();
       // Mantener el input abierto y enfocado para asignar varias seguidas
       setTimeout(() => document.getElementById('botBuilderTagInput')?.focus(), 0);
     }
@@ -23736,6 +23808,30 @@ function setHeaderTypeUI(type, existingMedia) {
   }
 }
 
+// El mismo dropdown de campos que usan los placeholders del cuerpo, reutilizado
+// para el {{1}} del botón URL. `cls` distingue a quién pertenece en los listeners.
+function _tplFieldDropdownHtml(cf, cls, i) {
+  const opt = (val, lbl) => `<option value="${val}"${cf===val?' selected':''}>${lbl}</option>`;
+  return `
+      <select class="int-input ${cls}" data-i="${i}" data-field="contactField" title="¿De qué campo se llena al enviar?">
+        ${opt('', '— Automático (regla de wapi) —')}
+        <optgroup label="Contacto">
+          ${opt('first_name', 'Nombre')}
+          ${opt('last_name',  'Apellido')}
+          ${opt('full_name',  'Nombre completo')}
+          ${opt('phone',      'Teléfono')}
+          ${opt('email',      'Email')}
+          ${opt('contact_id', 'ID de rastreo (reelance)')}
+          ${(typeof EXP_FIELD_DEFS !== 'undefined' ? EXP_FIELD_DEFS : []).filter(f => f.entity === 'contact').map(f => opt('cf:' + f.id, escapeHtml(f.label))).join('')}
+        </optgroup>
+        ${(() => {
+          const lf = (typeof EXP_FIELD_DEFS !== 'undefined' ? EXP_FIELD_DEFS : []).filter(f => f.entity === 'expedient' || !f.entity);
+          const items = lf.map(f => opt('lf:' + f.id, escapeHtml(f.label)));
+          return items.length ? `<optgroup label="Lead">${items.join('')}</optgroup>` : '';
+        })()}
+      </select>`;
+}
+
 function renderTplButtonsList() {
   const list = document.getElementById('tplButtonsList');
   if (!list) return;
@@ -23752,6 +23848,41 @@ function renderTplButtonsList() {
       : t === 'PHONE_NUMBER'
         ? `<input class="int-input tpl-btn-extra" data-i="${i}" data-field="phone_number" value="${extraVal}" placeholder="+5213311234567" />`
         : '';
+
+    // ── Placeholder del BOTÓN — espejo del recuadro del cuerpo ──────────────
+    // Meta numera el botón APARTE del cuerpo: su única variable siempre es {{1}}
+    // aunque el cuerpo ya use {{1}}..{{3}}. Esta fila deja VER y ELEGIR con qué
+    // campo se llena; en "Automático" aplica la regla de wapi (URL /t/ → número
+    // de guía del lead; cualquier otra → id del contacto).
+    // OJO: la fila usa el grid de 3 columnas de --mapped (num · dropdown ·
+    // preview) — un hijo de más rompe el acomodo y el preview cae apilado.
+    let phRow = '';
+    if (t === 'URL' && /\{\{\d+\}\}/.test(b.url || '')) {
+      const cf = b.contactField || '';
+      const auto = /\/t\/\{\{\d+\}\}\s*$/.test(b.url || '')
+        ? 'Automático: Número de guía (URL /t/)'
+        : 'Automático: ID del contacto';
+      const meta = cf ? _getPlaceholderMeta(cf) : null;
+      phRow = `
+      <div class="tpl-placeholder-row tpl-placeholder-row--mapped tpl-btn-ph-row" data-i="${i}">
+        <span class="tpl-placeholder-num" title="Variable del botón — su numeración va aparte de la del cuerpo">{{1}}</span>
+        ${_tplFieldDropdownHtml(cf, 'tpl-btn-ph-field', i)}
+        <span class="tpl-ph-auto-preview">${cf
+          ? `→ ejemplo para Meta: <strong>${escapeHtml((b.example || meta.example || 'ejemplo123'))}</strong>`
+          : `→ ${escapeHtml(auto)}`}</span>
+      </div>`;
+    } else if (t === 'URL') {
+      // URL sin variable: ofrecer el mismo "+ {{N}}" que tiene el cuerpo. Al
+      // click se agrega {{1}} AL FINAL de la URL (regla de Meta: una sola y al
+      // final) y aparece la fila de arriba.
+      phRow = `
+      <div class="tpl-var-row tpl-btn-ph-row" data-i="${i}">
+        <span class="tpl-hint-inline">Variable del botón:</span>
+        <button type="button" class="tpl-var-btn tpl-var-btn--num tpl-btn-add-var" data-i="${i}">+ {{N}}</button>
+        <span class="tpl-hint-inline">se agrega al final de la URL — Meta solo permite una</span>
+      </div>`;
+    }
+
     return `
       <div class="tpl-btn-row" data-i="${i}">
         <select class="int-input tpl-btn-type" data-i="${i}">
@@ -23763,6 +23894,7 @@ function renderTplButtonsList() {
         ${extraField}
         <button type="button" class="btn btn--ghost btn--sm tpl-btn-remove" data-i="${i}" title="Quitar botón">×</button>
       </div>
+      ${phRow}
     `;
   }).join('');
 }
@@ -23981,8 +24113,16 @@ function _collectTplButtons() {
     const b = { type, text };
     if (type === 'URL' && extraEl) b.url = extraEl.value.trim();
     if (type === 'PHONE_NUMBER' && extraEl) b.phone_number = extraEl.value.trim();
+    // Placeholder del botón (la fila hermana .tpl-btn-ph-row): el campo elegido
+    // y el ejemplo viajan DENTRO del botón. Antes este collect los tiraba y el
+    // mapeo se perdía en cada guardado.
+    if (type === 'URL') {
+      const phSel = document.querySelector(`#tplButtonsList .tpl-btn-ph-row[data-i="${i}"] .tpl-btn-ph-field`);
+      if (phSel && phSel.value) b.contactField = phSel.value;
+      const prev = _tplDraftButtons[i];
+      if (prev?.example) b.example = prev.example;
+    }
     if (text) out.push(b);
-    void i;
   });
   return out;
 }
@@ -24209,7 +24349,7 @@ let _sendTplCtx = null; // { tpl, convoId }
 
 // Resuelve el valor de un placeholder mapeado, leyendo del contacto real
 // (con fallback a los datos parciales del convo si no hay contacto).
-function _resolvePlaceholderForPreview(ph, convo, contact) {
+function _resolvePlaceholderForPreview(ph, convo, contact, maps) {
   if (!ph?.contactField) return null;
   const cf = ph.contactField;
   // Preferir contact (datos completos), caer al convo si falta
@@ -24224,6 +24364,16 @@ function _resolvePlaceholderForPreview(ph, convo, contact) {
   if (cf === 'phone') return contact?.phone || convo?.phone || '';
   if (cf === 'email') return contact?.email || '';
   if (cf === 'contact_id') return (contact?.id != null) ? String(contact.id) : (convo?.contactId != null ? String(convo.contactId) : '');
+  // Campos personalizados: lf:N vive en el LEAD y cf:N en el contacto. Este
+  // preview solo miraba los built-in del contacto, así que Paquetería/Número
+  // de Rastreo (lf:4/lf:5) salían como "el contacto no tiene lf:4" aunque el
+  // lead los tuviera llenos. Los mapas los arma openSendTemplateModal.
+  const m = String(cf).match(/^(cf|lf):(\d+)$/);
+  if (m) {
+    const map = m[1] === 'lf' ? maps?.lead : maps?.contact;
+    const v = map ? map[Number(m[2])] : null;
+    if (v != null && String(v).trim() !== '') return String(v);
+  }
   return null;
 }
 
@@ -24247,6 +24397,34 @@ async function openSendTemplateModal(tpl, convoId) {
   }
   _sendTplCtx.contact = contact;
 
+  // ── Campos del LEAD (Paquetería, Número de Rastreo, # Pedido…) ─────────────
+  // Los placeholders lf:N viven en el lead. Primero el lead abierto en pantalla
+  // (EXP_DETAIL); si el modal se abrió desde Chats, se busca el más reciente del
+  // contacto. El leadId viaja también al backend para que el botón dinámico /t/
+  // encuentre la guía DE ESTE lead (y no del último por casualidad).
+  let _tplLead = null;
+  if (typeof EXP_DETAIL !== 'undefined' && EXP_DETAIL?.id &&
+      convo?.contactId && EXP_DETAIL.contactId === convo.contactId) {
+    _tplLead = EXP_DETAIL;
+  }
+  if (!_tplLead && convo?.contactId) {
+    try {
+      const lst = await api('GET', `/api/expedients?contactId=${convo.contactId}&pageSize=10`);
+      const items = lst?.items || [];
+      const last = items.reduce((a, b) => (!a || Number(b.id) > Number(a.id) ? b : a), null);
+      if (last?.id) {
+        try { _tplLead = (await api('GET', `/api/expedients/${last.id}`))?.item || last; }
+        catch (_) { _tplLead = last; }
+      }
+    } catch (_) {}
+  }
+  const _leadMap = {};
+  ((_tplLead?.fieldValues) || []).forEach(fv => { _leadMap[fv.fieldId] = fv.value; });
+  const _contactMap = {};
+  ((contact?.fieldValues) || []).forEach(fv => { _contactMap[fv.fieldId] = fv.value; });
+  _sendTplCtx.leadId = _tplLead?.id || null;
+  _sendTplCtx.maps = { lead: _leadMap, contact: _contactMap };
+
   // Header con preview de body + nombre
   meta.innerHTML = `
     <div class="send-tpl-name"><strong>${escapeHtml(tpl.displayName || tpl.name)}</strong>
@@ -24264,14 +24442,15 @@ async function openSendTemplateModal(tpl, convoId) {
     const rows = [];
     for (let i = 0; i < max; i++) {
       const ph = phs[i] || {};
-      const auto = _resolvePlaceholderForPreview(ph, convo, contact);
+      const auto = _resolvePlaceholderForPreview(ph, convo, contact, _sendTplCtx.maps);
       if (auto !== null && auto !== '') {
         // Mapeado y con valor — solo mostrar
+        const fuente = /^lf:/.test(ph.contactField || '') ? 'auto del pedido' : 'auto del contacto';
         rows.push(`
           <div class="send-tpl-var-row">
             <span class="tpl-placeholder-num">{{${i + 1}}}</span>
             <span class="send-tpl-var-label">${escapeHtml(ph.label || '')}</span>
-            <span class="send-tpl-var-auto">${escapeHtml(auto)} <em class="tpl-hint-inline">(auto del contacto)</em></span>
+            <span class="send-tpl-var-auto">${escapeHtml(auto)} <em class="tpl-hint-inline">(${fuente})</em></span>
           </div>
         `);
       } else if (ph.contactField) {
@@ -24305,6 +24484,38 @@ async function openSendTemplateModal(tpl, convoId) {
     }
     vars.innerHTML = rows.join('');
   }
+
+  // ── Variable del BOTÓN (numeración aparte del cuerpo: siempre {{1}}) ───────
+  // Se muestra qué valor va a viajar en la URL y de dónde sale, para que el
+  // botón deje de ser una caja negra en el preview.
+  try {
+    const btns = Array.isArray(tpl.buttons) ? tpl.buttons : JSON.parse(tpl.buttons || '[]');
+    const dyn = (btns || []).find(b => b && String(b.type).toUpperCase() === 'URL' && /\{\{\d+\}\}/.test(b.url || ''));
+    if (dyn) {
+      let val = null, fuente = '';
+      if (dyn.contactField) {
+        val = _resolvePlaceholderForPreview({ contactField: dyn.contactField }, convo, contact, _sendTplCtx.maps);
+        fuente = 'campo: ' + (_getPlaceholderMeta(dyn.contactField).label || dyn.contactField);
+      }
+      if ((val == null || val === '') && /\/t\/\{\{\d+\}\}\s*$/.test(dyn.url || '')) {
+        const gDef = (typeof EXP_FIELD_DEFS !== 'undefined' ? EXP_FIELD_DEFS : [])
+          .find(f => (f.entity === 'expedient' || !f.entity) && /rastreo|tracking/i.test(f.label || ''));
+        const g = gDef ? _sendTplCtx.maps?.lead?.[gDef.id] : null;
+        if (g) { val = String(g); fuente = 'número de guía del pedido'; }
+      }
+      if (val == null || val === '') {
+        val = convo?.contactId != null ? String(convo.contactId) : '';
+        fuente = 'ID del contacto';
+      }
+      const urlFinal = (dyn.url || '').replace(/\{\{\d+\}\}/, val);
+      vars.insertAdjacentHTML('beforeend', `
+        <div class="send-tpl-var-row">
+          <span class="tpl-placeholder-num">{{1}}</span>
+          <span class="send-tpl-var-label">Botón "${escapeHtml(dyn.text || 'URL')}"</span>
+          <span class="send-tpl-var-auto">${escapeHtml(urlFinal)} <em class="tpl-hint-inline">(${escapeHtml(fuente)})</em></span>
+        </div>`);
+    }
+  } catch (_) { /* preview del botón es informativo: jamás debe tumbar el modal */ }
 
   modal.hidden = false;
 }
@@ -24342,6 +24553,9 @@ async function executeSendTemplate() {
     await api('POST', `/api/conversations/${ctx.convoId}/send-template`, {
       templateId: ctx.tpl.id,
       manualValues,
+      // El lead del que salen los campos lf:* y la guía del botón /t/. Sin esto,
+      // el backend adivina "el lead más reciente", que puede no ser el abierto.
+      leadId: ctx.leadId ?? null,
     });
     closeSendTemplateModal();
     toast('Plantilla enviada', 'success');
@@ -24703,6 +24917,19 @@ function setupTemplates() {
       _tplDraftButtons[i] = { type: e.target.value, text: cur.text || '' };
       renderTplButtonsList();
     }
+    // Placeholder del botón: elegir campo → se guarda en el botón mismo y se
+    // re-pinta para mostrar el ejemplo del campo elegido (o la regla automática).
+    if (e.target.classList.contains('tpl-btn-ph-field') && _tplDraftButtons[i]) {
+      _tplDraftButtons[i].contactField = e.target.value || undefined;
+      if (!e.target.value) delete _tplDraftButtons[i].contactField;
+      renderTplButtonsList();
+    }
+    // La URL cambió (blur): si le metieron o quitaron {{1}}, la fila del
+    // placeholder debe aparecer/desaparecer. En 'change' y no en 'input' para
+    // no robarle el foco mientras teclea.
+    if (e.target.classList.contains('tpl-btn-extra') && e.target.dataset.field === 'url') {
+      renderTplButtonsList();
+    }
   });
   document.getElementById('tplButtonsList')?.addEventListener('input', (e) => {
     const i = Number(e.target.dataset.i);
@@ -24715,6 +24942,17 @@ function setupTemplates() {
     }
   });
   document.getElementById('tplButtonsList')?.addEventListener('click', (e) => {
+    // "+ {{N}}" del botón: agrega la variable AL FINAL de la URL (regla de
+    // Meta) y con el re-render aparece la fila para elegir de qué campo sale.
+    if (e.target.classList.contains('tpl-btn-add-var')) {
+      const i = Number(e.target.dataset.i);
+      if (Number.isNaN(i) || !_tplDraftButtons[i]) return;
+      const url = (_tplDraftButtons[i].url || '').trim();
+      if (!url) { toast('Primero escribe la URL base — ej: https://reelance.mx/t/', 'warning'); return; }
+      _tplDraftButtons[i].url = url + '{{1}}';
+      renderTplButtonsList();
+      return;
+    }
     if (!e.target.classList.contains('tpl-btn-remove')) return;
     const i = Number(e.target.dataset.i);
     if (Number.isNaN(i)) return;
@@ -31219,3 +31457,40 @@ async function aiCreditPromptAlert(current) {
     }, 700);
   }
 })();
+
+// ── Paso "Esperar evento de paquetería": solo para reelance ───────────────
+//
+// wapi101 es multi-tenant y este paso solo le sirve a quien rastrea guías de
+// DHL/FedEx. En vez de dejarlo en el HTML (donde lo verían MEL BROS, MacMake
+// y los demás), se inyecta al vuelo y nada más si el tenant es reelance.
+//
+// El slug lo manda el servidor en la cabecera X-Tenant-Slug de /api/bot.
+let _slugTenant = null;
+async function sbTenantEsReelance() {
+  if (_slugTenant !== null) return _slugTenant === 'reelance';
+  try {
+    const r = await fetch('/api/bot', { credentials: 'include' });
+    _slugTenant = r.headers.get('X-Tenant-Slug') || '';
+  } catch { _slugTenant = ''; }
+  return _slugTenant === 'reelance';
+}
+
+async function sbInyectarPasoPaqueteria() {
+  const menu = document.querySelector('.sb-step-type-btn[data-type="wait_response"]')?.parentElement;
+  if (!menu) return;
+  if (menu.querySelector('[data-type="wait_courier_event"]')) return; // ya está
+  if (!(await sbTenantEsReelance())) return;
+
+  const ref = menu.querySelector('.sb-step-type-btn[data-type="wait_response"]');
+  const btn = document.createElement('button');
+  btn.className = 'sb-step-type-btn';
+  btn.dataset.type = 'wait_courier_event';
+  btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" width="20" height="20">'
+    + '<path d="M2 6h10v8H2z"/><path d="M12 9h3l3 3v2h-6z"/>'
+    + '<circle cx="5.5" cy="15.5" r="1.5"/><circle cx="14.5" cy="15.5" r="1.5"/></svg>'
+    + '<span>Esperar evento de paqueteria</span>';
+  ref.parentElement.insertBefore(btn, ref);
+}
+
+// Se vuelve a intentar cuando el menú aparece, porque se dibuja al abrirlo.
+document.addEventListener('click', () => { setTimeout(sbInyectarPasoPaqueteria, 60); }, true);

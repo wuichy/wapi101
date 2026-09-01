@@ -217,6 +217,10 @@ module.exports = function createBotRouter(db) {
   // ── CRUD ─────────────────────────────────────────────────────────────────────
   router.get('/', (req, res) => {
     const items = service.list(db, req.tenantId);
+    // El slug viaja aquí para que el front sepa qué pasos especiales puede
+    // ofrecer. Se manda en una respuesta que ya pedía de todos modos, en vez
+    // de agregar una llamada nueva solo para esto.
+    res.set('X-Tenant-Slug', String(req.tenant?.slug || ''));
     // Marcar bots incompatibles con el coordinador del híbrido IA+Bots.
     const tenant = db.prepare('SELECT ia_hybrid_enabled FROM tenants WHERE id=?').get(req.tenantId);
     const hybridOn = !!(tenant && tenant.ia_hybrid_enabled);

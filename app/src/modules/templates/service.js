@@ -150,7 +150,12 @@ function buildComponents(template) {
         const urlBtn = { type: 'URL', text: b.text, url: b.url };
         // URL dinámica ({{1}} al final): Meta EXIGE un example al registrar.
         if (/\{\{1\}\}/.test(b.url)) {
-          urlBtn.example = [b.example || b.url.replace('{{1}}', 'ejemplo123')];
+          // Meta exige example[0] como STRING plano. El botón puede traer el
+          // ejemplo guardado como string O como array (según qué editor/script
+          // lo escribió) — se aplana aquí para que jamás llegue [[...]], que
+          // Meta rechaza con "(#100) example[0] must be a string".
+          const _ex = Array.isArray(b.example) ? b.example[0] : b.example;
+          urlBtn.example = [String(_ex || b.url.replace('{{1}}', 'ejemplo123'))];
         }
         out.push(urlBtn);
       } else if (b.type === 'PHONE_NUMBER') {

@@ -30677,8 +30677,14 @@ document.addEventListener('DOMContentLoaded', () => {
   //    class 'modal-open' al body. Vigilamos con MutationObserver para detectar
   //    cuando aparece un modal y aplicarlo automáticamente.
   const sync = () => {
-    const anyOpen = document.querySelector('.modal:not([hidden]), .modal-backdrop:not([hidden])');
-    document.body.classList.toggle('modal-open', !!anyOpen);
+    // Visibilidad REAL, no atributo: index.html tiene un .modal sin `hidden`
+    // (lo oculta su padre), así que `:not([hidden])` lo daba por abierto
+    // SIEMPRE y body.modal-open quedaba prendido de forma permanente
+    // (mismo bug que mató la navegación con flechas, 2-sep-2026).
+    // getClientRects() = 0 cajas si él o cualquier ancestro es display:none.
+    const anyOpen = [...document.querySelectorAll('.modal, .modal-backdrop')]
+      .some(m => m.getClientRects().length > 0);
+    document.body.classList.toggle('modal-open', anyOpen);
   };
   // observar cambios de [hidden] en .modal / .modal-backdrop
   const mo = new MutationObserver(sync);

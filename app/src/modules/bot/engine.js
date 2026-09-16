@@ -2420,6 +2420,25 @@ function startNoResponsePoller(db) {
   console.log('[bot] startNoResponsePoller iniciado (cada 60s)');
 }
 
+// Poller que cada 60s vigila la ventana de 24 h de los leads que esperan en una
+// etapa y corre los bots con trigger_type='window_24h' (reglas en window-guard.js).
+// Existe porque los leads que NACEN en una etapa no disparan el bot de esa etapa.
+let _windowGuardTimer = null;
+function startWindowGuardPoller(db) {
+  if (_windowGuardTimer) return;
+  const guard = require('./window-guard');
+  const tick = () => {
+    try {
+      guard.tick(db, { runBot: (bot, ctx) => runAsync(db, bot, ctx), log: _log });
+    } catch (err) {
+      console.error('[bot] windowGuardPoller error:', err.message);
+    }
+  };
+  _windowGuardTimer = setInterval(tick, 60_000);
+  _windowGuardTimer.unref?.();
+  console.log('[bot] startWindowGuardPoller iniciado (cada 60s)');
+}
+
 // Poller que cada 60s busca waits expirados y los resume en rama on_timeout.
 let _waitTimeoutTimer = null;
 function startWaitTimeoutPoller(db) {
@@ -2659,6 +2678,8 @@ module.exports = {
   triggerPipelineStageLeave, triggerAssigneeChanged, triggerTagAdded,
   // Disparadores nuevos (Fase 2):
   triggerMessageRead, triggerNoResponse, startNoResponsePoller,
+  // Vigilante de la ventana de 24 h (leads que esperan en una etapa):
+  startWindowGuardPoller,
   // Disparadores nuevos (Fase 3 — programados):
   startScheduledPoller,
   getLogs, clearLogs, killRun, pauseRun, resumeRun,

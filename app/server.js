@@ -1240,6 +1240,11 @@ app.listen(config.port, config.host, () => {
   try { require('./src/modules/bot/engine').startNoResponsePoller(db); } catch (err) {
     console.warn('[boot] no se pudo iniciar no-response poller:', err.message);
   }
+  // Iniciar poller que cada 60s vigila la ventana de 24 h de los leads que
+  // esperan en una etapa y dispara bots con trigger_type='window_24h'.
+  try { require('./src/modules/bot/engine').startWindowGuardPoller(db); } catch (err) {
+    console.warn('[boot] no se pudo iniciar window-guard poller:', err.message);
+  }
   // Iniciar poller que cada 60s evalúa los disparadores programados
   // (scheduled_one_time / scheduled_daily / scheduled_field).
   try { require('./src/modules/bot/engine').startScheduledPoller(db); } catch (err) {

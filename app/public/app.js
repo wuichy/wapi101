@@ -8417,6 +8417,9 @@ function _blackboxFmt(ev) {
     bot_error: ['⚠️', 'Bot con error'], bot_paused_manual: ['⏸️', 'Bot pausado a mano'], bot_wait_adjusted: ['⏱️', 'Timer del bot ajustado'],
     stage_change: ['➡️', 'Cambió de etapa'], pipeline_change: ['🔀', 'Cambió de pipeline'], tag_add: ['🏷️', 'Etiqueta agregada'],
     created: ['✨', 'Lead creado'], contact_name_change: ['✏️', 'Nombre de contacto cambiado'], name_change: ['✏️', 'Nombre del lead cambiado'], email_change: ['✉️', 'Email cambiado'],
+    bot_window_move: [WINDOW_ALERT_ICON, 'Vigilante 24 h: lo movió'],
+    bot_window_stay: [WINDOW_ALERT_ICON, 'Vigilante 24 h: se queda (mensaje sin contestar)'],
+    bot_window_skip: [WINDOW_ALERT_ICON, 'Vigilante 24 h: no lo movió'],
   };
   const [ic, lbl] = tMap[ev.type] || ['•', ev.type || 'Actividad'];
   return { cls: 'bb-activity', icon: ic, title: lbl, sub: `${ev.description ? escapeHtml(ev.description) : ''}${ev.advisor ? ` · ${escapeHtml(ev.advisor)}` : ''}` };
@@ -9390,6 +9393,10 @@ async function selectExpDetailConvo(convoId) {
 
 function updateExpDetailBotToggle(_convo) { /* removed — replaced by chat search */ }
 
+// Ícono del vigilante de 24 h (reloj con aviso). Va ANTES de ACT_ICON porque
+// ACT_ICON lo lee al cargar el archivo.
+const WINDOW_ALERT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11" aria-hidden="true"><path d="M12 6v6l4 2"/><path d="M16 21.16a10 10 0 1 1 5-13.516"/><path d="M20 11.5v6"/><path d="M20 21.5h.01"/></svg>';
+
 const ACT_ICON = {
   created:             '🗂',
   stage_change:        '↗',
@@ -9406,6 +9413,9 @@ const ACT_ICON = {
   email_change:        '✎',
   tag_add:             '＋',
   tag_remove:          '－',
+  bot_window_move:     WINDOW_ALERT_ICON,
+  bot_window_stay:     WINDOW_ALERT_ICON,
+  bot_window_skip:     WINDOW_ALERT_ICON,
 };
 
 function highlightText(rawText, query) {
@@ -10384,7 +10394,7 @@ function _botMatchesQuery(bot, q) {
   if ((bot.name || '').toLowerCase().includes(q)) return true;
   if ((bot.trigger_value || '').toLowerCase().includes(q)) return true;
   // Trigger pipeline_stage / pipeline_stage_leave → resolver pipeline + stage
-  if ((bot.trigger_type === 'pipeline_stage' || bot.trigger_type === 'pipeline_stage_leave') && bot.trigger_value) {
+  if ((bot.trigger_type === 'pipeline_stage' || bot.trigger_type === 'pipeline_stage_leave' || bot.trigger_type === 'window_24h') && bot.trigger_value) {
     const stageId = Number(bot.trigger_value);
     const info = _resolveStage(stageId);
     if (info) {
@@ -10919,6 +10929,30 @@ const BOT_TRIGGER_REGISTRY = {
         return `: <span class="bot-row-pipeline-pill"><span class="bot-row-pipeline-name" style="background:${escHtml(info.pipelineColor)}24;border-color:${escHtml(info.pipelineColor)}55"><span class="bot-row-stage-dot" style="background:${escHtml(info.pipelineColor)}"></span>${escHtml(info.pipelineName)}</span><span class="bot-row-pipeline-arrow">→</span><span class="bot-row-stage-pill" style="background:${escHtml(info.color)}24;border-color:${escHtml(info.color)}55"><span class="bot-row-stage-dot" style="background:${escHtml(info.color)}"></span>${escHtml(info.stageName)}</span></span>`;
       }
       return `: stage #${escHtml(bot.trigger_value)} (no encontrada)`;
+    },
+  },
+  // Vigilante: revisa cada minuto a los leads que ESPERAN en la etapa (incluye los
+  // que nacen ahí, que no disparan "Lead entra a etapa") y corre los pasos a las
+  // 23 h 50 min del último mensaje del cliente, solo si todo está contestado.
+  // Reglas completas en src/modules/bot/window-guard.js.
+  window_24h: {
+    group: 'Pipeline',
+    label:      { es: 'Ventana de 24 h por cerrar (lead en etapa)', en: '24 h window about to close (lead in stage)' },
+    shortLabel: 'Ventana 24 h',
+    widget:     'stage',
+    serialize() {
+      const v = document.getElementById('sbTriggerStage')?.value || '';
+      if (!v) throw new Error('Elige la etapa que va a vigilar el bot');
+      return v;
+    },
+    deserialize(val) {
+      const stageId = Number(val);
+      const pl = (PIPELINES || []).find(p => p.stages?.some(s => s.id === stageId));
+      if (pl) populateTriggerPipelines(pl.id, stageId);
+    },
+    summaryHtml(bot) {
+      return BOT_TRIGGER_REGISTRY.pipeline_stage.summaryHtml(bot)
+        + ' <span class="bot-row-window-note">· a las 23 h 50 min del último mensaje, si todo está contestado</span>';
     },
   },
   // ─── Lead ───
@@ -16457,6 +16491,22 @@ function renderPipelineViewSwitch() {
   });
 }
 
+// Aviso del vigilante de 24 h (bot 'window_24h'): el cliente escribió, nadie le ha
+// contestado y su ventana cierra en 3 h o menos. Solo visual: sin sonido ni push.
+// (WINDOW_ALERT_ICON se define junto a ACT_ICON, que lo usa al cargar el archivo.)
+function _windowAlertPillHtml(e, nowSec) {
+  const wa = e && e.windowAlert;
+  if (!wa || !wa.closesAt) return '';
+  const left = wa.closesAt - nowSec;
+  if (left <= 0) return '';
+  const h = Math.floor(left / 3600);
+  const m = Math.floor((left % 3600) / 60);
+  const faltan = h > 0 ? `${h} h ${m} min` : `${Math.max(1, m)} min`;
+  const hora = new Date(wa.closesAt * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const title = `El cliente escribió y nadie le ha contestado. Su ventana de 24 h cierra a las ${hora} (faltan ${faltan}).`;
+  return `<span class="pl-card-window-pill" title="${escHtml(title)}">${WINDOW_ALERT_ICON}<span>${escHtml(faltan)}</span></span>`;
+}
+
 function renderPipelinesBoard() {
   const board = document.getElementById('plBoard');
   const empty = document.getElementById('plEmpty');
@@ -16564,15 +16614,16 @@ function renderPipelinesBoard() {
             const cardValueHtml = (showLeadValue && e.value > 0)
               ? `<span class="pl-card-value">$${Number(e.value).toLocaleString('es-MX')}</span>`
               : '';
+            const windowPill = _windowAlertPillHtml(e, nowSec);
             return `
-            <div class="pl-card ${isStale ? 'is-stale' : ''} ${failure ? 'has-delivery-error' : ''}" data-exp-id="${e.id}" draggable="true">
+            <div class="pl-card ${isStale ? 'is-stale' : ''} ${failure ? 'has-delivery-error' : ''} ${windowPill ? 'has-window-alert' : ''}" data-exp-id="${e.id}" draggable="true">
               <div class="pl-card-name ${e.nameIsAuto ? 'is-auto-name' : ''}">${escHtml(e.name || 'Sin nombre')}${deliveryIcon}</div>
               <div class="pl-card-contact-row">
                 ${avatarHtml}
                 <div class="pl-card-contact">${escHtml(contactName)}</div>
               </div>
               <div class="pl-card-footer">
-                <div class="pl-card-tags">${overdueLabel}${(e.tags || []).slice(0,2).map(t => `<span class="pl-card-tag">${escHtml(t)}</span>`).join('')}</div>
+                <div class="pl-card-tags">${windowPill}${overdueLabel}${(e.tags || []).slice(0,2).map(t => `<span class="pl-card-tag">${escHtml(t)}</span>`).join('')}</div>
                 <div class="pl-card-footer-right">${cardValueHtml}<span class="pl-card-date">${fmtDate(e.createdAt)}</span></div>
               </div>
 
@@ -16599,8 +16650,19 @@ function renderPipelinesBoard() {
                 Number(b.trigger_value) === stage.id
               ) || null;
             }
+            // Si no hay bot de entrada, mostrar el vigilante de 24 h de la etapa.
+            if (!bot) {
+              bot = (sbBots || []).find(b =>
+                b.enabled &&
+                b.trigger_type === 'window_24h' &&
+                Number(b.trigger_value) === stage.id
+              ) || null;
+            }
             if (!bot) return '';
-            return `<button type="button" class="pl-col-bot-hint" data-go-to-bot="${bot.id}" title="Click para abrir el bot &quot;${escHtml(bot.name)}&quot;. Se ejecuta automáticamente cuando un lead entra a esta etapa.">
+            const botHintWhen = bot.trigger_type === 'window_24h'
+              ? 'Revisa cada minuto a los leads de esta etapa y los mueve a las 23 h 50 min del último mensaje del cliente, si todo está contestado.'
+              : 'Se ejecuta automáticamente cuando un lead entra a esta etapa.';
+            return `<button type="button" class="pl-col-bot-hint" data-go-to-bot="${bot.id}" title="Click para abrir el bot &quot;${escHtml(bot.name)}&quot;. ${botHintWhen}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
                 <rect x="4" y="9" width="16" height="11" rx="2"/>
                 <path d="M12 4v3"/>

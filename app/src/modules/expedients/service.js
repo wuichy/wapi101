@@ -75,6 +75,9 @@ function hydrate(db, tenantId, row) {
     botPaused:      !!row.conv_bot_paused,
     botPausedAt:    row.bot_paused_at || null,
     deliveryFailure: _lastDeliveryFailure(db, tenantId, row.contact_id),
+    // Solo en etapas vigiladas por un bot 'window_24h': mensaje del cliente sin
+    // contestar y su ventana de 24 h cierra en 3 h o menos. null en los demás.
+    windowAlert:    require('../bot/window-guard').windowAlertFor(db, tenantId, row),
   };
 }
 

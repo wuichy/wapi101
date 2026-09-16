@@ -48,7 +48,7 @@ function _validateBot(db, tenantId, bot) {
   const issues = [];
   const steps = Array.isArray(bot.steps) ? bot.steps : [];
 
-  if (bot.trigger_type === 'pipeline_stage' && bot.trigger_value) {
+  if ((bot.trigger_type === 'pipeline_stage' || bot.trigger_type === 'window_24h') && bot.trigger_value) {
     const stageId = Number(bot.trigger_value);
     const stage = stageId ? db.prepare('SELECT id FROM stages WHERE id = ? AND tenant_id = ?').get(stageId, tenantId) : null;
     if (!stage) {

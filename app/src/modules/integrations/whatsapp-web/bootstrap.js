@@ -11,6 +11,8 @@ const botEngine = require('../../bot/engine');
 const inboundRouter = require('../../inbound-router/service');
 const pushSvc = require('../../notifications/service');
 const customerSvc = require('../../customers/service');
+const mediaLite = require('./media');
+const { lineTypeFromPlatform } = require('../line-type');
 
 function getIntegrationContext(db, integrationId) {
   if (!integrationId) return { tenantId: null, routing: null };
@@ -100,6 +102,21 @@ function _alertDown(db, tenantId, integrationId, title, body) {
   } catch (ne) { console.warn('[wa-web] in-app notif error:', ne.message); }
 }
 
+// Media de Lite: el mensaje ya quedó guardado con su placeholder ("🖼️ Imagen");
+// aquí se baja el archivo en SEGUNDO PLANO y se le pone media_url. Nunca
+// bloquea ni tumba el procesamiento del mensaje (ver media.js).
+function _bajarMedia(db, integrationId, saved, payload) {
+  try {
+    if (!saved?.id || !payload?.rawMessage || !mediaLite.DOWNLOADABLE.has(payload.messageType)) return;
+    mediaLite.downloadAndStore({
+      db,
+      msgId: saved.id,
+      rawMessage: payload.rawMessage,
+      download: (raw) => manager.downloadIncomingMedia(integrationId, raw),
+    }).catch((err) => console.warn(`[wa-web ${integrationId}] media:`, err?.message || err));
+  } catch (_) { /* la media nunca debe tumbar el mensaje */ }
+}
+
 function init(db) {
   manager.setHandlers({
     // Acks de salida (delivered/read) — actualiza el status del mensaje en DB
@@ -184,7 +201,7 @@ function init(db) {
         // Se guarda como saliente y AQUÍ SE ACABA: no es un mensaje del
         // cliente, así que nada de bots, IA, push ni crear leads.
         if (payload.fromMe) {
-          convoSvc.addMessage(db, tenantId, convo.id, {
+          const savedOut = convoSvc.addMessage(db, tenantId, convo.id, {
             externalId: payload.messageId,
             direction:  'outgoing',
             provider:   'whatsapp-lite',
@@ -197,6 +214,7 @@ function init(db) {
             // celu, y limpia el 🚨 de urgente.
             byAdvisor:  true,
           });
+          _bajarMedia(db, integrationId, savedOut, payload);
           // Si contestaste desde el celular, ese chat ya lo viste.
           try { convoSvc.markRead(db, tenantId, convo.id); } catch (_) {}
           console.log(`[wa-web ${integrationId}] saliente desde el celu → convo #${convo.id}`);
@@ -208,7 +226,7 @@ function init(db) {
         const autor = payload.isGroup
           ? (payload.authorName || (payload.authorPhone ? `+${payload.authorPhone}` : null))
           : null;
-        convoSvc.addMessage(db, tenantId, convo.id, {
+        const savedIn = convoSvc.addMessage(db, tenantId, convo.id, {
           externalId: payload.messageId,
           direction:  'incoming',
           provider:   'whatsapp-lite',
@@ -216,6 +234,7 @@ function init(db) {
           status:     'delivered',
           createdAt:  payload.timestamp,
         });
+        _bajarMedia(db, integrationId, savedIn, payload);
 
         ensureExpedient(db, tenantId, convo.contact_id, routing);
 
@@ -283,6 +302,26 @@ function init(db) {
               connected_at = unixepoch(), updated_at = unixepoch(), last_error = NULL
           WHERE id = ?
         `).run(display, phone || null, integrationId);
+
+        // Tipo de línea (personal / Business) según la plataforma del teléfono.
+        // Se guarda en config para que la pantalla aplique las reglas correctas
+        // (ver line-type.js). Se re-evalúa en cada conexión: si en la misma
+        // integración escanean otro teléfono, se corrige sola.
+        try {
+          const platform = session.platform || manager.getLinePlatform(integrationId);
+          if (platform) {
+            const r = db.prepare('SELECT config FROM integrations WHERE id = ?').get(integrationId);
+            let cfg = null;
+            try { cfg = r?.config ? JSON.parse(r.config) : {}; } catch (_) { cfg = null; } // config ilegible → NO se pisa
+            const lineType = lineTypeFromPlatform('whatsapp-lite', platform);
+            if (cfg && (cfg.platform !== platform || cfg.lineType !== lineType)) {
+              cfg.platform = platform;
+              cfg.lineType = lineType;
+              db.prepare('UPDATE integrations SET config = ? WHERE id = ?').run(JSON.stringify(cfg), integrationId);
+              console.log(`[wa-web ${integrationId}] línea ${lineType} (${platform})`);
+            }
+          }
+        } catch (err) { console.warn(`[wa-web ${integrationId}] tipo de línea:`, err.message); }
 
         // Se reconectó antes de que venciera la gracia → cancelar la alerta
         // programada. Este es el caso normal (caídas de ~5s).

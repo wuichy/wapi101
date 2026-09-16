@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const svc = require('./service');
+const waQuota = require('./wa-quota');
+const { lineTypeFromPlatform } = require('../integrations/line-type');
 const {
   sendMessage,
   sendWhatsAppTemplate,
@@ -149,6 +151,27 @@ module.exports = function createConversationsRouter(db) {
     result.totalAll    = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ?').get(req.tenantId).n;
     result.totalUnread = db.prepare('SELECT COUNT(*) AS n FROM conversations WHERE tenant_id = ? AND unread_count > 0').get(req.tenantId).n;
     res.json(result);
+  });
+
+  // GET /api/conversations/wa-quota/:integrationId
+  // Tipo de línea + contador de mensajes de SERVICIO de Meta (1,000 gratis al
+  // mes por número de la API desde el 1-oct-2026; ver wa-quota.js). Va ANTES
+  // de '/:id' para que Express nunca confunda 'wa-quota' con un id.
+  router.get('/wa-quota/:integrationId', (req, res) => {
+    const integrationId = Number(req.params.integrationId);
+    if (!integrationId) return res.status(400).json({ error: 'integrationId inválido' });
+    const integ = db.prepare('SELECT id, provider, config FROM integrations WHERE id = ? AND tenant_id = ?')
+      .get(integrationId, req.tenantId);
+    if (!integ) return res.status(404).json({ error: 'Integración no encontrada' });
+    let cfg = {};
+    try { cfg = integ.config ? JSON.parse(integ.config) : {}; } catch (_) { cfg = {}; }
+    let platform = cfg.platform || null;
+    if (!platform && integ.provider === 'whatsapp-lite') {
+      try { platform = require('../integrations/whatsapp-web/manager').getLinePlatform(integrationId); } catch (_) {}
+    }
+    const lineType = lineTypeFromPlatform(integ.provider, platform);
+    const quota = lineType === 'api' ? waQuota.getQuota(db, req.tenantId, integrationId) : null;
+    res.json({ integrationId, provider: integ.provider, lineType, quota });
   });
 
   // GET /api/conversations/:id

@@ -476,6 +476,12 @@ function addMessage(db, tenantId, conversationId, { externalId, direction, provi
     } catch (_) { /* col missing en DBs muy viejas → ignorar */ }
   }
 
+  // El contador de mensajes de servicio (wa-quota.js) cachea unos segundos;
+  // un saliente nuevo por la API lo invalida para que la barra baje al instante.
+  if (direction === 'outgoing' && provider === 'whatsapp') {
+    try { require('./wa-quota').bustTenant(t); } catch (_) {}
+  }
+
   const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(result.lastInsertRowid);
   return _mapMessageRow(row);
 }

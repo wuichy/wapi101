@@ -9605,6 +9605,9 @@ function setupExpDetail() {
       }
       EXP_DETAIL_MSGS.push(msg);
       renderExpDetailMessages();
+      // El contador de mensajes gratis baja al instante tras enviar.
+      _waQuotaCache.clear();
+      refreshExpDetailReplyState();
       // Reflect in convo list
       if (convo) { convo.lastMessage = body; }
     } catch (err) {
@@ -9679,6 +9682,7 @@ function refreshExpDetailReplyState() {
   const convoId = Number(form.dataset.convoId);
   const convo = EXP_DETAIL_CONVOS.find((c) => c.id === convoId);
   updateReplyFormStateGeneric(form, convo);
+  renderWaQuotaBar(form, convo);
 }
 
 // Versión genérica que recibe el form como parámetro (reutiliza la lógica de
@@ -18874,6 +18878,117 @@ function isWaWindowClosed(convo) {
 }
 
 // Activa/desactiva el reply form según el estado de la ventana 24h.
+// ── Barra de la ventana de 24 h + contador de mensajes de servicio ──────────
+// Desde el 1-oct-2026 Meta cobra lo que contestas DENTRO de la ventana de 24 h
+// por la API oficial: 1,000 gratis al mes por número; desde el 1,001 se cobra.
+// La barra vive encima de CADA caja de respuesta (chat y ficha del lead) y
+// cambia según el CANAL elegido en la caja:
+//   API      → "Ventana abierta · cierra en X" + "Gratis en octubre: quedan N de 1,000"
+//   Business → etiqueta "WhatsApp Business" (sus límites son de difusiones de
+//              la app, no de chats uno a uno → aquí no hay contador)
+//   Personal → nada
+// La ventana sale de isWaWindowClosed(), la MISMA regla que bloquea el botón
+// de enviar — nunca de un reloj propio que pudiera contradecirla. Con la
+// ventana cerrada ya existe el banner grande (.rh-window-closed-banner), así
+// que la barra no lo repite: solo deja el contador, debajo del banner.
+// Backend: GET /api/conversations/wa-quota/:integrationId (wa-quota.js).
+const _waQuotaCache = new Map(); // integrationId → { data, at }
+const WA_QUOTA_TTL_MS = 8000;
+
+function _waQuotaCss() {
+  if (document.getElementById('waQuotaCss')) return;
+  const s = document.createElement('style');
+  s.id = 'waQuotaCss';
+  s.textContent = `
+    .wa-quota-bar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 16px;padding:6px 10px 2px;font-size:12px;line-height:1.35;color:var(--text-muted,#6b7280)}
+    .wa-quota-bar[hidden]{display:none}
+    .wa-quota-bar .wa-win{display:inline-flex;align-items:center;gap:6px;color:var(--success,#16a34a);font-weight:500}
+    .wa-quota-bar .wa-dot{width:7px;height:7px;border-radius:50%;background:var(--success,#16a34a);display:inline-block;flex:none}
+    .wa-quota-bar .wa-q{display:inline-flex;align-items:center;gap:8px}
+    .wa-quota-bar .wa-q-meter{position:relative;display:inline-block;width:72px;height:5px;border-radius:3px;background:var(--border,#e5e7eb);overflow:hidden;flex:none}
+    .wa-quota-bar .wa-q-meter b{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--success,#16a34a)}
+    .wa-quota-bar .wa-q.is-warn{color:#b45309}
+    .wa-quota-bar .wa-q.is-warn .wa-q-meter b{background:#f59e0b}
+    .wa-quota-bar .wa-q.is-over{color:var(--danger,#dc2626);font-weight:600}
+    .wa-quota-bar .wa-q.is-over .wa-q-meter b{background:var(--danger,#dc2626)}
+    .wa-quota-bar .wa-line-tag{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;color:var(--text,#111827);background:var(--bg-soft,#f3f4f6);border:1px solid var(--border,#e5e7eb)}
+  `;
+  document.head.appendChild(s);
+}
+
+function _waSelectedIntegrationId(convo) {
+  const sel = Number(window._rhSelectedChannelId || 0);
+  return sel || Number((convo && (convo.integrationId || convo.integration_id)) || 0) || null;
+}
+
+async function _fetchWaQuota(integrationId) {
+  const hit = _waQuotaCache.get(integrationId);
+  if (hit && Date.now() - hit.at < WA_QUOTA_TTL_MS) return hit.data;
+  const data = await api('GET', `/api/conversations/wa-quota/${integrationId}`);
+  _waQuotaCache.set(integrationId, { data, at: Date.now() });
+  return data;
+}
+
+function _fmtVentanaRestante(ms) {
+  if (!(ms > 0)) return 'unos segundos';
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h) return m ? `${h} h ${m} min` : `${h} h`;
+  return `${Math.max(1, m)} min`;
+}
+
+async function renderWaQuotaBar(form, convo) {
+  if (!form) return;
+  // Solo escribe la llamada MÁS RECIENTE: si mientras esperábamos al servidor
+  // se abrió otra conversación, esta respuesta vieja ya no pinta nada.
+  const token = (form._waQuotaToken = (form._waQuotaToken || 0) + 1);
+  let bar = form.querySelector('.wa-quota-bar');
+  const integrationId = convo ? _waSelectedIntegrationId(convo) : null;
+  if (!integrationId) { if (bar) bar.hidden = true; return; }
+  let data;
+  try { data = await _fetchWaQuota(integrationId); }
+  catch (_) { if (bar && form._waQuotaToken === token) bar.hidden = true; return; }
+  if (form._waQuotaToken !== token) return;
+  _waQuotaCss();
+  if (!bar) { bar = document.createElement('div'); bar.className = 'wa-quota-bar'; }
+  // Orden estable: justo debajo del banner de ventana cerrada, o hasta arriba.
+  const banner = form.querySelector('.rh-window-closed-banner');
+  if (banner) { if (banner.nextSibling !== bar) banner.after(bar); }
+  else if (form.firstChild !== bar) form.prepend(bar);
+
+  if (data.lineType === 'business') {
+    bar.innerHTML = '<span class="wa-line-tag">WhatsApp Business</span>';
+    bar.hidden = false;
+    return;
+  }
+  if (data.lineType !== 'api') { bar.innerHTML = ''; bar.hidden = true; return; }
+
+  const partes = [];
+  if (!isWaWindowClosed(convo)) {
+    const t = _convoForSelectedChannel(convo);
+    const lastIn = Number((t && (t.lastIncomingAt || t.last_incoming_at)) || 0);
+    const restante = lastIn ? lastIn * 1000 + 24 * 60 * 60 * 1000 - Date.now() : 0;
+    partes.push(`<span class="wa-win"><i class="wa-dot"></i>Ventana abierta · cierra en ${_fmtVentanaRestante(restante)}</span>`);
+  }
+  const q = data.quota || {};
+  if (!q.active) {
+    partes.push('<span class="wa-q is-pending">El conteo de 1,000 mensajes gratis empieza el 1 de octubre</span>');
+  } else {
+    const mes = String(q.periodLabel || '').replace(/\s\d{4}$/, '');
+    const fmt = (n) => Number(n || 0).toLocaleString('es-MX');
+    const pct = Math.min(100, Math.round((Number(q.used || 0) / Number(q.limit || 1000)) * 100));
+    const texto = q.level === 'over'
+      ? `Pasaste los ${fmt(q.limit)} gratis de ${mes} · ${fmt(q.over)} ya se cobran`
+      : `Gratis en ${mes}: quedan ${fmt(q.remaining)} de ${fmt(q.limit)}`;
+    const titulo = `Contestaste ${fmt(q.used)} mensajes dentro de la ventana de 24 h en ${mes}`;
+    const nivel = ['ok', 'warn', 'over'].includes(q.level) ? q.level : 'ok';
+    partes.push(`<span class="wa-q is-${nivel}" title="${escapeHtml(titulo)}">${escapeHtml(texto)}<i class="wa-q-meter"><b style="width:${pct}%"></b></i></span>`);
+  }
+  bar.innerHTML = partes.join('');
+  bar.hidden = false;
+}
+
 function updateReplyFormState(convo) {
   const form = document.querySelector('.rh-reply-form');
   if (!form) return;
@@ -18911,6 +19026,7 @@ function updateReplyFormState(convo) {
   } else if (banner) {
     banner.remove();
   }
+  renderWaQuotaBar(form, convo);
 }
 
 // Re-evalúa el estado del reply form usando la conversación activa actual.
@@ -20418,6 +20534,9 @@ function setupReplyForm() {
       }
       CHAT_MESSAGES.push(msg);
       renderMessages();
+      // El contador de mensajes gratis baja al instante tras enviar.
+      _waQuotaCache.clear();
+      refreshReplyFormState();
       // Actualizar preview en la lista
       if (convo) { convo.lastMessage = body; convo.time = msg.time || ''; renderChatList(); }
     } catch (err) {
@@ -20593,6 +20712,9 @@ function startChatPolling() {
           EXP_DETAIL_MSGS = data.items || [];
         }
         renderExpDetailMessages();
+        // Barra de ventana/contador de la ficha del lead: el chat principal ya
+        // la refresca con refreshReplyFormState() en su rama de este sondeo.
+        refreshExpDetailReplyState();
       } catch (_) {}
     }
   }, 5000);

@@ -15,7 +15,9 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  downloadMediaMessage,
 } = require('@whiskeysockets/baileys');
+const { platformFromCredsFile } = require('../line-type');
 
 // integrationId → { sock, status, qrDataUrl, qrRaw, phoneNumber, error, startedAt, lastConnAt }
 const sessions = new Map();
@@ -186,6 +188,9 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
       const userId = sock.user?.id || '';
       session.phoneNumber = userId.split(':')[0]?.split('@')[0] || null;
       session.pushName = sock.user?.name || null;
+      // Plataforma del teléfono principal ('smba'/'smbi' = WhatsApp Business).
+      // La usa line-type.js para decidir qué reglas aplica la pantalla.
+      session.platform = state.creds?.platform || null;
       console.log(`[wa-web ${integrationId}] conectado como ${session.phoneNumber}`);
       try { onConnectedCallback?.(integrationId, session); }
       catch (err) { console.error(`[wa-web ${integrationId}] onConnected error:`, err.message); }
@@ -317,6 +322,9 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
           authorName:    isGroup && !fromMe ? (msg.pushName || null) : null,
           timestamp:     Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000),
           messageType,
+          // El mensaje crudo de Baileys: lo necesita media.js para bajar la
+          // foto/audio/video (antes solo viajaba el placeholder "🖼️ Imagen").
+          rawMessage:    msg,
         });
       } catch (err) {
         console.error(`[wa-web ${integrationId}] onMessage error:`, err.message);
@@ -397,6 +405,7 @@ function getStatus(integrationId) {
     qrDataUrl:   s.qrDataUrl,
     phoneNumber: s.phoneNumber,
     pushName:    s.pushName,
+    platform:    s.platform || null,
     error:       s.error,
     startedAt:   s.startedAt,
     lastConnAt:  s.lastConnAt,
@@ -456,6 +465,28 @@ async function getProfilePicUrl(integrationId, phone) {
   }
 }
 
+// Baja la media (foto, audio, video, documento, sticker) de un mensaje.
+// reuploadRequest le pide al teléfono que la vuelva a subir si el enlace de
+// WhatsApp ya venció (pasa con mensajes que llegan tras una reconexión).
+async function downloadIncomingMedia(integrationId, rawMessage) {
+  const s = sessions.get(integrationId);
+  if (!s?.sock) throw new Error('la sesión de WhatsApp no está conectada');
+  return downloadMediaMessage(rawMessage, 'buffer', {}, {
+    logger: pino({ level: 'silent' }),
+    reuploadRequest: s.sock.updateMediaMessage,
+  });
+}
+
+// Plataforma del teléfono principal ('smba'/'smbi' = Business). Si la sesión
+// no está viva, se lee del creds.json donde Baileys la dejó al emparejar.
+function getLinePlatform(integrationId) {
+  const live = sessions.get(integrationId)?.platform;
+  if (live) return live;
+  // SIN sessionDir(): esa CREA la carpeta si no existe, y una lectura no debe
+  // dejar carpetas vacías de sesión por ahí.
+  return platformFromCredsFile(path.join(SESSIONS_ROOT, String(integrationId), 'creds.json'));
+}
+
 module.exports = {
   setHandlers,
   startSession,
@@ -469,4 +500,6 @@ module.exports = {
   listSessions,
   restoreAll,
   getProfilePicUrl,
+  downloadIncomingMedia,
+  getLinePlatform,
 };

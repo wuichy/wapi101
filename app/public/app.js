@@ -5321,10 +5321,22 @@ function renderDashboard(d) {
     if (d.metaCost) {
       costCard.hidden = false;
       const c = d.metaCost;
-      set('dashCostUsd', `$${c.totalUsd.toFixed(2)} USD`);
-      set('dashCostMxn', `≈ $${c.totalMxn.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`);
-      set('dashCostConvos', fmt(c.conversations));
-      set('dashCostRate', `$${c.ratePerConversationUsd.toFixed(4)} USD`);
+      const usd = (n) => `$${Number(n || 0).toFixed(2)}`;
+      const mxn = (n) => `$${Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      // Rango: wapi no guarda la categoría de cada plantilla → de utilidad
+      // (piso) a marketing (techo). Con un backend viejo cae al total único.
+      const minU = c.minUsd ?? c.totalUsd, maxU = c.maxUsd ?? c.totalUsd;
+      const minM = c.minMxn ?? c.totalMxn, maxM = c.maxMxn ?? c.totalMxn;
+      set('dashCostUsd', minU === maxU ? `${usd(maxU)} USD` : `${usd(minU)} – ${usd(maxU)} USD`);
+      set('dashCostMxn', minM === maxM ? `≈ ${mxn(maxM)} MXN` : `≈ ${mxn(minM)} – ${mxn(maxM)} MXN`);
+      set('dashCostConvos', fmt(c.templates ? c.templates.count : c.conversations));
+      const sv = c.service;
+      let svTexto = '—';
+      if (sv && !sv.active) svTexto = `${fmt(sv.count)} · gratis hasta el 1 de octubre`;
+      else if (sv && sv.charged == null) svTexto = `${fmt(sv.count)} · la cuota de 1,000 es por número`;
+      else if (sv && sv.charged > 0) svTexto = `${fmt(sv.count)} · ${fmt(sv.charged)} ya se cobran`;
+      else if (sv) svTexto = `${fmt(sv.count)} · dentro de los 1,000 gratis`;
+      set('dashCostRate', svTexto);
       set('dashCostNote', c.note || '');
     } else {
       // No hay integración WhatsApp API → ocultar card

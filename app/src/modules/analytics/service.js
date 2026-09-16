@@ -242,39 +242,17 @@ function getDashboardData(db, tenantId, { period = 'today', advisorId = null, is
   ).get(tenantId);
 
   // ─── Costo estimado de WhatsApp Business API ─────────────────────────
-  // Meta cobra POR CONVERSACIÓN de 24h (no por mensaje). Tarifas LATAM ~MX 2026:
-  //   - Marketing:        $0.0432 USD / conversación
-  //   - Utility:          $0.0058 USD / conversación
-  //   - Authentication:   $0.0282 USD / conversación
-  //   - Service:          gratis primeras 1000/mes, luego ~$0.0058
-  // Como no rastreamos template categoría por mensaje (todavía), aproximamos:
-  //   Una conversación = un par (contact_id, día) con outgoing template.
-  //   Asumimos categoría "marketing" para outgoing iniciados por business
-  //   (sin incoming en las 24h previas). El resto es service/replies (gratis).
+  // Meta cobra por MENSAJE entregado desde jul-2025. Este bloque seguía el
+  // modelo muerto de "conversación de 24 h" y además contaba salientes de
+  // TODOS los canales (incluido WhatsApp Lite, que Meta no cobra), así que
+  // inflaba la cifra. La regla vive en conversations/wa-quota.js — la misma
+  // fuente que el contador de la caja de respuesta — para que el tablero y el
+  // chat nunca se contradigan (16-sep-2026).
   let metaCost = null;
   if (waConnected) {
-    // Mensajes outgoing por (contact_id, día) — conversaciones distintas
-    const conversationsRow = db.prepare(`
-      SELECT COUNT(DISTINCT c.contact_id || '|' || date(m.created_at,'unixepoch','-6 hours')) AS n
-        FROM messages m
-        JOIN conversations c ON c.id = m.conversation_id
-       WHERE m.tenant_id = ? AND m.direction = 'outgoing'
-         AND m.created_at BETWEEN ? AND ?
-         AND m.status != 'failed'
-         ${effectiveAdvisorId ? 'AND c.contact_id IN (SELECT id FROM contacts WHERE assigned_advisor_id = ? AND tenant_id = ?)' : ''}
-    `).get(tenantId, start, end, ...(effectiveAdvisorId ? [effectiveAdvisorId, tenantId] : []));
-    const conversations = conversationsRow?.n || 0;
-    // Tarifa promedio aproximada — uso marketing rate como aproximación conservadora
-    const RATE_USD_PER_CONV = 0.0432;
-    const USD_TO_MXN = 18.5; // aproximado
-    const totalUsd = conversations * RATE_USD_PER_CONV;
-    metaCost = {
-      conversations,
-      totalUsd: Number(totalUsd.toFixed(2)),
-      totalMxn: Number((totalUsd * USD_TO_MXN).toFixed(2)),
-      ratePerConversationUsd: RATE_USD_PER_CONV,
-      note: 'Estimado simplificado. Meta cobra por conversación de 24h, no por mensaje. Tarifa: marketing MX (~$0.0432 USD).',
-    };
+    metaCost = require('../conversations/wa-quota').metaCostEstimate(db, tenantId, {
+      start, end, advisorId: effectiveAdvisorId || null,
+    });
   }
 
   // Status de mensajes salientes (delivered / read / sent / failed)

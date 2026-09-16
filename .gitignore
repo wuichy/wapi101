@@ -43,3 +43,11 @@ cloudflared
 # Carpeta de pruebas locales
 claude-pro-reelance/
 wapi.db
+
+# Respaldos que se hacen a mano en el servidor al editar en caliente.
+# (16-sep-2026) Uno era app/.env.bak-<fecha> CON SECRETOS, y el patrón viejo
+# (.env.bak exacto) NO lo cubría: un `git add -A` lo habría subido a GitHub.
+.env.bak*
+*.bak*
+*.claudebak*
+*_tmp.js

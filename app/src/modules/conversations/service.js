@@ -221,13 +221,27 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
     const ftsQuery = ftsTokens.map(t => t + '*').join(' ');
 
     if (ftsQuery) {
+      // Buscador inteligente (10-sep-2026, falla real: 'diego pim' no hallaba a
+      // Diego Pimentel):
+      //  1. Cada palabra pega en CUALQUIER parte del nombre completo (nombre y
+      //     apellido concatenados) y en cualquier orden.
+      //  2. Sin acentos en ambos lados: 'jose' halla a Jose/José, 'munoz' a Muñoz.
+      //  3. El teléfono ignora espacios/guiones/paréntesis/+: pegar '33 3218 5818'
+      //     desde la agenda del cel lo encuentra igual.
+      const foldSql = (expr) => "replace(replace(replace(replace(replace(replace(replace(LOWER(" + expr + "),'á','a'),'é','e'),'í','i'),'ó','o'),'ú','u'),'ü','u'),'ñ','n')";
+      const foldJs = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const nombreFull = foldSql("co.first_name || ' ' || IFNULL(co.last_name,'')");
+      const tokenClause = ftsTokens.map(() => nombreFull + " LIKE ?").join(" AND ");
+      const soloDigitos = String(search).replace(/\D/g, "");
+      const telNormal = "replace(replace(replace(replace(replace(IFNULL(co.phone,''),' ',''),'-',''),'(',''),')',''),'+','')";
+      const conTel = soloDigitos.length >= 7;
       conditions.push(`(
-        LOWER(co.first_name) LIKE ?
-        OR LOWER(IFNULL(co.last_name,'')) LIKE ?
+        (${tokenClause})
         OR LOWER(IFNULL(co.phone,'')) LIKE ?
         OR LOWER(IFNULL(co.email,'')) LIKE ?
         OR LOWER(IFNULL(c.external_id,'')) LIKE ?
-        OR LOWER(IFNULL(c.last_message,'')) LIKE ?
+        OR LOWER(IFNULL(c.last_message,'')) LIKE ?${conTel ? `
+        OR ${telNormal} LIKE ?` : ''}
         OR EXISTS (
           SELECT 1 FROM contact_tags ct
           WHERE ct.contact_id = co.id AND LOWER(ct.tag) LIKE ? LIMIT 1
@@ -238,7 +252,7 @@ function list(db, tenantId, { search, provider, unreadOnly, contactId, includeAr
           WHERE fts.body MATCH ? AND m.tenant_id = ?
         )
       )`);
-      params.push(q, q, q, q, q, q, q, ftsQuery, tenantId);
+      params.push(...ftsTokens.map((t) => `%${foldJs(t)}%`), q, q, q, q, ...(conTel ? [`%${soloDigitos}%`] : []), q, ftsQuery, tenantId);
     } else {
       // search solo símbolos (ej "+++") → solo campos de contacto con LIKE
       conditions.push(`(

@@ -167,6 +167,19 @@ function buildWaAudience(db, tenantId, { pipelineId, stageId } = {}) {
 // no soporta variables en botones URL, y el botón-con-token es el corazón del
 // rastreo). Crea/reutiliza la conversación para que el mensaje viva en el inbox
 // y sus estados (entregado/leído) fluyan por el webhook normal.
+// El inbox debe enseñar el TEXTO REAL que recibió el cliente (cuerpo de la
+// plantilla con sus variables ya puestas), no la nota interna del sistema que
+// llamó. Variable sin valor se queda como {{n}} para no inventar texto.
+function renderTemplateBody(tplBody, params) {
+  const body = String(tplBody || '').trim();
+  if (!body) return null;
+  const list = Array.isArray(params) ? params : [];
+  return body.replace(/\{\{(\d+)\}\}/g, (m, n) => {
+    const v = list[Number(n) - 1];
+    return (v == null || v === '') ? m : String(v);
+  });
+}
+
 async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyParams, autoParams, buttonParams, preview, headerImageUrl }) {
   const spec = { headerImageUrl };
   const sender = require('../conversations/sender');
@@ -260,10 +273,20 @@ async function sendCampaignTemplate(db, tenantId, { phone, template, lang, bodyP
   }
 
   const wamid = data?.messages?.[0]?.id || null;
+  // En el inbox va lo que el cliente VE: la plantilla local renderizada con
+  // los bodyParams que realmente salieron a Meta. El preview del que llamó
+  // queda solo de respaldo si la plantilla no existe localmente.
+  let cuerpoReal = null;
+  try {
+    const tplLocal = db.prepare(
+      "SELECT body FROM message_templates WHERE tenant_id = ? AND name = ? AND type = 'wa_api' LIMIT 1"
+    ).get(tenantId, String(template));
+    cuerpoReal = renderTemplateBody(tplLocal?.body, bodyParams);
+  } catch { /* sin plantilla local: cae al preview */ }
   try {
     convoSvc.addMessage(db, tenantId, convo.id, {
       externalId: wamid, direction: 'outgoing', provider: 'whatsapp',
-      body: preview || `[campaña] ${template}`, status: 'sent',
+      body: cuerpoReal || preview || `[campaña] ${template}`, status: 'sent',
     });
   } catch (err) {
     console.warn('[reelance-ia] campaña: no se registró el mensaje en inbox:', err.message);
@@ -933,6 +956,8 @@ function _mergeForwardTracking(db, tenantId, externalId, payload) {
 //   createdAt, updatedAt
 // }
 function processOrderEvent(db, tenantId, payload) {
+  // Chancluda: aviso de empaque (módulo aparte; nunca debe tumbar el pedido)
+  try { require('../chancluda/service').onOrderEvent(db, tenantId, payload); } catch (e) { console.warn('[chancluda]', e.message); }
   const cfg = getConfigByTenant(db, tenantId);
   if (!cfg || !cfg.enabled) return { skipped: 'app-disabled' };
 
@@ -1669,6 +1694,7 @@ module.exports = {
   listPipelines,
   buildWaAudience,
   sendCampaignTemplate,
+  renderTemplateBody,
   listWaTemplates,
   createWaTemplate,
   deleteWaTemplate,

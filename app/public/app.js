@@ -29191,6 +29191,7 @@ function openApp(slug) {
   if (slug === 'reelance-woocommerce')    openWooModal();
   if (slug === 'reelance-abandoned-cart') openAbandonedCartModal();
   if (slug === 'reelance-ia')             openReelanceIaModal();
+  if (slug === 'chancluda') alert('Chancluda avisa por WhatsApp (del +52 33 4965 7193 al +52 33 2609 4214) cada pedido pagado de reelance.\n\nHorario: lunes a viernes 9:30–17:30, sin la hora de comida (2–3 pm) ni días festivos oficiales. Fuera de horario los pedidos se juntan y avisan al abrir. Si un pedido lleva 30 minutos sin procesarse manda un recordatorio.\n\nEl toggle de esta tarjeta la prende y apaga.');
 }
 
 // ── Reelance IA App Modal ────────────────────────────────────────────────────

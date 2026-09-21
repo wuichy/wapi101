@@ -320,12 +320,20 @@ function _handleLead(db, { bot, stage, exp, nowSec, runBot, isHumanOnly, log }) 
     return skip('not_api',
       'El vigilante no lo mueve: su chat más reciente no es por la API oficial de WhatsApp, así que no aplica la ventana de 24 h.');
   }
-  if (!a.lastIn) {
-    return skip('no_customer_message',
-      'El vigilante no lo mueve: el cliente todavía no ha escrito, no hay ventana de 24 h que medir.');
+  // ── El ancla del reloj: el último mensaje del CLIENTE… o el NUESTRO ──────
+  // (21-sep-2026, regla de Luis para Cartbounty: "si les mandamos mensajes y
+  // no respondían nada, se pasaban a Etapa 1".) Un carrito abandonado entra a
+  // la etapa sin haber escrito jamás: no hay ventana de 24 h que medir, pero
+  // SÍ hay silencio que medir — desde nuestro último mensaje. Un día completo
+  // callado y el lead sigue su camino. Si tampoco le hemos escrito nosotros,
+  // la regla no aplica: no se mide el silencio de una conversación vacía.
+  const anclaNuestra = !a.lastIn;
+  if (anclaNuestra && !a.lastOut) {
+    return skip('no_messages',
+      'El vigilante no lo mueve: nadie ha escrito en este chat (ni el cliente ni nosotros) — no hay silencio que medir.');
   }
 
-  const lastInAt  = Number(a.lastIn.created_at);
+  const lastInAt  = anclaNuestra ? Number(a.lastOut.created_at) : Number(a.lastIn.created_at);
   const closesAt  = lastInAt + WINDOW_SEC;
   const firstSlot = lastInAt + MOVE_AT_SEC;
   const base = { lastInAt, closesAt, pending: !!a.pending };
@@ -366,10 +374,12 @@ function _handleLead(db, { bot, stage, exp, nowSec, runBot, isHumanOnly, log }) 
   // 8) Correr el bot.
   decide({
     decision: 'moved', lastInAt, slotAt, type: 'bot_window_move',
-    description: k === 0
-      ? `Todo contestado: ${doing} solo. Último mensaje del cliente ${_fmt(lastInAt)}; su ventana de 24 h cierra ${_fmt(closesAt)}.`
-      : `Todo contestado: ${doing} solo. Su ventana ya había cerrado (${_fmt(closesAt)}), así que esperó a la misma hora en que escribió el cliente.`,
-    meta: { closesAt },
+    description: anclaNuestra
+      ? `El cliente nunca respondió: ${doing} solo. Nuestro último mensaje fue ${_fmt(lastInAt)} y pasó un día completo en silencio.`
+      : (k === 0
+        ? `Todo contestado: ${doing} solo. Último mensaje del cliente ${_fmt(lastInAt)}; su ventana de 24 h cierra ${_fmt(closesAt)}.`
+        : `Todo contestado: ${doing} solo. Su ventana ya había cerrado (${_fmt(closesAt)}), así que esperó a la misma hora en que escribió el cliente.`),
+    meta: { closesAt, anclaNuestra },
   });
   try {
     runBot(bot, {

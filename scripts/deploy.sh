@@ -125,6 +125,24 @@ else
   ok "No cambió ningún .js"
 fi
 
+# ── 4b. PRUEBAS antes de reiniciar ────────────────────────────────────────
+# Misma idea que la sintaxis: el servicio sigue corriendo el código viejo en
+# memoria, así que si una prueba truena abortamos aquí y el sitio nunca se cae.
+# Las pruebas viven en app/pruebas/probar-*.js y corren con el node_modules del
+# servicio (WorkingDirectory=/root/wapi101/app).
+step "Corriendo las pruebas"
+PRUEBAS="$(ssh "$HOST" "ls $REMOTE/app/pruebas/probar-*.js 2>/dev/null | wc -l | tr -d ' '" || echo 0)"
+if [[ "$PRUEBAS" != "0" ]]; then
+  if ! SALIDA="$(ssh "$HOST" "cd $REMOTE/app && for f in pruebas/probar-*.js; do node \"\$f\" || exit 1; done" 2>&1)"; then
+    say "$SALIDA"
+    die "Una prueba FALLÓ. NO reinicié — el sitio sigue vivo con la versión anterior."
+  fi
+  printf '%s\n' "$SALIDA" | grep -E '^(✅|❌)' | sed 's/^/    /'
+  ok "Pruebas OK ($PRUEBAS archivo(s))"
+else
+  warn "No hay pruebas en app/pruebas/ — desplegando sin red"
+fi
+
 # ── 5. Reiniciar y comprobar que quedó vivo ───────────────────────────────
 step "Reiniciando el servicio"
 ssh "$HOST" "systemctl restart $SERVICE && sleep 3 && systemctl is-active $SERVICE" >/dev/null \

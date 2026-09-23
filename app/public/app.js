@@ -9396,6 +9396,8 @@ function updateExpDetailBotToggle(_convo) { /* removed — replaced by chat sear
 // Ícono del vigilante de 24 h (reloj con aviso). Va ANTES de ACT_ICON porque
 // ACT_ICON lo lee al cargar el archivo.
 const WINDOW_ALERT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11" aria-hidden="true"><path d="M12 6v6l4 2"/><path d="M16 21.16a10 10 0 1 1 5-13.516"/><path d="M20 11.5v6"/><path d="M20 21.5h.01"/></svg>';
+// Ícono del bot AGENDADO (robot). El vigilante no ha despertado: ya tiene hora.
+const BOT_SCHEDULED_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11" aria-hidden="true"><rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="1"/><path d="M12 7v4"/><path d="M8 16h.01"/><path d="M16 16h.01"/></svg>';
 
 const ACT_ICON = {
   created:             '🗂',
@@ -16494,15 +16496,42 @@ function renderPipelineViewSwitch() {
 // Aviso del vigilante de 24 h (bot 'window_24h'): el cliente escribió, nadie le ha
 // contestado y su ventana cierra en 3 h o menos. Solo visual: sin sonido ni push.
 // (WINDOW_ALERT_ICON se define junto a ACT_ICON, que lo usa al cargar el archivo.)
+// "faltan 2 h 5 min" / "faltan 40 min" a partir de segundos.
+function _faltanTxt(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? `${h} h ${m} min` : `${Math.max(1, m)} min`;
+}
+function _horaTxt(sec) {
+  return new Date(sec * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+}
+
 function _windowAlertPillHtml(e, nowSec) {
   const wa = e && e.windowAlert;
-  if (!wa || !wa.closesAt) return '';
+  if (!wa) return '';
+
+  // Todo contestado: el vigilante no ha arrancado, pero YA TIENE HORA. Sin esto la
+  // tarjeta se veía "Estancado" en rojo horas antes de que el bot despertara, sin
+  // decir que estaba esperando a propósito (23-sep-2026).
+  if (wa.kind === 'scheduled' && wa.slotAt) {
+    const falta = wa.slotAt - nowSec;
+    const hora  = _horaTxt(wa.slotAt);
+    const quien = wa.botName ? `El bot «${wa.botName}»` : 'El vigilante de 24 h';
+    const desde = wa.anchorIsOurs
+      ? 'Nadie ha escrito del otro lado: el reloj corre desde NUESTRO último mensaje.'
+      : 'No hay nada del cliente sin contestar.';
+    const title = falta > 0
+      ? `${quien} lo va a mover a las ${hora} (faltan ${_faltanTxt(falta)}). ${desde} No está atorado: está esperando su turno.`
+      : `${quien} está en su turno (${hora}) — lo mueve en la próxima revisión. ${desde}`;
+    const txt = falta > 0 ? hora : 'ahora';
+    return `<span class="pl-card-bot-pill" title="${escHtml(title)}">${BOT_SCHEDULED_ICON}<span>${escHtml(txt)}</span></span>`;
+  }
+
+  if (!wa.closesAt) return '';
   const left = wa.closesAt - nowSec;
   if (left <= 0) return '';
-  const h = Math.floor(left / 3600);
-  const m = Math.floor((left % 3600) / 60);
-  const faltan = h > 0 ? `${h} h ${m} min` : `${Math.max(1, m)} min`;
-  const hora = new Date(wa.closesAt * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const faltan = _faltanTxt(left);
+  const hora = _horaTxt(wa.closesAt);
   const title = `El cliente escribió y nadie le ha contestado. Su ventana de 24 h cierra a las ${hora} (faltan ${faltan}).`;
   return `<span class="pl-card-window-pill" title="${escHtml(title)}">${WINDOW_ALERT_ICON}<span>${escHtml(faltan)}</span></span>`;
 }
@@ -16592,7 +16621,14 @@ function renderPipelinesBoard() {
         <div class="pl-col-body">
           ${cards.length ? cards.map(e => {
             const triggered = showAlarms ? evalStageAlarmsTriggered(stage, e, nowSec) : [];
-            const isStale = triggered.length > 0;
+            // 🚨 Un lead con el bot de ventana AGENDADO no está atorado: está esperando
+            // su turno. La alarma de la etapa salta a las 9 h y el bot no despierta hasta
+            // las 23 h 50 min, así que la tarjeta se pasaba ~15 h gritando "Estancado"
+            // sobre algo que iba bien (23-sep-2026). Si el vigilante ya tiene hora, no hay
+            // rojo ni letrero: manda la píldora del bot. Si el movimiento FALLÓ, el backend
+            // deja de mandar la hora y el "Estancado" vuelve solo — que es cuando sí importa.
+            const botAgendado = !!(e.windowAlert && e.windowAlert.kind === 'scheduled' && e.windowAlert.slotAt);
+            const isStale = triggered.length > 0 && !botAgendado;
             const overdueLabel = isStale
               ? (triggered.length === 1
                   ? `<span class="pl-card-stale-pill" title="${escHtml(alarmReason(stage))}">⚠ ${escHtml(alarmShortLabel(triggered[0].type))}</span>`
@@ -16616,7 +16652,7 @@ function renderPipelinesBoard() {
               : '';
             const windowPill = _windowAlertPillHtml(e, nowSec);
             return `
-            <div class="pl-card ${isStale ? 'is-stale' : ''} ${failure ? 'has-delivery-error' : ''} ${windowPill ? 'has-window-alert' : ''}" data-exp-id="${e.id}" draggable="true">
+            <div class="pl-card ${isStale ? 'is-stale' : ''} ${failure ? 'has-delivery-error' : ''} ${windowPill && !botAgendado ? 'has-window-alert' : ''}" data-exp-id="${e.id}" draggable="true">
               <div class="pl-card-name ${e.nameIsAuto ? 'is-auto-name' : ''}">${escHtml(e.name || 'Sin nombre')}${deliveryIcon}</div>
               <div class="pl-card-contact-row">
                 ${avatarHtml}

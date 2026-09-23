@@ -475,18 +475,67 @@ function watchedStages(db, tenantId, nowMs = Date.now()) {
 
 function bustCache() { _watchCache = new Map(); }
 
-// Mensaje del cliente sin contestar y faltan 3 h o menos para que cierre su ventana.
+// Lo que la TARJETA tiene que decir de un lead en etapa vigilada. Dos casos:
+//
+//   • 'pending'   — el cliente escribió, nadie le contestó y faltan 3 h o menos
+//                   para que cierre su ventana. (Lo de siempre.)
+//   • 'scheduled' — todo contestado: el vigilante ya tiene HORA para moverlo.
+//
+// 🚨 Por qué existe 'scheduled' (23-sep-2026): el bot de ventana NO arranca cuando
+// el cliente escribe — espera hasta 10 min antes de que cierre la ventana de 24 h
+// (MOVE_AT_SEC). Pero la alarma de la etapa grita "Estancado" a las 9 h. O sea que
+// la tarjeta se veía en rojo, sin nada corriendo y sin reloj, durante ~15 h antes
+// de que el bot siquiera despertara. La interfaz decía "roto" cuando estaba
+// esperando a propósito. El reloj aquí es EL MISMO de _handleLead: si cambia allá,
+// cambia aquí (lo cubre pruebas/probar-window-alert.js).
+//
 // Aplica a TODOS los leads de una etapa vigilada (también los viejos): solo avisa.
 function windowAlertFor(db, tenantId, row, { nowSec = Math.floor(Date.now() / 1000) } = {}) {
   try {
     if (!row || !row.contact_id || !row.stage_id) return null;
-    if (!watchedStages(db, tenantId, nowSec * 1000).has(Number(row.stage_id))) return null;
+    const bot = watchedStages(db, tenantId, nowSec * 1000).get(Number(row.stage_id));
+    if (!bot) return null;
+
     const a = analyzeContact(db, tenantId, row.contact_id);
-    if (!a.lastIn || !a.pending) return null;
-    const closesAt = Number(a.lastIn.created_at) + WINDOW_SEC;
-    const left = closesAt - nowSec;
-    if (left <= 0 || left > WARN_SEC) return null;
-    return { closesAt, pendingSince: Number(a.pending.created_at) };
+    if (!a.convo || a.convo.provider !== 'whatsapp') return null;
+
+    // 1) Algo del cliente sin contestar: mandan las prisas, no el bot.
+    if (a.lastIn && a.pending) {
+      const closesAt = Number(a.lastIn.created_at) + WINDOW_SEC;
+      const left = closesAt - nowSec;
+      if (left <= 0 || left > WARN_SEC) return null;
+      return { kind: 'pending', closesAt, pendingSince: Number(a.pending.created_at) };
+    }
+
+    // 2) Todo contestado → el vigilante ya tiene hora. El bot no lo vuelve a tocar
+    //    si ya lo movió (o si el movimiento falló y quedó a cargo de un humano).
+    const prev = _prevDecision(db, bot.id, row.id);
+    if (prev && ['moved', 'returned', 'move_failed'].includes(prev.decision)) return null;
+
+    // Ancla del reloj: el último mensaje del CLIENTE, o el NUESTRO si nunca escribió
+    // (carrito abandonado: no hay ventana que medir, pero sí silencio).
+    const ancla = a.lastIn || a.lastOut;
+    if (!ancla) return null;
+    const anchorAt  = Number(ancla.created_at);
+    const closesAt  = anchorAt + WINDOW_SEC;
+    const firstSlot = anchorAt + MOVE_AT_SEC;
+
+    let slotAt;
+    if (nowSec < firstSlot) {
+      slotAt = firstSlot;
+    } else {
+      const k       = Math.floor((nowSec - firstSlot) / DAY_SEC);
+      const thisOne = firstSlot + k * DAY_SEC;
+      const slotEnd = k === 0 ? closesAt - SAFE_BEFORE_CLOSE_SEC : thisOne + LATE_SLOT_SEC;
+      slotAt = nowSec >= slotEnd ? thisOne + DAY_SEC : thisOne;   // se le pasó el turno: mañana
+    }
+    return {
+      kind: 'scheduled',
+      slotAt,
+      closesAt,
+      botName: bot.name || null,
+      anchorIsOurs: !a.lastIn,   // el reloj corre desde NUESTRO mensaje, no del suyo
+    };
   } catch {
     return null;
   }

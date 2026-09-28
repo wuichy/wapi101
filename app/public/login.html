@@ -219,6 +219,8 @@
         try { (_remember ? sessionStorage : localStorage).removeItem('rh_advisor'); } catch {}
         _store.setItem('rh_token', data.token);
         _store.setItem('rh_advisor', JSON.stringify(data.advisor));
+        // La burbuja de soporte usa el nombre de la empresa para presentarse.
+        try { _store.setItem('rh_tenant', JSON.stringify(data.tenant || {})); } catch {}
         // Cookie compartida entre Safari y el PWA standalone en iOS
         // (localStorage NO se comparte entre ambos contextos en iOS)
         document.cookie = `rh_token=${encodeURIComponent(data.token)}; path=/; max-age=2592000; SameSite=Lax`;

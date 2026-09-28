@@ -85,5 +85,86 @@ module.exports = function createMonitorRouter(db) {
     } catch (e) { next(e); }
   });
 
+  // ─── GET /api/monitor/visitors — feed de visitantes con sus páginas ───
+  // Estilo del /admin/logs de reelance: cada sesión de wapi101.com con las
+  // páginas que vio, más resumen por origen/país. Filtros: ?days=1|7|28
+  // (default 7), ?country=MX, ?limit (default 60, máx 200). Solo lectura.
+  // Las visitas son de la landing pública (no tienen tenant), por eso no se
+  // filtra por tenant aquí — el módulo ya es admin-only.
+  router.get('/visitors', (req, res, next) => {
+    try {
+      const days    = [1, 7, 28].includes(Number(req.query.days)) ? Number(req.query.days) : 7;
+      const limit   = Math.min(Math.max(Number(req.query.limit) || 60, 10), 200);
+      const country = String(req.query.country || '').toUpperCase().slice(0, 2) || null;
+      const since   = Math.floor(Date.now() / 1000) - days * 86400;
+      const now     = Math.floor(Date.now() / 1000);
+
+      const conds = ['COALESCE(is_bot,0) = 0', 'created_at > ?'];
+      const params = [since];
+      if (country) { conds.push('country = ?'); params.push(country); }
+      const where = conds.join(' AND ');
+
+      const sessions = db.prepare(`
+        SELECT session_id, utm_source, utm_medium, utm_campaign, referrer, landing_page,
+               country, region, city, created_at, last_seen_at
+          FROM visitor_sessions WHERE ${where}
+         ORDER BY last_seen_at DESC LIMIT ?
+      `).all(...params, limit);
+
+      // Páginas de esas sesiones en UNA query (evita N+1)
+      const ids = sessions.map(s => s.session_id);
+      const pagesBySession = {};
+      if (ids.length) {
+        const ph = ids.map(() => '?').join(',');
+        db.prepare(`
+          SELECT session_id, path, title, created_at FROM visitor_pageviews
+           WHERE session_id IN (${ph}) ORDER BY created_at ASC
+        `).all(...ids).forEach(pv => {
+          (pagesBySession[pv.session_id] ||= []).push({ path: pv.path, title: pv.title, at: pv.created_at });
+        });
+      }
+
+      const origen = (s) => {
+        const r = String(s.referrer || '').toLowerCase();
+        if (s.utm_source) return `utm:${s.utm_source}`;
+        if (!r) return 'directo';
+        if (/google\./.test(r)) return 'google';
+        if (/bing\.|duckduckgo|yahoo\./.test(r)) return 'otro buscador';
+        if (/chatgpt|openai|perplexity|claude\.ai|copilot/.test(r)) return 'IA';
+        if (/wapi101\.com/.test(r)) return 'interno';
+        if (/facebook|instagram|fb\.|t\.co|twitter|linkedin|tiktok/.test(r)) return 'social';
+        return 'otro';
+      };
+
+      // Resumen sobre TODO el rango (no solo la página mostrada)
+      const all = db.prepare(`SELECT referrer, utm_source, country, landing_page FROM visitor_sessions WHERE ${where}`).all(...params);
+      const byOrigen = {}, byCountry = {}, byLanding = {};
+      for (const s of all) {
+        const o = origen(s); byOrigen[o] = (byOrigen[o] || 0) + 1;
+        const c = s.country || '??'; byCountry[c] = (byCountry[c] || 0) + 1;
+        const l = s.landing_page || '/'; byLanding[l] = (byLanding[l] || 0) + 1;
+      }
+      const top = (obj, n) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n);
+      const signups = db.prepare('SELECT COUNT(*) AS n FROM tenants WHERE created_at > ?').get(since).n;
+
+      res.json({
+        days, country,
+        stats: {
+          sessions: all.length,
+          signups,
+          byOrigen:  top(byOrigen, 8),
+          byCountry: top(byCountry, 10),
+          byLanding: top(byLanding, 8),
+        },
+        sessions: sessions.map(s => ({
+          ...s,
+          origen: origen(s),
+          online: (now - (s.last_seen_at || 0)) < 120,
+          pages: pagesBySession[s.session_id] || [],
+        })),
+      });
+    } catch (e) { next(e); }
+  });
+
   return router;
 };

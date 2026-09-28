@@ -6627,6 +6627,26 @@ document.addEventListener('click', (e) => {
   if (e.target?.closest?.('#waGroupsSave')) saveWaGroups();
 }, true);
 
+// ── Burbuja flotante de soporte (WhatsApp con Luis) ──────────────────────
+// Se muestra a todos los tenants MENOS al dueño (tenant 1 = wuichy). El texto
+// prellenado lleva quién escribe y desde qué empresa/plan, para que Luis sepa
+// de entrada con quién habla sin preguntar.
+function setupSupportBubble() {
+  const a = document.getElementById('waSupportBubble');
+  if (!a) return;
+  const adv = getAdvisor();
+  if (!adv) { a.hidden = true; return; }
+  if (Number(adv.tenantId) === 1) { a.hidden = true; return; }   // el dueño no se escribe a sí mismo
+  let tenant = null;
+  try { tenant = JSON.parse(localStorage.getItem('rh_tenant') || sessionStorage.getItem('rh_tenant') || 'null'); } catch (_) {}
+  const empresa = tenant?.displayName ? ` de ${tenant.displayName}` : '';
+  const plan    = tenant?.plan ? ` · plan ${tenant.plan}` : '';
+  const texto   = `Hola Luis, soy ${adv.name || 'un usuario'}${empresa} (wapi101${plan}). `;
+  a.href = `https://wa.me/523349657193?text=${encodeURIComponent(texto)}`;
+  a.hidden = false;
+}
+document.addEventListener('DOMContentLoaded', setupSupportBubble);
+
 // Campanita por canal (Integraciones). Prendida = suena; tachada = silencio.
 const BOT_ON_SVG  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V5"/><circle cx="12" cy="3.5" r="1.5"/><path d="M9 13h.01M15 13h.01M9 17h6"/></svg>';
 const BOT_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V5"/><circle cx="12" cy="3.5" r="1.5"/><path d="M9 13h.01M15 13h.01"/><line x1="3" y1="3" x2="21" y2="21"/></svg>';
@@ -8453,6 +8473,7 @@ document.addEventListener('click', (e) => {
 // ─── Monitor: consola de logs global + sesiones web (en línea ahora) ───
 let _monSub = 'logs';
 async function _loadMonitor() {
+  if (_monSub === 'visitors') return _loadMonitorVisitors();
   if (_monSub === 'logs') {
     const el = document.getElementById('monPaneLogs');
     if (!el) return;
@@ -8494,12 +8515,75 @@ document.addEventListener('click', (e) => {
   if (sub) {
     _monSub = sub.dataset.monSub || 'logs';
     document.querySelectorAll('.mon-subtab').forEach(b => b.classList.toggle('is-active', b === sub));
-    const lp = document.getElementById('monPaneLogs'), wp = document.getElementById('monPaneWeb');
-    if (lp) lp.hidden = _monSub !== 'logs';
-    if (wp) wp.hidden = _monSub !== 'web';
+    // Panes por data-mon-pane: agregar un subtab nuevo ya no requiere tocar esto.
+    document.querySelectorAll('.mon-pane').forEach(p => { p.hidden = p.dataset.monPane !== _monSub; });
     _loadMonitor();
+    return;
   }
+  // Visitantes: rango de días y filtro por país
+  const chip = t.closest('[data-vis-days], [data-vis-country]');
+  if (chip && chip.closest('#monPaneVisitors')) {
+    if (chip.dataset.visDays) {
+      _monVisDays = Number(chip.dataset.visDays) || 7;
+      document.querySelectorAll('[data-vis-days]').forEach(c => c.classList.toggle('is-active', c === chip));
+    } else {
+      _monVisCountry = (_monVisCountry === chip.dataset.visCountry) ? '' : chip.dataset.visCountry;
+    }
+    _loadMonitorVisitors();
+    return;
+  }
+  const row = t.closest('.mon-vis-head');
+  if (row) { row.parentElement.classList.toggle('is-open'); return; }
 });
+
+// ── Monitor › Visitantes ──
+let _monVisDays = 7, _monVisCountry = '';
+const _FLAG = (cc) => cc && /^[A-Z]{2}$/.test(cc)
+  ? String.fromCodePoint(...[...cc].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65)) : '🌐';
+async function _loadMonitorVisitors() {
+  const feed = document.getElementById('monVisFeed');
+  const stats = document.getElementById('monVisStats');
+  const countries = document.getElementById('monVisCountries');
+  if (!feed) return;
+  feed.innerHTML = '<div class="blackbox-loading">Cargando visitantes…</div>';
+  try {
+    const q = new URLSearchParams({ days: String(_monVisDays) });
+    if (_monVisCountry) q.set('country', _monVisCountry);
+    const r = await api('GET', `/api/monitor/visitors?${q}`);
+    const st = r.stats || {};
+    const orig = (st.byOrigen || []).map(([k, n]) => `${escapeHtml(k)} ${n}`).join(' · ') || '—';
+    if (stats) stats.innerHTML = `
+      <div class="mon-vis-stat"><b>${st.sessions ?? 0}</b><span>sesiones (${r.days} d${_monVisCountry ? ', ' + escapeHtml(_monVisCountry) : ''})</span></div>
+      <div class="mon-vis-stat"><b>${st.signups ?? 0}</b><span>registros nuevos</span></div>
+      <div class="mon-vis-stat"><b>${(st.byOrigen || []).find(([k]) => k === 'google')?.[1] || 0}</b><span>desde Google</span></div>
+      <div class="mon-vis-stat"><b>${(st.byOrigen || []).find(([k]) => k === 'IA')?.[1] || 0}</b><span>desde IA (ChatGPT, etc.)</span></div>
+      <div class="mon-vis-stat" style="grid-column:1/-1"><span>Orígenes: ${orig}</span></div>`;
+    if (countries) countries.innerHTML = (st.byCountry || []).map(([cc, n]) =>
+      `<button class="mon-vis-chip${_monVisCountry === cc ? ' is-active' : ''}" data-vis-country="${escapeHtml(cc)}">${_FLAG(cc)} ${escapeHtml(cc)} ${n}</button>`).join('');
+    const ss = r.sessions || [];
+    if (!ss.length) { feed.innerHTML = '<div class="blackbox-loading">Sin visitantes en este rango.</div>'; return; }
+    const fmt = (ts) => ts ? new Date(ts * 1000).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    const hora = (ts) => ts ? new Date(ts * 1000).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';
+    feed.innerHTML = ss.map(s => {
+      const geo = [s.city, s.region].filter(Boolean).join(', ') || s.country || '—';
+      const pages = s.pages || [];
+      const last = pages.length ? pages[pages.length - 1].path : (s.landing_page || '/');
+      return `<div class="mon-vis-row">
+        <div class="mon-vis-head">
+          <span class="mon-vis-flag">${_FLAG(s.country)}</span>
+          <div class="mon-vis-main">
+            <div class="mon-vis-title">${s.online ? '🟢 ' : ''}${escapeHtml(geo)} · <span style="font-weight:400">${escapeHtml(s.origen)}</span></div>
+            <div class="mon-vis-meta">${fmt(s.created_at)} → ${hora(s.last_seen_at)} · entró por <code>${escapeHtml(s.landing_page || '/')}</code> · última <code>${escapeHtml(last)}</code></div>
+          </div>
+          <span class="mon-vis-count">${pages.length} pág.</span>
+        </div>
+        <div class="mon-vis-pages">${pages.length
+          ? pages.map(p => `<div class="mon-vis-page"><time>${hora(p.at)}</time><code>${escapeHtml(p.path)}</code><span>${escapeHtml(p.title || '')}</span></div>`).join('')
+          : '<div class="mon-vis-page">Sin páginas registradas para esta sesión.</div>'}</div>
+      </div>`;
+    }).join('');
+  } catch (err) { feed.innerHTML = `<div class="blackbox-loading">Error: ${escapeHtml(err.message || '')}</div>`; }
+}
 
 function renderExpDetailInfo() {
   const exp = EXP_DETAIL;

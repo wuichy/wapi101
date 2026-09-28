@@ -15465,3 +15465,63 @@ body.bb-ve-fullscreen-on .bb-ve-wrap {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wa-group-count { flex-shrink: 0; font-size: 11.5px; color: var(--text-muted, #64748b);
   background: var(--bg, #f1f5f9); border-radius: 999px; padding: 2px 8px; }
+
+/* ─── Burbuja flotante de soporte (WhatsApp con Luis) ─── */
+.wa-support-bubble {
+  position: fixed;
+  right: 20px;
+  bottom: 84px;              /* arriba de la barra de escribir en Chats */
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 52px;
+  padding: 0;
+  border-radius: 999px;
+  background: #25D366;
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(37, 211, 102, .35), 0 2px 6px rgba(0,0,0,.15);
+  transition: box-shadow .15s, transform .15s;
+}
+.wa-support-bubble[hidden] { display: none; }
+.wa-support-bubble:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(37, 211, 102, .45), 0 3px 8px rgba(0,0,0,.18); }
+.wa-support-icon { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.wa-support-label {
+  max-width: 0; overflow: hidden; white-space: nowrap;
+  font-size: 13.5px; font-weight: 600; padding-left: 0;
+  transition: max-width .25s ease, padding .25s ease;
+}
+.wa-support-bubble:hover .wa-support-label,
+.wa-support-bubble:focus-visible .wa-support-label { max-width: 180px; padding-left: 16px; }
+@media (max-width: 720px) {
+  .wa-support-bubble { right: 14px; bottom: 96px; height: 46px; }
+  .wa-support-icon { width: 46px; height: 46px; }
+  .wa-support-label { display: none; }
+}
+
+/* ─── Monitor › Visitantes (feed estilo reelance /admin/logs) ─── */
+.mon-vis-toolbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 4px 6px; }
+.mon-vis-range, .mon-vis-countries { display: flex; flex-wrap: wrap; gap: 6px; }
+.mon-vis-chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border, #e2e8f0); background: transparent; color: var(--text-soft, #475569);
+}
+.mon-vis-chip.is-active { background: var(--accent, #2563eb); border-color: var(--accent, #2563eb); color: #fff; }
+.mon-vis-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; padding: 4px 4px 12px; }
+.mon-vis-stat { background: var(--bg, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 10px; padding: 10px 12px; }
+.mon-vis-stat b { display: block; font-size: 20px; color: var(--text, #0f172a); }
+.mon-vis-stat span { font-size: 11.5px; color: var(--text-muted, #64748b); }
+.mon-vis-row { border: 1px solid var(--border, #e2e8f0); border-radius: 10px; margin: 0 4px 8px; background: #fff; }
+.mon-vis-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; }
+.mon-vis-head:hover { background: var(--bg, #f8fafc); }
+.mon-vis-flag { font-size: 18px; flex-shrink: 0; }
+.mon-vis-main { flex: 1; min-width: 0; }
+.mon-vis-title { font-size: 13px; font-weight: 600; color: var(--text, #0f172a); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mon-vis-meta { font-size: 11.5px; color: var(--text-muted, #64748b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mon-vis-count { font-size: 11.5px; color: var(--text-soft, #475569); background: var(--bg, #f1f5f9); border-radius: 999px; padding: 2px 8px; flex-shrink: 0; }
+.mon-vis-pages { display: none; border-top: 1px solid var(--border, #f1f5f9); padding: 6px 12px 8px 40px; }
+.mon-vis-row.is-open .mon-vis-pages { display: block; }
+.mon-vis-page { display: flex; gap: 10px; font-size: 12px; padding: 3px 0; color: var(--text-soft, #475569); }
+.mon-vis-page time { flex-shrink: 0; color: var(--text-muted, #94a3b8); font-variant-numeric: tabular-nums; }
+.mon-vis-page code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: var(--text, #0f172a); }

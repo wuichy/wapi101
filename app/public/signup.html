@@ -226,6 +226,9 @@
         email:       document.getElementById('email').value.trim(),
         password:    document.getElementById('password').value,
         plan:        _urlPlan,
+        // Atribución: el id que track.js le puso a este visitante (localStorage).
+        // Con esto el registro se liga a su sesión (referrer, utm, landing).
+        visitorId:   (function(){ try { return localStorage.getItem('wapi_vid') || ''; } catch (e) { return ''; } })(),
       };
       btn.disabled = true;
       btn.textContent = s.creating;

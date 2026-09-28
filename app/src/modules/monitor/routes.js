@@ -146,12 +146,17 @@ module.exports = function createMonitorRouter(db) {
       }
       const top = (obj, n) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n);
       const signups = db.prepare('SELECT COUNT(*) AS n FROM tenants WHERE created_at > ?').get(since).n;
+      // Registros atribuidos por origen (columnas signup_* desde la migración 104)
+      const signupsBySource = db.prepare(
+        "SELECT COALESCE(signup_source, 'sin atribuir') AS src, COUNT(*) AS n FROM tenants WHERE created_at > ? GROUP BY src ORDER BY n DESC"
+      ).all(since).map(r => [r.src, r.n]);
 
       res.json({
         days, country,
         stats: {
           sessions: all.length,
           signups,
+          signupsBySource,
           byOrigen:  top(byOrigen, 8),
           byCountry: top(byCountry, 10),
           byLanding: top(byLanding, 8),

@@ -389,6 +389,7 @@ function _renderAboutPage() {
     'contactPoint': [{
       '@type': 'ContactPoint',
       'contactType': 'customer support',
+      'telephone': '+52-33-4965-7193',
       'email': 'soporte@wapi101.com',
       'availableLanguage': ['Spanish', 'English'],
       'areaServed': ['MX', 'LATAM'],
@@ -532,7 +533,7 @@ function _renderAboutPage() {
     <h2>Contacto</h2>
     <p>Email de soporte: <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a></p>
     <p>Para developers e integraciones: <a href="/developers">/developers</a></p>
-    <p>Para empresas con más de 50 asesores o necesidades específicas: contacta directo por <a href="https://wa.me/523349657193">WhatsApp</a>.</p>
+    <p>WhatsApp directo: <a href="https://wa.me/523349657193">+52 33 4965 7193</a> — para dudas, demos o empresas con necesidades específicas.</p>
   </section>
 
   <section class="cta-final">

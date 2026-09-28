@@ -578,6 +578,33 @@ app.post('/api/auth/signup', async (req, res) => {
       adminPassword: password,
     });
 
+    // Atribución del registro: ligar el tenant a la sesión de visitante que lo
+    // trajo (track.js → visitor_sessions). Best-effort: si no hay id o la
+    // sesión no existe, el tenant queda sin atribuir y nada se rompe.
+    try {
+      const vid = String(req.body?.visitorId || '').trim().slice(0, 64);
+      if (vid && result.tenant?.id) {
+        const vs = db.prepare(
+          'SELECT referrer, landing_page, utm_source, utm_medium, utm_campaign FROM visitor_sessions WHERE session_id = ? LIMIT 1'
+        ).get(vid);
+        if (vs) {
+          const r = String(vs.referrer || '').toLowerCase();
+          const source = vs.utm_source ? `utm:${vs.utm_source}`
+            : !r ? 'directo'
+            : /google\./.test(r) ? 'google'
+            : /bing\.|duckduckgo|yahoo\./.test(r) ? 'otro buscador'
+            : /chatgpt|openai|perplexity|claude\.ai|copilot/.test(r) ? 'IA'
+            : /facebook|instagram|fb\.|t\.co|twitter|linkedin|tiktok/.test(r) ? 'social'
+            : 'otro';
+          db.prepare(`UPDATE tenants SET signup_session_id = ?, signup_referrer = ?, signup_landing_page = ?,
+                        signup_utm_source = ?, signup_utm_medium = ?, signup_utm_campaign = ?, signup_source = ?
+                      WHERE id = ?`)
+            .run(vid, vs.referrer || null, vs.landing_page || null, vs.utm_source || null, vs.utm_medium || null,
+                 vs.utm_campaign || null, source, result.tenant.id);
+        }
+      }
+    } catch (e) { console.warn('[signup] atribución no guardada:', e.message); }
+
     // Auto-login: crear session inmediato
     const advisor = result.tenant && db.prepare(
       "SELECT * FROM advisors WHERE tenant_id = ? AND role = 'admin' AND active = 1 ORDER BY id DESC LIMIT 1"

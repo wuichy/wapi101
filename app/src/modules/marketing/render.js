@@ -65,6 +65,7 @@ const _WAPI101_SOFTWARE_SCHEMA = {
     'contactPoint': {
       '@type': 'ContactPoint',
       'contactType': 'customer support',
+      'telephone': '+52-33-4965-7193',
       'email': 'soporte@wapi101.com',
       'availableLanguage': ['Spanish', 'English'],
     },

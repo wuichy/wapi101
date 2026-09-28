@@ -616,6 +616,93 @@ const POSTS = {
   },
 
   // ─── Placeholder safety — mantén este al final ───
+  // ───────────────────────────────────
+  // 7. Ranking de plataformas de WhatsApp Business API (2026-09-28)
+  // Origen: Search Console mostró que las impresiones de wapi101 vienen de
+  // búsquedas tipo IA ("compara hubspot con twilio, infobip y 360dialog…
+  // ranking de mejor a peor") donde salíamos en pos 6-11 con /vs/hubspot.
+  // Este artículo responde exactamente esa pregunta.
+  // ───────────────────────────────────
+  'mejores-plataformas-whatsapp-business-api-latam': {
+    slug: 'mejores-plataformas-whatsapp-business-api-latam',
+    title: 'Mejores plataformas de WhatsApp Business API en LATAM (2026)',
+    description: 'Ranking de mejor a peor: Twilio, Infobip, 360dialog, Botmaker, HubSpot, Vonage, Bird y Wapi101. Precios reales y cuál elegir en México y LATAM.',
+    keywords: 'mejores plataformas whatsapp business api, twilio vs infobip vs 360dialog, botmaker vs hubspot whatsapp, ranking whatsapp api latam, proveedor whatsapp business api mexico, bsp whatsapp latam',
+    publishedAt: '2026-09-28',
+    updatedAt: '2026-09-28',
+    author: 'Equipo Wapi101',
+    category: 'Comparativas',
+    excerpt: 'Ocho plataformas para conectar WhatsApp Business API, ordenadas de mejor a peor según para quién son, cuánto cuestan de verdad y qué tan rápido las tienes andando en LATAM.',
+    readingTime: '8 min',
+    sections: [
+      {
+        h: 'Cómo armamos este ranking (y por qué no hay una sola ganadora)',
+        p: [
+          'Cuando alguien busca "compara Twilio con Infobip y 360dialog para la API de WhatsApp" lo que quiere es una respuesta directa: cuál es mejor. La respuesta honesta es que **depende de tu tamaño y de si tienes desarrolladores**. Un banco con 200 agentes y una tienda de 3 personas no deberían usar la misma herramienta, aunque las dos manden WhatsApps.',
+          'Así que ordenamos las 8 plataformas de mejor a peor **para cada perfil**, y al final hay un ranking general con criterios explícitos: costo real por conversación (no solo el precio de lista), tiempo hasta el primer mensaje, si necesitas programar, soporte en español y en horario de LATAM, y qué tan atado quedas al proveedor.',
+          'Somos Wapi101, un CRM para WhatsApp, así que tenemos interés en esto. Por eso las categorías donde otra plataforma es claramente mejor lo decimos sin rodeos. Si buscas la comparación técnica a fondo entre Cloud API y Twilio, ya la escribimos en [WhatsApp Cloud API vs Twilio](/blog/whatsapp-cloud-api-vs-twilio).',
+        ],
+      },
+      {
+        h: 'Primero: BSP, CRM o API directa — son cosas distintas',
+        p: [
+          'La confusión más común: comparar peras con manzanas. Hay tres tipos de plataforma en esta lista.',
+          '**API directa (Meta Cloud API).** Meta te da la API gratis; pagas solo las conversaciones (~$0.50-0.90 MXN por conversación de utilidad en México, más caras las de marketing). No hay intermediario, pero tampoco hay interfaz: necesitas un software que la use. [Cómo conectarla paso a paso](/blog/como-conectar-whatsapp-business-api).',
+          '**BSP (Business Solution Provider): Twilio, Infobip, 360dialog, Vonage, MessageBird.** Revenden la API con una capa técnica encima. Cobran una comisión por mensaje o una cuota mensual, y están hechos para que tu equipo de desarrollo construya sobre ellos. Sin desarrolladores, un BSP solo te da una llave que no sabes usar.',
+          '**CRM con WhatsApp: HubSpot, Botmaker, Wapi101.** Software terminado: inbox, bots, pipeline, equipo. Se conectan a la Cloud API (o a un BSP) por debajo. Aquí no programas nada. La diferencia entre ellos está en el precio, en qué tan completo es el CRM, y en si fueron hechos para LATAM o adaptados después.',
+        ],
+      },
+      {
+        h: 'El ranking, de mejor a peor',
+        p: [
+          '**1. Meta Cloud API directa + un CRM que la use.** La mejor relación costo/control para el 80% de los negocios en 2026. Cero comisión de intermediario, la API oficial, y eliges el software encima. La desventaja es que Meta no da soporte humano: si algo falla, tu CRM tiene que saber leer los errores de Meta. (Es nuestra categoría, y también la de Botmaker o de cualquier CRM serio.)',
+          '**2. 360dialog.** El BSP más barato y transparente: cuota mensual fija (desde ~$50 USD) y sin comisión por mensaje. Si tienes un desarrollador, es la forma más limpia de tener la API con soporte humano. Si no lo tienes, no te sirve solo.',
+          '**3. Twilio.** El estándar para desarrolladores: la mejor documentación del mercado, SDKs en todos los lenguajes, y escala infinita. Cobra ~$0.005 USD por mensaje encima de lo de Meta, y la consola está en inglés. Perfecto para una empresa de software; excesivo para una tienda.',
+          '**4. Infobip.** Enterprise: omnicanal (WhatsApp, SMS, RCS, email, voz), oficinas en LATAM, contratos anuales y precios que se negocian. Si mandas millones de mensajes al mes y tienes un área de TI, está entre las mejores. Si eres PyME, ni te van a contestar rápido.',
+          '**5. Botmaker.** El competidor directo hecho en LATAM (Argentina) para empresas medianas y grandes: bots muy completos, integraciones con e-commerce, soporte en español. El precio es de nivel enterprise (cientos de dólares al mes) y la curva de aprendizaje es real. Buena opción si ya tienes 20+ agentes.',
+          '**6. HubSpot con WhatsApp.** Excelente CRM… donde WhatsApp es un añadido. La integración nativa llegó tarde, requiere planes Marketing/Service de pago, y las conversaciones de WhatsApp viven en un rincón del CRM, no al centro. Si ya pagas HubSpot, úsalo. Si estás eligiendo por WhatsApp, hay mejores. [Wapi101 vs HubSpot](/vs/hubspot).',
+          '**7. Vonage (antes Nexmo).** Un BSP sólido, orientado a voz y SMS, con WhatsApp como uno más de sus canales. Documentación buena, precios parecidos a Twilio, menos comunidad en español. No hay una razón fuerte para elegirlo sobre Twilio salvo que ya lo uses para llamadas.',
+          '**8. MessageBird (ahora Bird).** Cambió de nombre, de precios y de enfoque varias veces en dos años; hoy empuja su propia suite de marketing. Funciona, pero la inestabilidad del rumbo lo pone al final: no conviene construir tu operación sobre una plataforma que no sabes cómo se llamará el año que entra.',
+        ],
+      },
+      {
+        h: 'Si eres una PyME en México o LATAM',
+        p: [
+          'Descarta los BSP puros (Twilio, Infobip, Vonage, Bird): son llaves para desarrolladores, y tú necesitas un software que ya funcione. Descarta también las suites enterprise si tienes menos de 10 personas atendiendo.',
+          'Lo que buscas es un CRM que se conecte **directo a la Cloud API** (sin comisión por mensaje), que tenga inbox compartido, pipeline y bots sin código, y que su soporte hable tu idioma y esté en tu horario. Eso es exactamente lo que construimos en [Wapi101](/crm-whatsapp-business): desde $29 USD al mes, con la API de Meta directa o tu número por QR si todavía no tienes la API aprobada.',
+          'Costo real de ejemplo para una tienda que atiende 1,500 conversaciones al mes: con Twilio + un CRM aparte pagas las conversaciones de Meta, más la comisión de Twilio, más el CRM. Con un CRM conectado directo pagas las conversaciones de Meta y el CRM. La diferencia no es enorme al mes, pero se multiplica al escalar — y sobre todo, es una factura menos y un proveedor menos que puede fallar.',
+        ],
+      },
+      {
+        h: 'Si eres empresa mediana o grande',
+        p: [
+          'Con equipo de TI: **360dialog o Twilio** como capa de API, y construyes o compras el software encima. Es la arquitectura más flexible y la que menos te ata.',
+          'Sin ganas de construir: **Botmaker** si necesitas bots muy sofisticados y ya operas en LATAM a escala; **Infobip** si tu operación es omnicanal y multinacional. Pide precios reales antes de decidir: los dos negocian.',
+          'Y un consejo que aplica a cualquiera: el número de WhatsApp está atado a tu cuenta de Meta (WABA), no al proveedor. [Puedes cambiar de plataforma sin perder el número](/blog/whatsapp-business-vs-api-diferencias) — así que no firmes un contrato anual por miedo a quedarte sin línea.',
+        ],
+      },
+      {
+        h: 'Los errores que vemos al elegir',
+        p: [
+          '**Elegir por el precio de lista.** El costo real es Meta + proveedor + software + horas de tu equipo. Un BSP "barato" con 40 horas de desarrollo no es barato.',
+          '**Ignorar el soporte.** Cuando Meta rechaza una plantilla o pausa tu número por calidad, necesitas a alguien que entienda el error en minutos, no un ticket en inglés que responden en 48 horas. Pregunta antes de contratar: ¿en qué idioma, en qué horario, y por qué canal?',
+          '**Comprar el enterprise antes de tiempo.** Empieza con lo que puedas tener funcionando esta semana. Migrar después es más fácil de lo que parece, porque el número es tuyo.',
+        ],
+      },
+    ],
+    faqs: [
+      ['¿Cuál es la mejor plataforma de WhatsApp Business API en 2026?', 'No hay una para todos. Para PyMEs en LATAM: un CRM conectado directo a la Cloud API de Meta (sin comisión por mensaje), como Wapi101. Para equipos con desarrolladores: 360dialog o Twilio. Para operaciones enterprise multinacionales: Infobip o Botmaker.'],
+      ['¿Twilio, Infobip o 360dialog: cuál es mejor?', 'De mejor a peor para la mayoría: 360dialog (más barato y transparente, cuota fija), Twilio (mejor documentación y escala, comisión por mensaje) e Infobip (enterprise, contratos anuales). Los tres necesitan desarrolladores.'],
+      ['¿HubSpot sirve para WhatsApp?', 'Sirve si ya pagas HubSpot Marketing o Service y quieres tener WhatsApp dentro. Si estás eligiendo una herramienta POR WhatsApp, quedan cortas las funciones de bots y de inbox comparadas con un CRM especializado.'],
+      ['¿Botmaker o Wapi101?', 'Botmaker es para empresas medianas y grandes con bots complejos y presupuesto enterprise. Wapi101 es para PyMEs y equipos pequeños que quieren inbox, pipeline y bots sin código desde $29 USD al mes. Si tienes menos de 20 agentes, Wapi101; si tienes 50, Botmaker.'],
+      ['¿Necesito un BSP para usar WhatsApp Business API?', 'No desde 2022. Meta Cloud API se contrata directo y gratis; pagas solo las conversaciones. El BSP solo agrega soporte técnico y herramientas para desarrolladores — útil si programas, innecesario si usas un CRM que ya se conecta directo.'],
+      ['¿Cuánto cuesta una conversación de WhatsApp Business API en México?', 'Aproximadamente entre $0.50 y $0.90 MXN por conversación de utilidad y más para marketing (varía por país y Meta ajusta las tarifas). Las conversaciones que inicia el cliente son gratis dentro de la ventana de 24 horas. Encima de eso va lo que cobre tu proveedor o CRM.'],
+      ['¿Puedo cambiar de proveedor sin perder mi número?', 'Sí. El número está vinculado a tu WhatsApp Business Account (WABA) en Meta, no al proveedor. Se migra entre BSPs y CRMs conservando número, nombre verificado y plantillas aprobadas.'],
+      ['¿Qué pasa si no tengo todavía la API aprobada?', 'Puedes empezar con tu número de WhatsApp conectado por QR (como WhatsApp Web) en un CRM que lo soporte, y migrar a la API cuando Meta apruebe tu cuenta. Wapi101 soporta las dos modalidades.'],
+    ],
+    relatedSlugs: ['whatsapp-cloud-api-vs-twilio', 'como-conectar-whatsapp-business-api', 'whatsapp-business-vs-api-diferencias'],
+  },
+
   '_placeholder': {
     slug: '_placeholder',
     title: 'Placeholder — no listar',

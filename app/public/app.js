@@ -8554,7 +8554,7 @@ async function _loadMonitorVisitors() {
     const orig = (st.byOrigen || []).map(([k, n]) => `${escapeHtml(k)} ${n}`).join(' · ') || '—';
     if (stats) stats.innerHTML = `
       <div class="mon-vis-stat"><b>${st.sessions ?? 0}</b><span>sesiones (${r.days} d${_monVisCountry ? ', ' + escapeHtml(_monVisCountry) : ''})</span></div>
-      <div class="mon-vis-stat"><b>${st.signups ?? 0}</b><span>registros nuevos</span></div>
+      <div class="mon-vis-stat"><b>${st.signups ?? 0}</b><span>registros nuevos${(st.signupsBySource || []).length ? ' · ' + st.signupsBySource.map(([k, n]) => `${escapeHtml(k)} ${n}`).join(', ') : ''}</span></div>
       <div class="mon-vis-stat"><b>${(st.byOrigen || []).find(([k]) => k === 'google')?.[1] || 0}</b><span>desde Google</span></div>
       <div class="mon-vis-stat"><b>${(st.byOrigen || []).find(([k]) => k === 'IA')?.[1] || 0}</b><span>desde IA (ChatGPT, etc.)</span></div>
       <div class="mon-vis-stat" style="grid-column:1/-1"><span>Orígenes: ${orig}</span></div>`;

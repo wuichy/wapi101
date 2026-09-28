@@ -408,7 +408,7 @@ function renderIndex() {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Blog Wapi101 · Guías de WhatsApp Business, CRM y automatización</title>
-  <meta name="description" content="Guías técnicas y prácticas sobre WhatsApp Business API, CRM, bots, plantillas aprobadas, automatización de ventas y mejores prácticas para PyMEs de México y LATAM." />
+  <meta name="description" content="Guías prácticas sobre WhatsApp Business API, CRM, bots, plantillas aprobadas y automatización de ventas para PyMEs de México y LATAM." />
   <meta name="keywords" content="blog whatsapp business, guia whatsapp api, blog crm latam, automatizar ventas whatsapp, plantillas hsm whatsapp, blog wapi101" />
   <link rel="canonical" href="https://wapi101.com/blog" />
   <meta name="theme-color" content="#2563eb" />

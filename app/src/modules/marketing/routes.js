@@ -289,12 +289,13 @@ _Última actualización: ${new Date().toISOString().slice(0, 10)}_
 function _renderFaqHub() {
   const FAQS = [
     ['¿Qué es Wapi101?', 'Wapi101 es un CRM multicanal para WhatsApp Business, Messenger, Instagram y Telegram. Usa WhatsApp Cloud API nativo (la API oficial de Meta), bots visuales y pipelines kanban. Está hecho para PyMEs en México y Latinoamérica, con interfaz y soporte en español y precios en pesos mexicanos.'],
+    ['¿Se escribe Wapi101, Wapi 101 o WhatsApp 101?', 'Se escribe Wapi101, todo junto y con el 101 al final. También nos buscan como “Wapi 101”, “WhatsApp 101” o simplemente “wapi”: es la misma herramienta, en wapi101.com.'],
     ['¿Wapi101 usa la API oficial de WhatsApp?', 'Sí. Wapi101 se conecta directo a WhatsApp Cloud API de Meta, sin intermediarios ni revendedores. También permite conectar un número personal por código QR para casos sencillos.'],
-    ['¿Cuánto cuesta Wapi101?', 'El plan Básico cuesta 149 MXN al mes, Pro 299 MXN y Ultra 499 MXN (usuarios ilimitados). Todos incluyen 14 días de prueba gratis sin tarjeta de crédito.'],
-    ['¿Necesito tarjeta para la prueba gratis?', 'No. La prueba de 14 días no pide tarjeta. Conectas tu WhatsApp Business y empiezas; si te sirve, eliges plan después.'],
+    ['¿Cuánto cuesta Wapi101?', 'Hay plan Gratis (1 usuario, 500 contactos, bots y pipelines incluidos, sin tarjeta y sin límite de tiempo). Los planes de pago: Básico MXN $149 al mes, Pro MXN $299 y Ultra MXN $499, todos con 14 días de prueba. Para operaciones grandes está el plan Ejecutivo, a la medida.'],
+    ['¿Necesito tarjeta para la prueba gratis?', 'No. Ni el plan Gratis ni los 14 días de prueba de los planes de pago piden tarjeta. Conectas tu WhatsApp Business y empiezas; si te sirve, eliges plan después.'],
     ['¿Wapi101 funciona en toda Latinoamérica?', 'Sí. Está diseñado para LATAM: español neutro/mexicano, precios en MXN y funciona en México, Colombia, Argentina, Chile, Perú, Ecuador y el resto de la región.'],
     ['¿Puedo automatizar respuestas con bots?', 'Sí. Incluye un constructor visual de bots con condiciones, esperas, botones de respuesta rápida y disparadores por palabra clave o por etapa del pipeline. Opcionalmente puedes activar IA híbrida para entender mensajes mal escritos.'],
-    ['¿Cuántos asesores pueden usar la misma cuenta?', 'Depende del plan. Básico y Pro incluyen varios asesores con roles y permisos; Ultra permite usuarios ilimitados. Cada asesor ve la bandeja compartida y puede tomar conversaciones.'],
+    ['¿Cuántos asesores pueden usar la misma cuenta?', 'El plan Gratis incluye 1 usuario (el administrador). Básico, Pro y Ultra incluyen 2 usuarios con roles y permisos, y se agregan usuarios adicionales según se necesite; el plan Ejecutivo tiene usuarios ilimitados. Cada asesor ve la bandeja compartida y solo lo que su rol permite.'],
     ['¿Wapi101 reemplaza a Kommo, HubSpot o Zoho?', 'Para equipos centrados en WhatsApp en LATAM, sí: Wapi101 es WhatsApp-first, en pesos y sin apps adicionales para mensajería. Tenemos comparativas detalladas en /vs/wapi101-vs-kommo, /vs/wapi101-vs-hubspot y /vs/wapi101-vs-zoho.'],
     ['¿Puedo importar mis contactos y leads?', 'Sí. El Data Center importa contactos, leads, etiquetas, plantillas y más desde CSV/Excel, y hacemos la importación inicial sin costo.'],
     ['¿Mis datos están seguros?', 'Sí. Conexiones cifradas (HTTPS/TLS), credenciales de integración cifradas en reposo, aislamiento por cuenta y respaldos. Cada cuenta solo ve sus propios datos.'],
@@ -402,7 +403,7 @@ function _renderAboutPage() {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Acerca de Wapi101 — Empresa, equipo, historia y misión</title>
-  <meta name="description" content="Wapi101 es un CRM SaaS multicanal fundado en México en 2026 para PyMEs de LATAM. Conoce nuestra historia, equipo, mercado objetivo y por qué construimos un CRM mexicano en pesos." />
+  <meta name="description" content="Wapi101 es un CRM para WhatsApp Business hecho en México para PyMEs de LATAM: quiénes somos, qué construimos, en qué creemos y cómo contactarnos." />
   <meta name="keywords" content="acerca de wapi101, quien es wapi101, empresa wapi101, equipo wapi101, crm mexicano, startup mexico crm, fundadores wapi101" />
   <link rel="canonical" href="https://wapi101.com/about" />
   <meta name="theme-color" content="#2563eb" />

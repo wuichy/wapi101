@@ -233,7 +233,7 @@ function renderPage(page) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>${escHtml(page.title)}</title>
+  <title>${escHtml(page.metaTitle || page.title)}</title>
   <meta name="description" content="${escHtml(metaDesc)}" />
   ${page.keywords ? `<meta name="keywords" content="${escHtml(page.keywords)}" />` : ''}
   <link rel="canonical" href="${url}" />
@@ -242,7 +242,7 @@ function renderPage(page) {
 
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="Wapi101" />
-  <meta property="og:title" content="${escHtml(page.title)}" />
+  <meta property="og:title" content="${escHtml(page.metaTitle || page.title)}" />
   <meta property="og:description" content="${escHtml(page.description)}" />
   <meta property="og:url" content="${url}" />
   <meta property="og:image" content="https://wapi101.com/icons/og-wapi101.png" />
@@ -252,7 +252,7 @@ function renderPage(page) {
   <meta property="og:locale" content="es_MX" />
 
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="${escHtml(page.title)}" />
+  <meta name="twitter:title" content="${escHtml(page.metaTitle || page.title)}" />
   <meta name="twitter:description" content="${escHtml(page.description)}" />
   <meta name="twitter:image" content="https://wapi101.com/icons/og-wapi101.png" />
 

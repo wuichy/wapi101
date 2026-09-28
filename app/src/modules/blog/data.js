@@ -115,7 +115,7 @@ const POSTS = {
       ['¿Puedo cambiar de proveedor sin perder el número?', 'Sí, el número está vinculado a tu WABA, no al proveedor. Si te cambias de Twilio a Cloud API directo, solo generas nuevo token y actualizas en el nuevo proveedor. El historial de mensajes lo mantiene tu CRM, no Meta.'],
       ['¿La API soporta multimedia, ubicación, contactos?', 'Sí — texto, imágenes (JPG/PNG hasta 5MB), video (MP4 hasta 16MB), audio, documentos (PDF hasta 100MB), ubicación, contactos vCard, listas interactivas y botones de respuesta rápida. Wapi101 expone todo desde la UI sin que toques la API.'],
     ],
-    relatedSlugs: ['plantillas-whatsapp-business-guia', 'whatsapp-business-vs-api-diferencias', 'whatsapp-cloud-api-vs-twilio'],
+    relatedSlugs: ['mejores-plataformas-whatsapp-business-api-latam', 'whatsapp-business-vs-api-diferencias', 'whatsapp-cloud-api-vs-twilio'],
   },
 
   // ───────────────────────────────────────────────────────────────────
@@ -212,9 +212,9 @@ const POSTS = {
       ['¿Cuál es la diferencia entre categoría marketing y utility?', 'Marketing = promocional, vendedor (ofertas, descuentos, lanzamientos). Utility = informativo, transaccional (confirmaciones, recordatorios, actualizaciones). Costo marketing es ~2.5x más caro que utility.'],
       ['¿Puedo usar emojis en plantillas?', 'Sí pero moderado. 1-2 emojis emblemáticos pasan, "🎉🎉🎉🔥🔥🔥" se rechaza por "spammy". Meta también rechaza emojis ambiguos como manos en signo de ok que pueden malinterpretarse.'],
       ['¿Necesito plantilla para responder a un cliente?', 'No, si te escribió en las últimas 24h puedes mandar mensaje libre (sin plantilla). La plantilla solo es necesaria para iniciar conversación o pasadas las 24h.'],
-      ['¿Wapi101 cobra extra por plantillas?', 'No. Pagas solo lo que cobra Meta directamente (Wapi101 usa Cloud API, sin margen extra). En tu reporte ves el costo real por conversación. Puedes verlo en [precios](/#pricing).'],
+      ['¿Wapi101 cobra extra por plantillas?', 'No. Pagas solo lo que cobra Meta directamente (Wapi101 usa Cloud API, sin margen extra). En tu reporte ves el costo real por conversación. Puedes verlo en [precios](/#pricingSection).'],
     ],
-    relatedSlugs: ['como-conectar-whatsapp-business-api', 'recuperar-carritos-abandonados-whatsapp', 'bots-whatsapp-pymes-ejemplos'],
+    relatedSlugs: ['evitar-bloqueo-whatsapp-business-mensajes-masivos', 'como-conectar-whatsapp-business-api', 'bots-whatsapp-pymes-ejemplos'],
   },
 
   // ───────────────────────────────────────────────────────────────────
@@ -302,7 +302,7 @@ const POSTS = {
       ['¿Hay alguna versión intermedia entre la app y la API?', 'Sí, WhatsApp Lite (conectar WhatsApp Web normal a un CRM). Te da CRM, multi-asesor y bots sin pagar API. Bueno para arrancar. Lo ofrece Wapi101 desde MXN $149/mes.'],
       ['¿Puedo escalar de WhatsApp Lite a API formal sin cambiar de CRM?', 'En Wapi101 sí — el mismo workspace puede tener ambos canales conectados simultáneamente. Manejas un solo equipo de asesores que ve los chats de ambos.'],
     ],
-    relatedSlugs: ['como-conectar-whatsapp-business-api', 'plantillas-whatsapp-business-guia', 'bots-whatsapp-pymes-ejemplos'],
+    relatedSlugs: ['whatsapp-business-multiagente-varios-usuarios', 'como-conectar-whatsapp-business-api', 'mejores-plataformas-whatsapp-business-api-latam'],
   },
 
   // ───────────────────────────────────────────────────────────────────
@@ -311,7 +311,7 @@ const POSTS = {
   'recuperar-carritos-abandonados-whatsapp': {
     slug: 'recuperar-carritos-abandonados-whatsapp',
     title: 'Carritos abandonados por WhatsApp: cómo recuperar 40% de ventas',
-    description: 'Recuperar carritos abandonados por WhatsApp convierte 5-10x más que email. Timing exacto, plantillas aprobadas, integración Shopify y WooCommerce — ejemplos reales 2026.',
+    description: 'Cómo recuperar carritos abandonados por WhatsApp: mensajes que sí convierten, tiempos de envío, plantillas aprobadas y automatización con tu tienda.',
     keywords: 'recuperar carrito abandonado whatsapp, mensaje carrito abandonado plantilla, automatizar carritos abandonados shopify whatsapp, recuperar ventas perdidas whatsapp, ecommerce whatsapp recovery, woocommerce whatsapp carrito',
     publishedAt: '2026-05-22',
     updatedAt: '2026-05-22',
@@ -523,7 +523,7 @@ const POSTS = {
       ['¿Los bots se pueden A/B testear?', 'Sí, puedes tener dos bots con el mismo trigger en 50/50 y comparar conversión. Útil para optimizar copy y timing.'],
       ['¿Hay plantillas pre-armadas?', 'Sí, Wapi101 trae 10 templates iniciales (los 10 de este artículo) que puedes copiar y personalizar. Cobre 14 días gratis para probarlos.'],
     ],
-    relatedSlugs: ['plantillas-whatsapp-business-guia', 'recuperar-carritos-abandonados-whatsapp', 'whatsapp-business-vs-api-diferencias'],
+    relatedSlugs: ['chatbot-whatsapp-con-ia-para-negocios', 'plantillas-whatsapp-business-guia', 'como-conectar-whatsapp-business-api'],
   },
 
   // ───────────────────────────────────────────────────────────────────
@@ -612,7 +612,7 @@ const POSTS = {
       ['¿Twilio cobra por número telefónico?', 'Sí, Twilio cobra ~USD $1/mes por número de WhatsApp Business + costos por mensaje. Cloud API directo no cobra por número (solo paga Meta por conversación).'],
       ['¿Cuál tiene mejor latencia?', 'Cloud API directo es ~50-150ms más rápido por tener un hop menos. Para chats humanos imperceptible, para bots de muchos pasos sí se nota.'],
     ],
-    relatedSlugs: ['como-conectar-whatsapp-business-api', 'whatsapp-business-vs-api-diferencias', 'plantillas-whatsapp-business-guia'],
+    relatedSlugs: ['mejores-plataformas-whatsapp-business-api-latam', 'como-conectar-whatsapp-business-api', 'whatsapp-business-vs-api-diferencias'],
   },
 
   // ─── Placeholder safety — mantén este al final ───
@@ -647,7 +647,7 @@ const POSTS = {
         h: 'Primero: BSP, CRM o API directa — son cosas distintas',
         p: [
           'La confusión más común: comparar peras con manzanas. Hay tres tipos de plataforma en esta lista.',
-          '**API directa (Meta Cloud API).** Meta te da la API gratis; pagas solo las conversaciones (~$0.50-0.90 MXN por conversación de utilidad en México, más caras las de marketing). No hay intermediario, pero tampoco hay interfaz: necesitas un software que la use. [Cómo conectarla paso a paso](/blog/como-conectar-whatsapp-business-api).',
+          '**API directa (Meta Cloud API).** Meta te da la API gratis; pagas solo los mensajes de plantilla que envías (desde julio de 2025 Meta cobra por mensaje según la categoría: marketing, utilidad o autenticación; responder dentro de la ventana de 24 horas no cuesta). No hay intermediario, pero tampoco hay interfaz: necesitas un software que la use. [Cómo conectarla paso a paso](/blog/como-conectar-whatsapp-business-api).',
           '**BSP (Business Solution Provider): Twilio, Infobip, 360dialog, Vonage, MessageBird.** Revenden la API con una capa técnica encima. Cobran una comisión por mensaje o una cuota mensual, y están hechos para que tu equipo de desarrollo construya sobre ellos. Sin desarrolladores, un BSP solo te da una llave que no sabes usar.',
           '**CRM con WhatsApp: HubSpot, Botmaker, Wapi101.** Software terminado: inbox, bots, pipeline, equipo. Se conectan a la Cloud API (o a un BSP) por debajo. Aquí no programas nada. La diferencia entre ellos está en el precio, en qué tan completo es el CRM, y en si fueron hechos para LATAM o adaptados después.',
         ],
@@ -669,8 +669,8 @@ const POSTS = {
         h: 'Si eres una PyME en México o LATAM',
         p: [
           'Descarta los BSP puros (Twilio, Infobip, Vonage, Bird): son llaves para desarrolladores, y tú necesitas un software que ya funcione. Descarta también las suites enterprise si tienes menos de 10 personas atendiendo.',
-          'Lo que buscas es un CRM que se conecte **directo a la Cloud API** (sin comisión por mensaje), que tenga inbox compartido, pipeline y bots sin código, y que su soporte hable tu idioma y esté en tu horario. Eso es exactamente lo que construimos en [Wapi101](/crm-whatsapp-business): desde $29 USD al mes, con la API de Meta directa o tu número por QR si todavía no tienes la API aprobada.',
-          'Costo real de ejemplo para una tienda que atiende 1,500 conversaciones al mes: con Twilio + un CRM aparte pagas las conversaciones de Meta, más la comisión de Twilio, más el CRM. Con un CRM conectado directo pagas las conversaciones de Meta y el CRM. La diferencia no es enorme al mes, pero se multiplica al escalar — y sobre todo, es una factura menos y un proveedor menos que puede fallar.',
+          'Lo que buscas es un CRM que se conecte **directo a la Cloud API** (sin comisión por mensaje), que tenga inbox compartido, pipeline y bots sin código, y que su soporte hable tu idioma y esté en tu horario. Eso es exactamente lo que construimos en [Wapi101](/crm-whatsapp-business): gratis para empezar y desde MXN $149 al mes (unos 9 USD), con la API de Meta directa o tu número por QR si todavía no tienes la API aprobada.',
+          'Costo real de ejemplo para una tienda que manda 1,500 mensajes de plantilla al mes: con Twilio + un CRM aparte pagas los mensajes de Meta, más la comisión de Twilio, más el CRM. Con un CRM conectado directo pagas los mensajes de Meta y el CRM. La diferencia no es enorme al mes, pero se multiplica al escalar — y sobre todo, es una factura menos y un proveedor menos que puede fallar.',
         ],
       },
       {
@@ -694,13 +694,341 @@ const POSTS = {
       ['¿Cuál es la mejor plataforma de WhatsApp Business API en 2026?', 'No hay una para todos. Para PyMEs en LATAM: un CRM conectado directo a la Cloud API de Meta (sin comisión por mensaje), como Wapi101. Para equipos con desarrolladores: 360dialog o Twilio. Para operaciones enterprise multinacionales: Infobip o Botmaker.'],
       ['¿Twilio, Infobip o 360dialog: cuál es mejor?', 'De mejor a peor para la mayoría: 360dialog (más barato y transparente, cuota fija), Twilio (mejor documentación y escala, comisión por mensaje) e Infobip (enterprise, contratos anuales). Los tres necesitan desarrolladores.'],
       ['¿HubSpot sirve para WhatsApp?', 'Sirve si ya pagas HubSpot Marketing o Service y quieres tener WhatsApp dentro. Si estás eligiendo una herramienta POR WhatsApp, quedan cortas las funciones de bots y de inbox comparadas con un CRM especializado.'],
-      ['¿Botmaker o Wapi101?', 'Botmaker es para empresas medianas y grandes con bots complejos y presupuesto enterprise. Wapi101 es para PyMEs y equipos pequeños que quieren inbox, pipeline y bots sin código desde $29 USD al mes. Si tienes menos de 20 agentes, Wapi101; si tienes 50, Botmaker.'],
+      ['¿Botmaker o Wapi101?', 'Botmaker es para empresas medianas y grandes con bots complejos y presupuesto enterprise. Wapi101 es para PyMEs y equipos pequeños que quieren inbox, pipeline y bots sin código, gratis para empezar y desde MXN $149 al mes. Si tienes menos de 20 agentes, Wapi101; si tienes 50, Botmaker.'],
       ['¿Necesito un BSP para usar WhatsApp Business API?', 'No desde 2022. Meta Cloud API se contrata directo y gratis; pagas solo las conversaciones. El BSP solo agrega soporte técnico y herramientas para desarrolladores — útil si programas, innecesario si usas un CRM que ya se conecta directo.'],
-      ['¿Cuánto cuesta una conversación de WhatsApp Business API en México?', 'Aproximadamente entre $0.50 y $0.90 MXN por conversación de utilidad y más para marketing (varía por país y Meta ajusta las tarifas). Las conversaciones que inicia el cliente son gratis dentro de la ventana de 24 horas. Encima de eso va lo que cobre tu proveedor o CRM.'],
+      ['¿Cuánto cuesta mandar mensajes por WhatsApp Business API en México?', 'Desde julio de 2025 Meta cobra por mensaje de plantilla entregado, con tarifa por país y categoría (marketing, utilidad, autenticación). En México un mensaje de utilidad cuesta del orden de uno o dos centavos de dólar y uno de marketing unos cuatro o cinco centavos; consulta la tabla oficial de Meta porque cambia. Responder dentro de la ventana de 24 horas no se cobra. Encima va lo que cobre tu proveedor o CRM.'],
       ['¿Puedo cambiar de proveedor sin perder mi número?', 'Sí. El número está vinculado a tu WhatsApp Business Account (WABA) en Meta, no al proveedor. Se migra entre BSPs y CRMs conservando número, nombre verificado y plantillas aprobadas.'],
       ['¿Qué pasa si no tengo todavía la API aprobada?', 'Puedes empezar con tu número de WhatsApp conectado por QR (como WhatsApp Web) en un CRM que lo soporte, y migrar a la API cuando Meta apruebe tu cuenta. Wapi101 soporta las dos modalidades.'],
     ],
-    relatedSlugs: ['whatsapp-cloud-api-vs-twilio', 'como-conectar-whatsapp-business-api', 'whatsapp-business-vs-api-diferencias'],
+    relatedSlugs: ['precio-whatsapp-business-api-mexico', 'whatsapp-cloud-api-vs-twilio', 'como-conectar-whatsapp-business-api'],
+  },
+
+  // ───────────────────────────────────
+  // 8. WhatsApp multiagente (2026-09-28) — cluster "whatsapp multiagente /
+  // varios usuarios / en varios celulares": la duda #1 de cualquier negocio
+  // que crece. Explica las 3 vías sin vender humo (los dispositivos vinculados
+  // de la app sirven para 2-3 personas).
+  // ───────────────────────────────────
+  'whatsapp-business-multiagente-varios-usuarios': {
+    slug: 'whatsapp-business-multiagente-varios-usuarios',
+    title: 'WhatsApp Business multiagente: varios usuarios, un número',
+    description: 'Cómo atender un solo número de WhatsApp Business con varios agentes: dispositivos vinculados, API + CRM o conexión por QR. Ventajas, límites y costos reales.',
+    keywords: 'whatsapp business multiagente, whatsapp multiusuario, whatsapp business varios usuarios, whatsapp business en varios celulares, whatsapp multiagente gratis, un numero de whatsapp varios agentes',
+    publishedAt: '2026-09-28',
+    updatedAt: '2026-09-28',
+    author: 'Equipo Wapi101',
+    category: 'Guías',
+    excerpt: 'Tres formas de que varias personas atiendan el mismo WhatsApp: los dispositivos vinculados de la app, la API con un CRM, y el punto medio por QR. Cuál te conviene según tu tamaño.',
+    readingTime: '7 min',
+    sections: [
+      {
+        h: 'El problema: un celular, cinco personas y cero control',
+        p: [
+          'Pasa en casi todos los negocios que crecen: el WhatsApp del negocio vive en un celular, y ese celular pasa de mano en mano. Uno contesta en la mañana, otro en la tarde, alguien se lleva el teléfono a su casa y los clientes de la noche se quedan sin respuesta. Nadie sabe quién prometió qué, y cuando esa persona renuncia se lleva las conversaciones con ella.',
+          '“WhatsApp multiagente” es simplemente eso: que varias personas atiendan el mismo número, cada una desde su propio dispositivo, con reglas sobre quién ve qué. Hay tres formas de lograrlo, y la que te conviene depende de cuántas personas atienden y de cuánto control necesitas.',
+        ],
+      },
+      {
+        h: 'Opción 1: dispositivos vinculados de WhatsApp Business (gratis, hasta 4 equipos)',
+        p: [
+          'La app de WhatsApp Business permite vincular hasta cuatro dispositivos adicionales al teléfono principal: computadoras con WhatsApp Web o la app de escritorio, y también otros celulares. Es gratis y toma dos minutos: Configuración → Dispositivos vinculados → escanear el código QR.',
+          '**Lo bueno:** cero costo, cero curva de aprendizaje, y el historial se sincroniza. Para dos o tres personas que se tienen confianza y atienden pocas conversaciones al día, es suficiente.',
+          '**Lo malo:** no hay asignación de chats (todos ven todo y dos personas pueden contestar el mismo mensaje), no hay roles ni permisos, no hay métricas de quién atendió qué ni en cuánto tiempo, y las etiquetas y respuestas rápidas siguen siendo las de la app. Además, el número sigue atado a un celular físico: si se pierde, se descompone o se lo lleva alguien, se detiene el negocio.',
+          'En algunos países Meta ofrece WhatsApp Business Premium, una suscripción de pago que amplía el límite de dispositivos y agrega una página web del negocio. No está en todos los mercados y sigue sin resolver la asignación ni los reportes.',
+        ],
+      },
+      {
+        h: 'Opción 2: WhatsApp Business API + un CRM (sin límite de agentes)',
+        p: [
+          'La API de WhatsApp Business (hoy “Cloud API”, la que da Meta directamente) desconecta el número de cualquier celular: vive en la nube, y el software que la usa, normalmente un CRM, decide quién atiende cada conversación. No hay límite de usuarios impuesto por Meta; el límite lo pone el plan de tu CRM.',
+          '**Lo que ganas:** bandeja compartida con asignación (manual, por turnos o por reglas), roles y permisos, notas internas, respuestas rápidas y plantillas compartidas, bots que atienden antes de pasar a un humano, y reportes: tiempos de respuesta, conversaciones por agente, ventas por canal. También puedes mandar mensajes iniciados por el negocio con plantillas aprobadas por Meta.',
+          '**Lo que cambia:** el número deja de funcionar en la app de WhatsApp Business (se migra a la API), Meta cobra por cada mensaje de plantilla que envías (responder dentro de la ventana de 24 horas no cuesta), y necesitas una cuenta de Meta Business. La [diferencia completa entre la app y la API la explicamos aquí](/blog/whatsapp-business-vs-api-diferencias).',
+          'Con Wapi101 la conexión es directa a Meta, sin intermediario ni comisión por mensaje encima de lo que cobra Meta. [La guía paso a paso para conectar la API](/blog/como-conectar-whatsapp-business-api) toma menos de una hora si ya tienes tu cuenta de Meta Business.',
+        ],
+      },
+      {
+        h: 'Opción 3: el punto medio, conectar tu número por QR a un CRM',
+        p: [
+          'Muchos negocios no quieren migrar todavía a la API: no tienen la verificación de Meta, no quieren perder la app en el celular, o simplemente quieren probar. Para eso existe la conexión por QR: el CRM se vincula a tu WhatsApp como si fuera un dispositivo más (igual que WhatsApp Web), y sobre esa conexión te da bandeja compartida, asignación, etiquetas, pipeline y bots.',
+          'En Wapi101 esto se llama WhatsApp Lite. Es la forma más rápida de tener multiagente hoy mismo, con tu número actual y sin trámites. La contra: al no ser la API oficial, depende de que el celular tenga batería e internet, no permite plantillas aprobadas para campañas, y es menos estable a volúmenes altos. Piénsalo como el primer escalón: empiezas por QR, y cuando la operación lo pide, migras a la API sin cambiar de herramienta.',
+        ],
+      },
+      {
+        h: 'Comparativa rápida: cuál elegir según tu tamaño',
+        p: [
+          '**1 a 3 personas, pocas conversaciones al día:** dispositivos vinculados. Gratis y suficiente, mientras nadie necesite saber quién atendió qué.',
+          '**3 a 10 personas o más de 50 conversaciones al día:** CRM por QR o API. Aquí ya duele no tener asignación ni reportes; un CRM con plan gratuito o de MXN $149 al mes se paga con la primera venta que no se pierde.',
+          '**Más de 10 personas, campañas salientes o varias sucursales:** API + CRM, sin discusión. Necesitas plantillas aprobadas, bots que filtren, y que el número no dependa de un celular.',
+          '**Varios números o varias marcas:** API + CRM multicanal, para que cada línea (y también Instagram, Messenger o Telegram) caiga en la misma bandeja con reglas distintas. [Así se ve en un CRM para WhatsApp](/crm-whatsapp-business).',
+        ],
+      },
+      {
+        h: 'Errores comunes al pasar a multiagente',
+        p: [
+          '**Compartir la cuenta con una sola contraseña.** Sin usuarios propios no hay trazabilidad: si algo sale mal no sabes quién fue, y si alguien se va, hay que cambiar la contraseña de todos.',
+          '**No definir reglas de asignación.** “El que lo vea, lo contesta” termina en dos respuestas contradictorias o en ninguna. Define turnos, asignación por tipo de consulta o rotación automática.',
+          '**Migrar a la API sin exportar el historial.** Las conversaciones de la app no se pasan a la API. Exporta lo importante (o captura los datos de tus clientes en el CRM) antes de migrar.',
+          '**Comprar el plan grande desde el día uno.** Empieza con lo que te deje operar esta semana; casi todos los CRM serios te dejan crecer sin migrar.',
+        ],
+      },
+    ],
+    faqs: [
+      ['¿Puedo usar WhatsApp Business en dos o más celulares?', 'Sí. La app de WhatsApp Business permite vincular hasta cuatro dispositivos adicionales (computadoras u otros celulares) al teléfono principal, desde Configuración → Dispositivos vinculados. Todos ven las mismas conversaciones; no hay asignación ni roles.'],
+      ['¿Cuántos usuarios puede tener un número con WhatsApp Business API?', 'Meta no pone límite. El número lo atienden tantos agentes como permita tu CRM. En Wapi101 el plan Gratis incluye 1 usuario, los planes de pago incluyen 2 y se agregan usuarios adicionales según se necesite.'],
+      ['¿Hay WhatsApp multiagente gratis?', 'Sí, en dos formas: los dispositivos vinculados de la app (gratis pero sin asignación ni reportes) y CRMs con plan gratuito. Wapi101 tiene plan Gratis con 1 usuario y 500 contactos, útil para probar la bandeja, los bots y el pipeline antes de pagar.'],
+      ['¿Se pierde el historial de chats al pasar a la API?', 'Las conversaciones que viven en la app no se migran automáticamente a la API. El número se conserva, los chats no. Exporta lo que necesites antes de migrar y, si es posible, empieza a registrar clientes en el CRM desde antes.'],
+      ['¿Puedo seguir usando la app de WhatsApp Business después de conectar la API?', 'No con el mismo número: al migrar a la API el número deja de funcionar en la app. Si quieres conservar la app, la alternativa es la conexión por QR (WhatsApp Lite en Wapi101), que funciona en paralelo a tu celular.'],
+      ['¿Cómo se reparten los chats entre agentes?', 'Depende del CRM. Lo habitual es asignación manual, rotación automática (round robin), por reglas (idioma, sucursal, tipo de consulta o etiqueta) o que un bot califique primero y asigne según la respuesta.'],
+      ['¿Los clientes notan la diferencia?', 'No. Para el cliente sigue siendo el mismo número y el mismo chat. Solo nota que le contestan más rápido y que no tiene que repetir su historia cada vez que lo atiende otra persona.'],
+    ],
+    relatedSlugs: ['whatsapp-business-vs-api-diferencias', 'como-conectar-whatsapp-business-api', 'bots-whatsapp-pymes-ejemplos'],
+  },
+
+  // ───────────────────────────────────
+  // 9. Evitar bloqueos (2026-09-28) — cluster "whatsapp me bloqueó / mensajes
+  // masivos sin bloqueo / número suspendido". Mucha búsqueda, casi todo lo que
+  // hay publicado es de vendedores de herramientas no oficiales. Aquí va la
+  // vía oficial (API + calidad + límites) con reglas concretas.
+  // ───────────────────────────────────
+  'evitar-bloqueo-whatsapp-business-mensajes-masivos': {
+    slug: 'evitar-bloqueo-whatsapp-business-mensajes-masivos',
+    title: 'Cómo evitar que WhatsApp bloquee tu número de negocio (2026)',
+    description: 'Por qué WhatsApp suspende números de negocio, cómo mandar mensajes masivos sin que te bloqueen, qué es la calificación de calidad y qué hacer si ya te pasó.',
+    keywords: 'whatsapp bloqueo numero negocio, evitar bloqueo whatsapp business, mensajes masivos whatsapp sin bloqueo, whatsapp business suspendido, calificacion de calidad whatsapp, limites de mensajes whatsapp api',
+    publishedAt: '2026-09-28',
+    updatedAt: '2026-09-28',
+    author: 'Equipo Wapi101',
+    category: 'Guías',
+    excerpt: 'WhatsApp bloquea números por patrones, no por mala suerte. Las reglas que sí evitan el bloqueo, los límites de envío de la API y el camino para mandar campañas sin poner en riesgo tu número.',
+    readingTime: '8 min',
+    sections: [
+      {
+        h: 'Por qué WhatsApp bloquea números de negocio',
+        p: [
+          'Un bloqueo casi nunca es aleatorio. WhatsApp mide señales: cuántas personas te reportan o te bloquean, qué porcentaje de tus mensajes son iniciados por ti sin respuesta, si mandas el mismo texto a muchos contactos en poco tiempo, si el número es nuevo y de pronto envía cientos de mensajes, y si usas software no oficial para automatizar la app.',
+          'Las causas más frecuentes que vemos: listas compradas o contactos que nunca dieron su número al negocio, envíos masivos desde extensiones de navegador o apps “modificadas”, mensajes idénticos con solo un link, y no dejar que la gente deje de recibir mensajes. Cualquiera de esas dispara reportes, y los reportes disparan el bloqueo.',
+          'Hay dos tipos de bloqueo: el temporal (te limita por horas o días, suele venir con aviso) y el permanente (“esta cuenta ya no puede usar WhatsApp”). El segundo es muy difícil de revertir, así que lo importante es no llegar ahí.',
+        ],
+      },
+      {
+        h: 'App vs API: reglas distintas para mandar mensajes',
+        p: [
+          'En la app de WhatsApp Business (la del celular) no hay envío masivo oficial. Las listas de difusión llegan solo a quien tiene tu número guardado, y todo lo que sea automatizar la app con herramientas externas viola los términos. Es la razón por la que la mayoría de los bloqueos vienen de la app: se le pide algo para lo que no fue hecha.',
+          'En la API de WhatsApp Business (Cloud API) los mensajes salientes se hacen con plantillas que Meta aprueba antes, con categorías claras (marketing, utilidad, autenticación) y con un sistema de calidad y límites explícito. Es el único camino oficial para mandar campañas, y por eso es más seguro: sabes las reglas de antemano. [Aquí explicamos las diferencias entre app y API](/blog/whatsapp-business-vs-api-diferencias).',
+        ],
+      },
+      {
+        h: 'Calificación de calidad y límites de envío en la API',
+        p: [
+          'Cada número en la API tiene una calificación de calidad: verde (alta), amarilla (media) o roja (baja). Se calcula con las señales de los últimos días: bloqueos, reportes y las razones que la gente da al bloquearte. Si cae a roja de forma sostenida, Meta baja tu límite de envío y puede restringir el número.',
+          'Los límites de envío son escalones de conversaciones iniciadas por el negocio en 24 horas: 250 al empezar sin verificación de negocio, y luego 1,000, 10,000, 100,000 e ilimitado. Se sube de nivel automáticamente cuando envías con buena calidad cerca del límite actual; la verificación de Meta Business acelera el arranque.',
+          'Desde 2025 Meta además limita cuántos mensajes de marketing recibe una misma persona de todos los negocios en un periodo. Si tus plantillas de marketing “no llegan” a algunos contactos sin que tú hayas hecho nada mal, suele ser eso, no un bloqueo.',
+        ],
+      },
+      {
+        h: 'Las 9 reglas que sí evitan el bloqueo',
+        p: [
+          '**1. Solo escribe a quien te dio permiso.** Opt-in real: formulario, casilla marcada, un “sí” en el chat o un click en un anuncio. Nada de listas compradas ni de contactos “de un amigo”.',
+          '**2. Calienta el número.** Un número nuevo no manda 2,000 mensajes el primer día. Empieza con decenas, sube gradualmente y mira la calidad antes de cada salto.',
+          '**3. Personaliza.** Nombre, contexto de por qué le escribes, y un texto que no parezca copiado y pegado a mil personas. Los mensajes idénticos con un link y nada más son la firma del spam.',
+          '**4. Ofrece salida.** “Responde BAJA para no recibir más mensajes”, y respétalo de verdad. Quien no puede salir, te reporta.',
+          '**5. Responde rápido a quien te contesta.** Una campaña que genera respuestas sin atender genera bloqueos. Ten a alguien (o un bot que pase a alguien) del otro lado.',
+          '**6. Usa la categoría correcta en las plantillas.** Un aviso de envío es utilidad, una promoción es marketing. Meta re-clasifica y penaliza el marketing disfrazado; nuestra [guía de plantillas](/blog/plantillas-whatsapp-business-guia) explica cómo redactar cada tipo.',
+          '**7. Frecuencia razonable.** Una promo diaria al mismo contacto termina en bloqueo aunque haya dado opt-in. Semanal o quincenal para marketing, y solo lo transaccional cuando toca.',
+          '**8. Nada de herramientas no oficiales sobre la app.** Extensiones que “mandan a todos tus contactos”, APKs modificados, bots que simulan un dedo humano. Es la vía rápida al bloqueo permanente.',
+          '**9. Vigila la calidad cada semana.** En la API la ves en Meta Business Manager (o en tu CRM). Si baja a amarilla, frena las campañas y revisa qué mensaje generó reportes.',
+        ],
+      },
+      {
+        h: 'Qué hacer si ya te bloquearon',
+        p: [
+          '**Bloqueo temporal en la app:** espera el plazo indicado, no intentes “brincarlo” con otro número o chip, y cuando regrese, baja el ritmo de envíos. Suele ser una advertencia.',
+          '**Bloqueo permanente en la app:** en el aviso hay un botón de “Solicitar revisión”. Explica en pocas líneas quién eres, qué hace el negocio y por qué crees que fue un error. Las revisiones se resuelven en horas o días. Si no procede, no hay más recurso; lo que sigue es un número nuevo y hacerlo bien desde el inicio (idealmente ya con API).',
+          '**Restricción en la API:** revisa la calificación de calidad y las plantillas pausadas en Meta Business Manager. Meta indica el motivo (plantillas con mal desempeño, reportes). Corrige el mensaje, espera a que la calidad se recupere y el límite vuelve a subir solo.',
+        ],
+      },
+      {
+        h: 'Cómo ayuda un CRM a no llegar ahí',
+        p: [
+          'Un CRM conectado a la API no evita el bloqueo por arte de magia, pero te da las herramientas: envíos por plantilla aprobada, control de frecuencia y de lotes, registro del opt-in y del opt-out por contacto, segmentación para no escribirle a todos lo mismo, y bandeja compartida para responder rápido cuando la campaña genera conversaciones. Y cuando Meta rechaza o pausa una plantilla, te muestra el motivo real en vez de dejarte adivinar.',
+          'En [Wapi101](/crm-whatsapp-business) puedes empezar por QR con tu número actual (para ordenar la atención) y pasar a la API cuando quieras hacer campañas en serio. Si tu volumen es alto, ve directo a la API: es la única forma oficial de mandar mensajes masivos sin jugarte el número. [Cuánto cuesta, aquí](/blog/precio-whatsapp-business-api-mexico).',
+        ],
+      },
+    ],
+    faqs: [
+      ['¿Se puede mandar mensajes masivos por WhatsApp sin que te bloqueen?', 'Sí, por la vía oficial: WhatsApp Business API con plantillas aprobadas, a contactos con opt-in, respetando los límites de envío y la frecuencia. Desde la app del celular no hay envío masivo oficial; hacerlo con herramientas externas es lo que provoca bloqueos.'],
+      ['¿Cuántos mensajes puedo mandar por día sin que me bloqueen?', 'En la app no hay un número público; los bloqueos se disparan por reportes y patrones, no por un tope fijo. En la API los límites son explícitos: 250 conversaciones iniciadas por el negocio en 24 horas al empezar sin verificación, y luego 1,000, 10,000, 100,000 e ilimitado según tu calidad.'],
+      ['¿Qué es la calificación de calidad de WhatsApp?', 'Es el semáforo (verde, amarillo, rojo) que Meta asigna a cada número de la API según reportes y bloqueos recientes de los usuarios. Roja sostenida baja tu límite de envío; verde te permite subir de nivel.'],
+      ['¿Por qué me bloquearon si solo escribía a mis clientes?', 'Lo más común: escribir a gente que no había aceptado recibir mensajes, mandar el mismo texto a muchos contactos en poco tiempo, o usar una herramienta no oficial. También influye que el número sea nuevo y arranque con mucho volumen.'],
+      ['¿Cómo recupero un número bloqueado de WhatsApp Business?', 'Si es temporal, esperando el plazo. Si es permanente, con el botón “Solicitar revisión” del aviso, explicando tu caso. Si Meta confirma el bloqueo, no hay más recurso y toca empezar con un número nuevo, idealmente ya con la API.'],
+      ['¿La API me protege del bloqueo?', 'Te da reglas claras y un semáforo de calidad para no llegar al bloqueo, y campañas por la vía oficial. Pero si mandas spam desde la API también te restringen: la calificación de calidad baja y Meta pausa plantillas o reduce tu límite.'],
+      ['¿Puedo usar otro número o chip mientras estoy bloqueado?', 'Técnicamente sí, pero si repites el mismo patrón vuelven a bloquearte, y usar varios números para evadir bloqueos es motivo de suspensión. Mejor corrige la forma de enviar antes de reintentar.'],
+    ],
+    relatedSlugs: ['plantillas-whatsapp-business-guia', 'whatsapp-business-vs-api-diferencias', 'precio-whatsapp-business-api-mexico'],
+  },
+
+  // ───────────────────────────────────
+  // 10. Precio de la API en México (2026-09-28) — cluster "cuánto cuesta
+  // whatsapp business api / precio por mensaje". Casi todo lo publicado sigue
+  // con la tabla vieja "por conversación"; desde julio 2025 Meta cobra por
+  // mensaje. Cifras SIEMPRE aproximadas y con el aviso de consultar la tabla
+  // oficial: Meta las cambia.
+  // ───────────────────────────────────
+  'precio-whatsapp-business-api-mexico': {
+    slug: 'precio-whatsapp-business-api-mexico',
+    title: 'Precio de WhatsApp Business API en México 2026: guía real',
+    description: 'Cuánto cuesta de verdad WhatsApp Business API en México: tarifa de Meta por mensaje, comisión del proveedor, costo del CRM y ejemplos por tipo de negocio.',
+    keywords: 'precio whatsapp business api mexico, cuanto cuesta whatsapp business api, tarifas whatsapp api 2026, costo por mensaje whatsapp, whatsapp cloud api precio, whatsapp business api gratis',
+    publishedAt: '2026-09-28',
+    updatedAt: '2026-09-28',
+    author: 'Equipo Wapi101',
+    category: 'Precios',
+    excerpt: 'La API de WhatsApp es gratis; lo que se paga son los mensajes, el proveedor y el software. Desglose de las tres capas con números aproximados para México y tres escenarios reales.',
+    readingTime: '8 min',
+    sections: [
+      {
+        h: 'Primero lo más importante: la API en sí es gratis',
+        p: [
+          'Meta no cobra por “tener” la API de WhatsApp Business. Crear la cuenta, conectar el número, recibir mensajes y responder dentro de la ventana de servicio no cuesta nada. Lo que sí se paga son tres cosas distintas, y casi todos los precios confusos que ves en internet vienen de mezclarlas: (1) lo que Meta cobra por mensajes de plantilla, (2) lo que cobra el proveedor si usas uno, y (3) lo que cuesta el software con el que atiendes.',
+          'Ojo con la información vieja: hasta mediados de 2025 Meta cobraba “por conversación” (una ventana de 24 horas). Desde julio de 2025 cobra **por mensaje de plantilla entregado**, por categoría. Muchos blogs siguen mostrando la tabla anterior.',
+        ],
+      },
+      {
+        h: 'Capa 1: lo que cobra Meta (por mensaje, por categoría)',
+        p: [
+          'Hay tres categorías de plantilla, cada una con su tarifa por país: **marketing** (promociones, novedades, recordatorios comerciales), **utilidad** (confirmaciones, avisos de envío, recordatorios de cita, cambios de pedido) y **autenticación** (códigos de verificación). Marketing es la más cara; utilidad y autenticación son mucho más baratas.',
+          'Para México, en orden de magnitud: un mensaje de utilidad cuesta alrededor de uno o dos centavos de dólar, y uno de marketing entre cuatro y cinco centavos. Son cifras aproximadas: Meta publica la tabla oficial por país y la ajusta; antes de presupuestar, consulta la tarifa vigente. Lo que no cambia es la proporción: marketing cuesta varias veces más que utilidad.',
+          '**Lo gratis:** las conversaciones que inicia el cliente. Cuando alguien te escribe, tienes 24 horas para responder sin costo, con mensajes libres (sin plantilla). Un mensaje de plantilla de utilidad enviado dentro de esa ventana abierta tampoco se cobra. Y si el cliente llega desde un anuncio de click-to-WhatsApp o desde el botón de tu página de Facebook, la ventana gratuita es de 72 horas.',
+          'Traducido: un negocio que sobre todo **responde** a clientes (tienda, consultorio, servicio) puede pagar casi nada a Meta. Un negocio que sobre todo **inicia** contacto con promociones paga proporcionalmente más, y por eso conviene separar bien utilidad de marketing.',
+        ],
+      },
+      {
+        h: 'Capa 2: lo que cobra el proveedor (BSP), si usas uno',
+        p: [
+          'Puedes conectar la API de dos formas: directo con Meta (Cloud API, sin intermediario) o a través de un proveedor autorizado (BSP) como Twilio, 360dialog, Infobip o Vonage. El BSP agrega su propio cobro: Twilio, por ejemplo, cobra alrededor de medio centavo de dólar por mensaje encima de la tarifa de Meta; 360dialog cobra una cuota mensual fija en lugar de comisión; Infobip negocia contratos. [Comparamos las plataformas aquí](/blog/mejores-plataformas-whatsapp-business-api-latam).',
+          'Si tu software se conecta directo a la Cloud API (como hace Wapi101), esta capa es cero. Vale la pena preguntar explícitamente a cualquier CRM: “¿cobran algo por mensaje encima de Meta?”. Algunos sí, y a volumen se nota.',
+        ],
+      },
+      {
+        h: 'Capa 3: el software para atender (CRM, inbox, bots)',
+        p: [
+          'La API sola es un grifo sin llave: para que un equipo la use necesitas un software que muestre las conversaciones, las reparta, guarde clientes y automatice. Aquí los precios van desde gratis hasta miles de pesos al mes, y casi siempre se cobran por usuario o por plan.',
+          'Como referencia, Wapi101 tiene plan Gratis (1 usuario, 500 contactos), Básico desde MXN $149 al mes (2 usuarios, 8,000 contactos, plantillas, API pública), Pro desde MXN $299 (agrega respuesta con IA y soporte prioritario) y Ultra desde MXN $499 (100,000 contactos, marca blanca). Sin cobro por mensaje. Otros CRM del mercado cobran entre USD $15 y $50 por usuario al mes; [el ranking por tipo de negocio está aquí](/mejor-crm-latam).',
+        ],
+      },
+      {
+        h: 'Tres escenarios con números aproximados',
+        p: [
+          '**Consultorio que manda 600 recordatorios de cita al mes (utilidad).** Meta: 600 mensajes de utilidad, del orden de USD $6 a $12 al mes. Proveedor: $0 si es Cloud API directa. Software: plan Gratis o Básico. Total: menos de MXN $400 al mes, y cada cita que no se pierde vale más que eso.',
+          '**Tienda en línea con 2,000 clientes que manda una promo quincenal (marketing) y avisos de envío (utilidad).** Meta: 4,000 mensajes de marketing al mes (alrededor de USD $160 a $200) más 800 de utilidad (unos USD $8 a $16). Software: plan Pro. Total: unos MXN $3,500 a $4,300 al mes. Si esas promos venden más del 1% de las veces, sale sobrado.',
+          '**Negocio de servicios que solo responde (100 conversaciones al día iniciadas por clientes).** Meta: $0, todo cae en la ventana gratuita. Software: Básico o Pro según usuarios. Total: MXN $149 a $299 al mes. Este es el caso de la mayoría de las PyMEs, y por eso “la API es cara” suele ser un mito.',
+        ],
+      },
+      {
+        h: 'Cómo bajar la cuenta sin bajar resultados',
+        p: [
+          '**Clasifica bien las plantillas.** Un aviso de envío es utilidad, no marketing; la diferencia por mensaje es de varias veces.',
+          '**Aprovecha la ventana de 24 horas.** Si el cliente te escribió hoy, todo lo que le respondas hoy es gratis. Diseña tus flujos para responder mientras la ventana está abierta, en vez de mandar plantillas al día siguiente.',
+          '**Usa anuncios de click-to-WhatsApp.** Además de traer clientes, abren una ventana gratuita de 72 horas.',
+          '**Segmenta el marketing.** Mandar la promo a los 2,000 contactos cuesta el doble que mandarla a los 1,000 que sí compran, y además cuida tu calificación de calidad ([cómo evitar bloqueos](/blog/evitar-bloqueo-whatsapp-business-mensajes-masivos)).',
+          '**Conecta directo a Meta.** Elimina la capa del proveedor cuando tu CRM lo permite. [Cómo se conecta, paso a paso](/blog/como-conectar-whatsapp-business-api).',
+        ],
+      },
+    ],
+    faqs: [
+      ['¿WhatsApp Business API es gratis?', 'La API en sí, sí: no hay costo por conectarla, recibir mensajes ni responder dentro de la ventana de 24 horas. Se paga por los mensajes de plantilla que envía el negocio (marketing, utilidad, autenticación), por el proveedor si usas uno, y por el software con el que atiendes.'],
+      ['¿Cuánto cuesta un mensaje de WhatsApp Business API en México?', 'Depende de la categoría. En orden de magnitud, un mensaje de utilidad cuesta uno o dos centavos de dólar y uno de marketing cuatro o cinco centavos. Meta publica la tabla oficial por país y la actualiza; conviene consultarla antes de presupuestar.'],
+      ['¿Meta sigue cobrando por conversación?', 'No. Desde julio de 2025 cobra por mensaje de plantilla entregado, según categoría y país. Las conversaciones iniciadas por el cliente y las respuestas dentro de la ventana de 24 horas no se cobran.'],
+      ['¿Qué mensajes son gratis en la API?', 'Todo lo que respondas dentro de las 24 horas después de que el cliente te escribió, los mensajes de plantilla de utilidad enviados dentro de esa ventana abierta, y las conversaciones que llegan desde anuncios click-to-WhatsApp o botones de página de Facebook durante 72 horas.'],
+      ['¿Cuánto cuesta un CRM para WhatsApp Business?', 'Desde gratis hasta más de USD $50 por usuario al mes. Wapi101: plan Gratis, Básico MXN $149, Pro MXN $299 y Ultra MXN $499 al mes, sin cobro por mensaje encima de Meta.'],
+      ['¿Es más barato usar Twilio o conectar directo a Meta?', 'Conectar directo elimina la comisión del proveedor (en Twilio, alrededor de medio centavo de dólar por mensaje). Twilio tiene sentido si tu equipo de desarrollo construye encima; si usas un CRM que ya se conecta directo, no necesitas pagar esa capa.'],
+      ['¿Necesito verificar mi negocio en Meta para usar la API?', 'Para empezar no: puedes enviar hasta 250 conversaciones iniciadas por el negocio en 24 horas sin verificación. Para subir de límite, mostrar el nombre del negocio y acceder a todas las funciones, sí conviene verificar el Meta Business.'],
+      ['¿Puedo probar la API sin pagar?', 'Sí. Meta no cobra por conectar, y con un CRM con plan gratuito como Wapi101 puedes conectar tu número y atender conversaciones entrantes sin costo; solo pagas si envías plantillas.'],
+    ],
+    relatedSlugs: ['mejores-plataformas-whatsapp-business-api-latam', 'whatsapp-cloud-api-vs-twilio', 'como-conectar-whatsapp-business-api'],
+  },
+
+  // ───────────────────────────────────
+  // 11. Chatbot con IA (2026-09-28) — cluster "chatbot whatsapp ia / chatgpt
+  // en whatsapp para negocios / ia whatsapp business". Conecta con la IA
+  // auto-respuesta del plan Pro. Honesto sobre lo que NO conviene delegar.
+  // ───────────────────────────────────
+  'chatbot-whatsapp-con-ia-para-negocios': {
+    slug: 'chatbot-whatsapp-con-ia-para-negocios',
+    title: 'Chatbot de WhatsApp con IA para negocios: guía práctica 2026',
+    description: 'Qué puede hacer un chatbot de WhatsApp con inteligencia artificial en un negocio real, qué no conviene delegarle, cómo entrenarlo sin programar y cuánto cuesta.',
+    keywords: 'chatbot whatsapp ia, inteligencia artificial whatsapp business, chatgpt whatsapp negocios, bot whatsapp con ia sin programar, asistente virtual whatsapp, automatizar whatsapp con ia',
+    publishedAt: '2026-09-28',
+    updatedAt: '2026-09-28',
+    author: 'Equipo Wapi101',
+    category: 'Automatización',
+    excerpt: 'La IA en WhatsApp sirve para responder con contexto, calificar leads y agendar; no sirve para prometer precios ni tomar decisiones delicadas. Cómo combinar IA, reglas y humanos, paso a paso.',
+    readingTime: '8 min',
+    sections: [
+      {
+        h: 'Bot de reglas vs bot con IA: no son lo mismo',
+        p: [
+          'Un bot de reglas funciona con menús y palabras clave: “escribe 1 para precios, 2 para horarios”. Es predecible, barato y perfecto para flujos cerrados (confirmar una cita, capturar un dato, dar un horario). Su límite es obvio: si el cliente escribe algo que no está en el menú, se atora.',
+          'Un bot con IA generativa entiende lenguaje natural: lee “oigan, ¿tienen el vestido azul en talla M y me lo mandan a Monterrey?” y responde con base en el catálogo y las políticas que le diste. No necesita que el cliente siga un guion. Su límite es otro: puede sonar seguro estando equivocado si no le pones contexto y frenos.',
+          'En la práctica, lo que funciona en un negocio real es la combinación: reglas para lo estructurado, IA para lo abierto, y un humano a un click de distancia. [Los ejemplos de bots de reglas para PyMEs están aquí](/blog/bots-whatsapp-pymes-ejemplos); este artículo es sobre la parte de IA.',
+        ],
+      },
+      {
+        h: 'Lo que un chatbot con IA hace bien',
+        p: [
+          '**Responder preguntas frecuentes con contexto.** Horarios, ubicación, formas de pago, políticas de envío y devolución, diferencias entre productos. Si le das una base de conocimiento clara, resuelve la mayoría de las dudas de primer contacto a cualquier hora.',
+          '**Calificar leads.** Preguntar qué necesita, para cuándo, en qué zona y con qué presupuesto, y con eso etiquetar el chat, moverlo en el pipeline y asignarlo al asesor correcto. Es el uso con mejor retorno: el asesor recibe la conversación ya filtrada.',
+          '**Agendar y confirmar.** Proponer horarios disponibles, registrar la cita y mandar el recordatorio (con plantilla de utilidad si ya cerró la ventana de 24 horas).',
+          '**Atender fuera de horario y en otros idiomas.** Contesta a las 11 de la noche, en inglés si el cliente escribe en inglés, y deja el resumen listo para que el equipo retome en la mañana.',
+          '**Resumir y sugerir.** Para el agente humano: resumir un chat largo, sugerir una respuesta, detectar el tono del cliente. Aquí la IA no habla con el cliente, ayuda a quien sí lo hace.',
+        ],
+      },
+      {
+        h: 'Lo que no conviene delegarle (todavía)',
+        p: [
+          '**Precios y promesas que no estén en su base.** Si el precio no está en el catálogo que le diste, no debe inventarlo. Configura el bot para que diga “te confirmo con un asesor” en vez de improvisar.',
+          '**Decisiones sensibles.** Diagnósticos médicos, asesoría legal, reclamaciones con dinero de por medio, quejas fuertes. La IA puede recabar la información y pasar el caso; la decisión la toma una persona.',
+          '**Datos personales delicados.** No le pidas al bot que recolecte datos bancarios ni documentos por chat. Manda a un canal seguro.',
+          '**Cerrar ventas complejas.** Un cliente que compara tres opciones y pide descuento quiere hablar con alguien. El bot lo detecta y lo pasa; no lo retiene.',
+        ],
+      },
+      {
+        h: 'Cómo montarlo sin programar, paso a paso',
+        p: [
+          '**1. Define el alcance en una hoja.** Qué debe resolver el bot (las 15 preguntas más frecuentes de tu chat real), qué debe pasar a humano, y en qué tono habla (tutea, usa emojis, formal). Lee tus últimos 200 chats: ahí está la lista.',
+          '**2. Arma la base de conocimiento.** FAQs redactadas como las contestaría tu mejor vendedor, catálogo con precios vigentes, políticas, horarios, direcciones. Texto claro, sin jerga interna. Si la fuente cambia (precios), agenda actualizarla.',
+          '**3. Ponle frenos.** Instrucciones explícitas: no inventar precios, no prometer fechas de entrega que no estén en la política, y pasar a humano cuando el cliente lo pida o cuando no esté seguro. Y una palabra de escape que siempre funcione: “asesor”.',
+          '**4. Conéctalo al flujo, no lo sueltes solo.** El bot recibe después del saludo, califica, y entrega a un pipeline: etiqueta, etapa, asesor asignado. En [Wapi101](/crm-whatsapp-business) la IA se enciende por canal o por bot y se apaga cuando entra un humano, para que no se pisen.',
+          '**5. Pruébalo con tu equipo una semana.** Que tres personas le escriban como clientes difíciles. Corrige la base con lo que falle. Solo entonces enciéndelo con clientes reales, primero en horario nocturno o en un canal.',
+          '**6. Mide y ajusta cada semana.** Porcentaje de chats resueltos sin humano, porcentaje que pidió asesor, tiempo de primera respuesta, y las preguntas que el bot no supo (esas van a la base de conocimiento).',
+        ],
+      },
+      {
+        h: 'Cuánto cuesta un chatbot de WhatsApp con IA',
+        p: [
+          'Tres componentes: los mensajes de WhatsApp (gratis si el cliente inició la conversación y respondes dentro de 24 horas; [el detalle de tarifas está aquí](/blog/precio-whatsapp-business-api-mexico)), el software que orquesta el bot, y el uso del modelo de IA, que se cobra por texto procesado.',
+          'Para una PyME el uso de IA cuesta poco: una conversación típica de 10 mensajes con contexto del negocio cuesta fracciones de centavo de dólar con los modelos actuales. Lo que domina el costo es el software. En Wapi101 la respuesta automática con IA viene en el plan Pro (MXN $299 al mes) y el uso del modelo se cubre con un crédito de IA que cargas y consumes según el volumen; los bots de reglas están en todos los planes, incluido el Gratis.',
+          'Si alguien te cotiza un “chatbot con IA” en decenas de miles de pesos de desarrollo, pregunta qué estás pagando: hoy la parte de IA se configura, no se programa. Lo que sí vale la pena pagar es el trabajo de armar bien la base de conocimiento y los flujos.',
+        ],
+      },
+      {
+        h: 'Reglas de Meta y buenas prácticas con clientes',
+        p: [
+          'Meta pide que un negocio automatizado ofrezca siempre una forma clara de llegar a una persona, y que no se usen bots para spam. Buenas prácticas que además mejoran resultados: decir que es un asistente automático cuando el cliente pregunta, no fingir ser humano, responder corto (WhatsApp no es correo), y nunca dejar al cliente atrapado en un loop: tres intentos sin entender y pasa a humano.',
+          'Y un consejo de experiencia: el mejor bot con IA no es el que contesta todo, es el que sabe cuándo callarse. Un “te paso con Ana, que conoce ese caso” a tiempo vende más que diez respuestas correctas.',
+        ],
+      },
+    ],
+    faqs: [
+      ['¿Puedo poner ChatGPT en mi WhatsApp Business?', 'No directamente en la app del celular. Necesitas la API de WhatsApp Business (o una conexión por QR a un CRM) y un software que conecte el modelo de IA con tus chats, le dé el contexto de tu negocio y controle cuándo responde. Los CRM con IA integrada hacen exactamente eso sin programar.'],
+      ['¿Un chatbot con IA reemplaza a mis vendedores?', 'No. Reemplaza las preguntas repetitivas y el primer filtro; los vendedores reciben leads calificados y conversaciones resumidas. Los negocios que mejor resultado obtienen usan la IA para que el equipo atienda más y mejor, no para quitar al equipo.'],
+      ['¿Cómo evito que el bot invente respuestas?', 'Dándole una base de conocimiento clara, instrucciones explícitas de no inventar precios ni promesas, y una regla de pasar a humano cuando no esté seguro o cuando el cliente lo pida. Y probándolo con tu equipo antes de encenderlo con clientes.'],
+      ['¿Cuánto cuesta un chatbot de WhatsApp con IA?', 'El uso del modelo de IA cuesta fracciones de centavo por conversación; lo que pesa es el software. En Wapi101 la IA viene en el plan Pro (MXN $299 al mes) con crédito de IA por uso; los bots de reglas están en todos los planes, incluido el Gratis.'],
+      ['¿Necesito la API de WhatsApp para usar IA?', 'Es lo recomendable, porque es la vía oficial y estable. Como paso intermedio, algunos CRM (Wapi101 incluido) permiten conectar tu número por QR y usar bots e IA sobre esa conexión, con las limitaciones de no ser la API oficial.'],
+      ['¿El bot puede agendar citas?', 'Sí: consulta la disponibilidad, propone horarios, registra la cita y manda el recordatorio. Requiere que el CRM tenga calendario o se conecte al tuyo.'],
+      ['¿Meta permite bots con IA en WhatsApp?', 'Sí, siempre que el negocio ofrezca una forma clara de hablar con una persona, no use la automatización para spam y respete las políticas de mensajería. Decir que es un asistente automático cuando el cliente lo pregunta es buena práctica.'],
+    ],
+    relatedSlugs: ['bots-whatsapp-pymes-ejemplos', 'precio-whatsapp-business-api-mexico', 'whatsapp-business-multiagente-varios-usuarios'],
   },
 
   '_placeholder': {

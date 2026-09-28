@@ -264,6 +264,39 @@ app.get('/terms',   (_req, res) => res.sendFile(path.join(__dirname, 'public', '
 // respondemos con URL de confirmación + código.
 //
 // Doc: https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback
+//
+// GET /data-deletion: página de instrucciones (Meta la exige como "Data
+// deletion instructions URL", privacy.html la enlaza y Google la rastreaba
+// como 404 hasta el 28-sep-2026). El POST de abajo es el callback automático.
+app.get('/data-deletion', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(`<!DOCTYPE html>
+<html lang="es-MX"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eliminación de datos · Wapi101</title>
+<meta name="description" content="Cómo solicitar la eliminación de tus datos en Wapi101: desde tu cuenta, por correo o mediante la solicitud automática de Meta. Plazo máximo de 30 días." />
+<link rel="canonical" href="https://wapi101.com/data-deletion" />
+<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;max-width:640px;margin:60px auto;padding:0 24px;color:#0f172a;line-height:1.65}h1{color:#2563eb;font-size:28px}h2{font-size:18px;margin-top:28px}code{background:#f1f5f9;padding:3px 8px;border-radius:4px;font-size:14px}ol li,ul li{margin-bottom:6px}.en{margin-top:40px;padding-top:20px;border-top:1px solid #e2e8f0;color:#475569;font-size:14px}a{color:#2563eb}</style></head>
+<body>
+<h1>Eliminación de datos</h1>
+<p>Puedes pedir que eliminemos los datos personales que Wapi101 guarda sobre ti o sobre tu cuenta de Meta (Facebook, Instagram o WhatsApp) en cualquier momento. Hay tres formas:</p>
+<h2>1. Desde tu cuenta de Wapi101</h2>
+<p>Inicia sesión y ve a <strong>Configuración → Cuenta → Eliminar datos</strong>. La cuenta, sus contactos, conversaciones e integraciones se eliminan de forma definitiva.</p>
+<h2>2. Por correo</h2>
+<p>Escribe a <a href="mailto:soporte@wapi101.com?subject=Solicitud%20de%20eliminaci%C3%B3n%20de%20datos">soporte@wapi101.com</a> desde el correo asociado a tu cuenta indicando qué datos quieres eliminar. Te confirmamos la recepción en un día hábil.</p>
+<h2>3. Solicitud automática desde Meta</h2>
+<p>Si conectaste Wapi101 con tu cuenta de Facebook o Instagram, puedes usar la opción <em>Eliminar mis datos</em> en la configuración de apps de Meta. Meta envía la solicitud a nuestro endpoint (<code>POST /data-deletion</code>) y recibirás un código de confirmación con una página para consultar el estado.</p>
+<h2>Qué eliminamos y en cuánto tiempo</h2>
+<ul>
+<li>Datos de perfil, tokens de acceso e identificadores de Meta asociados a la solicitud.</li>
+<li>Contactos, conversaciones, leads y archivos de la cuenta, si la solicitud es de toda la cuenta.</li>
+<li>Plazo máximo: <strong>30 días</strong>. Conservamos solo lo que exige la ley fiscal mexicana (facturas, hasta 5 años).</li>
+</ul>
+<p>¿Ya tienes un código? Consulta su estado en <a href="/data-deletion-status">/data-deletion-status</a>. Más detalle en nuestro <a href="/privacy">Aviso de privacidad</a>.</p>
+<div class="en"><strong>Data deletion (English).</strong> You can request deletion of the personal data Wapi101 holds about you or your Meta account at any time: from your account settings (Settings → Account → Delete data), by email to soporte@wapi101.com, or through Meta's "Delete my data" option, which calls our data deletion callback and returns a confirmation code. Requests are completed within 30 days; only records required by Mexican tax law are retained.</div>
+<p style="margin-top:32px"><a href="/">← Volver a Wapi101</a></p>
+</body></html>`);
+});
+
 app.post('/data-deletion', express.urlencoded({ extended: false }), async (req, res) => {
   const crypto = require('crypto');
   const signedRequest = req.body?.signed_request;

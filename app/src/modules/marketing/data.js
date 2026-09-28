@@ -59,13 +59,13 @@ const PAGES = {
         h: 'Precio real para una PyME de 3 personas',
         p: [
           'En Kommo, el plan Advanced cuesta alrededor de USD $25 por usuario/mes. Una PyME con 3 vendedores paga ~USD $75/mes (≈ MXN $1,500/mes) — y eso sin contar la integración WhatsApp que suele requerir un proveedor adicional (Twilio cobra por mensaje).',
-          'En Wapi101 el plan Pro es MXN $299/mes plano para todo el workspace, incluyendo hasta 5 usuarios y WhatsApp Cloud API directa con Meta (sin sobrecargo por mensaje). Es ~5× más barato a igual número de usuarios.',
+          'En Wapi101 el plan Pro es MXN $299/mes por workspace, con 2 usuarios incluidos y usuarios adicionales según se necesite, y WhatsApp Cloud API directa con Meta (sin sobrecargo por mensaje). A tres personas sigue costando una fracción de Kommo más su proveedor.',
         ],
       },
       {
         h: 'WhatsApp: Cloud API vs aggregators',
         p: [
-          'Wapi101 se conecta directo con WhatsApp Cloud API de Meta. Tú eres el dueño del número, no pagas markup por mensaje, y los costos son los oficiales de Meta (gratis hasta 1,000 conversaciones de servicio/mes).',
+          'Wapi101 se conecta directo con WhatsApp Cloud API de Meta. Tú eres el dueño del número, no pagas markup por mensaje, y los costos son los oficiales de Meta (responder dentro de la ventana de 24 horas es gratis; las plantillas se cobran por mensaje según categoría).',
           'Kommo se integra vía aggregators como Twilio o 360dialog. Esos proveedores cobran un fee por mensaje encima del costo de Meta, y agregan una capa de complejidad. Para un negocio que manda miles de mensajes/mes, esa diferencia es significativa.',
         ],
       },
@@ -86,12 +86,35 @@ const PAGES = {
           'Si quieres bots visuales con sub-menús anidados (wait_response + condiciones) sin pagar tier alto.',
         ],
       },
+      {
+        h: "Precio a 1, 3 y 10 usuarios",
+        p: [
+          "**1 usuario:** Kommo alrededor de USD $15-25 al mes según plan (≈ MXN $280-460); Wapi101 plan Gratis ($0) o Básico (MXN $149). **3 usuarios:** Kommo alrededor de USD $45-75 al mes (≈ MXN $830-1,400) más el proveedor de WhatsApp; Wapi101 Pro (MXN $299, 2 usuarios incluidos) más un usuario adicional, sin cobro por mensaje. **10 usuarios:** Kommo alrededor de USD $150-250 al mes (≈ MXN $2,800-4,600) más proveedor; Wapi101 Ultra (MXN $499) más usuarios adicionales.",
+          "Los precios de Kommo cambian por plan y promoción; revísalos antes de decidir. Lo que no cambia es la estructura: por usuario y con WhatsApp vía terceros, contra por plan y con WhatsApp directo a Meta. [Lo que cobra Meta por mensaje](/blog/precio-whatsapp-business-api-mexico).",
+        ],
+      },
+      {
+        h: "Migrar de Kommo a Wapi101, paso a paso",
+        p: [
+          "**1. Exporta de Kommo** contactos, leads (con etapa y responsable), etiquetas y campos personalizados; el importador de Wapi101 (Data Center) lee esos archivos y te deja mapear campo por campo. **2. Recrea los pipelines:** mismas etapas, mismo orden; toma diez minutos. **3. Vuelve a montar tus Salesbots como bots visuales:** menú, condiciones, esperas y pase a humano. **4. Conecta WhatsApp:** si tu número ya está en la API vía un proveedor, se migra a la conexión directa con Meta conservando número, nombre verificado y plantillas aprobadas; si estaba en la app, conéctalo por QR mientras tramitas la API.",
+          "**5. Corre los dos en paralelo una semana** con el equipo trabajando ya desde Wapi101, y cancela Kommo cuando nadie lo abra. El equipo de Wapi101 acompaña la migración desde Kommo en el onboarding; el proceso ya está hecho varias veces.",
+        ],
+      },
+      {
+        h: "Lo que Kommo hace y Wapi101 no (todavía)",
+        p: [
+          "Honestidad primero: Kommo tiene un **marketplace enorme** de integraciones (telefonía, ERPs, cientos de apps) y años de madurez en **automatizaciones digitales** para venta B2B con muchos pasos. Si tu operación depende de una integración específica de ese marketplace, verifica que exista en Wapi101 (API abierta, webhooks, n8n/Make/Zapier) antes de migrar. Donde Wapi101 gana es en todo lo que rodea al chat: WhatsApp directo, multicanal incluido, bots e IA en el mismo lugar, y un precio que no crece por cada persona que entra. [Ranking de plataformas para WhatsApp Business API](/blog/mejores-plataformas-whatsapp-business-api-latam).",
+        ],
+      },
     ],
     faqs: [
       ['¿Wapi101 reemplaza completamente a Kommo?', 'Para casos de uso de PyME conversacional vía WhatsApp/Messenger/Instagram/Telegram, sí. Si dependes de integraciones muy específicas de Kommo (ej. telefonía VoIP X o un ERP vertical), valida primero si esas existen en Wapi101 o se pueden hacer vía webhooks/API.'],
       ['¿Puedo migrar mis contactos y pipelines de Kommo a Wapi101?', 'Sí. Tenemos scripts de migración para Kommo (contactos, leads, pipelines, etiquetas). Si necesitas ayuda, el equipo lo hace contigo en el onboarding.'],
       ['¿Wapi101 tiene Salesbot como Kommo?', 'Sí, llamamos al equivalente "Bot Builder". Soporta condiciones anidadas, wait_response (esperar respuesta), plantillas WhatsApp, asignación automática y handover a humano.'],
       ['¿Por qué Wapi101 es más barato?', 'Tres razones: (1) precio plano por workspace en vez de por usuario; (2) WhatsApp Cloud API directo con Meta, sin markups de aggregators; (3) equipo lean operando desde México, con costos optimizados.'],
+      ["¿Kommo cobra por mensaje de WhatsApp?", "Kommo no, pero el proveedor que necesita para conectar WhatsApp (Twilio, 360dialog u otro) sí cobra su comisión o cuota, además de la tarifa de Meta. En Wapi101 la conexión es directa con Meta y solo pagas lo que Meta cobra por mensaje de plantilla."],
+      ["¿Se pierden los chats al migrar de Kommo?", "El historial de conversaciones de Kommo no se importa tal cual; sí se importan contactos, leads, etapas, etiquetas y campos. Exporta las conversaciones importantes antes de cancelar. Las plantillas de WhatsApp viven en tu cuenta de Meta y se conservan."],
+      ["¿Wapi101 tiene integraciones con Zapier, Make o n8n?", "Sí, por webhooks salientes, API pública y conectores para n8n, Make y Zapier, además de WooCommerce. Si tu integración de Kommo era vía Zapier, casi siempre se replica."],
     ],
   },
 
@@ -122,7 +145,7 @@ const PAGES = {
         h: '¿Cuánto cuesta cada uno realmente?',
         p: [
           'HubSpot tiene un CRM gratis muy bueno para iniciar, pero el "todo incluido" es engañoso. Para tener email marketing automatizado, secuencias de ventas y bots conversacionales necesitas Marketing Hub Pro (USD $890/mes) + Sales Hub Pro (USD $90/usuario/mes). Para 3 vendedores: ≈ USD $1,160/mes = MXN $23,000/mes.',
-          'Wapi101 incluye CRM + pipelines + bots + multicanal + plantillas en MXN $299/mes plano (≈ USD $15). Diferencia: 75× más barato para PyMEs.',
+          'Wapi101 incluye CRM + pipelines + bots + IA + multicanal + plantillas en MXN $299/mes (≈ USD $16), con 2 usuarios incluidos. Para una PyME la diferencia es de decenas de veces.',
         ],
       },
       {
@@ -149,11 +172,29 @@ const PAGES = {
           'Si necesitas el soporte y la documentación en español MX.',
         ],
       },
+      {
+        h: "Precio por año para un equipo de 3 (números redondos)",
+        p: [
+          "HubSpot con Marketing Hub Professional y Sales Hub Professional para 3 personas anda en el orden de USD $12,000 a $14,000 al año (los precios de HubSpot cambian por asiento y por nivel; revisa su página antes de decidir). El CRM gratuito de HubSpot cuesta $0, pero no incluye WhatsApp ni automatización conversacional.",
+          "Wapi101 plan Pro: MXN $299 al mes, MXN $2,691 al año pagando anual (≈ USD $156), con 2 usuarios incluidos; el tercero se agrega como usuario adicional. Incluye WhatsApp por la API oficial sin comisión por mensaje, Instagram, Messenger, Telegram, bots y respuesta con IA. [Lo que cobra Meta por mensaje](/blog/precio-whatsapp-business-api-mexico).",
+        ],
+      },
+      {
+        h: "Migrar de HubSpot a Wapi101: qué se trae y qué no",
+        p: [
+          "**Se trae:** contactos y empresas (exportación CSV de HubSpot → importador de Wapi101 con mapeo de campos), etiquetas y propiedades como campos personalizados, pipelines y etapas (se recrean en minutos), y las plantillas de WhatsApp si ya las tenías aprobadas en tu cuenta de Meta (viven en Meta, no en HubSpot).",
+          "**No se trae tal cual:** los workflows de HubSpot (se rehacen como bots o automatizaciones de pipeline), los correos de marketing (Wapi101 no es una herramienta de email masivo) y los reportes históricos, que conviene exportar a PDF antes de cancelar.",
+          "**Usar los dos:** muchos equipos dejan HubSpot para email y contenido y llevan las conversaciones a Wapi101, sincronizando contactos por webhooks o Zapier/Make. Funciona, pero define una sola fuente de verdad para el estado del lead o terminarás con dos verdades. [Ranking de plataformas para WhatsApp Business API](/blog/mejores-plataformas-whatsapp-business-api-latam).",
+        ],
+      },
     ],
     faqs: [
       ['¿Puedo usar HubSpot CRM gratis junto con Wapi101?', 'Técnicamente sí, vía Zapier o webhooks. Pero duplicas trabajo manteniendo dos sistemas. La mayoría de nuestros clientes ex-HubSpot migran 100%.'],
       ['¿Wapi101 reemplaza el marketing email de HubSpot?', 'No, Wapi101 es CRM conversacional (WhatsApp, Messenger, Instagram, Telegram). Si necesitas email marketing avanzado, recomendamos combinar Wapi101 con un email tool dedicado como Brevo o MailerLite (más baratos que HubSpot Marketing Hub).'],
       ['¿HubSpot tiene WhatsApp Business API nativo?', 'No directamente. HubSpot se conecta a WhatsApp vía partners (360dialog, Twilio). Wapi101 sí es Meta-Tech Provider directo, así que no hay intermediarios cobrando markup.'],
+      ["¿Cuánto cuesta WhatsApp en HubSpot?", "HubSpot no cobra WhatsApp como tal: se conecta a través de un proveedor (360dialog, Twilio u otro), que cobra su cuota o comisión, más la tarifa por mensaje de Meta, y requiere un plan de pago de Service o Marketing Hub. El total depende de tres facturas."],
+      ["¿HubSpot tiene bots para WhatsApp?", "Tiene chatflows y workflows, pensados para chat web y correo; para WhatsApp las opciones son más limitadas y dependen del conector. Wapi101 tiene un editor visual de bots hecho para WhatsApp (menús, botones, condiciones, esperas, pase a humano) y respuesta con IA."],
+      ["¿Qué reportes pierdo al salir de HubSpot?", "Los de marketing (tráfico web, email, atribución multicanal). Los de venta conversacional (leads por etapa, tiempos de respuesta, conversión por asesor y por canal) los tienes en Wapi101."],
     ],
   },
 
@@ -458,7 +499,7 @@ const PAGES = {
       {
         h: 'WhatsApp Cloud API vs WhatsApp Web: ¿cuál usar?',
         p: [
-          'Cloud API (oficial de Meta): permite múltiples usuarios atendiendo el mismo número, bots automáticos, plantillas masivas aprobadas, historial completo. Requiere un proveedor (como Wapi101) que sea Tech Provider o pasar por aggregator. Costo: gratis hasta 1,000 conversaciones de servicio/mes.',
+          'Cloud API (oficial de Meta): permite múltiples usuarios atendiendo el mismo número, bots automáticos, plantillas masivas aprobadas, historial completo. Requiere un proveedor (como Wapi101) que sea Tech Provider o pasar por aggregator. Costo: Meta no cobra por responder dentro de la ventana de 24 horas; cobra por mensaje de plantilla (marketing, utilidad o autenticación) según el país.',
           'WhatsApp Web (no oficial / Baileys): conecta tu WhatsApp normal vía sesión QR. Funciona para 1 dispositivo, limitado en automatización, riesgo de baneo de Meta si haces broadcast masivo. Útil solo para inicio o casos muy pequeños.',
           'Recomendación: si tu negocio depende de WhatsApp, usa Cloud API. Wapi101 te conecta directamente con Meta como Tech Provider, sin markup por mensaje.',
         ],
@@ -492,15 +533,63 @@ const PAGES = {
           '4. Importa 100 contactos de prueba.',
           '5. Crea 1 pipeline simple y 1 bot básico.',
           '6. Pruébalo con tu equipo 1 semana antes de decidir.',
-          'Wapi101 ofrece 14 días gratis sin tarjeta. Conectas tu WhatsApp Business en 10 minutos.',
+          'Wapi101 tiene plan Gratis sin tarjeta (1 usuario, 500 contactos) y 14 días de prueba de los planes de pago. Conectas tu WhatsApp Business en 10 minutos.',
+        ],
+      },
+      {
+        h: "Cómo funciona por dentro (lo que pasa con cada mensaje)",
+        p: [
+          "Cada mensaje que entra por WhatsApp llega a una **bandeja compartida**, ligado a un contacto (con su historial, etiquetas y datos) y a un **lead o expediente** que vive en una etapa del pipeline. El CRM decide qué pasa primero: si un bot lo atiende (menú, calificación, preguntas frecuentes), si se asigna a un asesor por reglas o por turno, o si dispara una automatización (etiquetar, mover de etapa, avisar al equipo).",
+          "Cuando el cliente escribe se abre una **ventana de 24 horas** en la que puedes responder con mensajes libres sin costo. Pasada esa ventana, para volver a escribirle necesitas una **plantilla aprobada por Meta** (recordatorio, confirmación, promoción), que Meta cobra por mensaje según su categoría. Un buen CRM te dice si la ventana está abierta o cerrada y te deja mandar la plantilla desde el mismo chat.",
+          "Todo queda registrado: quién atendió, cuánto tardó, en qué etapa se ganó o perdió el lead y por qué. Esa trazabilidad es la diferencia entre “creo que vendemos más por WhatsApp” y saberlo con números.",
+        ],
+      },
+      {
+        h: "Con API oficial o con tu número por QR: los dos caminos",
+        p: [
+          "La **API de WhatsApp Business (Cloud API)** es la vía oficial: el número vive en la nube, no depende de un celular, soporta todos los agentes que quieras, plantillas y campañas. Requiere una cuenta de Meta Business y migrar el número (deja de funcionar en la app). [Cómo conectarla paso a paso](/blog/como-conectar-whatsapp-business-api).",
+          "La **conexión por QR** (en Wapi101 se llama WhatsApp Lite) vincula tu número actual como si fuera WhatsApp Web: sirve para ordenar la atención hoy mismo, con bandeja compartida, pipeline y bots, sin trámites. No permite plantillas aprobadas para campañas y depende de que el celular tenga señal. Es el escalón previo a la API, no un sustituto para operaciones grandes.",
+          "Regla práctica: si mandas campañas o tienes más de cinco personas atendiendo, ve a la API. Si quieres probar el CRM con tu número de siempre, empieza por QR y migra después sin cambiar de herramienta. [Un número, varios usuarios: las tres opciones](/blog/whatsapp-business-multiagente-varios-usuarios).",
+        ],
+      },
+      {
+        h: "Casos de uso por tipo de negocio",
+        p: [
+          "**Tienda o ecommerce:** recuperación de carritos abandonados, aviso de envío, post-venta y reseñas por WhatsApp; integración con WooCommerce. [CRM para ecommerce](/crm-ecommerce).",
+          "**Clínicas y consultorios:** agenda, confirmación y recordatorio de citas con plantillas de utilidad, seguimiento de tratamientos. [CRM para clínicas](/crm-clinicas).",
+          "**Inmobiliarias:** calificación de leads por presupuesto y zona, envío de fichas, agenda de visitas y seguimiento por asesor. [CRM inmobiliario](/crm-inmobiliaria).",
+          "**Restaurantes:** reservas, pedidos y menú por WhatsApp, avisos de promociones a clientes frecuentes. [CRM para restaurantes](/crm-restaurantes).",
+          "**Servicios y agencias:** cotizaciones, seguimiento de propuestas y recordatorios de pago, con el historial completo del chat en cada etapa del pipeline.",
+        ],
+      },
+      {
+        h: "Cuánto cuesta tener un CRM para WhatsApp",
+        p: [
+          "Son tres capas: (1) **Meta** cobra por los mensajes de plantilla que envías, por categoría y país (responder dentro de la ventana de 24 horas no cuesta); (2) el **proveedor intermedio**, si usas uno (Twilio, 360dialog…), cobra una comisión o cuota, capa que desaparece cuando el CRM se conecta directo a Meta; (3) el **software**, que va de gratis a decenas de dólares por usuario al mes.",
+          "En Wapi101: plan Gratis (1 usuario, 500 contactos), Básico desde MXN $149 al mes, Pro desde $299 (agrega respuesta con IA) y Ultra desde $499, sin cobro por mensaje encima de Meta. [Desglose completo de tarifas con tres escenarios reales](/blog/precio-whatsapp-business-api-mexico).",
+        ],
+      },
+      {
+        h: "Errores comunes al implementar (y cómo evitarlos)",
+        p: [
+          "**Conectar la API sin exportar el historial de la app.** Los chats de la app no se migran; guarda lo importante antes.",
+          "**Encender bots sin ruta a humano.** Un menú sin salida genera reportes y bloqueos. Siempre una palabra o un botón para hablar con alguien.",
+          "**Mandar campañas sin opt-in.** Es la vía rápida a que Meta baje tu calificación de calidad. [Cómo evitar bloqueos](/blog/evitar-bloqueo-whatsapp-business-mensajes-masivos).",
+          "**No definir las etapas del pipeline antes de empezar.** Cinco etapas claras (nuevo, contactado, cotizado, ganado, perdido) valen más que veinte que nadie usa.",
+          "**Comprar el plan grande antes de tiempo.** Empieza con lo que el equipo pueda usar esta semana; subir de plan es un click.",
         ],
       },
     ],
     faqs: [
       ['¿Puedo usar mi número actual de WhatsApp Business en un CRM?', 'Sí, pero hay que migrarlo a WhatsApp Cloud API (gratis vía Meta + tu proveedor CRM). El proceso toma 1-2 horas. Pierdes WhatsApp en tu celular pero ganas multi-agente, bots, plantillas y todo.'],
-      ['¿Wapi101 cobra por mensaje?', 'No. Cobramos por workspace plano (MXN $149-$499/mes según plan). Los costos por mensaje son los oficiales de Meta (gratis las primeras 1000 conversaciones de servicio/mes; las de marketing tienen costo según país: ~$0.04 USD por mensaje en MX).'],
+      ['¿Wapi101 cobra por mensaje?', 'No. Hay plan Gratis y planes de pago por workspace (MXN $149-$499/mes según plan), sin cobro por mensaje encima de Meta. Lo que cobra Meta es por mensaje de plantilla según categoría y país: en México, del orden de 4-5 centavos de dólar un mensaje de marketing y de 1-2 centavos uno de utilidad; responder dentro de la ventana de 24 horas es gratis.'],
       ['¿Es legal mandar broadcast a mi base de clientes por WhatsApp?', 'Sí si usas plantillas aprobadas por Meta y mandas a contactos con consentimiento (opt-in). Hacer broadcast con plantillas no aprobadas o sin opt-in puede resultar en baneo. Wapi101 te guía en esto.'],
       ['¿Funciona con tienda online (Shopify, WooCommerce)?', 'Sí, vía webhooks. Cuando hay un carrito abandonado en tu tienda, el bot puede mandar mensaje automático por WhatsApp para recuperarlo.'],
+      ["¿Sirve un CRM para WhatsApp si somos solo dos personas?", "Sí. Con dos personas ya aparece el problema de “quién contestó qué”. Un plan gratuito con bandeja compartida y pipeline suele bastar; el bot y las plantillas se agregan cuando hagan falta."],
+      ["¿Puedo tener WhatsApp, Instagram y Messenger en el mismo CRM?", "Sí, si el CRM es multicanal. En Wapi101 los tres canales (y Telegram y correo) caen en la misma bandeja, con el mismo contacto y el mismo pipeline, y puedes activar bots por canal."],
+      ["¿Necesito saber programar para usar bots?", "No. Los bots se arman con un editor visual: bloques de mensaje, botones, condiciones, esperas y pase a humano. La IA se configura con texto (tu base de conocimiento), no con código. [Ejemplos de bots para PyMEs](/blog/bots-whatsapp-pymes-ejemplos)."],
+      ["¿Qué pasa con mis datos y los de mis clientes?", "Viven en tu cuenta, aislados por empresa, con conexiones cifradas y respaldos. Puedes exportarlos (contactos, leads, conversaciones) cuando quieras y eliminar tu cuenta desde la configuración."],
+      ["¿Qué diferencia hay entre un CRM para WhatsApp y una herramienta multiagente?", "La herramienta multiagente reparte chats; el CRM además guarda el historial del cliente, lo mueve por un pipeline de venta, automatiza seguimientos y mide conversión. Si solo quieres repartir chats, cualquiera sirve; si quieres vender más, necesitas el CRM."],
     ],
   },
 
@@ -516,7 +605,7 @@ const PAGES = {
       {
         h: 'Las 7 opciones que conviene evaluar',
         p: [
-          '**Wapi101** — CRM mexicano multicanal (WhatsApp, Messenger, IG, Telegram). Precio plano MXN $149-$499. Cloud API nativo. 14 días gratis.',
+          '**Wapi101** — CRM mexicano multicanal (WhatsApp, Messenger, IG, Telegram). Plan Gratis y planes desde MXN $149. Cloud API nativo, sin cobro por mensaje.',
           '**Kommo (ex-amoCRM)** — Pipelines kanban maduros, Salesbot. ~USD $25/usuario/mes. WhatsApp vía aggregators.',
           '**Leadsales** — CRM mexicano enfocado WhatsApp. UI minimalista. USD $20+/usuario/mes.',
           '**HubSpot CRM** — Plan gratis muy bueno pero WhatsApp es add-on caro. Mejor para mid-market.',
@@ -529,7 +618,7 @@ const PAGES = {
         h: 'Criterios para elegir (para PyME mexicana)',
         p: [
           '1. **¿WhatsApp es tu canal principal?** Si sí, prioriza CRMs con Cloud API nativo (Wapi101, Leadsales).',
-          '2. **¿Cuántos usuarios serán?** Si 1-5: prefiere precio plano (Wapi101) sobre por-usuario (Kommo, Pipedrive).',
+          '2. **¿Cuántos usuarios serán?** Si 1-5: prefiere precio por plan (Wapi101) sobre precio por usuario (Kommo, Pipedrive), y suma los usuarios adicionales al comparar.',
           '3. **¿Necesitas multicanal?** Messenger, Instagram, Telegram además de WhatsApp: Wapi101 los tiene incluidos.',
           '4. **¿Capacitación corta?** Si tu equipo no es técnico, busca UI simple (Wapi101, Leadsales, Pipedrive).',
           '5. **¿Presupuesto MXN?** Verifica precio en pesos sin sorpresas por TC USD/MXN.',
@@ -550,8 +639,36 @@ const PAGES = {
         h: 'Caso típico: PyME mexicana 3 personas, venta por WhatsApp',
         p: [
           'Perfil: Tienda de productos belleza con 3 vendedoras, ~200 contactos nuevos al mes, 60% de ventas por WhatsApp, 40% por Instagram DM.',
-          'Recomendación: Wapi101 plan Pro (MXN $299/mes). Cubre las 3 usuarias (no se paga por usuario adicional), conecta WhatsApp + Instagram + Messenger en una sola bandeja, bots para FAQ automática, plantillas para promociones masivas.',
-          'Costo anual: MXN $2,990 (con 20% off anual). Equivalente: ~USD $150/año. Comparable: Kommo para 3 usuarias = USD $900/año.',
+          'Recomendación: Wapi101 plan Pro (MXN $299/mes). Incluye 2 usuarios (la tercera vendedora se agrega como usuario adicional), conecta WhatsApp + Instagram + Messenger en una sola bandeja, bots para preguntas frecuentes, respuesta con IA y plantillas para promociones.',
+          'Costo anual del plan Pro pagando anual: MXN $2,691 (≈ USD $156), más el usuario adicional. Comparable: un CRM por asiento a USD $25 para 3 usuarias = USD $900 al año, sin contar la integración con WhatsApp.',
+        ],
+      },
+      {
+        h: "Qué necesita de verdad una PyME (y qué no)",
+        p: [
+          "Lo que sí: una bandeja compartida para que nadie conteste dos veces ni nadie deje un chat sin responder; un pipeline simple con cinco etapas; recordatorios y seguimientos automáticos; plantillas para no escribir lo mismo cuarenta veces al día; y un reporte semanal de cuántos leads entraron, cuántos se cerraron y quién los atendió.",
+          "Lo que casi nunca: pronóstico por territorio, cotizador enterprise, doscientos campos personalizados o integración con el ERP el primer mes. Todo eso se puede necesitar a los cincuenta empleados; a los cinco, solo estorba y encarece. La mejor señal de un CRM para PyME es que tu equipo lo use al segundo día sin capacitación.",
+        ],
+      },
+      {
+        h: "Precio real por año para 1, 3 y 5 personas",
+        p: [
+          "El truco de la mayoría de los CRM globales es el precio “por usuario”: USD $20-25 al mes se ven baratos hasta que multiplicas. A 3 personas son unos USD $75 al mes (≈ MXN $1,400) y a 5 personas unos USD $125 (≈ MXN $2,300), solo en licencias y antes de la integración con WhatsApp.",
+          "Con precio por plan cambia la cuenta. En Wapi101: **1 persona**, plan Gratis ($0) o Básico (MXN $149/mes, $1,341 al año pagando anual); **2 personas**, Pro (MXN $299/mes, $2,691 al año), que incluye dos usuarios y la respuesta con IA; **3 a 5 personas**, Pro o Ultra más los usuarios adicionales que necesites. Aun sumando usuarios, queda por debajo del modelo por asiento de los globales, y sin cobro por mensaje encima de lo que cobra Meta.",
+          "Compara siempre el total anual con tu equipo real y con la integración de WhatsApp incluida, no el precio de entrada del anuncio. [Cómo cobra Meta por mensaje](/blog/precio-whatsapp-business-api-mexico).",
+        ],
+      },
+      {
+        h: "Cómo implementar un CRM en 7 días sin frenar las ventas",
+        p: [
+          "**Día 1:** crea la cuenta, conecta WhatsApp (por QR si aún no tienes la API) e invita a tu equipo. **Día 2:** importa contactos desde Excel o desde el celular y define cinco etapas del pipeline. **Día 3:** escribe cinco respuestas rápidas y una plantilla de seguimiento. **Día 4:** activa un bot de bienvenida con menú y pase a humano.",
+          "**Días 5 a 7:** trabaja solo desde el CRM (nada de contestar desde el celular), revisa cada tarde qué chats quedaron sin respuesta y ajusta. Al día 7 ya tienes datos reales para decidir si te quedas en el plan gratuito o subes. [Guía completa de CRM para WhatsApp Business](/crm-whatsapp-business).",
+        ],
+      },
+      {
+        h: "Señales de que ya necesitas un CRM",
+        p: [
+          "Contestas desde tu celular personal y no sabes cuántos clientes te escribieron esta semana. Dos personas le respondieron distinto al mismo cliente. Se te olvidó dar seguimiento a una cotización y te enteraste cuando el cliente compró en otro lado. Copias y pegas el mismo mensaje varias veces al día. No sabes qué vendedor cierra más ni por qué. Si marcaste dos o más, el CRM se paga solo el primer mes.",
         ],
       },
     ],
@@ -560,6 +677,11 @@ const PAGES = {
       ['¿Cuál tiene mejor soporte en español MX?', 'Los mexicanos (Wapi101, Leadsales) tienen ventaja por husos horarios MX y referencias locales. Los globales tienen soporte multilingüe pero suelen ser tickets en EN/PT.'],
       ['¿Puedo migrar de Excel/Google Sheets a CRM fácilmente?', 'Sí. Casi todos importan CSV. Wapi101 te ayuda con el mapeo en el onboarding (gratis).'],
       ['¿Cuánto tarda implementar un CRM en una PyME?', 'Setup técnico: 1-2 horas (conectar WhatsApp, importar contactos, crear pipeline). Adopción real del equipo: 2-4 semanas con uso diario.'],
+      ["¿Un CRM gratis sirve para una PyME?", "Para empezar, sí: bandeja compartida, contactos y pipeline cubren a una o dos personas. El plan Gratis de Wapi101 incluye 1 usuario y 500 contactos sin límite de tiempo. Pagas cuando necesites más usuarios, plantillas para campañas o la respuesta con IA."],
+      ["¿Funciona con mi WhatsApp normal o necesito la API?", "Puedes empezar con tu número actual conectado por QR (como WhatsApp Web) y pasar a la API oficial cuando quieras mandar campañas o tener más agentes. [Diferencias entre la app y la API](/blog/whatsapp-business-vs-api-diferencias)."],
+      ["¿Puedo cambiar de CRM más adelante sin perder todo?", "Sí. Exige que el CRM te deje exportar contactos, leads y conversaciones en CSV o por API. Tu número de WhatsApp es tuyo (vive en tu cuenta de Meta), así que se migra entre plataformas."],
+      ["¿Sirve para una sola persona?", "Sí, y es donde más ayuda: recordatorios automáticos, plantillas y un pipeline evitan que se te caigan ventas por olvido. Empieza en el plan Gratis."],
+      ["¿Qué pasa con la facturación en pesos y el tipo de cambio?", "Los CRM globales cobran en dólares, así que tu gasto sube cuando sube el dólar. Wapi101 cobra en pesos mexicanos, con el mismo precio todo el año."],
     ],
   },
 
@@ -582,7 +704,7 @@ const PAGES = {
       {
         h: 'Top 7 evaluados',
         p: [
-          '**1. Wapi101 (México)** — Multicanal nativo (WhatsApp Cloud API + Messenger + IG + Telegram), precio plano en MXN ($149-$499/mes), bots visuales con condiciones anidadas, 14 días gratis sin tarjeta. Mejor para PyMEs MX y LATAM conversacionales.',
+          '**1. Wapi101 (México)** — Multicanal nativo (WhatsApp Cloud API + Messenger + IG + Telegram), precio por plan en MXN (Gratis, y de $149 a $499/mes), bots visuales con condiciones anidadas y respuesta con IA, plan Gratis sin tarjeta. Mejor para PyMEs MX y LATAM conversacionales.',
           '**2. Kommo (ex-amoCRM, global)** — Pipelines kanban maduros, Salesbot, marketplace de apps. USD $15-$45/u/mes. WhatsApp vía aggregators. Mejor para empresas con equipos ya entrenados.',
           '**3. Leadsales (México)** — CRM 100% WhatsApp, UI ultra-minimalista, en español MX. USD $20+/u/mes. Mejor para tiendas pequeñas solo-WhatsApp.',
           '**4. Sirena/Z-API (Argentina/Brasil)** — Foco en mensajería, popular en BR/AR. Precios en pesos AR / reais.',
@@ -609,11 +731,48 @@ const PAGES = {
           'No probar con tu equipo real antes de comprometerte. Casi todos ofrecen 14 días gratis — úsalos.',
         ],
       },
+      {
+        h: "Cómo evaluamos (criterios y pesos)",
+        p: [
+          "Ordenamos por lo que decide una compra en LATAM, en este orden: **WhatsApp nativo** (API oficial sin intermediario, multiagente, plantillas), **precio total en moneda local** para un equipo de 3 a 5 personas, **soporte en español y en horario de la región**, **bots y automatización sin programar**, **multicanal** (Instagram, Messenger, Telegram), **facilidad de adopción** (que el equipo lo use en un día) e **integraciones** (tienda en línea, Zapier/Make, API abierta).",
+          "No pesan igual para todos: una empresa B2B que vende por correo y llamadas debe subir “pipeline” y bajar “WhatsApp”. Por eso, más que un ganador absoluto, abajo damos un ganador por necesidad. Somos parte de la lista (Wapi101), así que donde otro es mejor, lo decimos.",
+        ],
+      },
+      {
+        h: "El mejor CRM según lo que necesitas",
+        p: [
+          "**Vendes por chat (WhatsApp, Instagram):** Wapi101 o Leadsales; Wapi101 si además quieres bots, IA y multicanal en la misma bandeja. [Guía de CRM para WhatsApp Business](/crm-whatsapp-business).",
+          "**Venta B2B tradicional por correo y llamadas:** Pipedrive; su pipeline sigue siendo el más limpio. HubSpot si además haces marketing de contenidos.",
+          "**Marketing automation completo (email, landing pages, anuncios):** HubSpot, aceptando su precio. [Wapi101 vs HubSpot](/vs/hubspot).",
+          "**Suite todo-en-uno con tareas, intranet y documentos:** Bitrix24 o Zoho One; el CRM es una parte, no el centro.",
+          "**Equipo ya entrenado en Kommo:** quédate hasta que el costo por usuario o la integración de WhatsApp te empujen. [Wapi101 vs Kommo](/vs/kommo).",
+          "**Brasil:** RD Station, Z-API o Pipedrive, por idioma y ecosistema local.",
+        ],
+      },
+      {
+        h: "Precio real a 5 usuarios (lo que se paga al año)",
+        p: [
+          "Con modelo por usuario a USD $20-25 al mes, 5 personas son USD $1,200 a $1,500 al año, más la integración de WhatsApp vía proveedor (que suele cobrar por mensaje). En pesos mexicanos ronda los MXN $22,000 a $28,000; en pesos colombianos o argentinos la cifra cambia cada mes con el tipo de cambio.",
+          "Con modelo por plan, como Wapi101, un equipo de 5 paga el plan Pro o Ultra (MXN $299 o $499 al mes, menos pagando anual) más los usuarios adicionales a los dos incluidos, sin cobro por mensaje encima de Meta. La diferencia anual suele ser de varios miles de pesos, y crece con cada persona que se suma. [Cómo cobra Meta por mensaje](/blog/precio-whatsapp-business-api-mexico).",
+        ],
+      },
+      {
+        h: "Lo que cambia en 2026",
+        p: [
+          "**Meta cobra por mensaje, no por conversación** (desde julio de 2025): las campañas de marketing cuestan más a volumen, y los CRM que se conectan directo a Meta ahorran la comisión del intermediario. **La IA ya responde en el chat**: calificar leads y contestar preguntas frecuentes con IA dejó de ser cosa de enterprise; hoy viene en planes de PyME. **Instagram DM es canal de venta**, no solo de likes: un CRM que lo ignore te deja fuera de la mitad de las conversaciones en retail y belleza. **Los rankings también los leen las IA**: cuando alguien pregunta a ChatGPT qué CRM le conviene, la respuesta sale de comparativas como esta, así que la transparencia de precios pesa más que nunca. [Ranking de plataformas de WhatsApp Business API](/blog/mejores-plataformas-whatsapp-business-api-latam).",
+        ],
+      },
     ],
     faqs: [
       ['¿Cuál es el CRM más usado en LATAM?', 'Por volumen total, Kommo, HubSpot y Salesforce dominan. Pero entre PyMEs específicamente, las opciones locales (Wapi101 MX, Leadsales MX, Sirena ARG) están ganando rápido por precio y enfoque WhatsApp.'],
       ['¿Necesito el CRM más caro para tener buenos resultados?', 'No. Para PyMEs LATAM, el CRM más adecuado suele ser uno enfocado y bien usado, no el más caro. Wapi101 a MXN $299/mes (≈ USD $15) cubre el 90% de necesidades de una PyME que vende por chat.'],
       ['¿Por qué los CRMs latinoamericanos son más baratos?', 'Tres razones: (1) costos operativos en LATAM más bajos que US/EU; (2) competencia feroz entre locales; (3) entendimiento del mercado: las PyMEs no pueden pagar precios per-seat USA-style.'],
+      ["¿Vale la pena el CRM gratis de HubSpot para LATAM?", "Como base de contactos y pipeline, sí, es muy bueno. Para WhatsApp no: la integración es de pago, vía terceros y limitada. Si tu venta es por chat, un CRM conversacional te sale más barato y hace más."],
+      ["¿Hay CRM en portugués para Brasil?", "Sí: RD Station y Pipedrive tienen interfaz y soporte en portugués, y Z-API es popular para WhatsApp. Wapi101 funciona en Brasil pero su interfaz está en español."],
+      ["¿Qué CRM tiene mejor soporte en español?", "Los nacidos en la región (Wapi101 y Leadsales en México, Sirena en Argentina) atienden en español y en horario local. Los globales tienen soporte en español, pero suele ser por ticket y con tiempos de respuesta de otro huso horario."],
+      ["¿Me conviene un CRM global “porque es el más usado”?", "Solo si tu proceso se parece al de sus clientes típicos (B2B, correo, ciclos largos). Si vendes por WhatsApp a consumidores, el CRM más usado del mundo puede ser el peor para ti: pagarás funciones que no usas y te faltarán las que sí."],
+      ["¿Cómo afecta el tipo de cambio al costo del CRM?", "Los CRM que cobran en dólares suben de precio cada vez que tu moneda baja, sin que cambies nada. Los que cobran en moneda local (Wapi101 en pesos mexicanos) mantienen el precio; para Colombia, Perú o Argentina, pagar en dólares con precio por plan sigue siendo más estable que por usuario."],
+      ["¿Puedo probar varios antes de decidir?", "Sí, casi todos tienen 14 días de prueba o plan gratuito. Prueba con tu equipo real y tus conversaciones reales una semana; la que el equipo use sin que se lo pidas es la buena."],
     ],
   },
 

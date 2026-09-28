@@ -350,6 +350,7 @@ ${items}
     </div>
   </main>
   <footer style="text-align:center;color:#94a3b8;padding:30px;font-size:14px">© ${new Date().getFullYear()} Wapi101 · Hecho en México 🇲🇽</footer>
+  <script src="/support-bubble.js?v=20260928" defer></script>
 </body>
 </html>`;
 }
@@ -531,7 +532,7 @@ function _renderAboutPage() {
     <h2>Contacto</h2>
     <p>Email de soporte: <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a></p>
     <p>Para developers e integraciones: <a href="/developers">/developers</a></p>
-    <p>Para empresas con más de 50 asesores o necesidades específicas: contacta directo por <a href="https://wa.me/525567890123">WhatsApp</a>.</p>
+    <p>Para empresas con más de 50 asesores o necesidades específicas: contacta directo por <a href="https://wa.me/523349657193">WhatsApp</a>.</p>
   </section>
 
   <section class="cta-final">
@@ -555,6 +556,7 @@ function _renderAboutPage() {
   </div>
 </footer>
 
+  <script src="/support-bubble.js?v=20260928" defer></script>
 </body>
 </html>`;
 }

@@ -466,6 +466,7 @@ function renderPage(page) {
   </div>
 </footer>
 
+  <script src="/support-bubble.js?v=20260928" defer></script>
 </body>
 </html>`;
 }

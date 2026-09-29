@@ -145,6 +145,11 @@ try {
 // Chancluda: avisos de pedidos nuevos al WhatsApp de la empacadora
 try { require('./src/modules/chancluda/service').init(db); } catch (err) { console.warn('[boot] chancluda no arrancó:', err.message); }
 
+// Avisos de la casa (smarthouse) al WhatsApp de Luis: los manda el vigía de la
+// casa desde este mismo VPS. Puerta angosta: ver casa-avisos/routes.js.
+try { app.use('/api/apps/casa-avisos', require('./src/modules/casa-avisos/routes').router()); }
+catch (err) { console.warn('[boot] casa-avisos no montó:', err.message); }
+
 // Analítica de visitantes de la landing pública — ingesta PÚBLICA (sin auth).
 // El tracker en landing.html/signup/etc. hace POST /api/track. Va ANTES del
 // authMiddleware. Los datos se ven en /super → Visitantes.

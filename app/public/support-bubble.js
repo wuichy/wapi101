@@ -8,7 +8,7 @@
 (function () {
   if (document.getElementById('waSupportBubble')) return;   // idempotente
 
-  var NUMERO = '523349657193';
+  var NUMERO = '5213322949686';
   var ruta   = location.pathname === '/' ? 'la página principal' : location.pathname;
   var texto  = 'Hola Luis, estoy viendo wapi101.com (' + ruta + ') y tengo una duda: ';
 

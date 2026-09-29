@@ -351,7 +351,7 @@ ${items}
     </div>
   </main>
   <footer style="text-align:center;color:#94a3b8;padding:30px;font-size:14px">© ${new Date().getFullYear()} Wapi101 · Hecho en México 🇲🇽</footer>
-  <script src="/support-bubble.js?v=20260928" defer></script>
+  <script src="/support-bubble.js?v=20260929tel" defer></script>
 </body>
 </html>`;
 }
@@ -390,7 +390,7 @@ function _renderAboutPage() {
     'contactPoint': [{
       '@type': 'ContactPoint',
       'contactType': 'customer support',
-      'telephone': '+52-33-4965-7193',
+      'telephone': '+52-1-33-2294-9686',
       'email': 'soporte@wapi101.com',
       'availableLanguage': ['Spanish', 'English'],
       'areaServed': ['MX', 'LATAM'],
@@ -534,7 +534,7 @@ function _renderAboutPage() {
     <h2>Contacto</h2>
     <p>Email de soporte: <a href="mailto:soporte@wapi101.com">soporte@wapi101.com</a></p>
     <p>Para developers e integraciones: <a href="/developers">/developers</a></p>
-    <p>WhatsApp directo: <a href="https://wa.me/523349657193">+52 33 4965 7193</a> — para dudas, demos o empresas con necesidades específicas.</p>
+    <p>WhatsApp directo: <a href="https://wa.me/5213322949686">+52 1 33 2294 9686</a> — para dudas, demos o empresas con necesidades específicas.</p>
   </section>
 
   <section class="cta-final">
@@ -558,7 +558,7 @@ function _renderAboutPage() {
   </div>
 </footer>
 
-  <script src="/support-bubble.js?v=20260928" defer></script>
+  <script src="/support-bubble.js?v=20260929tel" defer></script>
 </body>
 </html>`;
 }

@@ -65,7 +65,7 @@ const _WAPI101_SOFTWARE_SCHEMA = {
     'contactPoint': {
       '@type': 'ContactPoint',
       'contactType': 'customer support',
-      'telephone': '+52-33-4965-7193',
+      'telephone': '+52-1-33-2294-9686',
       'email': 'soporte@wapi101.com',
       'availableLanguage': ['Spanish', 'English'],
     },
@@ -467,7 +467,7 @@ function renderPage(page) {
   </div>
 </footer>
 
-  <script src="/support-bubble.js?v=20260928" defer></script>
+  <script src="/support-bubble.js?v=20260929tel" defer></script>
 </body>
 </html>`;
 }

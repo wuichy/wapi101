@@ -356,7 +356,7 @@ ${_topBarHtml()}
 
 ${_footerHtml()}
 
-  <script src="/support-bubble.js?v=20260928" defer></script>
+  <script src="/support-bubble.js?v=20260929tel" defer></script>
 </body>
 </html>`;
 }
@@ -454,7 +454,7 @@ ${_topBarHtml()}
 
 ${_footerHtml()}
 
-  <script src="/support-bubble.js?v=20260928" defer></script>
+  <script src="/support-bubble.js?v=20260929tel" defer></script>
 </body>
 </html>`;
 }

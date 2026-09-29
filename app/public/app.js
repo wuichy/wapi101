@@ -6655,7 +6655,7 @@ function setupSupportBubble() {
   const empresa = tenant?.displayName ? ` de ${tenant.displayName}` : '';
   const plan    = tenant?.plan ? ` · plan ${tenant.plan}` : '';
   const texto   = `Hola Luis, soy ${adv.name || 'un usuario'}${empresa} (wapi101${plan}). `;
-  a.href = `https://wa.me/523349657193?text=${encodeURIComponent(texto)}`;
+  a.href = `https://wa.me/5213322949686?text=${encodeURIComponent(texto)}`;
   a.hidden = false;
 }
 document.addEventListener('DOMContentLoaded', setupSupportBubble);

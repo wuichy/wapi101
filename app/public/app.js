@@ -6511,6 +6511,8 @@ async function checkIntegrationsHealth() {
         if (!prov.includes('whatsapp')) continue;
         if (i.status === 'disconnected' || i.status === 'error') {
           down.push({
+            id:    i.id,
+            lite:  prov.includes('lite'),
             token: `${i.id}:${i.updatedAt || i.updated_at || 0}`,
             label: prov.includes('lite') ? 'WhatsApp Lite' : 'WhatsApp',
             num:   i.externalId || i.external_id || i.phoneNumber || '',
@@ -6536,13 +6538,24 @@ function renderIntegDownBanner(down) {
   bar.innerHTML =
     '<span class="integ-down-txt">⚠️ <strong>' + escapeHtml(names) + '</strong> ' +
     (visible.length > 1 ? 'están desconectados' : 'está desconectado') +
-    ' — no envía ni recibe mensajes. Reconéctalo escaneando el QR.</span>' +
+    ' — no envía ni recibe mensajes. ' + (visible.some(d => d.lite) ? 'Reconéctalo escaneando un QR nuevo.' : 'Revisa la conexión con Meta (token o número).') + '</span>' +
     '<span class="integ-down-actions">' +
       '<button type="button" class="integ-down-btn" id="integDownReconnectBtn">Reconectar</button>' +
       '<button type="button" class="integ-down-dismiss" id="integDownDismissBtn" title="Ya lo sé, no me avises de esta desconexión">No volver a avisar</button>' +
     '</span>';
-  document.getElementById('integDownReconnectBtn')?.addEventListener('click', () => {
+  document.getElementById('integDownReconnectBtn')?.addEventListener('click', async () => {
+    // WhatsApp Lite: abrir el modal de ESA integración con un QR nuevo listo
+    // para escanear. Antes solo cambiaba de vista (donde el usuario ya solía
+    // estar) y no pasaba nada visible.
+    const lite = visible.find(d => d.lite && d.id);
+    if (lite) return reconnectWaLite(lite.id);
+    // WhatsApp Cloud API: no hay QR; abrir su edición para revisar credenciales
     try { if (typeof showView === 'function') showView('integraciones'); } catch (_) {}
+    const first = visible.find(d => d.id);
+    if (first) {
+      try { await loadIntegrations(); } catch (_) {}
+      if (INTEGRATIONS.find(p => p.key === 'whatsapp')?.integrations?.some(i => i.id === first.id)) openIntegrationModal('whatsapp', first.id);
+    }
   });
   document.getElementById('integDownDismissBtn')?.addEventListener('click', () => {
     _integDismiss(visible.map(d => d.token));
@@ -6672,11 +6685,17 @@ function renderIntegrations() {
         ? `${escapeHtml(inst.routing.pipelineName || '')} › ${escapeHtml(inst.routing.stageName || '')}`
         : 'Sin pipeline asignado';
       const isErr = inst.status === 'error';
+      const isDown = inst.status === 'disconnected';
       const isConnecting = inst.status === 'connecting' || inst.status === 'pending';
-      const metaClass = isErr ? 'is-error' : isConnecting ? 'is-connecting' : '';
+      const metaClass = (isErr || isDown) ? 'is-error' : isConnecting ? 'is-connecting' : '';
       const metaText = isErr ? '⚠ ' + escapeHtml(inst.lastError || 'Error')
+                     : isDown ? '🔌 Desconectado — no envía ni recibe mensajes'
                      : isConnecting ? '⏳ Esperando escaneo de QR…'
                      : routingLabel;
+      // WhatsApp Lite caído o a medias: botón para generar un QR nuevo ahí mismo
+      const reconnectBtn = (p.key === 'whatsapp-lite' && (isErr || isDown || isConnecting))
+        ? `<button class="btn btn--xs btn--danger" data-action="wa-reconnect" data-id="${inst.id}" title="Generar un QR nuevo y volver a vincular este número">Reconectar</button>`
+        : '';
       return `
         <div class="int-account-row">
           <div class="int-account-head">
@@ -6701,6 +6720,7 @@ function renderIntegrations() {
                     title="${inst.notifications === false ? 'Notificaciones apagadas — click para prender' : 'Notificaciones prendidas — click para silenciar este canal'}">
               ${inst.notifications === false ? BELL_OFF_SVG : BELL_ON_SVG}
             </button>
+            ${reconnectBtn}
             ${p.key === 'whatsapp-lite' ? `<button class="btn btn--xs btn--ghost" data-action="wa-groups" data-id="${inst.id}" title="Elegir qué grupos entran al CRM">Grupos${(inst.groups || []).length ? ` (${inst.groups.length})` : ''}</button>` : ''}
             <button class="btn btn--xs btn--ghost" data-action="routing" data-id="${inst.id}" title="Configurar pipeline">Pipeline</button>
             <button class="btn btn--xs btn--ghost" data-action="edit-instance" data-provider="${p.key}" data-id="${inst.id}" title="Editar">${isOAuth ? 'Ver' : 'Editar'}</button>
@@ -6775,6 +6795,9 @@ function bindIntegrationListeners(root) {
   });
   root.querySelectorAll('[data-action="wa-groups"]').forEach((btn) => {
     btn.addEventListener("click", () => openWaGroupsModal(Number(btn.dataset.id)));
+  });
+  root.querySelectorAll('[data-action="wa-reconnect"]').forEach((btn) => {
+    btn.addEventListener("click", () => reconnectWaLite(Number(btn.dataset.id)));
   });
   root.querySelectorAll('[data-action="notif-toggle"]').forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -7695,13 +7718,31 @@ function openIntegrationModal(providerKey, instanceId = null) {
         wrap.innerHTML = '<div style="font-size:48px;opacity:.3">📱</div>';
         wrap.style.background = "#f8fafc";
       } else {
-        // Ya conectado: mostrar estado, sin QR ni botón submit
+        // Integración existente: mostrar el estado REAL (antes decía "Conectado"
+        // aunque estuviera caída) y ofrecer el QR nuevo con el botón de abajo.
         document.getElementById("intSubmitBtn").hidden = true;
-        if (refreshBtn) refreshBtn.style.display = "inline-flex";
+        if (refreshBtn) { refreshBtn.style.display = "inline-flex"; refreshBtn.disabled = false; refreshBtn.textContent = "Generar QR nuevo"; }
         const phone = instance.externalId || '';
-        document.getElementById("intQrStatus").textContent = phone ? `✓ Conectado como +${phone}` : '✓ Conectado';
-        document.getElementById("intQrStatus").className = "int-qr-status is-ok";
-        document.getElementById("intQrImageWrap").innerHTML = '<div style="font-size:64px">📱</div>';
+        const st   = document.getElementById("intQrStatus");
+        const wrap = document.getElementById("intQrImageWrap");
+        wrap.style.background = "";
+        if (instance.status === 'connected') {
+          st.textContent = phone ? `✓ Conectado como +${phone}` : '✓ Conectado';
+          st.className = "int-qr-status is-ok";
+          wrap.innerHTML = '<div style="font-size:64px">📱</div>';
+        } else if (instance.status === 'connecting' || instance.status === 'pending') {
+          st.textContent = '⏳ Esperando escaneo… si no aparece el QR en unos segundos, genera uno nuevo';
+          st.className = "int-qr-status";
+          wrap.innerHTML = '<div class="int-qr-spinner"></div>';
+          pollQrStatus(instance.id, { statusEl: st, imgWrap: wrap,
+            onConnected: (s) => { toast(`WhatsApp Lite conectado +${s.phoneNumber || ''}`, "success"); setTimeout(async () => { closeIntegrationModal(); await loadIntegrations(); checkIntegrationsHealth(); }, 800); },
+          });
+        } else {
+          st.textContent = (phone ? `+${phone} está desconectado` : 'Desconectado') + ' — genera un QR nuevo y escanéalo desde tu WhatsApp';
+          st.className = "int-qr-status is-error";
+          wrap.innerHTML = '<div style="font-size:64px;opacity:.55">🔌</div>';
+          if (refreshBtn) refreshBtn.textContent = "Reconectar escaneando QR";
+        }
       }
     } else {
       document.getElementById("intFormFields").hidden = false;
@@ -7873,6 +7914,25 @@ async function startQrFlow() {
   }
 
   submitBtn.textContent = "Esperando escaneo…";
+  pollQrStatus(integrationId, {
+    statusEl, imgWrap,
+    onConnected: (s) => {
+      QR_CONFIRMED = true;          // ya escaneó — no abortar al cerrar modal
+      toast(`WhatsApp Lite conectado +${s.phoneNumber || ''}`, "success");
+      setTimeout(async () => {
+        closeIntegrationModal();
+        await loadIntegrations();
+        openRoutingModal(integrationId);
+      }, 800);
+    },
+    onFailed: () => { submitBtn.disabled = false; submitBtn.textContent = "Generar QR"; },
+  });
+}
+
+// Sondea /qr-status cada 1.5 s y pinta el QR / el estado en el modal. Lo usan
+// la conexión nueva (startQrFlow) y la reconexión de una integración existente
+// (restartQrFlow). onFailed cubre timeout, desconexión y error.
+function pollQrStatus(integrationId, { statusEl, imgWrap, onConnected, onFailed }) {
   let polls = 0;
   const MAX_POLLS = 100; // ~150s
   stopQrPolling();
@@ -7882,8 +7942,7 @@ async function startQrFlow() {
       stopQrPolling();
       statusEl.textContent = "Tiempo agotado. Click \"Generar QR nuevo\".";
       statusEl.classList.add("is-error");
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Generar QR";
+      onFailed?.();
       return;
     }
     try {
@@ -7899,26 +7958,76 @@ async function startQrFlow() {
         statusEl.textContent = "Conectando…";
       } else if (s.liveStatus === 'connected') {
         stopQrPolling();
-        QR_CONFIRMED = true;          // ya escaneó — no abortar al cerrar modal
         statusEl.textContent = `✓ Conectado como +${s.phoneNumber || '?'}`;
-        statusEl.classList.add("is-ok");
-        toast(`WhatsApp Lite conectado +${s.phoneNumber || ''}`, "success");
-        setTimeout(async () => {
-          closeIntegrationModal();
-          await loadIntegrations();
-          openRoutingModal(integrationId);
-        }, 800);
+        statusEl.className = "int-qr-status is-ok";
+        onConnected?.(s);
       } else if (s.liveStatus === 'disconnected' || s.liveStatus === 'error' || s.liveStatus === 'not_started') {
         stopQrPolling();
         statusEl.textContent = s.lastError || "Sesión desconectada. Genera un QR nuevo.";
         statusEl.classList.add("is-error");
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Generar QR";
+        onFailed?.();
       }
     } catch (err) {
       console.warn("[qr poll] err:", err.message);
     }
   }, 1500);
+}
+
+// ─── Reconectar una integración WhatsApp Lite EXISTENTE (QR nuevo) ───
+// Antes no había forma desde la interfaz: "Generar QR nuevo" creaba OTRA
+// integración y el "Reconectar" del banner rojo solo abría la vista de
+// integraciones. El backend ya tenía POST /:id/qr-restart (cierra la sesión
+// vieja, borra su auth y arranca una nueva que emite QR).
+async function restartQrFlow(integrationId) {
+  const statusEl   = document.getElementById("intQrStatus");
+  const imgWrap    = document.getElementById("intQrImageWrap");
+  const errBox     = document.getElementById("intError");
+  const refreshBtn = document.getElementById("intQrRefreshBtn");
+  if (!statusEl || !imgWrap) return;
+  if (errBox) errBox.hidden = true;
+  const btnReady = () => { if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.textContent = "Generar QR nuevo"; } };
+  if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.textContent = "Generando QR…"; }
+  statusEl.textContent = "Cerrando la sesión anterior y generando un QR nuevo…";
+  statusEl.className = "int-qr-status";
+  imgWrap.innerHTML = '<div class="int-qr-spinner"></div>';
+  imgWrap.style.background = "";
+  // Integración existente: cerrar el modal a medias NO debe borrarla.
+  QR_PENDING_ID = null;
+  QR_CONFIRMED = false;
+  try {
+    await api("POST", `/api/integrations/${integrationId}/qr-restart`);
+  } catch (err) {
+    if (errBox) { errBox.textContent = err.message; errBox.hidden = false; }
+    statusEl.textContent = "No se pudo reiniciar la sesión";
+    statusEl.classList.add("is-error");
+    btnReady();
+    return;
+  }
+  pollQrStatus(integrationId, {
+    statusEl, imgWrap,
+    onConnected: (s) => {
+      btnReady();
+      toast(`WhatsApp Lite reconectado +${s.phoneNumber || ''}`, "success");
+      setTimeout(async () => {
+        closeIntegrationModal();
+        await loadIntegrations();
+        checkIntegrationsHealth();   // quita el banner rojo sin esperar 3 min
+      }, 800);
+    },
+    onFailed: btnReady,
+  });
+  setTimeout(btnReady, 4000);   // en cuanto salga el QR, el botón sirve para pedir otro
+}
+
+// Abre el modal de esa integración y arranca el QR de inmediato. Lo usan el
+// botón "Reconectar" del banner rojo y el de la tarjeta del número.
+async function reconnectWaLite(integrationId) {
+  try { if (typeof showView === 'function') showView('integraciones'); } catch (_) {}
+  const find = () => INTEGRATIONS.find(p => p.key === 'whatsapp-lite')?.integrations?.find(i => i.id === integrationId);
+  if (!find()) { try { await loadIntegrations(); } catch (_) {} }
+  if (!find()) { toast('No encontré esa conexión de WhatsApp Lite. Recarga la página e intenta de nuevo.', 'error'); return; }
+  openIntegrationModal('whatsapp-lite', integrationId);
+  await restartQrFlow(integrationId);
 }
 
 // ─── Modal de routing (pipeline / etapa) ───
@@ -8155,7 +8264,7 @@ function setupIntegrations() {
     }
   });
 
-  document.getElementById("intQrRefreshBtn")?.addEventListener("click", () => startQrFlow());
+  document.getElementById("intQrRefreshBtn")?.addEventListener("click", () => (INT_EDIT?.instance ? restartQrFlow(INT_EDIT.instance.id) : startQrFlow()));
 
   document.getElementById("intDisconnectBtn")?.addEventListener("click", async () => {
     if (!INT_EDIT?.instance) return;

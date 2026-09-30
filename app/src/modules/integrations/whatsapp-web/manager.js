@@ -220,7 +220,13 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
 
       const code   = lastDisconnect?.error?.output?.statusCode;
       const reason = disconnectReasonName(code);
-      const msg    = lastDisconnect?.error?.message || 'desconectado';
+      // El nodo <stream:error> trae el detalle que distingue los dos 401:
+      // <conflict type="replaced"/> = otro cliente entró con las MISMAS
+      // credenciales; <conflict type="device_removed"/> = el teléfono quitó
+      // este dispositivo vinculado. Sin esto, "conflict" a secas no dice cuál.
+      const errNode = lastDisconnect?.error?.data;
+      const detail  = errNode?.content?.[0]?.attrs?.type ? ` type=${errNode.content[0].attrs.type}` : '';
+      const msg    = (lastDisconnect?.error?.message || 'desconectado') + detail;
       const loggedOut = code === DisconnectReason.loggedOut;
       const replaced  = code === DisconnectReason.connectionReplaced;
       const heldMs = session.lastConnAt ? Date.now() - session.lastConnAt : 0;

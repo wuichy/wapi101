@@ -99,6 +99,18 @@ function extractIncomingBody(message) {
   return { body: `📩 Mensaje (${messageType})`, messageType };
 }
 
+// Apagado del proceso (SIGTERM del deploy): con esta bandera el handler de
+// 'close' NO programa reintentos ni dispara alertas por sockets que nosotros
+// mismos estamos cerrando.
+let SHUTTING_DOWN = false;
+
+// 401 → 'loggedOut', 440 → 'connectionReplaced', 515 → 'restartRequired'…
+// Antes el log decía solo "Connection Terminated" y no había forma de saber
+// POR QUÉ se cayó un número (caso: +…9686 el 29-sep-2026).
+function disconnectReasonName(code) {
+  return Object.keys(DisconnectReason).find(k => DisconnectReason[k] === code) || 'desconocido';
+}
+
 // Callbacks globales (los registra el caller; no los hardcodeamos aquí para mantener desacoplado)
 let onMessageCallback = null;
 let onConnectedCallback = null;
@@ -150,6 +162,12 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
     syncFullHistory: false,
   });
 
+  // Reintentos: se heredan del arranque anterior, pero si la conexión duró
+  // más de 60 s se vuelve a 0. Antes el contador solo subía (el 30-sep un
+  // número sano iba en "reintento 6 en 15 s" aunque cada reconexión había
+  // funcionado), así que cada caída transitoria tardaba más en recuperarse.
+  let attempts = reconnectAttempts;
+
   const session = {
     sock,
     status: 'connecting', // connecting | qr | connected | disconnected | error
@@ -197,30 +215,50 @@ async function startSession(integrationId, { reconnectAttempts = 0 } = {}) {
     }
 
     if (connection === 'close') {
-      const code = lastDisconnect?.error?.output?.statusCode;
-      const msg  = lastDisconnect?.error?.message || 'desconectado';
+      // Lo cerramos nosotros (deploy/reinicio): ni reintento ni alerta.
+      if (SHUTTING_DOWN) return;
+
+      const code   = lastDisconnect?.error?.output?.statusCode;
+      const reason = disconnectReasonName(code);
+      const msg    = lastDisconnect?.error?.message || 'desconectado';
       const loggedOut = code === DisconnectReason.loggedOut;
+      const replaced  = code === DisconnectReason.connectionReplaced;
+      const heldMs = session.lastConnAt ? Date.now() - session.lastConnAt : 0;
+      if (heldMs > 60_000) attempts = 0;   // conexión sana → el backoff empieza de cero
 
       if (loggedOut) {
+        // 401: el teléfono dejó de reconocer este dispositivo vinculado (lo
+        // desvincularon desde el celular, o WhatsApp lo invalidó, p. ej. al
+        // pasarse del límite de dispositivos). No se arregla solo: QR nuevo.
         session.status = 'disconnected';
-        session.error = 'Sesión cerrada en el dispositivo';
-        console.warn(`[wa-web ${integrationId}] sesión cerrada (logout)`);
+        session.error = `Sesión cerrada en el dispositivo (${code} ${reason})`;
+        console.warn(`[wa-web ${integrationId}] sesión cerrada (${code} ${reason}: ${msg}) tras ${Math.round(heldMs / 1000)}s conectado`);
         // Borrar archivos de auth — la próxima vez requerirá QR nuevo
         try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+      } else if (replaced && (session.replacedAt && Date.now() - session.replacedAt < 5 * 60_000)) {
+        // 440 dos veces en 5 min: otro cliente está usando este mismo enlace
+        // (otro CRM / otra instancia). Reintentar sería un ping-pong eterno.
+        session.status = 'disconnected';
+        session.error = 'Otra sesión se conectó con este número (440 connectionReplaced)';
+        console.warn(`[wa-web ${integrationId}] desconectado (440 connectionReplaced) por segunda vez — no reintento`);
       } else {
-        // Reconexión exponencial con tope
-        const next = Math.min(reconnectAttempts + 1, 10);
-        const delay = Math.min(2000 * Math.pow(1.5, reconnectAttempts), 60000);
+        if (replaced) session.replacedAt = Date.now();
+        // Reconexión exponencial con tope. 440 la primera vez: esperar 20 s
+        // para dejar que el otro socket (p. ej. el proceso viejo) muera.
+        const next = Math.min(attempts + 1, 10);
+        const delay = replaced ? 20_000 : Math.min(2000 * Math.pow(1.5, attempts), 60000);
         session.status = 'connecting';
-        session.error = `Reconectando: ${msg}`;
-        console.warn(`[wa-web ${integrationId}] desconectado (${msg}); reintento ${next} en ${Math.round(delay)}ms`);
+        session.error = `Reconectando: ${msg} (${code ?? '?'} ${reason})`;
+        console.warn(`[wa-web ${integrationId}] desconectado (${code ?? '?'} ${reason}: ${msg}) tras ${Math.round(heldMs / 1000)}s; reintento ${next} en ${Math.round(delay)}ms`);
         setTimeout(() => {
+          if (SHUTTING_DOWN) return;
           startSession(integrationId, { reconnectAttempts: next })
             .catch((err) => console.error(`[wa-web ${integrationId}] reintento falló:`, err.message));
         }, delay);
       }
 
-      try { onDisconnectedCallback?.(integrationId, { loggedOut, message: msg }); }
+      const fatal = loggedOut || session.status === 'disconnected';
+      try { onDisconnectedCallback?.(integrationId, { loggedOut, replaced, fatal, code, reason, message: msg }); }
       catch (err) { console.error(`[wa-web ${integrationId}] onDisconnected error:`, err.message); }
     }
   });
@@ -425,6 +463,18 @@ async function stopSession(integrationId, { logout = true, removeAuth = true } =
   }
 }
 
+// Cierra todos los sockets sin logout ni borrar auth (los enlaces siguen
+// vigentes y se restauran en el siguiente arranque). Lo llama server.js al
+// recibir SIGTERM para que el proceso no muera con escrituras de credenciales
+// a medias ni con sockets abiertos que el siguiente proceso tenga que pisar.
+function stopAll() {
+  SHUTTING_DOWN = true;
+  for (const [id, s] of sessions.entries()) {
+    try { s.sock?.end(); } catch (_) {}
+    console.log(`[wa-web ${id}] socket cerrado por apagado del servicio`);
+  }
+}
+
 function listSessions() {
   const out = [];
   for (const [id, s] of sessions.entries()) {
@@ -497,6 +547,7 @@ module.exports = {
   getGroupName,
   toJid,
   stopSession,
+  stopAll,
   listSessions,
   restoreAll,
   getProfilePicUrl,

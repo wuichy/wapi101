@@ -1292,6 +1292,23 @@ app.post('/api/mail/compose', async (req, res) => {
 });
 
 
+// ─── Apagado limpio ───────────────────────────────────────────────────────
+// systemd manda SIGTERM en cada deploy. Sin handler, Node moría a secas con
+// los sockets de WhatsApp Lite abiertos y escrituras de credenciales a medias;
+// el siguiente proceso reabría las sesiones sobre eso. Ahora cerramos los
+// sockets, damos 1.5 s a que se escriba todo, y salimos.
+let _shuttingDown = false;
+function _gracefulExit(signal) {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  console.log(`[server] ${signal}: cerrando sesiones de WhatsApp Lite antes de salir…`);
+  try { require('./src/modules/integrations/whatsapp-web/manager').stopAll(); }
+  catch (e) { console.warn('[server] stopAll falló:', e.message); }
+  setTimeout(() => process.exit(0), 1500);
+}
+process.on('SIGTERM', () => _gracefulExit('SIGTERM'));
+process.on('SIGINT',  () => _gracefulExit('SIGINT'));
+
 app.listen(config.port, config.host, () => {
   console.log(`Wapi101 App → http://${config.host}:${config.port}  (env: ${config.env})`);
   console.log(`DB          → ${config.dbPath}`);

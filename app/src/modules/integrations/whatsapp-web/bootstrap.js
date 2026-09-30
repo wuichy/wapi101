@@ -355,14 +355,20 @@ function init(db) {
         const row = db.prepare("SELECT display_name, external_id FROM integrations WHERE id = ?").get(integrationId);
         const displayName = row?.display_name || 'WhatsApp Lite';
 
-        // ── Cerraron sesión desde el celular: esto NO se arregla solo ──
-        if (info.loggedOut) {
+        // ── Cerraron sesión desde el celular (401) u otra sesión tomó el
+        // enlace (440 repetido): esto NO se arregla solo ──
+        if (info.loggedOut || info.fatal) {
           _clearDownTimer(integrationId);
+          const why = info.loggedOut
+            ? `Sesión cerrada en el dispositivo (${info.code || 401} ${info.reason || 'loggedOut'})`
+            : `Otra sesión se conectó con este número (${info.code || 440} ${info.reason || 'connectionReplaced'})`;
           db.prepare(`UPDATE integrations SET status = 'disconnected', last_error = ?, updated_at = unixepoch() WHERE id = ?`)
-            .run('Sesión cerrada en el dispositivo', integrationId);
+            .run(why, integrationId);
           _downAlerted.add(integrationId);
           _alertDown(db, tenantId, integrationId, '⚠️ WhatsApp desconectado',
-            `${displayName} cerró sesión. Reconecta escaneando QR de nuevo.`);
+            info.loggedOut
+              ? `${displayName} cerró sesión (${info.code || 401}): el teléfono dejó de reconocer este dispositivo vinculado — lo desvincularon desde el celular o WhatsApp lo invalidó. Reconecta escaneando QR de nuevo.`
+              : `${displayName}: otra sesión se conectó con el mismo número (${info.code || 440}). Si no fuiste tú, cierra ese otro dispositivo en WhatsApp y reconecta escaneando QR.`);
           return;
         }
 

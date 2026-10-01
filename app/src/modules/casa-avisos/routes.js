@@ -29,6 +29,11 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const CANAL = 'push';                   // ver cabecera: NO por WhatsApp Lite
+// APAGADO por pedido de Luis (30-sep-2026 21:45): "me están llegando muchos".
+// El vigía sigue llamando y queda registro en el journal de wapi y en su
+// syslog (journalctl -t vigia-casa), pero no se manda ninguna notificación.
+// Para prenderlos: true + ./scripts/deploy.sh.
+const ACTIVO = false;
 const TENANT = 1;                       // Luis (sus suscripciones push: iPhone y Mac)
 const LLAVE_RUTA = process.env.CASA_AVISOS_TOKEN_FILE || '/root/.wapi101/casa-avisos.token';
 const TOPE_HORA = 12;
@@ -50,6 +55,7 @@ function _iguales(a, b) {
 function router(deps = {}) {
   const r = express.Router();
   const leerLlave = deps.leerLlave || _leerLlave;
+  const activo = deps.activo ?? ACTIVO;
   const enviar = deps.enviar || (async (texto) => {
     if (!deps.db) throw new Error('casa-avisos montado sin db');
     const r = await require('../notifications/service').sendToAll(deps.db, TENANT, {
@@ -72,6 +78,11 @@ function router(deps = {}) {
     const texto = String(req.body?.text || '').trim();
     if (!texto) return res.status(400).json({ error: 'text vacío' });
     if (texto.length > 1000) return res.status(400).json({ error: 'text muy largo (máx 1000)' });
+
+    if (!activo) {
+      console.log(`[casa-avisos] apagado: no se notifica · ${texto.slice(0, 80)}`);
+      return res.json({ ok: true, sent: false, reason: 'avisos apagados' });
+    }
 
     const ahora = Date.now();
     if (_ultimo.texto === texto && ahora - _ultimo.t < REBOTE_MS) {
@@ -98,6 +109,6 @@ function router(deps = {}) {
 }
 
 module.exports = {
-  router, CANAL, TENANT, TOPE_HORA,
+  router, CANAL, TENANT, TOPE_HORA, ACTIVO,
   _reset() { _ultimo = { texto: null, t: 0 }; _enviados.length = 0; },
 };

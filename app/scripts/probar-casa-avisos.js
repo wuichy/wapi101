@@ -9,9 +9,17 @@ const mod = require('../src/modules/casa-avisos/routes');
 let mandados = [];
 let llave = 'llave-de-prueba';
 const app = express();
+// Las pruebas de la puerta corren con los avisos PRENDIDOS (activo: true);
+// el modo apagado (el de producción desde el 30-sep) se prueba al final.
 app.use('/api/apps/casa-avisos', mod.router({
   leerLlave: () => llave,
+  activo: true,
   enviar: async (t) => { mandados.push(t); return 'msg-' + mandados.length; },
+}));
+let mandadosApagado = [];
+app.use('/apagado', mod.router({
+  leerLlave: () => 'llave-de-prueba',
+  enviar: async (t) => { mandadosApagado.push(t); return 'x'; },
 }));
 
 const fallas = [];
@@ -54,6 +62,19 @@ function paso(nombre, ok, detalle = '') {
   mod._reset(); llave = null;
   r = await post({ text: 'hola' }, 'lo-que-sea');
   paso('sin archivo de llave -> no manda (403)', r.status === 403);
+
+  paso('en producción los avisos están APAGADOS', mod.ACTIVO === false);
+  const rA = await fetch(`http://127.0.0.1:${srv.address().port}/apagado/aviso`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer llave-de-prueba' },
+    body: JSON.stringify({ text: 'Casa: la casa se cayó' }),
+  }).then(async r => ({ status: r.status, j: await r.json() }));
+  paso('apagado: responde 200 sin mandar nada', rA.status === 200 && rA.j.sent === false && mandadosApagado.length === 0);
+  const rB = await fetch(`http://127.0.0.1:${srv.address().port}/apagado/aviso`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer otra' },
+    body: JSON.stringify({ text: 'x' }),
+  });
+  paso('apagado: la llave se sigue exigiendo (401)', rB.status === 401);
 
   srv.close();
   console.log(fallas.length ? `\nFALLARON ${fallas.length}: ${fallas.join(', ')}` : '\nTODO BIEN — casa-avisos');

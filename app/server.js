@@ -147,7 +147,7 @@ try { require('./src/modules/chancluda/service').init(db); } catch (err) { conso
 
 // Avisos de la casa (smarthouse) al WhatsApp de Luis: los manda el vigía de la
 // casa desde este mismo VPS. Puerta angosta: ver casa-avisos/routes.js.
-try { app.use('/api/apps/casa-avisos', require('./src/modules/casa-avisos/routes').router()); }
+try { app.use('/api/apps/casa-avisos', require('./src/modules/casa-avisos/routes').router({ db })); }
 catch (err) { console.warn('[boot] casa-avisos no montó:', err.message); }
 
 // Analítica de visitantes de la landing pública — ingesta PÚBLICA (sin auth).

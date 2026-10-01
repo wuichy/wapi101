@@ -29,8 +29,9 @@ function paso(nombre, ok, detalle = '') {
     body: JSON.stringify(cuerpo),
   }).then(async r => ({ status: r.status, j: await r.json() }));
 
-  paso('destino fijo = Luis (33 4965 7193)', mod.DESTINO === '5213349657193');
-  paso('sale por la integración 37 (33 2294 9686)', mod.INTEGRACION === 37);
+  paso('sale por push de wapi (NO por WhatsApp Lite: tumbaba el 9686)', mod.CANAL === 'push');
+  paso('va solo al tenant de Luis (1)', mod.TENANT === 1);
+  paso('ya no expone línea ni destino de WhatsApp', mod.INTEGRACION === undefined && mod.DESTINO === undefined);
 
   let r = await post({ text: 'hola' }, null);
   paso('sin llave -> 401', r.status === 401);
